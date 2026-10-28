@@ -5431,6 +5431,7 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   worker's included) and `nuka do` reaches stderr with the same values
   redacted, from the moment the env files are read. A value split across
   two writes is not found.
+  A finding of `nuka run` that quotes such output, such as `worker-output-unreadable`, holds the same redacted text in run.json and the summary.
   A step's `run` cannot control this process.   Each loaded value is removed
   in every spelling below, and each spelling is replaced by the same
   `{{secret.NAME}}` token. The spellings are the value itself, the

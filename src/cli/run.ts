@@ -83,7 +83,7 @@ import {
 } from "../run/run-scenario.js";
 import { DirectoryTargetLineError, parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
-import { fixtureTeardownWarning, redactString, versionProbeWarning } from "../secrets/redact.js";
+import { fixtureTeardownWarning, redact, redactString, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import {
   formatFixtureDefinitionIssues,
@@ -395,7 +395,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // it happens; `--json` keeps it for the one document, so stderr stays
   // empty and the document says everything the run found.
   const runFindings: Finding[] = [...notices];
-  const warn = (finding: Finding): void => {
+  // The secrets the process stderr is redacted with (step-stdout.ts). A
+  // finding can quote what project code printed, such as a line a worker
+  // wrote on its stdout, so run.json and the summary redact it with the
+  // same set and read as stderr did.
+  let printedSecrets: SecretSet = [];
+  const redactOutput = (secrets: SecretSet): void => {
+    printedSecrets = [...printedSecrets, ...secrets];
+    options.redactProjectOutput?.(secrets);
+  };
+  const warn = (raw: Finding): void => {
+    const finding = printedSecrets.length === 0 ? raw : (redact(raw, printedSecrets) as Finding);
     runFindings.push(finding);
     if (!options.json) stderr.write(formatFinding(withHint(finding)));
   };
@@ -776,7 +786,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         return refused(error);
       }
       const { envVars, secrets } = read;
-      options.redactProjectOutput?.(secrets);
+      redactOutput(secrets);
       const probeResult = await probeVersion(resolvedEnv.version);
       let targetVersion: string | undefined;
       if (probeResult !== undefined) {
@@ -822,7 +832,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       if (pass.resolvedEnv.program === null) return null;
       const started = await worldStarter.start(pass.resolvedEnv.name, pass.resolvedEnv.program, pass.secrets, abort);
       if (started.ok) {
-        options.redactProjectOutput?.(started.view.secrets);
+        redactOutput(started.view.secrets);
         if (started.view.url !== undefined) headUrls.set(pass.resolvedEnv.name, started.view.url);
         return started;
       }

@@ -672,6 +672,14 @@ just until 0.1.
 
 ### Fixed
 
+- **A finding that quotes a worker's output is redacted in run.json.**
+  A line a `--concurrency` worker or a tree of `--base` wrote on its
+  stdout that was not an envelope, such as what a child process with
+  inherited stdio printed, became a `worker-output-unreadable` warning
+  that stderr showed redacted and run.json and the summary held as it
+  was. Each finding of `nuka run` is now redacted with the secrets
+  stderr is redacted with before it is stored.
+
 - **A step that calls `process.exit` no longer ends the run.** A
   `process.exit(0)` in a step, hook, or fixture ended `nuka run` with
   exit code 0 after an earlier scenario had failed, with no run.json and

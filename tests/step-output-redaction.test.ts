@@ -1,14 +1,16 @@
 import { execFile } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { copyFixtureToTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, latestRunDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 // Responsibility: what a step prints (console.log, console.error, and a
 // write to process.stdout) reaches stderr with the secrets a record
 // redacts redacted, in `nuka run`, `nuka run --concurrency 2`, and
 // `nuka do`. The CLI runs as its own process, because the step writes to
-// the process streams, which an injected sink does not replace.
+// the process streams, which an injected sink does not replace. A line a
+// worker could not read as an envelope is quoted in a finding, and that
+// finding reads the same in run.json and the summary as on stderr.
 
 const API_TOKEN = "SECRETTOKEN123456";
 
@@ -25,6 +27,23 @@ export default defineStep({
     console.log(\`log Bearer \${env.API_TOKEN}\`);
     console.error(\`error Bearer \${env.API_TOKEN}\`);
     process.stdout.write(\`stdout Bearer \${env.API_TOKEN}\\n\`);
+    return {};
+  },
+});
+`;
+
+const INHERITING_STEP = `import { execFileSync } from "node:child_process";
+import { z } from "zod";
+import { defineStep } from "../../nukadoko-shim.js";
+
+export default defineStep({
+  pattern: "a child prints the token",
+  description: "Runs a child that inherits stdio and prints the loaded token",
+  args: z.object({}),
+  returns: z.object({}),
+  mutates: false,
+  async run({ env }) {
+    execFileSync(process.execPath, ["-e", "console.log(\\"deploy with \\" + process.env.T)"], { stdio: "inherit", env: { ...process.env, T: env.API_TOKEN } });
     return {};
   },
 });
@@ -66,4 +85,27 @@ describe("a step's own output reaches stderr redacted", () => {
       }
     }, 60_000);
   }
+
+  it("a worker-output-unreadable finding quotes the line redacted in run.json and the summary", async () => {
+    const rootDir = await copyFixtureToTempDir("stderr-redaction-project");
+    try {
+      await writeFile(path.join(rootDir, "features/steps/child-prints-token.ts"), INHERITING_STEP);
+      await writeFile(path.join(rootDir, "features/child-a.feature"), "Feature: child a\n\n  Scenario: child a\n    When a child prints the token\n");
+      await writeFile(path.join(rootDir, "features/child-b.feature"), "Feature: child b\n\n  Scenario: child b\n    When a child prints the token\n");
+
+      const { stderr } = await spawnedCli(rootDir, ["run", "features/child-a.feature", "features/child-b.feature", "--concurrency", "2"]);
+
+      const quoted = "A worker produced an unreadable line on its own stdout: deploy with {{secret.API_TOKEN}}";
+      const runDir = latestRunDir(rootDir);
+      const runJson = await readFile(path.join(runDir, "run.json"), "utf8");
+      const summary = await readFile(path.join(runDir, "summary.md"), "utf8");
+      expect([stderr, runJson, summary].map((text) => [text.includes(API_TOKEN), text.includes(quoted)])).toEqual([
+        [false, true],
+        [false, true],
+        [false, true],
+      ]);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  }, 60_000);
 });
