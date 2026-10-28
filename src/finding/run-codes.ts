@@ -54,6 +54,12 @@ const RUN_CODES = {
     description: "A BeforeAll or AfterAll hook threw, so the run is red.",
     fix: "Correct the hook the message names.",
   },
+  "nothing-selected": {
+    severity: "failed",
+    description:
+      "nuka run selected no scenario: its targets hold none, or --env leaves out every one they hold, so nothing ran and nothing was checked. The run writes no run directory.",
+    fix: "Name a target that holds a scenario, or run without the --env that leaves every scenario out.",
+  },
   "program-exited": {
     severity: "warning",
     description: "The program a world served exited while the scenarios still ran, so the requests after that found nothing listening.",

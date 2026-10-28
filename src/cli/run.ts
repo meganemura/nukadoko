@@ -99,7 +99,7 @@ import { asFinding, writeCheckIssueLines } from "./check.js";
 import { formatFinding, warningSink, type Finding } from "../finding/finding.js";
 import { checkCodeFix } from "../check/codes.js";
 import type { RefusalCode } from "./refusal-codes.js";
-import { RefusalError, formatEnvelope, refuse, withHint, type Hint } from "./refusal.js";
+import { FAILED_EXIT_CODE, RefusalError, formatEnvelope, refuse, withHint, writeStopped, type Hint } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { finalizeOpenRequests, installChannelPatches } from "../context/create-context.js";
 
@@ -331,6 +331,28 @@ function stepsLocation(
       ? [{ label: "steps", relativePath: path.join(runRelativeDir(stateDir, runId), RUN_FILE_DIRS.steps), kind: "dir" as const, count: stepRecordsWritten }]
       : []),
   ];
+}
+
+/** Why a run selected no scenario. When `--env` left every scenario out,
+ * the `do:` line is the same run without it, which selects the
+ * environments that declare conditions; when the targets hold none, only
+ * an edit gets past it. */
+function nothingSelectedFinding(targets: readonly string[], givenTargets: readonly string[], envs: readonly string[], leftOut: number): Finding {
+  if (leftOut === 0) {
+    return {
+      severity: "failed",
+      code: "nothing-selected",
+      message: `no scenario to run in ${targets.join(", ")}, so nothing was checked`,
+      fix: "Add a scenario to the feature files the targets name, or name a target that holds one.",
+    };
+  }
+  return {
+    severity: "failed",
+    code: "nothing-selected",
+    message: `no scenario to run: the conditions of the ${leftOut} selected ${leftOut === 1 ? "scenario" : "scenarios"} hold in no environment --env names (${envs.join(", ")}), so nothing was checked`,
+    fix: "Run without --env, which selects the environments that declare conditions, or name an environment that meets the scenario's tags.",
+    do: ["nuka run", ...givenTargets.map(shellWord)].join(" "),
+  };
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
@@ -692,6 +714,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       programFile,
     );
     if (unfilled !== undefined) return refused(new Error(unfilled.message), "program-placeholder-unfilled", { fix: unfilled.fix });
+
+    // Nothing checked is no pass: an exit 0 here would read as criteria
+    // that hold. It follows every refusal of the setup, which says what to
+    // fix first, and precedes the env files, the probes, and the worlds:
+    // nothing runs, so there is no evidence to write.
+    if (flatPickles.length === 0) {
+      return writeStopped(
+        { json: options.json, stdout: options.stdout, stderr, command: "run" },
+        [...notices, nothingSelectedFinding(featureArgs, options.featureArgs, options.envs, leftOut)],
+        FAILED_EXIT_CODE,
+      );
+    }
 
     // Each environment is a pass of its own: its env files, the
     // secrets they hold, its version probe, and the world its pass starts

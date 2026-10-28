@@ -3937,14 +3937,16 @@ scenario's `evidence.dir`) is relative to the run directory, the one that
 holds `run.json` itself, so a run directory uploaded from CI and
 downloaded somewhere else reads the same. The paths line on stderr names
 the file as `run`, relative to the project root. A run that selects no scenario writes no record and no
-`run.json`. A run that was killed has none either, which is how retention
+`run.json`, and fails with `nothing-selected` (exit 1): it checked nothing,
+so it is no pass. A run that was killed has none either, which is how retention
 tells it from a run that ended. There is no scenario record file: a
 scenario's entry in `run.json` is its record.
 
 `--json` prints that same document on stdout as the one JSON document there,
 byte for byte the file, instead of the scenario lines `--records` prints, so
-a script reads the whole result with one parse. It also prints for a run
-that selected no scenario, with empty `scenarios`. A refusal before anything
+a script reads the whole result with one parse. A run that selected no
+scenario prints an envelope with verdict `failed` and its `nothing-selected`
+finding instead. A refusal before anything
 runs prints nothing on stdout, as without `--json`. stderr is unchanged.
 
 The paths lines name what the run wrote: its step records and its run
@@ -4089,7 +4091,9 @@ no named environment meets is not run: its row is left out of the table,
 table, and stderr, after the count line, say so in one line: `<n> criteria
 not run: their conditions hold in no selected environment`. Naming one
 environment runs what applies there, so a hook failure's `do:` line,
-which names one, runs as printed. `nuka check` reads the tags against
+which names one, runs as printed. When `--env` leaves out every selected
+scenario, nothing runs and the run fails with `nothing-selected`, whose
+`do:` line is the same run without `--env`. `nuka check` reads the tags against
 the environments a run would select (the ones `nuka check --env` names,
 or the ones a run without `--env` selects), and reports three errors:
 

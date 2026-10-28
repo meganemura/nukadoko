@@ -201,7 +201,7 @@ describe("nuka run: progress output", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(1);
     // None of the four output-location rows (each its own line, starting
     // with its own label) — checked by line start, not by substring: the
     // summary line legitimately contains the word "scenarios" as part of
@@ -212,9 +212,8 @@ describe("nuka run: progress output", () => {
     expect(lines.some((line) => line.startsWith("scenarios "))).toBe(false);
     expect(lines.some((line) => line.startsWith("allure"))).toBe(false);
     expect(lines.some((line) => line.startsWith("messages"))).toBe(false);
-    // The summary line is unconditional even here — a run that did nothing
-    // still gets told so.
-    expect(stderr.text()).toContain("0 scenarios: 0 passed, 0 failed");
+    // A run that did nothing is told so, as a failure: nothing was checked.
+    expect(stderr.text()).toContain("failed\tnothing-selected\t-\tno scenario to run in features/empty.feature, so nothing was checked\n");
   });
 
   it("stdout carries only each scenario's run.json entry under --records; every non-empty line parses, one per scenario", async () => {

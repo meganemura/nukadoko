@@ -462,6 +462,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   既存の `url` の関数は、`--base` で使う前に `tree` で分岐させます。
   base にも head の URL を返す関数では base の world のセルは走らず、その理由は `` the url function returned head's URL for the base tree; branch on `tree` `` です。
 
+- **scenario を 1 つも選ばない run は exit 1 で終わります。**
+  まだ scenario の無い対象や、選んだどの scenario の condition も満たさない `--env` で `nuka run` を走らせる CI のジョブは、これまで緑でした。
+  今は `nothing-selected` で失敗します。
+  scenario を足すか、scenario を持つ対象を名指すか、`--env` を外します。
+  `--env` がすべての scenario を外したときは、finding の `do:` 行がその run です。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

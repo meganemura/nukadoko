@@ -193,9 +193,9 @@ describe("nuka run: BeforeAll/AfterAll run once per run, in LIFO order for After
       stderr,
     });
 
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
-    expect(stripRunProgressLines(stderr.text())).toBe("");
+    expect(stripRunProgressLines(stderr.text())).toMatch(/^failed\tnothing-selected\t/);
     const log = (globalThis as Record<string, unknown>).__nukadokoRunAllHooksLog as string[];
     expect(log).toEqual([]);
   });

@@ -558,6 +558,13 @@ This part does not change release to release.
   base world's cells not run, with the reason `` the url function returned
   head's URL for the base tree; branch on `tree` ``.
 
+- **A run that selects no scenario exits 1.** A CI job that runs
+  `nuka run` on a target with no scenario yet, or with an `--env` that
+  meets the conditions of none of the selected scenarios, went green
+  and now fails with `nothing-selected`. Add the scenario, name a target
+  that holds one, or drop the `--env`; the finding's `do:` line is that
+  run when `--env` left every scenario out.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

@@ -129,4 +129,6 @@ switch was removed, the side whose code stayed decides, so the `@with:`
 side keeps the scenario and the tag goes, and the other side means the
 scenario goes. `condition-unmet` is a scenario no environment of the
 default selection meets; under `--env` it is left out, not reported.
+A run that leaves out every scenario it selected runs nothing and fails
+with `nothing-selected`: nothing checked is no pass.
 `@held` is kept in the row's `conditions`, and only `--base` reads it.

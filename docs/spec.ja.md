@@ -3149,6 +3149,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
 CI からアップロードした run ディレクトリを別の場所にダウンロードしても、同じように読めるからです。
 stderr の書き込み先の行は、このファイルを `run` として、プロジェクトのルートからの相対パスで示します。
 scenario を 1 つも選ばなかった run は record を書かず、`run.json` も書きません。
+その run は何も確かめていないので合格ではなく、`nothing-selected` で失敗します(exit 1)。
 強制終了された run にもありません。
 retention は、それによって終わった run と見分けます。
 scenario record のファイルはありません。
@@ -3156,7 +3157,7 @@ scenario record のファイルはありません。
 
 `--json` は、同じ文書をファイルとバイト単位で同じまま stdout の唯一の JSON 文書として、`--records` が出力する scenario の行の代わりに出力します。
 スクリプトは 1 回の解析で結果全体を読めます。
-scenario を 1 つも選ばなかった run でも、空の `scenarios` とともに出力します。
+scenario を 1 つも選ばなかった run は、代わりに verdict が `failed` で `nothing-selected` の finding を持つ envelope を出力します。
 何かが実行される前の拒否では、`--json` なしのときと同じく stdout に何も出力しません。
 stderr は変わりません。
 
@@ -3265,6 +3266,8 @@ program ファイルは、プログラムの設定を condition から導くこ�
 その行は表から外れ、`run.json` の `table.left_out` がそれを数え、サマリ(表の下)と stderr(件数の行の後ろ)が 1 行でそう言います。
 `<n> criteria not run: their conditions hold in no selected environment` です。
 environment を 1 つ名指せばそこに当てはまるものが走るので、environment を 1 つ名指す hook の失敗の `do:` 行は、出力されたとおりに走ります。
+`--env` が選んだすべての scenario を外すと何も走らず、run は `nothing-selected` で失敗します。
+その `do:` 行は、`--env` を除いた同じ run です。
 `nuka check` は、run が選ぶ environment(`nuka check --env` が名指すもの、または `--env` の無い run が選ぶもの)に照らして tag を読み、3 つのエラーを報告します:
 
 - `condition-tag-malformed`: `@with:` か `@without:` で始まり、3 つの形のどれでもない tag。

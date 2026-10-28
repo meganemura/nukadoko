@@ -85,9 +85,10 @@ describe("nuka run: which criteria a run selects", () => {
   it("runs nothing when --env leaves out every targeted criterion, and says why", () =>
     inProject(async (rootDir) => {
       const { exitCode, stderr } = await cli(rootDir, ["run", "--env", "flag-on", "features/banner.feature:8"]);
-      expect(exitCode).toBe(0);
-      expect(stderr).toContain("0 scenarios: 0 passed, 0 failed");
-      expect(stderr).toContain("\n1 criterion not run: its conditions hold in no selected environment\n");
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain(
+        "failed\tnothing-selected\t-\tno scenario to run: the conditions of the 1 selected scenario hold in no environment --env names (flag-on), so nothing was checked\n",
+      );
       expect(existsSync(path.join(rootDir, ".nukadoko", "runs"))).toBe(false);
     }));
 

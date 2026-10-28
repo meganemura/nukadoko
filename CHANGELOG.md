@@ -652,6 +652,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A run that selects no scenario fails.** A target that holds no
+  scenario, or an `--env` that leaves out every scenario the targets
+  hold, ran nothing and exited 0, which read as criteria that hold. It
+  exits 1 now with a `nothing-selected` finding that says what selected
+  nothing, and still writes no run directory. When `--env` left every
+  scenario out, the finding's `do:` line is the same run without `--env`.
+
 - **A record keeps a JSON object's own `__proto__` key.** Redaction
   rebuilt each object by assignment, and assigning `__proto__` sets the
   prototype instead of adding a key, so a response body or a returned
