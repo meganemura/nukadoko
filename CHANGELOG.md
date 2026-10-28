@@ -391,7 +391,8 @@ just until 0.1.
   or at the config file, a feature file outside the features directory
   named on the command line, a workspace package linked into
   `node_modules` from inside the repository (the base world alone), or a
-  submodule or a nested repository: each leaves the world it reaches
+  submodule or a nested repository (the state directory, where the run
+  makes its own trees, is never read as one): each leaves the world it reaches
   unbuilt, its cells not run with the reason, and the `do:` line of a
   row that turns red runs the row without `--base`, with a `fix:` line
   where an edit lets `--base` build the world. Where one hides part of

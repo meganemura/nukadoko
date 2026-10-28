@@ -4377,7 +4377,9 @@ comparison that could not see the mapping. One line per shape:
   which would run head's copy as the base's code.
 - A submodule on either side, or a directory in head's working tree that
   holds a repository of its own: both worlds, and it hides the mapping
-  when it is under the features directory.
+  when it is under the features directory. The state directory, where
+  the run makes its own trees, is not read as head's working tree, so it
+  needs no entry in `.gitignore`.
 
 Without `--base` no change is known, so a row is `held`, `proven`, or
 `failed`. The exit code is 1 when a row is red, or when the run failed

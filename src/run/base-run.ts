@@ -377,9 +377,14 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
       config: refConfigFile === null ? null : inRepo(refConfigFile),
       program: refProgramFile === null ? null : inRepo(refProgramFile),
     };
-    // git lists a nested repository with a trailing `/`.
+    // git lists a nested repository with a trailing `/`. The state
+    // directory is the runs', this one's trees among them, not head's
+    // working tree, whether or not git ignores it, as the old tree leaves
+    // it out too.
+    const stateDir = inRepo(config.stateDir);
     const headEntries = (await workingTreeFiles(top)).flatMap((file): SideEntry[] => {
       const entry = file.replace(/\/$/, "");
+      if (within(entry, stateDir)) return [];
       const kind = kindOnDisk(path.join(top, entry));
       return kind === null ? [] : [{ path: entry, kind }];
     });
@@ -414,7 +419,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     const baseNeeded = !blocked("base") && changes.some((change) => change?.change === "changed" || change?.change === "new");
     const oldNeeded =
       !blocked("old") && changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true || change.renamedFrom !== undefined));
-    const treeInput: TreeInput = { headFiles, refFiles, head: headSide, ref: refSide, stateDir: inRepo(config.stateDir) };
+    const treeInput: TreeInput = { headFiles, refFiles, head: headSide, ref: refSide, stateDir };
     const roots = { head: top, ref: baseTop };
     if (oldNeeded) writeOldTree(treeInput, roots, oldTop);
     if (baseNeeded) {

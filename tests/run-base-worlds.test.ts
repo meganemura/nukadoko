@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CART_STEP, cartModule, feature, makeBaseProject, rowSummary, scenario, totalStep, type BaseProject, type TableRow } from "./helpers/base-project.js";
@@ -144,6 +144,21 @@ describe("a url function", () => {
     expect(result.exitCode).toBe(0);
     const [, five] = rows(project.root);
     expect(rowSummary([five!])).toEqual([["five items", "new", "proven", ["head:default:pass", "base:default:fail"]]]);
+  }, 60_000);
+});
+
+describe("a state directory git does not ignore", () => {
+  it("is not head's working tree, so the run's own base tree in it blocks no world", async () => {
+    project = await makeBaseProject();
+    writeFileSync(path.join(project.top, ".gitignore"), "node_modules/\n");
+    project.write({ "lib/cart.mjs": cartModule("return count;"), "features/cart.feature": "Feature: Cart\n" });
+    project.commit("base");
+    project.write({ "lib/cart.mjs": cartModule(), "features/cart.feature": feature(scenario("three items", 3, 6)) });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "HEAD~1"]);
+    expect(result.stderr).not.toContain("not run");
+    expect(rowSummary(rows(project.root))).toEqual([["three items", "new", "proven", ["head:default:pass", "base:default:fail"]]]);
+    expect(result.exitCode).toBe(0);
   }, 60_000);
 });
 
