@@ -5541,6 +5541,7 @@ code は `invalid-arguments`、`target-not-found`、`config-invalid`、`check-er
 `nuka run` は、`check-errors` の拒否の前に、止まる原因になった `nuka check` の所見を出力します。
 次のコマンドがわかっているとき、拒否の `do` はそれを名指しします。
 知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、`check` が受け付けない `:line` には `nuka check <file>` です。
+`check-errors` には、対象の各ファイルを `:line` を除いて 1 回ずつ名指し、run の `--env` フラグを付けた `nuka check` です。
 プロジェクトのファイルが `nuka scaffold` を妨げるとき(step ファイルがすでにある、または `--from` が名指す step の `returns` がそのキーを持たない)、`fix` がそのファイルへの変更を名指しし、`do` は同じ `nuka scaffold` のコマンドラインです。
 それ以外では、`fix` はそのコードの一般的な編集で、`do` はそのコマンド自身の `--help` です。
 

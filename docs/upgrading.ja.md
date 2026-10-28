@@ -468,6 +468,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   scenario を足すか、scenario を持つ対象を名指すか、`--env` を外します。
   `--env` がすべての scenario を外したときは、finding の `do:` 行がその run です。
 
+- **`check-errors` の拒否の `do:` 行は `:line` を持ちません。**
+  対象の各ファイルを 1 回ずつ名指すので、`nuka check` がそのまま走らせます。
+  プロジェクトで変えることはありません。
+  以前の行を走らせたスクリプトは `line-not-supported` を受け取っていました。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

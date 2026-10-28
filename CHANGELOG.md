@@ -652,6 +652,12 @@ just until 0.1.
 
 ### Fixed
 
+- **The `do:` line of `check-errors` runs as printed.** A `nuka run`
+  given `:line` targets that `nuka check` stopped printed `nuka check`
+  with the same targets, and `nuka check` refuses a `:line`
+  (`line-not-supported`). The line now names each targeted file once,
+  without its line, and keeps the `--env` flags.
+
 - **A run that selects no scenario fails.** A target that holds no
   scenario, or an `--env` that leaves out every scenario the targets
   hold, ran nothing and exited 0, which read as criteria that hold. It

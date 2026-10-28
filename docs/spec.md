@@ -6795,7 +6795,8 @@ prints the `nuka check` findings it stopped on before its
 `check-errors` refusal. The refusal's `do` is the next command when one is
 known: `nuka steps` for an unknown step, the install line for a missing
 peer dependency, `nuka check <file>` for a `:line` that `check` does not
-take. When a project file stands in the way of `nuka scaffold` (the step
+take, and, for `check-errors`, `nuka check` with each targeted file once,
+without its `:line`, and the run's `--env` flags. When a project file stands in the way of `nuka scaffold` (the step
 file already exists, or a `--from` producer's `returns` does not hold the
 key), the `fix` names the change to that file and the `do` is the same
 `nuka scaffold` command line. Otherwise the `fix` is the code's general

@@ -333,6 +333,14 @@ function stepsLocation(
   ];
 }
 
+/** The `nuka check` that reports the errors a run stopped over, as check
+ * accepts it: check reads whole files and refuses a `:line` target, so
+ * each targeted file is named once, without its line. */
+export function checkCommandFor(targets: readonly string[], envs: readonly string[]): string {
+  const files = [...new Set(targets.map((target) => parseFeatureTarget(target).relativePath))];
+  return ["nuka check", ...files.map(shellWord), ...envs.flatMap((name) => ["--env", shellWord(name)])].join(" ");
+}
+
 /** Why a run selected no scenario. When `--env` left every scenario out,
  * the `do:` line is the same run without it, which selects the
  * environments that declare conditions; when the targets hold none, only
@@ -518,7 +526,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           "check-errors",
           {
             fix: "Correct each error the findings name, or pass --no-check to run anyway.",
-            do: ["nuka check", ...options.featureArgs.map(shellWord), ...options.envs.flatMap((name) => ["--env", shellWord(name)])].join(" "),
+            do: checkCommandFor(options.featureArgs, options.envs),
           },
           options.json ? report.errors.map((issue) => asFinding("error", issue)) : [],
         );

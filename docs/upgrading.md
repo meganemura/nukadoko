@@ -565,6 +565,10 @@ This part does not change release to release.
   that holds one, or drop the `--env`; the finding's `do:` line is that
   run when `--env` left every scenario out.
 
+- **The `check-errors` refusal's `do:` line has no `:line`.** It names
+  each targeted file once, so `nuka check` runs it; nothing changes in a
+  project. A script that ran the old line got `line-not-supported`.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and
