@@ -6249,7 +6249,9 @@ plaintext reaches a log the moment the run starts.
 `--fail-on <code>` (repeatable, or comma-separated) makes one invocation
 exit 1 when a finding with that code is reported, and says so on stderr as
 `fail-on: <code> reported <n> finding(s)`; under `--json` the envelope's
-`fail_on_hits` lists each such code with its count. The finding keeps its
+`fail_on_hits` lists each such code with its count.
+Each `--fail-on` takes one value, a code or a comma-separated list, so a feature path after it is a target.
+The finding keeps its
 severity in the output: what changed is the project's policy for that job,
 not the finding's nature. A code that a check report never contains is
 refused before anything is analyzed, so a typo cannot become a gate that

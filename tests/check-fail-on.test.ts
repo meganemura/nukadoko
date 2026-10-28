@@ -112,6 +112,13 @@ describe("nuka check --fail-on", () => {
     expect(repeatedErr.text()).toBe("fail-on: schema-field-undescribed reported 2 findings\n");
   });
 
+  it("takes one value per flag, so a feature path after it is a target", async () => {
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check", "--fail-on", "scenario-without-then", "features/multi.feature"], { rootDir, stdout: createCaptureSink(), stderr });
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toBe("fail-on: scenario-without-then reported 2 findings\n");
+  });
+
   it("keeps --json output parseable while the exit code turns to 1, and names each hit in fail_on_hits", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json", "--fail-on", "schema-field-undescribed,fixture-unused"], {

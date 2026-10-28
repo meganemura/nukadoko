@@ -672,6 +672,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A feature path after `--fail-on` is a target.** `--fail-on` took
+  every word after it, so `nuka check --fail-on pattern-unbound
+  features/a.feature` refused the path as an unknown code. Each
+  `--fail-on` takes one value now, a code or a comma-separated list, and
+  still repeats.
+
 - **A `{condition.<name>}` refusal in the default world names an
   environment that declares it.** Its fix told the user to declare the
   condition under conditions of world default, which the program file

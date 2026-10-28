@@ -906,6 +906,9 @@ export async function runCli(
         .option("fail-on", {
           type: "string",
           array: true,
+          // One value per flag, so a feature path after it stays a target;
+          // the flag repeats, or takes a comma-separated list, for more.
+          nargs: 1,
           describe:
             "exit 1 when a finding with this code is reported (repeatable, or comma-separated); the finding keeps " +
             "its severity in the output, only the exit code changes. For a job that gates on one note, such as " +
