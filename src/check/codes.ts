@@ -196,7 +196,7 @@ const CHECK_CODES = {
   "from-structural-violation": {
     description: "A step's from names a value that is not a registered step, or is otherwise structurally malformed.",
     severity: "error",
-    fix: "Make each from entry name a step that a step file registers.",
+    fix: "Make each from entry name a step that a step file registers, and a key that step's returns declares.",
   },
   "from-unused": {
     description:

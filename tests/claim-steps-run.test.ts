@@ -1452,6 +1452,30 @@ export default defineStep({
     );
   });
 
+  it("names the top of the result for a dotted from key, and says a from key reads one level", async () => {
+    const rootDir = await project({
+      "features/steps/the-count-is.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the count is {count:int}",
+  args: z.object({ count: z.number(), total: z.number() }),
+  from: { total: [answer, "cart.count"] },
+  claims: [{ actual: "total", compare: "equal", expected: "count" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the count is 1"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout).toContain(
+      'error\tfrom-structural-violation\tfeatures/steps/the-count-is.ts\tfrom.total names key "cart.count", which is not one of the upstream step\'s returns keys\n' +
+        '  fix: Name a key that the upstream step\'s returns declares. The upstream step\'s returns declares cart, out, body. A from key reads one level of the result, so name "cart" in from and read count under it in the path that uses it.\n',
+    );
+    expect(checked.stdout).toContain(
+      'error\tclaim-path-unknown\tfeatures/t.feature:4\tStep "the-count-is"\'s claims[0].actual reads "total", and step "the-app-answers" on line 3 returns nothing at "cart.count" at the top of its result, which has cart, out, body. "cart.count" is one key, not a path: a from key reads one level of the result. The value would be undefined, so the claim would always break\n',
+    );
+  });
+
   it("refuses an expected key a parameter type with a transformer fills", async () => {
     const rootDir = await project({
       "nukadoko.config.ts":

@@ -1,7 +1,9 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { defineStep, type Step } from "../src/step/define-step.js";
-import { registeredStepPredicate, validateStepFrom } from "../src/step/validate-from.js";
+import { registeredStepPredicate, undeclaredReturnsKeyFix, validateStepFrom } from "../src/step/validate-from.js";
 
 // Responsibility: unit tests for src/step/validate-from.ts's pure functions
 // — no discovery, no loader, no filesystem:
@@ -89,6 +91,9 @@ describe("validateStepFrom", () => {
     const isRegistered = registeredStepPredicate([upstream, step]);
     const issues = validateStepFrom("consumer", step, isRegistered);
     expect(issues.some((issue) => issue.message.includes('"missingKey"'))).toBe(true);
+    expect(issues.find((issue) => issue.message.includes('"missingKey"'))?.fix).toBe(
+      "Name a key that the upstream step's returns declares. The upstream step's returns declares id, count.",
+    );
   });
 
   it("flags a step whose own args isn't an object schema", () => {
@@ -126,4 +131,19 @@ describe("validateStepFrom", () => {
     });
     expect(validateStepFrom("no-from", step, () => true)).toEqual([]);
   });
+});
+
+describe("undeclaredReturnsKeyFix", () => {
+  const key = gs.text({ alphabet: "abc", minSize: 1, maxSize: 3 });
+
+  it("names every declared key, and splits a dotted key only when its first part is declared", () =>
+    hegel.test((tc) => {
+      const declared = tc.draw(gs.arrays(key, { maxSize: 4, unique: true }));
+      const parts = tc.draw(gs.arrays(key, { minSize: 1, maxSize: 3 }));
+      const fix = undeclaredReturnsKeyFix(parts.join("."), declared);
+      expect(fix.startsWith("Name a key that the upstream step's returns declares. ")).toBe(true);
+      if (declared.length > 0) expect(fix).toContain(`declares ${declared.join(", ")}.`);
+      const splits = parts.length > 1 && declared.includes(parts[0]!);
+      expect(fix.includes(`name "${parts[0]}" in from and read ${parts.slice(1).join(".")} under it`)).toBe(splits);
+    }));
 });

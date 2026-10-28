@@ -253,12 +253,18 @@ function missingMessage(
   segments: readonly string[],
   line: number | undefined,
 ): string {
-  const where = segments.slice(0, walk.at).join(".");
   const segment = segments[walk.at]!;
+  const where = walk.at === 0 ? "at the top of its result" : `under ${segments.slice(0, walk.at).join(".")}`;
   const has = walk.keys === null ? "" : walk.keys.length === 0 ? ", which has no keys" : `, which has ${walk.keys.join(", ")}`;
+  // Only the first segment can hold a dot: it is the from entry's key,
+  // which the run reads as one key, never as a path.
+  const oneLevel =
+    walk.at === 0 && segment.includes(".") && walkSchema(producer.step.returns, segment.split(".")).kind !== "missing"
+      ? ` "${segment}" is one key, not a path: a from key reads one level of the result.`
+      : "";
   return (
     `Step "${stepName}"'s ${label} reads "${path}", and step "${producer.stepName}"` +
-    `${line === undefined ? "" : ` on line ${line}`} returns nothing at "${segment}" under ${where}${has}. ` +
+    `${line === undefined ? "" : ` on line ${line}`} returns nothing at "${segment}" ${where}${has}.${oneLevel} ` +
     "The value would be undefined, so the claim would always break"
   );
 }

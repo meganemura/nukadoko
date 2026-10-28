@@ -460,6 +460,7 @@ async function reportFor(
       errors.push({
         code: "from-structural-violation",
         message: issue.message,
+        ...(issue.fix === undefined ? {} : { fix: issue.fix }),
         // rootDir-relative, matching every other CheckIssue.file this report
         // produces (src/discover/discover-steps.ts's own header, on
         // CompatParameterTypeEntry.filePath) — unlike that field,

@@ -672,6 +672,16 @@ just until 0.1.
 
 ### Fixed
 
+- **`claim-path-unknown` and `from-structural-violation` say where the
+  key is missing and what to name instead.** A path that misses at the
+  top of the producer's result read "under ," with no place; it now
+  reads "at the top of its result". A `from` key with a dot, such as
+  `nested.list`, is one key, not a path, and both findings now say so.
+  The fix for a `from` key that the producer's `returns` does not
+  declare lists the keys it does declare, and for a dotted key it says
+  to name the first part in `from` and read the rest in the claim's
+  path, in place of a fix about a step that no step file registers.
+
 - **`--fail-on` refuses a note code with targets.** A check with
   targets computes no notes, so `nuka check features --fail-on
   pattern-unbound` accepted a gate that could never fire and exited 0.

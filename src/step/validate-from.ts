@@ -43,6 +43,22 @@ export interface FromIssue {
    * being filled — not the upstream's returns key). */
   readonly key: string;
   readonly message: string;
+  /** What to change, when it differs from the code's own fix. */
+  readonly fix?: string;
+}
+
+/** The fix for a from entry whose key the upstream step's returns does
+ * not declare. A dotted key is the likely mistake: a from key reads one
+ * level of the result, so the rest of the path belongs in the claim. */
+export function undeclaredReturnsKeyFix(upstreamKey: string, returnsKeys: readonly string[]): string {
+  const declared =
+    returnsKeys.length === 0 ? "The upstream step's returns declares no keys." : `The upstream step's returns declares ${returnsKeys.join(", ")}.`;
+  const [head, ...rest] = upstreamKey.split(".");
+  const oneLevel =
+    rest.length > 0 && returnsKeys.includes(head!)
+      ? ` A from key reads one level of the result, so name "${head}" in from and read ${rest.join(".")} under it in the path that uses it.`
+      : "";
+  return `Name a key that the upstream step's returns declares. ${declared}${oneLevel}`;
 }
 
 /**
@@ -132,6 +148,7 @@ export function validateStepFrom(
             step: stepName,
             key,
             message: `from.${key} names key "${upstreamKey}", which is not one of the upstream step's returns keys`,
+            fix: undeclaredReturnsKeyFix(upstreamKey, Object.keys(returnsShape)),
           });
         }
       }

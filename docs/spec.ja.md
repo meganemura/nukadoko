@@ -1464,6 +1464,9 @@ record のラベルは、`view` と `at` を含めて、場所全体を名指し
 `undefined` に解決される実際の値では、claim は必ず成り立たず、record はその場所を名指しします。
 `nuka check` は、各 `from` のパスを値を返す step の `returns` スキーマと照らし合わせ、スキーマが宣言していないパスを報告します(`claim-path-unknown`)。
 そのような claim は、成り立たないことしかありえないからです。
+`from` の項目のキーは、値を返す step の結果を一段だけ読みます。
+そのため `nested.list` のようにドットを含むキーは、パスではなく一つのキーを名指しします。
+`from` には `nested` を書き、その下の `list` は claim のパスで読みます。
 
 #### claim が判定する値
 

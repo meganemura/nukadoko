@@ -1771,6 +1771,9 @@ An actual value that resolves to `undefined` always breaks, and the record
 names the place. `nuka check` reads each `from` path against the producing
 step's `returns` schema and reports a path that schema does not declare
 (`claim-path-unknown`), because such a claim could only ever break.
+A `from` entry's key reads one level of the producer's result, so a
+dotted key such as `nested.list` names one key, not a path: name
+`nested` in `from` and read `list` under it in the claim's path.
 
 #### The value a claim judges
 
