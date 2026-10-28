@@ -864,8 +864,10 @@ CI keep working: confirmed by running our own stream through
 a test case from the scenario, so a plain Scenario run in two
 environments is two test cases of one name there. A control (a
 scenario run where its condition does not hold) is left out of the
-stream, so JUnit reads a green run as green; Allure keeps it, named
-`<scenario> (control)`, with the status it ran to. See
+stream, so JUnit reads a green run as green. It does not read every red
+run as red: under `--base` an `unproven` or `moved` row is no failed
+test case there, so gate on `nuka run`'s exit code. Allure keeps a
+control, named `<scenario> (control)`, with the status it ran to. See
 [Allure results](docs/spec.md#allure-results) and
 [Messages stream](docs/spec.md#messages-stream).
 

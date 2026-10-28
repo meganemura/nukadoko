@@ -275,7 +275,8 @@ fetch が無ければ、`nuka run` は `base-shallow` で拒否し、同じ `git
   2 つの job が言えるのは、それぞれの側が green だったことです。
   1 回の run は、scenario が 2 つを見分けたことを言えます。
   job は、対照が赤にすることのない `nuka run` の終了コードでゲートします。
-  `nuka report --format messages` から作る JUnit のレポートは対照を外すので、終了コードと一致します。
+  `nuka report --format messages` から作る JUnit のレポートは対照を外すので、対照がそれを赤にすることもありません。
+  ただし `--base` のもとでは `unproven` や `moved` の行を失敗として示さないので、ゲートにはなりません。
   Allure のレポートは、失敗した対照を `<scenario> (control)` という名前の失敗した result として、設計どおり示します。
   その失敗こそが証明だからです。
 - **ランナー自身の速さに合わせた `retention.runs`。**

@@ -3529,8 +3529,10 @@ step ファイルのリファクタリングは対応づけを変えるので、
 `--base` のもとでは何を比べたかを名指す 1 行があり、そのあとに受け入れ基準ごとに 1 行、world と environment ごとに 1 列(head の列の見出しにはその environment が宣言する condition が続きます)で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
 ゲートは `nuka run` の終了コードで、対照がそれを赤にすることはありません。
 Allure の result は各対照を走った結果のままの状態で、対照と分かる形で残すので、失敗した対照はそこでは設計どおり失敗した result です。
-JUnit を読む CI がゲートにする messages ストリームは、対照を外します(「Allure results」と「Messages stream」を参照)。
-どちらも head の実行だけを持ちます。
+messages ストリームは、対照を外します(「Allure results」と「Messages stream」を参照)。
+どちらも head の実行だけを持つので、示すのは scenario の結果であり、断定の表ではありません。
+`unproven` や `moved` の行は、head での実行がすべて通っていても赤です。
+CI のジョブは終了コードでゲートし、このストリームから作った JUnit のレポートではゲートしません。
 
 `--base` は、プロジェクトのリポジトリで git が解決するコミットを名指すものを取ります。
 ブランチ、tag、`origin/main` のようなリモート追跡の名前、またはコミットです。
@@ -4861,6 +4863,13 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   対照はゲートするテストではなく証拠です。
   失敗した対照はその行を証明するもので、JUnit のレポートはそれを green の run の失敗として数えてしまいます。
   `run.json`、run サマリ、Allure の result はそれらを残します。
+- ストリームが示すのは scenario の結果であり、断定の表ではありません。
+  `unproven` や `moved` の行が赤なのは base か old の world で走ったもの、または走らなかったもののためで、ストリームはそれを外します。
+  その行の test case は head での実行で、どれも通っています。
+  必須のセルを持たない行には、test case が 1 つもありません。
+  そのとき false になるのは `testRunFinished.success` だけで、`@cucumber/junit-xml-formatter` はそれを出力しません。
+  そのような run の JUnit のレポートは、失敗を 1 つも数えません。
+  `nuka run` の終了コードでゲートしてください。
 - 各 test case は、media type が `application/vnd.nukadoko.verdict+json` の `verdict.json` 添付を、最後の step の後に `testStepId` なしで持ちます。
   その中身は、行の `verdict` と `reason` です(「断定」を参照)。
   `TestCaseFinished` は実行がどう終わったかを述べ、断定のためのフィールドを持ちません。

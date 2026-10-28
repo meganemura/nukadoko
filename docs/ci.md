@@ -334,7 +334,9 @@ Five things the workflow above leaves to the team, each small.
   was green; one run can say that the scenario told them apart. The job
   gates on `nuka run`'s exit code, which a control never turns red. A
   JUnit report built from `nuka report --format messages` leaves the
-  controls out and agrees with it; an Allure report shows a control that
+  controls out, so a control never turns it red either; under `--base` it
+  does not show an `unproven` or `moved` row as a failure, so it is no
+  gate. An Allure report shows a control that
   failed as a failed result named `<scenario> (control)`, by design,
   since that failure is the proof.
 - **`retention.runs` sized to the runner's own pace.** The default keeps

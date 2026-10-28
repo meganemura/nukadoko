@@ -4442,9 +4442,11 @@ red row that says why, with where its execution stopped. `nuka run`'s
 exit code is the gate, and a control never turns it red. The Allure
 results keep each control with the status it ran to, marked as a
 control, so a control that failed is a failed result there by design;
-the messages stream, which a JUnit-reading CI gates on, leaves the
-controls out (see "Allure results" and "Messages stream"). Both carry
-head's executions alone.
+the messages stream leaves the controls out (see "Allure results" and
+"Messages stream"). Both carry head's executions alone, so they show
+scenario outcomes, not the verdict table: an `unproven` or `moved`
+row is red while every execution at head passed. A CI job gates on the
+exit code, never on a JUnit report built from the stream.
 
 `--base` names a commit-ish git resolves in the project's repository:
 a branch, a tag, a remote-tracking name such as `origin/main`, or a
@@ -6096,6 +6098,14 @@ manifest, so retention and `nuka clean` remove it with the run.
   gates: the one that failed is what proves its row, and a JUnit report
   would count it as a failure of a green run. `run.json`, the run
   summary, and the Allure results keep them.
+- The stream shows scenario outcomes, not the verdict table. An
+  `unproven` or `moved` row is red for what ran, or did not run, in the
+  base or the old world, which the stream leaves out, and each of its
+  test cases, an execution at head, passed;
+  a row with no required cell has no test case at all. Only
+  `testRunFinished.success` is false then, and
+  `@cucumber/junit-xml-formatter` does not print it: the JUnit report of
+  such a run counts no failure. Gate on `nuka run`'s exit code.
 - Each test case carries a `verdict.json` attachment of media type
   `application/vnd.nukadoko.verdict+json`, after its last step and with
   no `testStepId`: its row's `verdict` and `reason` (see "Verdicts").
