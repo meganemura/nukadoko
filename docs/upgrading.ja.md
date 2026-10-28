@@ -428,6 +428,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `base-shallow` の拒否の `do` がそのコマンドです。
   `featuresDir` がプロジェクトのルートであるプロジェクトは、`--base` を使う前に feature と step を専用のディレクトリへ移します。
 
+  0.21.0 から上げる 1 つの commit は、上げる前の ref を渡した `--base` を通れません。
+  その commit では Then が claim の step になるので、対応づけが変わり、変わっていない受け入れ基準はすべて old の world で走ります。
+  old の world は、ref の step ファイルのもとでの新しいリリースで、その Then はまだコードを走らせます。
+  その tree は `nuka check` を通らない(あるいは config が読み込めない)ので、そのような行はすべて `moved` になります。
+  その `do:` の行も同じ結果を出し、head をどう直しても通りません。
+  その commit は `--base` を付けない `nuka run` でゲートします。
+  次の変更は、新しい step を持つ基点と比べます。
+
 - **run.json は `since` を持たず、scenario のエントリは `criteria` を持ちません。**
   `criteria.changed_since` を読んでいた読み手は、`table.rows` の行の `change`(`unchanged`、`changed`、`new`、`removed`、そして名前を変えたか移した受け入れ基準の `renamed_from`)を読みます。
   `ambiguous` と `unknown` はなくなりました。

@@ -506,6 +506,16 @@ This part does not change release to release.
   whose `featuresDir` is the project root moves its features and steps
   into a directory of their own before it can use `--base`.
 
+  The one commit that upgrades from 0.21.0 cannot pass `--base` with a
+  ref from before the upgrade. Its Thens become claim steps, so the
+  mapping changed, and every unchanged criterion runs in the old world:
+  the new release on the ref's step files, whose Thens still run code.
+  That tree does not pass `nuka check` (or its config does not load), so
+  every such row is `moved`, its `do:` line gives the same result, and
+  no edit at head can make it pass. Gate that commit with `nuka run`
+  without `--base`. The next change compares with a base that has the
+  new steps.
+
 - **run.json has no `since`, and a scenario entry has no `criteria`.**
   A reader of `criteria.changed_since` reads the row's `change` in
   `table.rows` (`unchanged`, `changed`, `new`, or `removed`, and
