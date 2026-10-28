@@ -144,6 +144,9 @@ names, so a deployment target can declare its switches and stay out. `url` in pl
 that runs elsewhere, such as a staging server, and starts nothing: give it
 `build: []` and `prepare: []` when the top level has them, and
 `policy: "read-only"` when the data there belongs to someone else.
+Under `nuka run --base`, a `url` function receives `tree` and branches on
+it: one that answers the base world with head's URL leaves that world not
+run.
 
 A tree with no program file starts no world, which suits a command-line
 tool whose steps run commands with `runCommand`. "Program" in
