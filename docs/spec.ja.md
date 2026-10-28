@@ -2958,7 +2958,8 @@ exit code は結果であって、失敗ではないからです。
 文字列は step record から取るので、そこに含まれる secret はすでに redact されています。
 サマリ行の後では、失敗した各 scenario を所見 `failed\tscenario-failed\t<feature>:<line>\t<name>: <エラーの 1 行目>` として stderr に表示します。
 その各所見に `  do:` 行が続きます。
-`do:` 行は `nuka run <feature>:<line>` で、run に `--env` が与えられていれば、その scenario が走った environment を名指す `--env <name>` も付きます。
+`do:` 行は `nuka run <feature>:<line>` で、run が environment を選んだときは、その scenario が走った environment を名指す `--env <name>` も付きます。
+`--env`、`defaultEnvironments`、condition を宣言する environment のどれで選んだときも同じで、暗黙の `default` だけを走らせた run では何も名指しません。
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
 この行は直列実行と並行実行の両方で表示されます。
 `--json` のとき、stderr は空です。

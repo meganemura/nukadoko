@@ -523,8 +523,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     return refused(`--env names ${[...new Set(repeated)].map((name) => `"${name}"`).join(", ")} more than once`, "invalid-value");
   }
   // A rerun line has to land in the same environment the failure came from.
-  // A run that named no environment ran under `default`, and its rerun
-  // names none either.
+  // A run that ran only the implicit `default` names none, since a rerun
+  // without `--env` runs there again.
   const conditionsOf: RunConditions = {
     rerunFlags: (environment) => (implicitDefault ? [] : ["--env", environment]),
     named: envs.length > 1,

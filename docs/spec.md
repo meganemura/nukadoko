@@ -3687,7 +3687,9 @@ redacted. After the
 summary line, stderr prints each failed scenario as a finding,
 `failed\tscenario-failed\t<feature>:<line>\t<name>: <first error line>`,
 followed by a `  do:` line: `nuka run <feature>:<line>`, plus `--env <name>`
-naming the environment the scenario ran in when the run was given `--env`,
+naming the environment the scenario ran in whenever the run selected
+environments, by `--env`, by `defaultEnvironments`, or as the environments
+that declare conditions (only a run of the implicit `default` names none),
 quoted for a POSIX shell where a word needs
 it. These lines appear for serial and concurrent runs. Under `--json`, stderr is empty: it carries none of the lines this
 paragraph and the two above it name, nor the retention line, and the
