@@ -888,6 +888,8 @@ typed step 自身の `run` には締め切りがあります。
 `nukadoko.config.ts` の `stepTimeout` がプロジェクトの既定を決め、既定値は 20 分です。
 `defineStep({ timeout })` は 1 つの step についてそれを上書きします。
 これがあることで、返らない step は `error.kind: "timeout"` の失敗した step になり、run は次の scenario へ進んで summary に到達します。
+`--concurrency` でも同じです。
+worker は、時間切れになった step が答えの無いリクエストやタイマーを開いたまま残しても、scenario と AfterAll hook を終えたところで終わります。
 「制限なし」を意味する値はありません。
 返らない step は run 全体を道連れにし、終わらない run は何も報告しないからです。
 それを止めるためにあります。

@@ -459,3 +459,10 @@ try {
 // A failure before main's own teardown leaves the IPC channel open, and an
 // open channel keeps this process alive with the parent waiting on it.
 if (process.connected) process.disconnect?.();
+// The work is done, and anything still open is project code's: a request
+// a timed-out step left without an answer holds its socket, and a timer
+// holds the loop. The parent waits for this process to end, so it ends
+// here, once every envelope and line it wrote has reached its pipe.
+await new Promise<void>((resolve) => envelopeStdout.write("", resolve));
+await new Promise<void>((resolve) => process.stderr.write("", () => resolve()));
+process.exit();

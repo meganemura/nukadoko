@@ -1125,7 +1125,9 @@ A typed step's own `run` has a deadline. `stepTimeout` in
 and `defineStep({ timeout })` overrides it for one step. Passing it is what
 turns a step that never returns into a failed step with
 `error.kind: "timeout"`, so the run continues to the next scenario and
-reaches its summary. There is no value meaning "no limit": a step that
+reaches its summary. Under `--concurrency` too: a worker ends once its
+scenarios and its AfterAll hooks are done, even when a step that timed
+out left a request without an answer or a timer open. There is no value meaning "no limit": a step that
 never returns takes the whole run with it, which is what this exists to
 stop, and a run that never ends reports nothing at all. `nuka steps` and
 `nuka describe` show a step's own `timeout` when it declares one.

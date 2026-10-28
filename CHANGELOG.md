@@ -652,6 +652,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A step that timed out no longer hangs `--concurrency`.** A step
+  whose request never got an answer failed with its timeout, and its
+  worker then waited on the open socket forever, so the parent never
+  printed the summary. A worker now ends once its scenarios and its
+  AfterAll hooks are done, after its last envelope reaches the parent.
+
 - **The `do:` line of `check-errors` runs as printed.** A `nuka run`
   given `:line` targets that `nuka check` stopped printed `nuka check`
   with the same targets, and `nuka check` refuses a `:line`

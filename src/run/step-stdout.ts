@@ -19,10 +19,16 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // process exit ends that. Records reach the real stdout through the sink
 // this function returns, which keeps the `write` found before the switch.
 
+/** A sink on the real stdout. `written` is called once the chunk, and
+ * every chunk before it, has reached the stream. */
+export interface RecordSink extends WritableSink {
+  write(chunk: string, written?: () => void): unknown;
+}
+
 /** Points `process.stdout.write` at stderr for the rest of the process and
  * returns a sink that still writes to the real stdout. */
-export function divertProcessStdoutToStderr(): WritableSink {
+export function divertProcessStdoutToStderr(): RecordSink {
   const recordWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
-  return { write: (chunk: string) => recordWrite(chunk) };
+  return { write: (chunk: string, written?: () => void) => recordWrite(chunk, written) };
 }
