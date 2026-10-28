@@ -2900,7 +2900,10 @@ reads state creates it first and claims only on what it created.
   `serve`, and `setup` phase starts, so a long wait says what it waits
   on.
   A world that ran a command or `setup` prints one more once it is
-  ready, with what each phase took, the URL, and the log:
+  ready, with what each phase took, the URL, and the log.
+  A path under the project, such as a command's `{dir}` or `{root}`,
+  is printed relative to the project root, as every path nukadoko
+  prints is:
 
 ```text
 world default: build started: npm run build

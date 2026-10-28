@@ -14,6 +14,7 @@ import { loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
 import { placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
+import { projectRelativeText } from "../run/base-run.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { createStepContext, finalizeOpenRequests, installChannelPatches, type DisposeResult } from "../context/create-context.js";
 import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
@@ -445,7 +446,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         worldDir: () => path.join(evidenceDir, DO_WORLD_DIR_NAME),
         recordPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
         displayPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
-        progress: stderr,
+        // A command is filled with absolute paths (`{root}`, `{dir}`), and
+        // every path nukadoko prints is relative to the project.
+        progress: { write: (chunk: string) => stderr.write(projectRelativeText(chunk, rootDir)) },
       }).start(resolvedEnv.name, resolvedEnv.program, secrets, startAbort.signal);
       processSignal.setProcessCleanup(async () => {
         startAbort.abort();

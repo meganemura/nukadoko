@@ -477,6 +477,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   step、hook、fixture が出力した読み込み済みの secret は、record と同じく stderr でも `{{secret.NAME}}` になります。
   その値を nukadoko の stderr から読み戻していたスクリプトは、env ファイルから読みます。
 
+- **world の進行の行は、パスをプロジェクトのルートから名指します。**
+  コマンドの `{dir}` や `{root}` は、stderr では `.nukadoko/runs/<run_id>/worlds/<environment>` や `.` になります。
+  run.json の `worlds[].commands` は、プログラムが受け取った語のままです。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

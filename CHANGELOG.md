@@ -652,6 +652,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A world's progress lines name `{dir}` from the project root.** The
+  line a world of `nuka run` or `nuka do` prints as a phase starts held
+  the command as filled, so a `{dir}` or `{root}` in it was an absolute
+  path. The trees of `--base` already printed it relative to the
+  project; head's world and `nuka do`'s world do too now.
+
 - **What a step prints reaches stderr with its secrets redacted.** A
   step, hook, or fixture that printed a loaded secret through
   `console.log`, `console.error`, or `process.stdout.write` put the value

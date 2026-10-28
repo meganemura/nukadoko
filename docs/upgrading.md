@@ -574,6 +574,11 @@ This part does not change release to release.
   its record. A script that read the value back from nukadoko's stderr
   reads it from the env file instead.
 
+- **A world's progress lines name paths from the project root.** A
+  `{dir}` or `{root}` in a command reads `.nukadoko/runs/<run_id>/worlds/<environment>`
+  or `.` on stderr; run.json's `worlds[].commands` keeps the words the
+  program received.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

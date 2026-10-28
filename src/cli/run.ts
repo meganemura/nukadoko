@@ -796,7 +796,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       worldDir: (name) => path.join(runDirAbsolute, "worlds", name),
       recordPath: (absolutePath) => path.relative(runDirAbsolute, absolutePath).split(path.sep).join("/"),
       displayPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
-      progress,
+      // A command is filled with absolute paths (`{root}`, `{dir}`), and
+      // every path nukadoko prints is relative to the project.
+      progress: { write: (chunk: string) => progress.write(projectRelativeText(chunk, rootDir)) },
     });
     const worlds: RunWorld[] = [];
     // The URL each of head's worlds reached, unredacted, so the base world
