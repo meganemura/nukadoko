@@ -52,12 +52,12 @@ Pick the source from the sentence; the record names it in `expected_from`.
 - **An earlier step returned it** ("the item count is unchanged"):
   `expected: { from: "<from key>.<path>" }`, recorded as
   `from:<step>@<line>.<key>`.
-- **The pattern's fixed words state it** ("is refused", "exits 0", "holds
-  no items"): `expected: { literal: "refused" }`. The literal is exactly
-  the pattern's own words, or `0`, `""`, or `[]` for `no`, `none`, or
-  `nothing` (`""` or `[]` for `empty`) with `compare: "equal"` only, or
-  `"not-equal"` only right after the fixed word `not` ("is not empty").
-  Any other literal is refused: `Then the command succeeds` cannot claim `0`.
+- **The pattern's fixed words state it** ("is refused", "exits 0", "holds no
+  items"): `expected: { literal: "refused" }`. The literal is exactly the
+  pattern's own words, or `0`, `""`, or `[]` for `no`, `none`, `nothing`, or
+  `neither` (`""` or `[]` for `empty`) with `compare: "equal"` only, or
+  `"not-equal"` only right after the fixed word `not` ("is not empty"). Any
+  other literal is refused: `Then the command succeeds` cannot claim `0`.
 - **A second reading** ("A is listed before B"): `expected: { observe:
   "<path>" }`, a value `observe` returned beside the actual one.
 

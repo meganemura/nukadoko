@@ -1695,8 +1695,8 @@ ones nothing validated.
   joined by one space (the pattern `the command exits 0` may claim `0`).
   Only the pattern's words lose their edge punctuation, so a literal with
   other spacing or punctuation is a text the sentence does not state. Or
-  it is the fixed value of a word in a short table: `no`, `none`, and
-  `nothing` fix `0`, `""`, and `[]`; `empty` fixes `""` and `[]`. A
+  it is the fixed value of a word in a short table: `no`, `none`,
+  `nothing`, and `neither` fix `0`, `""`, and `[]`; `empty` fixes `""` and `[]`. A
   value from the table is compared with `equal` alone: "no item is
   unpaid" read as `at-least 0`, or "the cart is empty" read as
   `not-equal []`, holds for nearly anything, and the word does not show
@@ -6506,7 +6506,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               claim on what observe returns against the
                               first stated value. A line that states no
                               value but holds a word that fixes one (no,
-                              none, nothing, empty) needs exactly one --from
+                              none, nothing, neither, empty) needs exactly one
+                              --from
                               whose returns schema is a bare z.string(),
                               z.number(), or z.array(): its claim compares
                               that value with the word's literal of the same

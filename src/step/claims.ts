@@ -209,6 +209,7 @@ export const LITERAL_WORDS: Readonly<Record<string, readonly ClaimLiteral[]>> = 
   no: [0, "", []],
   none: [0, "", []],
   nothing: [0, "", []],
+  neither: [0, "", []],
   empty: ["", []],
 };
 

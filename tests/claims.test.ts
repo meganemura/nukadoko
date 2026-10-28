@@ -684,6 +684,13 @@ describe("the literal rule, exactly", () => {
       );
     }));
 
+  it("neither fixes the values no fixes, so a line about two hosts can state an empty list", () => {
+    const pattern = "neither host path links to it any more";
+    expect(LITERAL_WORDS["neither"]).toEqual(LITERAL_WORDS["no"]);
+    expect(literalStatedBy(pattern, [])).toBe("neither");
+    expect(claimsProblem([{ actual: "result", compare: "equal", expected: { literal: [] } }], literalShape(pattern))).toBeNull();
+  });
+
   it("refuses a table literal under every compare when one pattern says the word and another says not the word", () => {
     const shape = { ...literalShape("the list is empty"), patterns: ["the list is empty", "the list is not empty"] };
     for (const compare of ["equal", "not-equal"] as const) {

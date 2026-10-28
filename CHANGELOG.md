@@ -16,6 +16,10 @@ just until 0.1.
   `contains-text`, an expected text of only whitespace or nothing breaks
   the claim, and a `where` claim that overlaps an item claim cannot use
   either compare.
+- **`neither` states an empty value, as `no` does.** "Neither host path
+  links to it any more" may claim `{ literal: [] }` (or `0` or `""`),
+  compared with `equal`, where only `no`, `none`, `nothing`, and
+  `empty` could before.
 
 ## 0.22.0 — 2026-10-28
 

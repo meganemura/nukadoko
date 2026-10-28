@@ -1405,7 +1405,7 @@ discovery は、`defineStep` が返したオブジェクトそのものである
 - **リテラル**: `{ literal: v }` で、文そのものがその値を述べているときに限ります。
   そのテキストが、pattern の固定の語の並びを 1 つの空白でつないだものとちょうど等しいか(pattern `the command exits 0` は `0` を claim できます)、短い表にある語の固定の値であることが条件です。
   端の句読点を取るのは pattern の語の側だけなので、空白や句読点の違うリテラルは、文が述べていないテキストです。
-  表では、`no`、`none`、`nothing` が `0`、`""`、`[]` を、`empty` が `""` と `[]` を固定します。
+  表では、`no`、`none`、`nothing`、`neither` が `0`、`""`、`[]` を、`empty` が `""` と `[]` を固定します。
   表の値と比べられるのは `equal` だけです。
   "no item is unpaid" を `at-least 0` と読むことや、"the cart is empty" を `not-equal []` と読むことは、ほとんど何に対しても成り立ち、語はそれを示しません。
   ただ 1 つの例外は、表の語のすぐ前にある固定の語 `not` です。
@@ -5242,7 +5242,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               claim on what observe returns against the
                               first stated value. A line that states no
                               value but holds a word that fixes one (no,
-                              none, nothing, empty) needs exactly one --from
+                              none, nothing, neither, empty) needs exactly one
+                              --from
                               whose returns schema is a bare z.string(),
                               z.number(), or z.array(): its claim compares
                               that value with the word's literal of the same

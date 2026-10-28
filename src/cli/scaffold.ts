@@ -560,7 +560,7 @@ const OUTPUT_STREAMS: ReadonlySet<string> = new Set(["stdout", "stderr"]);
  * by `nuka scaffold --then`, which refuses, and `--feature`, which writes
  * no stub for such a line and says so. */
 export const THEN_STATES_NO_VALUE =
-  "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, empty)";
+  "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty)";
 
 /** Every fixed word of `pattern` that states a literal (`LITERAL_WORDS`),
  * in order, with the values it fixes. Pure. */
