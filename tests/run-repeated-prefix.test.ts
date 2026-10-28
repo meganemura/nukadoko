@@ -7,7 +7,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { loadFeaturesFromDirs } from "../src/feature/load-features.js";
+import { loadFeaturesFromDirs, parseFeatureSource } from "../src/feature/load-features.js";
 import { findRepeatedScenarioPrefixes, stepPrefixKey, type RunFeature } from "../src/run/repeated-prefix.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
@@ -341,6 +341,65 @@ describe("repeated-scenario-prefix reads each shared step's mutates declaration"
     expect(prefixNotes(rootDir)[0]!.message).toContain(
       '"Given the catalog is loaded" does not declare mutates: false',
     );
+  });
+});
+
+describe("repeated-scenario-prefix reads which shared steps a Background already holds", () => {
+  let rootDir: string;
+  // `nuka run` passes the parsed document of each selected feature, which
+  // is where a Background is.
+  const FEATURES: Record<string, string> = {
+    "features/background.feature":
+      "Feature: Background\n\n  Background:\n    Given the catalog is loaded\n\n" +
+      "  Scenario: one\n    Then the total is 1\n\n  Scenario: two\n    Then the total is 2\n",
+    "features/inline.feature":
+      "Feature: Inline\n\n  Scenario: one\n    Given the catalog is loaded\n    Then the total is 1\n\n" +
+      "  Scenario: two\n    Given the catalog is loaded\n    Then the total is 2\n",
+  };
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("check-clean-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  function notesFor(feature: string, lines: readonly [number, number], mutates: boolean) {
+    for (const [index, line] of lines.entries()) {
+      writeScenario(rootDir, {
+        id: `scn-${index}`, runId: "run-new", feature, line,
+        startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
+        steps: [
+          { text: "the catalog is loaded", ms: 2_000, mutates },
+          { text: `the total is ${index + 1}`, ms: 1_000, mutates: false },
+        ],
+      });
+    }
+    return prefixNotes(rootDir, [{ relativePath: feature, ...parseFeatureSource(FEATURES[feature]!, feature) }]);
+  }
+
+  it("does not offer a Background when every shared step already comes from one", () => {
+    const notes = notesFor("features/background.feature", [6, 9], false);
+    expect(notes.map((note) => note.fix)).toEqual([
+      "No change is necessary. The shared steps already sit in a Background. A process-scope fixture fits only an opening whose steps all declare mutates: false.",
+    ]);
+  });
+
+  it("says the steps already sit in a Background when a shared step may write", () => {
+    const notes = notesFor("features/background.feature", [6, 9], true);
+    expect(notes.map((note) => note.message.split("time. ")[1])).toEqual([
+      'The shared steps: "the catalog is loaded". "the catalog is loaded" does not declare mutates: false, so a later ' +
+        'scenario may read what this opening writes: a "process"-scope fixture would share that state between scenarios. ' +
+        "The shared steps already sit in a Background.",
+    ]);
+  });
+
+  it("still offers a Background when the shared steps are the scenarios' own", () => {
+    const notes = notesFor("features/inline.feature", [3, 7], false);
+    expect(notes.map((note) => note.fix)).toEqual([
+      "No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.",
+    ]);
   });
 });
 

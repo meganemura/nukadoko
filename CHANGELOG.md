@@ -672,6 +672,11 @@ just until 0.1.
 
 ### Fixed
 
+- **`repeated-scenario-prefix` no longer offers a Background for steps
+  that already sit in one.** When every shared step of the opening comes
+  from the feature's or a Rule's Background, the fix and the message say
+  so, in place of "A Background can hold the shared steps".
+
 - **`claim-path-unknown` and `from-structural-violation` say where the
   key is missing and what to name instead.** A path that misses at the
   top of the producer's result read "under ," with no place; it now

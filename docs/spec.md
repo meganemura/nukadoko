@@ -3545,8 +3545,9 @@ step record), the note names that step and says a `process`-scope
 fixture would share what it writes between scenarios. Following that
 advice on a writing opening broke two of seven scenarios in a measured
 HTTP API project. Naming a saving would be claiming the lift is possible,
-which nothing here measured. It never changes a scenario's status or the
-exit code.
+which nothing here measured. When every shared step comes from a
+Background, the note says the steps already sit in one, and offers no
+Background. It never changes a scenario's status or the exit code.
 
 `--base <git ref>` compares the run with the commit the ref names, such
 as the base of a pull request: a new or changed criterion also runs

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { PickleStepType, type Pickle, type PickleStep, type PickleStepArgument } from "@cucumber/messages";
+import { PickleStepType, type GherkinDocument, type Pickle, type PickleStep, type PickleStepArgument } from "@cucumber/messages";
 import type { Finding } from "../finding/finding.js";
 import { runCodeInfo } from "../finding/run-codes.js";
 import { readStepRecord } from "../record/read-step-record.js";
@@ -36,6 +36,10 @@ interface TrieNode {
   readonly children: Map<string, TrieNode>;
   count: number;
   ms: number;
+  /** True when some record reached this node's own step from a scenario's
+   * own steps, not from a Background, or from a scenario the features do
+   * not hold. */
+  outsideBackground: boolean;
   /** The earliest scenario, in source order, that opens with this prefix. */
   first: SourcePosition | null;
   /** True when some record of this node's own step lacks `mutates: false`:
@@ -80,6 +84,8 @@ function asScenario(entry: RunScenario, runDir: string): ScenarioRecord {
 export interface RunFeature {
   readonly relativePath: string;
   readonly pickles: readonly Pickle[];
+  /** The parsed file, which says which steps a Background holds. */
+  readonly gherkinDocument?: GherkinDocument;
 }
 
 function elapsedMs(startedAt: string, finishedAt: string): number {
@@ -110,6 +116,21 @@ function pickleStepsFor(
   return steps.every((step, index) => step.text === record.steps[index]!.text) ? steps : undefined;
 }
 
+/** The gherkin step ids of every Background, the feature's and each
+ * Rule's, in `features`. */
+function backgroundStepIds(features: readonly RunFeature[]): Set<string> {
+  const ids = new Set<string>();
+  for (const feature of features) {
+    for (const child of feature.gherkinDocument?.feature?.children ?? []) {
+      for (const step of child.background?.steps ?? []) ids.add(step.id);
+      for (const ruleChild of child.rule?.children ?? []) {
+        for (const step of ruleChild.background?.steps ?? []) ids.add(step.id);
+      }
+    }
+  }
+  return ids;
+}
+
 function picklesByScenario(features: readonly RunFeature[]): Map<string, readonly PickleStep[]> {
   const pickles = new Map<string, readonly PickleStep[]>();
   for (const feature of features) {
@@ -124,9 +145,10 @@ function picklesByScenario(features: readonly RunFeature[]): Map<string, readonl
 
 function buildTrie(records: readonly ScenarioRecord[], features: readonly RunFeature[]): TrieNode {
   const root: TrieNode = {
-    texts: [], withArgument: false, parent: null, children: new Map(), count: 0, ms: 0, first: null, mayWrite: false,
+    texts: [], withArgument: false, parent: null, children: new Map(), count: 0, ms: 0, outsideBackground: false, first: null, mayWrite: false,
   };
   const pickles = picklesByScenario(features);
+  const inBackground = backgroundStepIds(features);
 
   for (const record of records) {
     let node = root;
@@ -149,6 +171,7 @@ function buildTrie(records: readonly ScenarioRecord[], features: readonly RunFea
           children: new Map(),
           count: 0,
           ms: 0,
+          outsideBackground: false,
           first: null,
           mayWrite: false,
         };
@@ -158,6 +181,7 @@ function buildTrie(records: readonly ScenarioRecord[], features: readonly RunFea
       child.ms += prefixMs;
       if (child.first === null || comesBefore(position, child.first)) child.first = position;
       if (stepRecord?.mutates !== false) child.mayWrite = true;
+      if (!(pickleStep?.astNodeIds ?? []).some((id) => inBackground.has(id))) child.outsideBackground = true;
       node = child;
     }
   }
@@ -220,6 +244,14 @@ function firstWritingStep(node: TrieNode): string | undefined {
   return chain.find((step) => step.mayWrite)?.texts.at(-1);
 }
 
+/** True when every record reached every shared step from a Background. */
+function allFromBackground(node: TrieNode): boolean {
+  for (let current: TrieNode | null = node; current !== null && current.parent !== null; current = current.parent) {
+    if (current.outsideBackground) return false;
+  }
+  return true;
+}
+
 function formatNumber(value: number, maximumFractionDigits: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits, useGrouping: false });
 }
@@ -232,6 +264,9 @@ function toFinding(node: TrieNode, totalScenarioMs: number): Finding {
   const percentage = formatNumber((node.ms / totalScenarioMs) * 100, 1);
   const steps = node.texts.map((text) => `"${text}"`).join(", ");
   const writer = firstWritingStep(node);
+  // Advice to move steps into a Background they already sit in sends the
+  // reader to change nothing.
+  const inBackground = allFromBackground(node);
   // `mutates` is the step's own declaration, so this trusts it rather than
   // guessing from the trace whether the opening wrote anything.
   const lift =
@@ -239,14 +274,18 @@ function toFinding(node: TrieNode, totalScenarioMs: number): Finding {
       ? `Every shared step declares mutates: false, so a "process"-scope fixture (nukadoko.config.ts fixtures) ` +
         `can build this opening once for all of them.`
       : `"${writer}" does not declare mutates: false, so a later scenario may read what this opening writes: ` +
-        `a "process"-scope fixture would share that state between scenarios. ` +
-        `A Background keeps the shared steps in one place and still runs them for each scenario.`;
+        `a "process"-scope fixture would share that state between scenarios.` +
+        (inBackground
+          ? " The shared steps already sit in a Background."
+          : " A Background keeps the shared steps in one place and still runs them for each scenario.");
   const info = runCodeInfo("repeated-scenario-prefix");
   return {
     severity: info.severity,
     code: "repeated-scenario-prefix",
     ...(node.first === null ? {} : { file: node.first.feature }),
-    fix: info.fix,
+    fix: inBackground
+      ? "No change is necessary. The shared steps already sit in a Background. A process-scope fixture fits only an opening whose steps all declare mutates: false."
+      : info.fix,
     message:
       `${node.count} scenarios begin with the same ${node.texts.length} ` +
       `step${node.texts.length === 1 ? "" : "s"}, which took ${seconds} seconds across them, ` +

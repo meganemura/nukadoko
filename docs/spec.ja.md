@@ -2847,6 +2847,7 @@ step record には、各 step 自身の `mutates` の宣言が載っています
 そうでない step があるとき(`mutates: true` を宣言している、宣言を持たない compat step である、または step record が無い)は、その step を名指し、`process` スコープの fixture ではその step が書き込むものを scenario の間で共有してしまうと伝えます。
 計測した HTTP API のプロジェクトでは、書き込む始まりにこの助言を当てはめると、7 つの scenario のうち 2 つが失敗しました。
 節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
+共有する step がすべて Background から来ているときは、その step がすでに Background にあると伝え、Background への移動は勧めません。
 scenario の status も終了コードも変えません。
 
 `--base <git ref>` は、pull request の向かう先など、ref が名指すコミットと run を比べます。
