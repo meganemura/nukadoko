@@ -3356,7 +3356,11 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 - `new` か `changed` の行は、head のセルが必須で通った各 environment で、base の world で走ります。
   ただし head の対照がすでに証明しているときは走りません。
   `@held` の付いた行は、基点がその振る舞いを持つことを示せるのは基点だけなので、常にそこで走ります。
-- `unchanged` の行は、対応づけが変わったとき、または行が `retagged` のとき、そうした各 environment で、基点の feature ファイルが与える行で、old の world で走ります。
+- `unchanged` の行は、対応づけが変わったとき、または行が `retagged` のとき、基点の feature ファイルが与える行で、old の world で走ります。
+  どの environment で走るかも基点の対応づけです。
+  基点のプログラムのファイルが選ぶ environment(その `defaultEnvironments`、`conditions` を宣言するすべての environment、または run の `--env` の名前)のうち、基点がそれに与える condition で行が必須になるところで、同じ名前の environment の head の手順を使って走ります。
+  基点が必須とする environment を head のプログラムのファイルがもう持たないとき、その old のセルは理由とともに `·` で、行は `moved` です。
+  基点にプログラムのファイルが無いときは、old の world の environment は head のものです。
 - 必須の head のセルが通らなかった行は、どちらでも走りません。
 
 **セル。**

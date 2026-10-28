@@ -47,7 +47,7 @@ import {
   type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
-import { buildTable, executionOutcome, foldCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome } from "../run/verdict-table.js";
+import { buildTable, executionOutcome, foldCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
 import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.js";
@@ -697,25 +697,30 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // secrets they hold, its version probe, and the world its pass starts
     // (in the execution phase, below).
     const passes: EnvironmentPass[] = [];
-    for (const resolvedEnv of resolvedEnvs) {
-      const envFiles = resolvedEnv.envFiles;
-      // An env file that cannot be read is a setup problem, refused like
-      // an invalid config under --no-check too: nothing has run yet, and
-      // an `error` finding would read as a run that failed.
-      let envVars: Record<string, string>;
-      let secrets: ReturnType<typeof buildSecretSet>;
-      try {
-        envVars = loadEnvFiles(rootDir, envFiles);
-        const classification = await classifyEnvFiles(rootDir, envFiles);
-        secrets = buildSecretSet(rootDir, {
+    const readEnvFiles = async (envFiles: readonly string[]): Promise<Pick<EnvironmentPass, "envVars" | "secrets">> => {
+      const envVars = loadEnvFiles(rootDir, envFiles);
+      const classification = await classifyEnvFiles(rootDir, envFiles);
+      return {
+        envVars,
+        secrets: buildSecretSet(rootDir, {
           secretSourceFiles: classification.secretSource,
           trackedFiles: classification.tracked,
           publicKeys: config.secrets.public,
           redactKeys: config.secrets.redact,
-        });
+        }),
+      };
+    };
+    for (const resolvedEnv of resolvedEnvs) {
+      // An env file that cannot be read is a setup problem, refused like
+      // an invalid config under --no-check too: nothing has run yet, and
+      // an `error` finding would read as a run that failed.
+      let read: Pick<EnvironmentPass, "envVars" | "secrets">;
+      try {
+        read = await readEnvFiles(resolvedEnv.envFiles);
       } catch (error) {
         return refused(error);
       }
+      const { envVars, secrets } = read;
       const probeResult = await probeVersion(resolvedEnv.version);
       let targetVersion: string | undefined;
       if (probeResult !== undefined) {
@@ -806,6 +811,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       try {
         prepared = await prepareBase({
           rootDir,
+          envs: options.envs,
           config,
           headProgram: program,
           ref: baseRef.ref,
@@ -846,6 +852,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
     const base = prepared;
     const old = base === undefined ? undefined : oldPlaces(base.criteria.changes);
+    // The old world's environments are the ref's (src/run/base-run.ts),
+    // head's when the ref has no program file; when the ref's did not
+    // load, its cells stand in head's environments and say why.
+    const oldEnvironments: readonly TableEnvironment[] =
+      base === undefined || base.oldEnvironments === null || "problem" in base.oldEnvironments ? tableEnvironments : base.oldEnvironments;
+    const oldRolesOf = (tags: readonly string[]): { environment: string; role: CellRole }[] =>
+      rolesOf(tags, oldEnvironments).map((role, index) => ({ environment: oldEnvironments[index]!.name, role }));
     // Each scenario's run.json entry is built when its record arrives, from
     // the step records it cites, so a `--repeat` run never holds more than
     // one scenario's step records at a time. The lines and step names come
@@ -1078,6 +1091,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
                   tags: criterion.tags,
                   lines: criterion.lines,
                 })),
+                oldEnvironments,
               },
             }),
       });
@@ -1340,7 +1354,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           mappingChanged: base.mapping.changed,
           retagged: compared?.change === "unchanged" && compared.retagged === true,
         };
-        planned.set(key, plannedWorldCells(headCells, proofRuns, context));
+        planned.set(key, plannedWorldCells(headCells, proofRuns, context, oldRolesOf(pickle.tags.map((tag) => tag.name))));
       }
       // A tree's cells that will not run say why on stderr too, beside the
       // count line that shows the rows they turn red.
@@ -1348,11 +1362,31 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         treeNotRun.set(treeKey(world, environment), reason);
         progress.write(`${world} ${environment}  not run: ${reason}\n`);
       };
+      // The old world's pass in an environment the ref's mapping requires:
+      // head's, or one for head's recipe of that name when head's run did
+      // not select it. An environment head no longer has cannot run the
+      // ref's mapping on head's code, so its cells say so.
+      const oldPassOf = async (environment: string): Promise<EnvironmentPass | string> => {
+        if (base.oldEnvironments !== null && "problem" in base.oldEnvironments) {
+          return projectRelativeText(`the base's program file did not load, so the environments its mapping requires are not known: ${base.oldEnvironments.problem}`, rootDir);
+        }
+        const known = passes.find((pass) => pass.resolvedEnv.name === environment);
+        if (known !== undefined) return known;
+        if (environment !== DEFAULT_ENVIRONMENT_NAME && !Object.hasOwn(program?.environments ?? {}, environment)) {
+          return "the base's mapping requires this environment, and head's program file no longer has it";
+        }
+        try {
+          const resolvedEnv = resolveEnvironment(config, program, environment, true);
+          return { resolvedEnv, envArg: environment, ...(await readEnvFiles(resolvedEnv.envFiles)), targetVersion: undefined };
+        } catch (error) {
+          return `its env files could not be read: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      };
       const trees = [
-        { world: "base" as const, tree: base.base },
-        { world: "old" as const, tree: base.old },
+        { world: "base" as const, tree: base.base, environments: tableEnvironments },
+        { world: "old" as const, tree: base.old, environments: oldEnvironments },
       ];
-      for (const { world, tree } of trees) {
+      for (const { world, tree, environments } of trees) {
         if (tree === null) continue;
         const starter = createWorldStarter({
           rootDir: tree.root,
@@ -1369,10 +1403,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           programFromHead: world === "base" && base.base?.programFromHead === true,
           headUrls,
         });
-        for (const pass of passes) {
+        for (const { name: environment } of environments) {
           // A signal ends the run, so no tree world starts after it.
           if (signals.interrupted) break;
-          const environment = pass.resolvedEnv.name;
           const targets: TreeTarget[] = [];
           for (const { feature, pickle } of flatPickles) {
             const key = criterionKey(feature.relativePath, pickle.location?.line ?? 0);
@@ -1387,6 +1420,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             }
           }
           if (targets.length === 0) continue;
+          const pass = world === "base" ? passes.find((entry) => entry.resolvedEnv.name === environment)! : await oldPassOf(environment);
+          if (typeof pass === "string") {
+            leaveNotRun(world, environment, pass);
+            continue;
+          }
           let recipe = pass.resolvedEnv.program;
           if (world === "base") {
             try {

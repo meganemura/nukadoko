@@ -86,3 +86,75 @@ describe("a url function", () => {
     expect(rowSummary([five!])).toEqual([["five items", "new", "proven", ["head:default:pass", "base:default:fail"]]]);
   }, 60_000);
 });
+
+describe("the old world's environments", () => {
+  const environments = (entries: Readonly<Record<string, string>>, defaults?: readonly string[]): string =>
+    `import { defineProgram } from "nukadoko";\nexport default defineProgram({\n${defaults === undefined ? "" : `  defaultEnvironments: ${JSON.stringify(defaults)},\n`}  environments: {\n${Object.entries(
+      entries,
+    )
+      .map(([name, conditions]) => `    ${name}: { conditions: ${conditions}, env: { WHERE: ${JSON.stringify(name)} } },`)
+      .join("\n")}\n  },\n});\n`;
+  // Head's code gets three items wrong in `b` alone.
+  const wrongInB = cartModule('return process.env.WHERE === "b" ? 7 : count * 2;');
+
+  function cellsOf(row: TableRow): string[] {
+    return row.cells.map((cell) => `${cell.world}:${cell.environment}:${cell.role}:${cell.outcome}`);
+  }
+
+  it("are the ones the base's mapping requires the row in, so a cell head made a control still runs there", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }),
+      "features/cart.feature": feature(scenario("three items", 3, 6, "@with:flag")),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    // Head breaks the total in b and declares the flag off there, which
+    // turns head's b cell into a control.
+    project.write({ "lib/cart.mjs": wrongInB, "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: false }" }) });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(1);
+    const [row] = rows(project.root);
+    expect(row!.verdict).toBe("moved");
+    expect(cellsOf(row!)).toEqual(["head:a:required:pass", "head:b:control:fail", "old:a:required:pass", "old:b:required:fail"]);
+    expect(row!.cells.find((cell) => cell.world === "old" && cell.environment === "b")!.conditions).toEqual({ flag: true });
+  }, 60_000);
+
+  it("start head's recipe of an environment the base selects and head's run does not", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }, ["a", "b"]),
+      "features/cart.feature": feature(scenario("three items", 3, 6, "@with:flag")),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    project.write({ "lib/cart.mjs": wrongInB, "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }, ["a"]) });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(1);
+    const [row] = rows(project.root);
+    expect(row!.verdict).toBe("moved");
+    expect(cellsOf(row!)).toEqual(["head:a:required:pass", "old:a:required:pass", "old:b:required:fail"]);
+  }, 60_000);
+
+  it("leave a cell not run where head's program file no longer has the environment", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }),
+      "features/cart.feature": feature(scenario("three items", 3, 6, "@with:flag")),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    project.write({ "nukadoko.program.ts": environments({ a: "{ flag: true }" }) });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(1);
+    const [row] = rows(project.root);
+    expect(row!.verdict).toBe("moved");
+    expect(cellsOf(row!)).toEqual(["head:a:required:pass", "old:a:required:pass", "old:b:required:not-run"]);
+    expect(row!.reason).toBe(
+      "passes in a, but the mapping changed since the base, and it did not run in the old world in b: the base's mapping requires this environment, and head's program file no longer has it",
+    );
+  }, 60_000);
+});

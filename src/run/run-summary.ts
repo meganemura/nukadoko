@@ -292,7 +292,8 @@ function tableCell(cell: RunTableCell): string {
 // reader scans for. A head column's heading names the conditions its
 // environment declares, since they decide which of its cells count, and
 // they are the environment's word, which a reader can check. A base or an
-// old column names none: its cells take their roles from head's.
+// old column names none: a base cell takes its role from head's, and an
+// old cell names on itself the conditions the ref gives its environment.
 function renderTable(document: RunDocument): string[] {
   const { worlds, rows, base } = document.table;
   if (rows.length === 0) return [];

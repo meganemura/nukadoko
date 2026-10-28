@@ -344,7 +344,8 @@ just until 0.1.
   and its Then has to fail there in `--proof-runs` runs for the row to
   be `proven`; `old`, head's code under the ref's criteria and mapping,
   runs an unchanged row when the mapping changed or the row is retagged,
-  and it has to pass
+  in each environment the ref's program file requires it in, with head's
+  recipe of that name, and it has to pass
   there. The rows are `held`, `proven`, `removed`, `failed`,
   `unproven` (nothing shows a Then failing without the change), or
   `moved` (an approved sentence no longer holds under the steps it was

@@ -3,10 +3,12 @@ import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
+import type { Conditions } from "../condition/condition.js";
 import { CONFIG_FILE_NAMES, loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAMES } from "../config/load-program.js";
 import type { Program } from "../config/program-schema.js";
 import type { NukadokoConfig } from "../config/schema.js";
+import { defaultEnvironmentNames } from "../environment/resolve-environment.js";
 import { parseFeatureSource, walkFeatureFiles } from "../feature/load-features.js";
 import type { RunMappingChanges } from "../record/run-result.js";
 import { runsRelativeDir } from "../record/state-layout.js";
@@ -50,6 +52,10 @@ export { fetchCommandFor, GitRefError, removeStaleTreeRegistrations, resolveRef,
 // directory and its mapping part. One that does not load at the ref is a
 // mapping that cannot be shown to be head's, so it counts as changed, and
 // the old world, which runs that mapping, then says it could not run.
+// The old world's environments are that mapping too: the ones the ref's
+// program file selects for the run's `--env` names, each with the
+// conditions the ref gives it, so a row is asked to hold where the base
+// asked it to, and the old world starts head's recipe of the same name.
 //
 // A features directory at the project root holds the program's code too,
 // so "the mapping" would be the whole project and the base tree would be
@@ -83,6 +89,11 @@ export interface PreparedBase {
   /** `null` unless a selected row is unchanged and the mapping changed or
    * the row was retagged. */
   readonly old: PreparedTree | null;
+  /** The environments the old world runs in, with the conditions the
+   * ref's program file gives each (module header); `null` when the ref
+   * has no program file and head's are the old world's, and why when it
+   * did not load. */
+  readonly oldEnvironments: readonly OldEnvironment[] | null | { readonly problem: string };
   /** The ref's feature files that were compared, by path relative to the
    * project root. */
   readonly refFeatures: ReadonlyMap<string, RefFeature>;
@@ -93,8 +104,16 @@ export interface PreparedBase {
   cleanup(): Promise<void>;
 }
 
+/** One environment of the old world, as the ref's program file has it. */
+export interface OldEnvironment {
+  readonly name: string;
+  readonly conditions: Conditions | undefined;
+}
+
 export interface PrepareBaseInput {
   readonly rootDir: string;
+  /** The run's `--env` names, empty when it named none. */
+  readonly envs: readonly string[];
   readonly config: NukadokoConfig;
   readonly headProgram: Program | null;
   readonly ref: string;
@@ -319,6 +338,13 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
       },
       base: baseNeeded ? { root: baseProject, programFromHead: refProgramFile === null && headProgramFile !== null } : null,
       old: oldNeeded ? { root: path.join(oldTop, prefix) } : null,
+      oldEnvironments:
+        refProgram === null || "problem" in refProgram
+          ? refProgram
+          : (input.envs.length > 0 ? input.envs : defaultEnvironmentNames(refProgram)).map((name) => ({
+              name,
+              conditions: Object.hasOwn(refProgram.environments ?? {}, name) ? refProgram.environments![name]!.conditions : undefined,
+            })),
       refFeatures,
       unparsed,
       cleanup,

@@ -4206,9 +4206,17 @@ head passed:
   where its head cell is required and passed, unless a head control
   already proves it. A row tagged `@held` always runs there, since only
   the base can show the base has the behaviour.
-- An `unchanged` row runs in the old world in each such environment when
-  the mapping changed or the row is retagged, at the line the ref's
-  feature file gives it.
+- An `unchanged` row runs in the old world when the mapping changed or
+  the row is retagged, at the line the ref's feature file gives it. Which
+  environments is the ref's mapping too: the ones the ref's program file
+  selects (its `defaultEnvironments`, or every environment that declares
+  `conditions`, or the run's `--env` names), and in each the role the
+  conditions the ref gives it decide, so the row runs where it is
+  required at the ref, with head's recipe of the environment of that
+  name. An environment the ref requires that head's program file no
+  longer has is an old cell `·` with the reason, and the row is `moved`.
+  When the ref has no program file, the old world's environments are
+  head's.
 - A row whose required head cell did not pass runs in neither.
 
 **Cells.** A cell is what its executions came to:

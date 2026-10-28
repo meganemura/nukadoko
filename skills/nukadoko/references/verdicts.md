@@ -52,7 +52,7 @@ config's fixtures or parameter types, an environment's conditions.
   the Then so it fails without the change: a When that errors there
   proves nothing.
 - An `unchanged` row, when the mapping changed or its tags did
-  (`retagged`), also runs in the `old` world, your code under the base's feature file and steps, and has to
+  (`retagged`), also runs in the `old` world, your code under the base's feature file, steps, and conditions, and has to
   pass there. A rewritten step that now checks less is what this catches.
 
 ## The cells

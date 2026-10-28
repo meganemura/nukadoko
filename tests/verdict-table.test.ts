@@ -424,6 +424,44 @@ describe("buildTable", () => {
       }
     }));
 
+  it("gives an old cell the role and the conditions the base's environment has, and a column to one only the base selects", () => {
+    const table = buildTable({
+      criteria: [{ feature: "a.feature", line: 3, name: "s", tags: ["@with:flag"] }],
+      environments: [
+        { name: "a", conditions: { flag: true } },
+        { name: "b", conditions: { flag: false } },
+      ],
+      outcomes: (_feature, _line, environment, world = "head") => (world === "old" && environment === "c" ? [{ kind: "fail", line: 5, claim: 0, actual: { value: 7 } }] : [{ kind: "pass" }]),
+      notRunReason: () => undefined,
+      proofRuns: 2,
+      leftOut: 0,
+      base: {
+        ref: "main",
+        commit: "0".repeat(40),
+        mapping: { files: [], config: false, conditions: ["b"], default_environments: false },
+        mappingChanged: true,
+        changeOf: () => ({ change: "unchanged" }),
+        removed: [],
+        oldEnvironments: [
+          { name: "b", conditions: { flag: true } },
+          { name: "c", conditions: { flag: true } },
+        ],
+      },
+    });
+    expect(table.worlds).toEqual([
+      { world: "head", environment: "a" },
+      { world: "head", environment: "b" },
+      { world: "old", environment: "b" },
+      { world: "old", environment: "c" },
+    ]);
+    const [row] = table.rows;
+    expect(row!.cells.filter((entry) => entry.world === "old")).toEqual([
+      { world: "old", environment: "b", role: "required", conditions: { flag: true }, outcome: "pass", runs: 1 },
+      { world: "old", environment: "c", role: "required", conditions: { flag: true }, outcome: "fail", line: 5, runs: 1, claim: 0, actuals: [{ value: 7 }] },
+    ]);
+    expect(row!.verdict).toBe("moved");
+  });
+
   it("says how many criteria --env left out, in the same words on stderr and in the summary", () => {
     expect(leftOutText(1)).toBe("1 criterion not run: its conditions hold in no selected environment");
     expect(leftOutText(3)).toBe("3 criteria not run: their conditions hold in no selected environment");
@@ -531,6 +569,21 @@ describe("judgeRow under --base", () => {
       expect(planned.old).toEqual(green && given.change === "unchanged" && (given.mappingChanged || given.retagged) ? passedIn : []);
       expect(planned.base).toEqual(green && given.change !== "unchanged" && (given.held || !controlProves) ? passedIn : []);
       expect(plannedWorldCells(head, runs, undefined)).toEqual({ base: [], old: [] });
+    }));
+
+  it("plans an unchanged row's old cells where the old world's environments require it, whatever head's roles are", () =>
+    hegel.test((tc) => {
+      const head = tc.draw(cells);
+      const runs = tc.draw(proofRuns);
+      const given: RowContext = { ...tc.draw(context), change: "unchanged" };
+      const oldRoles = tc
+        .draw(gs.arrays(gs.sampledFrom(["required", "control"] as const), { maxSize: 4 }))
+        .map((role, index) => ({ environment: `old-${index}`, role }));
+      const planned = plannedWorldCells(head, runs, given, oldRoles);
+      const required = head.filter((cell) => cell.role === "required");
+      const green = required.length > 0 && required.every((cell) => cell.outcome === "pass");
+      const oldRequired = oldRoles.filter((cell) => cell.role === "required").map((cell) => cell.environment);
+      expect(planned).toEqual({ base: [], old: green && (given.mappingChanged || given.retagged) ? oldRequired : [] });
     }));
 
   it("never calls a retagged row held without an old cell that passed", () =>

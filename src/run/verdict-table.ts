@@ -43,7 +43,10 @@ import { shellWord } from "../shell/shell-word.js";
 // mapping changed or the row was retagged, and head passed, where it shows
 // the approved sentence still means what it meant. A retag is judged as a
 // mapping change because a tag can select a hook or steer a World: the
-// sentence is the same, and what runs it may not be.
+// sentence is the same, and what runs it may not be. Which environments
+// the old world runs a row in is mapping too: the ref's environments, and
+// the row's role in each from the conditions the ref gives them, since an
+// unchanged row's condition tags are the ref's.
 
 /** One execution, read for the table. A `fail` names the claim that broke,
  * by its position among its step's claims, and the actual value it saw. */
@@ -156,19 +159,24 @@ function underneathChange(context: RowContext): string | null {
 }
 
 /** The environments a row needs a base cell and an old cell in, from its
- * head cells (module header). `context` absent: a run without `--base`,
- * which has neither world. Pure. */
+ * head cells and its role in each of the old world's environments
+ * (module header). `context` absent: a run without `--base`, which has
+ * neither world. Pure. */
 export function plannedWorldCells(
   headCells: readonly Pick<RunTableCell, "environment" | "role" | "outcome" | "runs">[],
   proofRuns: number,
   context: RowContext | undefined,
+  oldRoles: readonly Pick<RunTableCell, "environment" | "role">[] = headCells,
 ): { readonly base: readonly string[]; readonly old: readonly string[] } {
   const none = { base: [], old: [] };
   if (context === undefined) return none;
   const required = headCells.filter((cell) => cell.role === "required");
   if (required.length === 0 || required.some((cell) => cell.outcome !== "pass")) return none;
   const environments = required.map((cell) => cell.environment);
-  if (context.change === "unchanged") return underneathChange(context) !== null ? { base: [], old: environments } : none;
+  if (context.change === "unchanged") {
+    if (underneathChange(context) === null) return none;
+    return { base: [], old: oldRoles.filter((cell) => cell.role === "required").map((cell) => cell.environment) };
+  }
   if (!context.held && headCells.some((cell) => proves({ ...cell, world: "head" }, proofRuns))) return none;
   return { base: environments, old: [] };
 }
@@ -406,6 +414,9 @@ export interface TableBase {
     line: number,
   ) => { readonly change: "unchanged" | "changed" | "new"; readonly renamedFrom?: { readonly feature: string; readonly name: string }; readonly retagged?: true };
   readonly removed: readonly RemovedCriterion[];
+  /** The old world's environments, with the conditions the ref's mapping
+   * gives each (module header). */
+  readonly oldEnvironments: readonly TableEnvironment[];
 }
 
 export interface TableInput {
@@ -440,8 +451,8 @@ function byPlace(a: { readonly feature: string; readonly line: number }, b: { re
  * ones; columns head, base, old, each in the run's environment order, a
  * base or an old column only where some row has a cell. Pure. */
 export function buildTable(input: TableInput): RunTable {
-  // A base or an old cell names the conditions of head's environment it
-  // stands under, as its role does: the row's roles are head's.
+  // A base cell names the conditions of head's environment it stands
+  // under, as its role does, and an old cell the ref's (module header).
   const cellOf = (criterion: SelectedCriterion, environment: TableEnvironment, role: CellRole, world: RunWorldName): RunTableCell => {
     const folded = foldCell(input.outcomes(criterion.feature, criterion.line, environment.name, world));
     const problem = world === "head" && role === "control" ? input.proofProblem?.(criterion.feature, criterion.line, environment.name) : undefined;
@@ -462,12 +473,14 @@ export function buildTable(input: TableInput): RunTable {
       input.base === undefined || compared === undefined
         ? undefined
         : { change: compared.change, held: readCriterionTags(criterion.tags).held, mappingChanged: input.base.mappingChanged, retagged: compared.retagged === true };
-    const planned = plannedWorldCells(headCells, input.proofRuns, context);
+    const oldEnvironments = input.base?.oldEnvironments ?? [];
+    const oldRoles = rolesOf(criterion.tags, oldEnvironments).map((role, index) => ({ environment: oldEnvironments[index]!.name, role }));
+    const planned = plannedWorldCells(headCells, input.proofRuns, context, oldRoles);
     const roleIn = (environment: string): CellRole => headCells.find((cell) => cell.environment === environment)?.role ?? "required";
     const cells = [
       ...headCells,
       ...input.environments.filter((environment) => planned.base.includes(environment.name)).map((environment) => cellOf(criterion, environment, roleIn(environment.name), "base")),
-      ...input.environments.filter((environment) => planned.old.includes(environment.name)).map((environment) => cellOf(criterion, environment, roleIn(environment.name), "old")),
+      ...oldEnvironments.filter((environment) => planned.old.includes(environment.name)).map((environment) => cellOf(criterion, environment, "required", "old")),
     ];
     const change: RunRowChange | null = compared?.change ?? null;
     return {
@@ -495,7 +508,7 @@ export function buildTable(input: TableInput): RunTable {
     lines: criterion.lines,
   }));
   const worlds = WORLD_ORDER.flatMap((world) =>
-    input.environments
+    (world === "old" ? (input.base?.oldEnvironments ?? []) : input.environments)
       .filter((environment) => world === "head" || rows.some((row) => row.cells.some((cell) => cell.world === world && cell.environment === environment.name)))
       .map((environment) => ({ world, environment: environment.name })),
   );
