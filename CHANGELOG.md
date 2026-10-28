@@ -352,7 +352,8 @@ just until 0.1.
   or renamed,
   in each environment the ref's program file requires it in, with head's
   recipe of that name, and it has to pass
-  there. The rows are `held`, `proven`, `removed`, `failed`,
+  there. A control proves an unchanged row as it does without `--base`,
+  unless the row is moved. The rows are `held`, `proven`, `removed`, `failed`,
   `unproven` (nothing shows a Then failing without the change), or
   `moved` (an approved sentence no longer holds under the steps it was
   approved with), and the gate is red on the last three. The base world

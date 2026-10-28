@@ -541,14 +541,16 @@ describe("judgeRow under --base", () => {
     const head = all.filter((cell) => cell.world === "head");
     const required = head.filter((cell) => cell.role === "required");
     if (required.length === 0 || required.some((cell) => cell.outcome !== "pass")) return "failed";
+    const controlProves = head.some((cell) => cell.role === "control" && proof(cell, runs));
     if (given.change === "unchanged") {
-      if (!given.mappingChanged && !given.retagged && !given.renamed) return "held";
       const old = all.filter((cell) => cell.world === "old");
-      return old.length > 0 && old.every((cell) => cell.outcome === "pass") ? "held" : "moved";
+      const moved = (given.mappingChanged || given.retagged || given.renamed) && !(old.length > 0 && old.every((cell) => cell.outcome === "pass"));
+      if (moved) return "moved";
+      return controlProves ? "proven" : "held";
     }
     const base = all.filter((cell) => cell.world === "base");
     if (base.some((cell) => proof(cell, runs))) return "proven";
-    if (head.some((cell) => cell.role === "control" && proof(cell, runs))) return "proven";
+    if (controlProves) return "proven";
     if (given.held && base.length > 0 && base.every((cell) => cell.outcome === "pass")) return "held";
     return "unproven";
   }
@@ -578,6 +580,21 @@ describe("judgeRow under --base", () => {
       if (verdict === "moved") expect(given.change).toBe("unchanged");
       if (verdict === "unproven") expect(given.change).not.toBe("unchanged");
       expect(verdict).not.toBe("removed");
+    }));
+
+  it("reads an unchanged row's cells as a run without --base does, unless the old world shows its meaning moved", () =>
+    hegel.test((tc) => {
+      // A green head, so its controls decide the word.
+      const required = tc.draw(gs.integers({ minValue: 1, maxValue: 2 }));
+      const controls = tc.draw(gs.arrays(cell, { maxSize: 3 })).map((entry): RunTableCell => ({ ...entry, role: "control", environment: "" }));
+      const head = [...Array.from({ length: required }, (): RunTableCell => ({ world: "head", environment: "", role: "required", conditions: {}, outcome: "pass", runs: 1 })), ...controls].map(
+        (entry, index) => ({ ...entry, environment: `env-${index}` }),
+      );
+      const old = tc.draw(gs.arrays(worldCell("old"), { maxSize: 2 }));
+      const runs = tc.draw(proofRuns);
+      const given: RowContext = { ...tc.draw(context), change: "unchanged" };
+      const verdict = judgeRow([...head, ...old], runs, given).verdict;
+      if (verdict !== "moved") expect(verdict).toBe(judgeRow(head, runs).verdict);
     }));
 
   it("gives a run without --base only held, proven, or failed", () =>
@@ -668,6 +685,16 @@ describe("judgeRow under --base", () => {
       verdict: "moved",
       reason: "passes in default, but its name or its file changed since the base, and a claim broke at line 6 of the base's feature file in the old world in default",
     });
+    const control: RunTableCell = { world: "head", environment: "off", role: "control", conditions: {}, outcome: "fail", line: 8, runs: 2, claim: 0, actuals: [] };
+    expect(judgeRow([head, control], 2, { change: "unchanged", held: false, mappingChanged: false, retagged: false, renamed: false })).toEqual({
+      verdict: "proven",
+      reason: "passes in default, and a claim broke at line 8 in off, where its conditions do not hold, in each of 2 runs",
+    });
+    expect(judgeRow([head, control, at("old", "pass")], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false })).toEqual({
+      verdict: "proven",
+      reason: "passes in default, and a claim broke at line 8 in off, where its conditions do not hold, in each of 2 runs, and it passed in the old world, where the base's mapping runs head's code",
+    });
+    expect(judgeRow([head, control, at("old", "broke", { line: 4 })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false }).verdict).toBe("moved");
     expect(judgeRow([head], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: true, renamed: true })).toEqual({
       verdict: "moved",
       reason: "passes in default, but the mapping, its tags, and its name or its file changed since the base and the old world did not run it",

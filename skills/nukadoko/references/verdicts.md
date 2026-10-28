@@ -90,9 +90,9 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
   calling the criterion covered, and do not rewrite the Then on your own
   to make the control fail. A control that is `broke@<line>` proves
   nothing either: a Given or When failed where the behaviour is absent,
-  before any Then was judged. Under `--base`, an `unchanged` row is
-  `held` when the mapping did not change or the old world passed it, and
-  a `@held` row when the base passed it.
+  before any Then was judged. Under `--base`, an `unchanged` row no
+  control proves is `held` when the mapping did not change or the old
+  world passed it, and a `@held` row when the base passed it.
 - **`unproven`** (red): a `new` or `changed` row passed, and nothing
   shows its Then failing without the change: the base passed it, broke
   before a Then, or did not run. When the base already had the

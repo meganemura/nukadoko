@@ -4303,15 +4303,17 @@ proves nothing, so the row is `held`.
 
 **Verdicts.** A row is one of six words. Three are green:
 
-- `held`: every required head cell is `pass`, and nothing more is asked
-  of it: without `--base`, no control proves it; under `--base`, it is
-  `unchanged` and the mapping did not change, or it passed in the old
-  world too, or it is a `new` or `changed` row tagged `@held` that
-  passed at the base and no control proves.
+- `held`: every required head cell is `pass`, no control proves it, and
+  nothing more is asked of it: under `--base`, it is `unchanged` and
+  the mapping did not change, or it passed in the old world too, or it is
+  a `new` or `changed` row tagged `@held` that passed at the base.
 - `proven`: every required head cell is `pass`, and a cell where its
   behaviour is absent is `fail` in `--proof-runs` runs or more: a control,
-  or, for a `new` or `changed` row, its base cell. A row tagged `@held`
-  that is proven this way says the tag is not needed.
+  or, for a `new` or `changed` row, its base cell. Under `--base`, an
+  `unchanged` row a control proves is `proven` as it is without
+  `--base`, unless it is `moved`, since the base answers whether its
+  meaning moved, not whether its Then tells the behaviour apart. A row
+  tagged `@held` that is proven this way says the tag is not needed.
 - `removed`: the ref holds the criterion and head does not. The row has
   no cells and quotes the sentences the ref had, so a reader sees what
   was dropped.

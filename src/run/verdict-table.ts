@@ -223,7 +223,8 @@ function controlProofReason(passedIn: string, proof: RunTableCell): string {
  * did not pass, or for a row with no required cell at all, which nothing
  * shows holds; under `--base`, red too for a new or changed row nothing
  * proves (`unproven`) and an unchanged row the old world does not pass
- * (`moved`). A control never turns a row red. Pure. */
+ * (`moved`). A control never turns a row red, and proves a row that is
+ * not red, unchanged or not. Pure. */
 export function judgeRow(
   cells: readonly RunTableCell[],
   proofRuns: number,
@@ -251,15 +252,24 @@ export function judgeRow(
 
   if (context.change === "unchanged") {
     const changed = underneathChange(context);
+    if (changed !== null) {
+      const old = cells.filter((cell) => cell.world === "old");
+      const moved = old.find((cell) => cell.outcome !== "pass");
+      if (old.length === 0) {
+        return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed} and the old world did not run it` };
+      }
+      if (moved !== undefined) {
+        return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed}, and ${worldCellClause(moved, proofRuns)}` };
+      }
+    }
+    // The base answers whether an unchanged row's meaning moved, not
+    // whether its Then tells the behaviour apart, so a control proves it
+    // as it would without --base: one set of cells reads one way.
+    if (controlProof !== undefined) {
+      const proven = controlProofReason(passedIn, controlProof);
+      return { verdict: "proven", reason: changed === null ? proven : `${proven}, and it passed in the old world, where the base's mapping runs head's code` };
+    }
     if (changed === null) return { verdict: "held", reason: `passes in ${passedIn}, and neither it nor the mapping changed since the base` };
-    const old = cells.filter((cell) => cell.world === "old");
-    const moved = old.find((cell) => cell.outcome !== "pass");
-    if (old.length === 0) {
-      return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed} and the old world did not run it` };
-    }
-    if (moved !== undefined) {
-      return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed}, and ${worldCellClause(moved, proofRuns)}` };
-    }
     return { verdict: "held", reason: `passes in ${passedIn}, and in the old world, where the base's mapping runs head's code` };
   }
 
