@@ -570,6 +570,26 @@
       "en": ["moved"],
       "ja": "意味が動いた",
       "note": "行の断定の一つ。変わっていない受け入れ基準が head で通るのに、対応づけが変わり、old の world で通らない。承認された文の意味がその下で動いた。値 `moved` はコードスパンで英語のまま。赤"
+    },
+    {
+      "en": ["symbolic link"],
+      "ja": "シンボリックリンク",
+      "note": "docs/spec.ja.md で既に使われていた形。--base はまだたどらず、features ディレクトリとその上、その下、config のファイルにあると world を作らない"
+    },
+    {
+      "en": ["submodule"],
+      "ja": "サブモジュール",
+      "note": "git の submodule(mode 160000 の gitlink)。--base はまだ扱わない"
+    },
+    {
+      "en": ["nested repository"],
+      "ja": "入れ子のリポジトリ",
+      "note": "head の working tree の中で、自分の .git を持つディレクトリ。--base はまだ扱わない"
+    },
+    {
+      "en": ["workspace package"],
+      "ja": "ワークスペースのパッケージ",
+      "note": "node_modules にあり、リポジトリの中のディレクトリを指すシンボリックリンクのパッケージ。npm や pnpm の workspaces が入れる形。--base はまだ扱わず、base の world を作らない"
     }
   ],
   "keep_english": [

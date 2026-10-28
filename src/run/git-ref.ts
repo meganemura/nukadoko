@@ -169,9 +169,12 @@ export async function workingTreeFiles(top: string): Promise<string[]> {
   return nulList(await git(top, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]));
 }
 
-/** The files a checkout of a commit holds, relative to its top. */
-export async function trackedFiles(top: string): Promise<string[]> {
-  return nulList(await git(top, ["ls-files", "-z", "--cached"]));
+/** The entries a checkout of a commit holds, relative to its top, each
+ * with its git mode: `120000` for a symbolic link, `160000` for a
+ * submodule's gitlink. */
+export async function trackedEntries(top: string): Promise<{ readonly path: string; readonly mode: string }[]> {
+  // Each entry is `<mode> <object> <stage>\t<path>`.
+  return nulList(await git(top, ["ls-files", "-z", "--stage"])).map((line) => ({ path: line.slice(line.indexOf("\t") + 1), mode: line.slice(0, line.indexOf(" ")) }));
 }
 
 /** A detached worktree of `commit` at `dir`. */

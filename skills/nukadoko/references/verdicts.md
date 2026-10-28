@@ -112,7 +112,12 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
 
 Each `unproven` and `moved` row is also a `criterion-unproven` or
 `criterion-moved` finding with the reason; its `do:` line judges that row
-again against the same base.
+again against the same base. A reason that says `--base` does not support
+a shape yet (a symbolic link, a feature file outside the features
+directory, a workspace package, a submodule) means that world was not
+built: make the `fix:` edit when the finding has one, or run its `do:`
+line, which leaves `--base` off, and tell the person the row was not
+judged against the base.
 
 ## The findings
 

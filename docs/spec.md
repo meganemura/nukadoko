@@ -3888,6 +3888,8 @@ to act on the run without opening another file:
   `files` under the features directory, by their path from the project
   root, whether the `config`'s mapping part changed, the environments
   whose `conditions` changed, and whether `default_environments` did.
+  Its `unseen` says why the comparison could not see all of the mapping,
+  and is empty when it could (see "Verdicts").
   `worlds` lists its columns, `{ world, environment }`: `head` in each of
   the run's environments, in the run's order, then `base` and `old` in
   each environment where some row has a cell. `rows` has one row per
@@ -4174,7 +4176,10 @@ Neither tree holds `node_modules` or anything else git ignores, and
 nothing is installed: each tree builds its program with its own `build`
 commands, and both sit inside head's project, so a package a tree's file
 imports, nukadoko included, resolves to head's. A change that also changed
-the dependencies builds the base against head's versions. A dependency
+the dependencies builds the base against head's versions. A workspace
+package, linked into `node_modules` from inside the repository, would
+run head's copy as the base's code, so `--base` does not build the base
+world then (below). A dependency
 outside the project (a Ruby gem, a system tool) is the machine's. A world
 of a tree has its directory at `worlds/<environment>@base` or
 `worlds/<environment>@old`, and a `url` function learns which tree it
@@ -4227,7 +4232,7 @@ head passed:
 | `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
 | `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, a claim nukadoko could not judge, or, at the scenario's line, a hook |
 | `flaky@<line>` | they disagree (two that broke two claims of one line disagree too); the line is the first one's that did not pass |
-| `·` | none ran, and `reason` says why: the program did not start for its world, a BeforeAll failed, or a tree's files did not load |
+| `·` | none ran, and `reason` says why: the program did not start for its world, a BeforeAll failed, a tree's files did not load, or `--base` did not build the world (below) |
 
 Only a Then proves. A When that errors where the behaviour is absent says
 nothing about whether the Then can tell the difference, so it is
@@ -4309,6 +4314,32 @@ An `unproven` row has a `criterion-unproven` finding and a `moved` row a
 `run.json`'s findings, each with the row's reason. Their `do:` line is
 `nuka run <file>:<line> --base <ref>`, with the run's `--env` flags, which
 judges the row again against the same base.
+
+**What `--base` does not support yet.** Some shapes keep a tree from
+holding the mix its world names. They are read from both sides before
+either tree is made, and a world one of them reaches is not built: each
+of its cells is `·` with the reason, and the finding of a row that turns
+red has a `do:` line that runs the row without `--base`, and a `fix:`
+line when an edit lets `--base` build the world. Where a shape hides
+part of the mapping from the comparison, the mapping counts as changed
+and `mapping_changes.unseen` says why, so an `unchanged` row needs the
+old world, which is not built, and is `moved`: it is never `held` on a
+comparison that could not see the mapping. One line per shape:
+
+- A symbolic link at the features directory, in a directory above it,
+  under it, or at the config file, on either side: both worlds, and it
+  hides the mapping. The fix replaces the link with the files it points to.
+- A selected feature file outside the features directory, which only a
+  target on the command line selects: both worlds, and it hides the
+  mapping, since step files beside it are not compared. The fix moves it
+  under the features directory.
+- A workspace package: a package under the project's or the repository
+  top's `node_modules` that is a symbolic link to a directory inside the
+  repository with no `node_modules` in its path. The base world alone,
+  which would run head's copy as the base's code.
+- A submodule on either side, or a directory in head's working tree that
+  holds a repository of its own: both worlds, and it hides the mapping
+  when it is under the features directory.
 
 Without `--base` no change is known, so a row is `held`, `proven`, or
 `failed`. The exit code is 1 when a row is red, or when the run failed

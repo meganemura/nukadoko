@@ -3128,6 +3128,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `mapping_changed` は `--base` が無ければ `null` で、あれば対応づけが変わったかどうかです。
   `mapping_changes` は何が変わったかを述べます。
   features ディレクトリの下の `files`(プロジェクトのルートからのパス)、config の対応づけの部分が変わったかどうかの `config`、`conditions` が変わった environment、`default_environments` が変わったかどうかです。
+  その `unseen` は、比較が対応づけのすべてを見られなかった理由を述べ、見られたときは空です(「断定」を参照)。
   `worlds` はその列 `{ world, environment }` を並べます。
   run の各 environment の `head` を run の順に、そのあとに、ある行がセルを持つ各 environment の `base` と `old` です。
   `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並び、そのあとに消えた受け入れ基準ごとに 1 行が続きます。
@@ -3331,6 +3332,7 @@ features ディレクトリの外のコードはプログラムのもので、�
 どちらの tree も `node_modules` や git が無視するほかのものを持たず、何もインストールしません。
 各 tree は自分のプログラムを自分の `build` のコマンドで build し、どちらも head のプロジェクトの中にあるので、tree のファイルが import するパッケージは、nukadoko も含めて head のものに解決されます。
 依存も変えた変更では、基点を head の版で build します。
+リポジトリの中から `node_modules` にリンクされたワークスペースのパッケージは、head の写しを基点のコードとして走らせてしまうので、そのとき `--base` は base の world を作りません(後述)。
 プロジェクトの外の依存(Ruby の gem、システムのツール)はマシンのものです。
 tree の world のディレクトリは `worlds/<environment>@base` か `worlds/<environment>@old` で、`url` の関数はどの tree のために答えるのかを知ります(「テスト対象のプログラム」を参照)。
 tree の scenario は、`--concurrency` にかかわらず、その tree で始めた worker プロセスで走ります。
@@ -3372,7 +3374,7 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 | `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
 | `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim、または scenario の行では hook |
 | `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も食い違いです)。行は通らなかった最初の実行のもの |
-| `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、BeforeAll が失敗した、または tree のファイルが読み込めなかった) |
+| `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、BeforeAll が失敗した、tree のファイルが読み込めなかった、または `--base` がその world を作らなかった(後述)) |
 
 証明するのは Then だけです。
 振る舞いが無いところでエラーになる When は、Then が違いを見分けられるかどうかについて何も言いません。
@@ -3433,6 +3435,23 @@ run を赤にすることはありません。
 `unproven` の行は `criterion-unproven` の finding を、`moved` の行は `criterion-moved` の finding を持ちます。
 どちらも stderr の数の行のあとと `run.json` の findings に出て、行の理由を述べます。
 その `do:` 行は、run の `--env` を付けた `nuka run <file>:<line> --base <ref>` で、同じ基点に対してその行をもう一度断定します。
+
+**`--base` がまだ扱わないもの。**
+いくつかの形は、tree がその world の名指す組み合わせを持つことを妨げます。
+それらはどちらの tree を作るよりも前に両側から読まれ、そのどれかが及ぶ world は作られません。
+その world のセルはどれも理由を添えた `·` になります。
+それで赤になった行の finding は、`--base` を付けずにその行を走らせる `do:` 行を持ち、編集で `--base` がその world を作れるようになるときは `fix:` 行も持ちます。
+形が対応づけの一部を比較から隠すときは、対応づけは変わったものとして数えられ、`mapping_changes.unseen` がその理由を述べます。
+そのため `unchanged` の行は作られない old の world を必要とし、`moved` になります。
+対応づけを見られなかった比較の上で `held` になることはありません。
+形ごとに 1 行です。
+
+- どちらかの側で、features ディレクトリ、その上のディレクトリ、その下、または config のファイルにあるシンボリックリンク: 両方の world で、対応づけを隠します。
+  fix はリンクをそれが指すファイルで置き換えます。
+- features ディレクトリの外にある、選ばれた feature ファイル(これを選ぶのはコマンドラインで名指した対象だけです): 両方の world で、その隣の step ファイルは比べられないので、対応づけを隠します。
+  fix はそれを features ディレクトリの下へ移します。
+- ワークスペースのパッケージ、つまりプロジェクトかリポジトリの最上位の `node_modules` の下にあり、パスに `node_modules` を含まないリポジトリの中のディレクトリを指すシンボリックリンクのパッケージ: base の world だけで、そこでは head の写しが基点のコードとして走ってしまいます。
+- どちらかの側のサブモジュール、または head の作業ツリーの中で自分のリポジトリを持つディレクトリ(入れ子のリポジトリ): 両方の world で、features ディレクトリの下にあるときは対応づけを隠します。
 
 `--base` が無ければ変化は分からないので、行は `held`、`proven`、`failed` のどれかです。
 行が赤のとき、または run がどの scenario の外でも失敗したとき(hook、world、worker)、終了コードは 1 です。

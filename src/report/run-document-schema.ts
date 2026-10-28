@@ -232,7 +232,7 @@ const table = z.looseObject({
   base: z.looseObject({ ref: z.string(), commit: z.string() }).nullable(),
   mapping_changed: z.boolean().nullable(),
   mapping_changes: z
-    .looseObject({ files: z.array(z.string()), config: z.boolean(), conditions: z.array(z.string()), default_environments: z.boolean() })
+    .looseObject({ files: z.array(z.string()), config: z.boolean(), conditions: z.array(z.string()), default_environments: z.boolean(), unseen: z.array(z.string()) })
     .nullable(),
   worlds: z.array(z.looseObject({ world: worldName, environment: z.string() })),
   rows: z.array(

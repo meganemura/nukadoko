@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import type { Conditions } from "../condition/condition.js";
@@ -13,11 +13,13 @@ import { parseFeatureSource, walkFeatureFiles } from "../feature/load-features.j
 import type { RunMappingChanges } from "../record/run-result.js";
 import { runsRelativeDir } from "../record/state-layout.js";
 import { compareCriteria, criteriaOfFeature, criterionKey, type CriteriaComparison, type Criterion, type CriterionChange } from "./criteria.js";
-import { addWorktree, NO_HOOKS, removeStaleTreeRegistrations, removeWorktree, repositoryPlace, trackedFiles, workingTreeFiles } from "./git-ref.js";
+import { addWorktree, NO_HOOKS, removeStaleTreeRegistrations, removeWorktree, repositoryPlace, trackedEntries, workingTreeFiles } from "./git-ref.js";
 import { compareMapping, configMappingText, programMappingOf, type MappingComparison, type MappingSnapshot } from "./mapping.js";
 import { runOnce } from "./process-signal.js";
 import { overlayBaseTree, within, writeOldTree, type TreeInput, type TreeSide } from "./trees.js";
+import { entryKindOfMode, worldObstacles, type EntryKind, type SideEntry, type WorldObstacle } from "./world-obstacles.js";
 export { projectRelativeText } from "./trees.js";
+export type { ObstacleKind, ObstacleWorld, WorldObstacle } from "./world-obstacles.js";
 
 export { criterionKey, type CriteriaComparison, type Criterion, type CriterionChange, type CriterionPlace } from "./criteria.js";
 export type { MappingComparison } from "./mapping.js";
@@ -60,6 +62,12 @@ export { fetchCommandFor, GitRefError, removeStaleTreeRegistrations, resolveRef,
 // A features directory at the project root holds the program's code too,
 // so "the mapping" would be the whole project and the base tree would be
 // head's: that run is refused instead (`BaseSetupError`).
+//
+// Some shapes keep a tree from holding the mix its world names
+// (src/run/world-obstacles.ts). They are read once, from the checkout of
+// the ref and head's working tree, before either tree is made: a world
+// with an obstacle is not made, and where an obstacle hides part of the
+// mapping, the mapping counts as changed.
 
 /** A `--base` run that cannot be compared, before anything ran. */
 export class BaseSetupError extends Error {}
@@ -84,11 +92,15 @@ export interface PreparedBase {
   readonly mapping: MappingComparison;
   /** `mapping` as run.json's `table.mapping_changes` says it. */
   readonly mappingChanges: RunMappingChanges;
-  /** `null` when no selected row is new or changed. */
+  /** `null` when no selected row is new or changed, or the base world has
+   * an obstacle. */
   readonly base: (PreparedTree & { readonly programFromHead: boolean }) | null;
   /** `null` unless a selected row is unchanged and the mapping changed or
-   * the row was retagged. */
+   * the row was retagged, and the old world has no obstacle. */
   readonly old: PreparedTree | null;
+  /** What keeps the base or the old world from being made, sorted by
+   * world: each world named here is `null` above. */
+  readonly obstacles: readonly WorldObstacle[];
   /** The environments the old world runs in, with the conditions the
    * ref's program file gives each (module header); `null` when the ref
    * has no program file and head's are the old world's, and why when it
@@ -144,22 +156,65 @@ function existing(dir: string, names: readonly string[]): string | null {
   return names.find((name) => existsSync(path.join(dir, name))) ?? null;
 }
 
-function onDisk(file: string): boolean {
+/** What is on disk at `file`, without following a link: a directory
+ * where git lists an entry is a repository of its own. `null` when
+ * nothing is. */
+function kindOnDisk(file: string): EntryKind | null {
   try {
-    lstatSync(file);
-    return true;
+    const stats = lstatSync(file);
+    return stats.isSymbolicLink() ? "link" : stats.isDirectory() ? "repository" : "file";
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** The links on the way to the features directory and at the config
+ * file, which git lists only where it tracks them or sees them. */
+function linksAbove(top: string, side: TreeSide): SideEntry[] {
+  const parts = side.featuresDir.split("/").filter((part) => part.length > 0);
+  const paths = [...parts.map((_, index) => parts.slice(0, index + 1).join("/")), ...(side.config === null ? [] : [side.config])];
+  return paths.filter((entry) => kindOnDisk(path.join(top, entry)) === "link").map((entry) => ({ path: entry, kind: "link" }));
+}
+
+/** Each package under the project's or the repository top's
+ * `node_modules`, scoped ones included, that is a symbolic link, with
+ * the path it resolves to relative to the top, or `null` outside it. */
+function linkedPackages(top: string, prefix: string): { path: string; target: string | null }[] {
+  const realTop = realpathSync(top);
+  const found: { path: string; target: string | null }[] = [];
+  const names = (dir: string): string[] => {
+    try {
+      return readdirSync(path.join(top, dir));
+    } catch {
+      return [];
+    }
+  };
+  for (const modules of new Set([path.posix.join(prefix, "node_modules"), "node_modules"])) {
+    const packages = names(modules).flatMap((name) => (name.startsWith("@") ? names(path.posix.join(modules, name)).map((scoped) => `${name}/${scoped}`) : [name]));
+    for (const name of packages) {
+      const at = path.posix.join(modules, name);
+      if (kindOnDisk(path.join(top, at)) !== "link") continue;
+      let real: string;
+      try {
+        real = realpathSync(path.join(top, at));
+      } catch {
+        continue;
+      }
+      const relative = path.relative(realTop, real);
+      found.push({ path: at, target: relative.startsWith("..") || path.isAbsolute(relative) ? null : toPosix(relative) });
+    }
+  }
+  return found;
 }
 
 /** The mapping files of one side: each file under its features directory
  * but a `.feature` file, by its path relative to that directory, hashed
- * from where the side's files are. */
-function mappingFiles(files: readonly string[], featuresDir: string, top: string): Map<string, string> {
+ * from where the side's files are. A repository of its own has no bytes
+ * to hash; it is an obstacle that hides the mapping instead. */
+function mappingFiles(entries: readonly SideEntry[], featuresDir: string, top: string): Map<string, string> {
   const hashes = new Map<string, string>();
-  for (const file of files) {
-    if (!within(file, featuresDir) || file.endsWith(".feature")) continue;
+  for (const { path: file, kind } of entries) {
+    if (kind === "repository" || !within(file, featuresDir) || file.endsWith(".feature")) continue;
     hashes.set(path.posix.relative(featuresDir, file), hashOf(path.join(top, file)));
   }
   return hashes;
@@ -292,23 +347,39 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
       config: refConfigFile === null ? null : inRepo(refConfigFile),
       program: refProgramFile === null ? null : inRepo(refProgramFile),
     };
-    const headFiles = (await workingTreeFiles(top)).filter((file) => onDisk(path.join(top, file)));
-    const refFiles = await trackedFiles(baseTop);
+    // git lists a nested repository with a trailing `/`.
+    const headEntries = (await workingTreeFiles(top)).flatMap((file): SideEntry[] => {
+      const entry = file.replace(/\/$/, "");
+      const kind = kindOnDisk(path.join(top, entry));
+      return kind === null ? [] : [{ path: entry, kind }];
+    });
+    const refEntries = (await trackedEntries(baseTop)).map((entry): SideEntry => ({ path: entry.path, kind: entryKindOfMode(entry.mode) }));
+    const headFiles = headEntries.map((entry) => entry.path);
+    const refFiles = refEntries.map((entry) => entry.path);
+    const found = worldObstacles({
+      project: prefix,
+      head: { ...headSide, entries: [...headEntries, ...linksAbove(top, headSide)] },
+      ref: { ...refSide, entries: refEntries },
+      features: input.features.map((feature) => inRepo(feature.relativePath)),
+      linkedPackages: linkedPackages(top, prefix),
+    });
+    const blocked = (world: WorldObstacle["world"]): boolean => found.obstacles.some((obstacle) => obstacle.world === world);
     const headSnapshot: MappingSnapshot = {
-      files: mappingFiles(headFiles, headSide.featuresDir, top),
+      files: mappingFiles(headEntries, headSide.featuresDir, top),
       config: { text: configMappingText(config) },
       program: programMappingOf(input.headProgram),
     };
     const refSnapshot: MappingSnapshot = {
-      files: mappingFiles(refFiles, refSide.featuresDir, baseTop),
+      files: mappingFiles(refEntries, refSide.featuresDir, baseTop),
       config: "problem" in refConfig ? { problem: refConfig.problem } : { text: configMappingText(refConfig) },
       program: refProgram !== null && "problem" in refProgram ? { problem: refProgram.problem } : programMappingOf(refProgram),
     };
-    const mapping = compareMapping(refSnapshot, headSnapshot);
+    const compared = compareMapping(refSnapshot, headSnapshot);
+    const mapping = found.mappingUnseen.length === 0 ? compared : { ...compared, changed: true };
 
     const changes = [...input.selected].map((key) => criteria.changes.get(key));
-    const baseNeeded = changes.some((change) => change?.change === "changed" || change?.change === "new");
-    const oldNeeded = changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true));
+    const baseNeeded = !blocked("base") && changes.some((change) => change?.change === "changed" || change?.change === "new");
+    const oldNeeded = !blocked("old") && changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true));
     const treeInput: TreeInput = { headFiles, refFiles, head: headSide, ref: refSide, stateDir: inRepo(config.stateDir) };
     const roots = { head: top, ref: baseTop };
     if (oldNeeded) writeOldTree(treeInput, roots, oldTop);
@@ -335,9 +406,11 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
         config: mapping.config,
         conditions: mapping.conditions,
         default_environments: mapping.defaultEnvironments,
+        unseen: found.mappingUnseen,
       },
       base: baseNeeded ? { root: baseProject, programFromHead: refProgramFile === null && headProgramFile !== null } : null,
       old: oldNeeded ? { root: path.join(oldTop, prefix) } : null,
+      obstacles: found.obstacles,
       oldEnvironments:
         refProgram === null || "problem" in refProgram
           ? refProgram

@@ -174,7 +174,7 @@ describe("nuka run --base", () => {
     const document = JSON.parse(result.stdout) as { table: { base: unknown; mapping_changed: boolean; mapping_changes: unknown; worlds: unknown; rows: Row[] } };
     expect(document.table.base).toEqual({ ref: "base-branch", commit: base });
     expect(document.table.mapping_changed).toBe(true);
-    expect(document.table.mapping_changes).toEqual({ files: ["features/steps/total-about.ts"], config: false, conditions: [], default_environments: false });
+    expect(document.table.mapping_changes).toEqual({ files: ["features/steps/total-about.ts"], config: false, conditions: [], default_environments: false, unseen: [] });
     expect(document.table.worlds).toEqual([
       { world: "head", environment: "default" },
       { world: "base", environment: "default" },

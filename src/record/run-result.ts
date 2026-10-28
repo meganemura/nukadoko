@@ -253,6 +253,9 @@ export interface RunMappingChanges {
   readonly config: boolean;
   readonly conditions: readonly string[];
   readonly default_environments: boolean;
+  /** Why the comparison could not see the mapping whole, each a reason
+   * that makes `mapping_changed` true (src/run/world-obstacles.ts). */
+  readonly unseen: readonly string[];
 }
 
 /** run.json's `table`: one row per criterion, one cell per world and
@@ -269,7 +272,8 @@ export interface RunTable {
    * each file under the features directory but a `.feature` file that was
    * added, removed, or edited, relative to the project root; whether the
    * config's mapping part changed; each environment whose `conditions`
-   * changed; and whether `defaultEnvironments` changed. */
+   * changed; whether `defaultEnvironments` changed; and what the
+   * comparison could not see. */
   readonly mapping_changes: RunMappingChanges | null;
   /** The table's columns, in order: each world and environment. */
   readonly worlds: readonly { readonly world: RunWorldName; readonly environment: string }[];

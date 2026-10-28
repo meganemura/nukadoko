@@ -79,7 +79,7 @@ describe("nuka report on a run.json with one field deleted or null", () => {
     // and an execution of the old world.
     document.table.base = { ref: "main", commit: "0123456789abcdef0123456789abcdef01234567" };
     document.table.mapping_changed = true;
-    document.table.mapping_changes = { files: ["features/steps/a.ts"], config: false, conditions: ["staging"], default_environments: false };
+    document.table.mapping_changes = { files: ["features/steps/a.ts"], config: false, conditions: ["staging"], default_environments: false, unseen: [] };
     document.table.worlds = [...document.table.worlds, { world: "base", environment: "default" }, { world: "old", environment: "default" }];
     const [row] = document.table.rows;
     row.change = "unchanged";

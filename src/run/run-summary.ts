@@ -345,10 +345,13 @@ function renderBase(document: RunDocument): string[] {
         ...(mapping.conditions.length === 0 ? [] : [`the conditions of ${mapping.conditions.map((name) => cellCode(name)).join(", ")}`]),
         ...(mapping.default_environments ? ["defaultEnvironments"] : []),
       ];
+  const unseen = mapping?.unseen ?? [];
   const mappingLine =
-    document.table.mapping_changed === true
-      ? `The mapping changed (${parts.length === 0 ? "the base's could not be read" : parts.join("; ")}), so the old world ran each unchanged criterion under the base's steps.`
-      : "The mapping did not change, so no unchanged criterion needed the old world.";
+    unseen.length > 0
+      ? `The mapping could not be compared whole (${unseen.join("; ")}), so it counts as changed, and each unchanged criterion needs the old world.`
+      : document.table.mapping_changed === true
+        ? `The mapping changed (${parts.length === 0 ? "the base's could not be read" : parts.join("; ")}), so the old world ran each unchanged criterion under the base's steps.`
+        : "The mapping did not change, so no unchanged criterion needed the old world.";
   // A ref that is itself an abbreviated hash would only repeat.
   const compared = base.commit.startsWith(base.ref) ? cellCode(base.ref) : `${cellCode(base.ref)} (\`${base.commit.slice(0, 7)}\`)`;
   return ["", `Compared with ${compared}: ${changes}. ${mappingLine}`];

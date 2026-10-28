@@ -1106,7 +1106,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       });
       // An unproven or moved row has no failed execution either, so it gets
       // one too, whose `do:` judges it again against the same base.
-      if (base !== undefined) rows.push(...judgedRowFindings(table, base.ref, rerunFlags));
+      if (base !== undefined) rows.push(...judgedRowFindings(table, base.ref, rerunFlags, base.obstacles));
       runFindings.push(...rows);
       const fields: RunFields = {
         run_id: runId,
@@ -1387,6 +1387,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         { world: "old" as const, tree: base.old, environments: oldEnvironments },
       ];
       for (const { world, tree, environments } of trees) {
+        // A world with an obstacle was not built (src/run/base-run.ts):
+        // each environment with a cell planned in it says why.
+        const obstacle = base.obstacles.find((entry) => entry.world === world);
+        if (obstacle !== undefined) {
+          for (const { name } of environments) {
+            if ([...planned.values()].some((cells) => cells[world].includes(name))) leaveNotRun(world, name, obstacle.reason);
+          }
+          continue;
+        }
         if (tree === null) continue;
         const starter = createWorldStarter({
           rootDir: tree.root,

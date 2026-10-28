@@ -1,14 +1,16 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { cartModule, feature, makeBaseProject, rowSummary, scenario, type BaseProject, type TableRow } from "./helpers/base-project.js";
-import { latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { CART_STEP, cartModule, feature, makeBaseProject, rowSummary, scenario, totalStep, type BaseProject, type TableRow } from "./helpers/base-project.js";
+import { createEmptyTempDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: that each tree of `nuka run --base` runs the mix
 // docs/spec.md "Verdicts" names, end to end, for the repository shapes
 // that once ran the other side's files: the base world is the ref's code
 // under head's criteria and mapping, and the old world is head's code
-// under the ref's criteria and mapping.
+// under the ref's criteria and mapping. A shape a tree cannot hold that
+// mix for leaves the world unbuilt, and its cells say why.
 
 let project: (BaseProject & { readonly top: string }) | undefined;
 
@@ -156,5 +158,164 @@ describe("the old world's environments", () => {
     expect(row!.reason).toBe(
       "passes in a, but the mapping changed since the base, and it did not run in the old world in b: the base's mapping requires this environment, and head's program file no longer has it",
     );
+  }, 60_000);
+});
+
+describe("a shape --base cannot build a world for", () => {
+  interface JudgedFinding {
+    readonly code: string;
+    readonly fix?: string;
+    readonly do?: string;
+  }
+
+  async function judge(args: readonly string[] = []): Promise<{ exitCode: number; table: { mapping_changed: boolean; mapping_changes: { unseen: string[] } }; findings: JudgedFinding[] }> {
+    const result = await project!.cli(["run", "--json", "--base", "base-branch", ...args]);
+    const document = JSON.parse(result.stdout) as { table: { mapping_changed: boolean; mapping_changes: { unseen: string[] } }; findings: (JudgedFinding & { severity: string })[] };
+    return {
+      exitCode: result.exitCode,
+      table: document.table,
+      findings: document.findings.map(({ code, fix, do: command }) => ({ code, ...(fix === undefined ? {} : { fix }), ...(command === undefined ? {} : { do: command }) })),
+    };
+  }
+
+  it("a symbolic link to the steps leaves both worlds unbuilt, so a shared Then head weakened neither holds a row nor proves one", async () => {
+    project = await makeBaseProject();
+    rmSync(path.join(project.root, "features", "steps"), { recursive: true });
+    project.write({
+      "shared-steps/a-cart.ts": CART_STEP.replace("../../lib/cart.mjs", "../lib/cart.mjs"),
+      "shared-steps/total-is.ts": totalStep("equal"),
+      "lib/cart.mjs": cartModule("return count === 4 ? 10 : count * 2;"),
+      "features/cart.feature": feature(scenario("three items", 3, 6)),
+    });
+    symlinkSync("../shared-steps", path.join(project.root, "features", "steps"));
+    project.commit("base");
+    project.git("branch", "base-branch");
+    // Head gets three items wrong and adds a criterion the base's code
+    // fails only under the base's Then; weakening the shared Then hides both.
+    project.write({
+      "lib/cart.mjs": cartModule("return count === 3 ? 7 : count === 4 ? 9 : count * 2;"),
+      "shared-steps/total-is.ts": totalStep("at-least"),
+      "features/cart.feature": feature(scenario("three items", 3, 6), scenario("four items", 4, 8)),
+    });
+    project.commit("head");
+    const judged = await judge();
+    expect(judged.exitCode).toBe(1);
+    const reason = "features/steps is a symbolic link in the criteria or the mapping, and --base does not follow symbolic links yet";
+    expect(judged.table.mapping_changed).toBe(true);
+    expect(judged.table.mapping_changes.unseen).toEqual([reason]);
+    const [three, four] = rows(project.root);
+    expect(rowSummary([three!, four!])).toEqual([
+      ["three items", "unchanged", "moved", ["head:default:pass", "old:default:not-run"]],
+      ["four items", "new", "unproven", ["head:default:pass", "base:default:not-run"]],
+    ]);
+    expect(three!.reason).toBe(`passes in default, but the mapping could not be compared with the base's, and it did not run in the old world in default: ${reason}`);
+    expect(four!.cells[1]!.reason).toBe(reason);
+    const fix = "replace the symbolic link features/steps with the files it points to";
+    expect(judged.findings).toEqual([
+      { code: "criterion-moved", fix, do: "nuka run features/cart.feature:3" },
+      { code: "criterion-unproven", fix, do: "nuka run features/cart.feature:7" },
+    ]);
+  }, 60_000);
+
+  it("a feature file outside the features directory leaves both worlds unbuilt", async () => {
+    project = await makeBaseProject();
+    project.write({ "extra/cart.feature": feature(scenario("three items", 3, 6)) });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    project.write({
+      "lib/cart.mjs": cartModule("return count >= 5 ? count * 2 - 1 : count * 2;"),
+      "extra/cart.feature": feature(scenario("three items", 3, 6), scenario("five items", 5, 9)),
+    });
+    project.commit("head");
+    const judged = await judge(["extra/cart.feature"]);
+    expect(judged.exitCode).toBe(1);
+    const reason = "extra/cart.feature is outside the features directory features, and --base compares only the criteria and steps under it";
+    expect(judged.table.mapping_changes.unseen).toEqual([reason]);
+    expect(rowSummary(rows(project.root))).toEqual([
+      ["three items", "unchanged", "moved", ["head:default:pass", "old:default:not-run"]],
+      ["five items", "new", "unproven", ["head:default:pass", "base:default:not-run"]],
+    ]);
+    const fix = "move extra/cart.feature under features";
+    expect(judged.findings).toEqual([
+      { code: "criterion-moved", fix, do: "nuka run extra/cart.feature:3" },
+      { code: "criterion-unproven", fix, do: "nuka run extra/cart.feature:7" },
+    ]);
+  }, 60_000);
+
+  it("a workspace package leaves the base world unbuilt, rather than run head's copy as the base's code", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "packages/pricing/package.json": `${JSON.stringify({ name: "pricing", type: "module", main: "index.mjs" })}\n`,
+      "packages/pricing/index.mjs": cartModule(),
+      "features/steps/a-cart.ts": CART_STEP.replace("../../lib/cart.mjs", "pricing"),
+      "features/cart.feature": feature(scenario("three items", 3, 6)),
+    });
+    // What a workspace install leaves; git ignores it.
+    mkdirSync(path.join(project.root, "node_modules"));
+    symlinkSync("../packages/pricing", path.join(project.root, "node_modules", "pricing"));
+    project.commit("base");
+    project.git("branch", "base-branch");
+    project.write({
+      "packages/pricing/index.mjs": cartModule("return count >= 5 ? count * 2 - 1 : count * 2;"),
+      "features/cart.feature": feature(scenario("three items", 3, 6), scenario("five items", 5, 9)),
+    });
+    project.commit("head");
+    const judged = await judge();
+    expect(judged.exitCode).toBe(1);
+    expect(judged.table.mapping_changed).toBe(false);
+    const [three, five] = rows(project.root);
+    expect(rowSummary([three!, five!])).toEqual([
+      ["three items", "unchanged", "held", ["head:default:pass"]],
+      ["five items", "new", "unproven", ["head:default:pass", "base:default:not-run"]],
+    ]);
+    expect(five!.cells[1]!.reason).toBe(
+      "node_modules/pricing links to a package inside the repository, so the base world would run head's copy of it as the base's code, and --base does not support workspace packages yet",
+    );
+    expect(judged.findings).toEqual([{ code: "criterion-unproven", do: "nuka run features/cart.feature:7" }]);
+  }, 60_000);
+
+  it.each(["submodule", "nested repository"])("a %s leaves both worlds unbuilt, rather than stop the run", async (shape) => {
+    project = await makeBaseProject();
+    project.write({ "features/cart.feature": feature(scenario("three items", 3, 6)) });
+    const nested = (dir: string): void => {
+      const git = (...args: string[]): string => execFileSync("git", ["-C", dir, "-c", "user.email=test@example.com", "-c", "user.name=test", ...args], { encoding: "utf8" });
+      git("init", "-q");
+      git("commit", "-q", "--allow-empty", "-m", "nested");
+    };
+    const source = await createEmptyTempDir();
+    try {
+      if (shape === "submodule") {
+        nested(source);
+        project.git("submodule", "add", "-q", source, "vendor/sub");
+      }
+      project.commit("base");
+      project.git("branch", "base-branch");
+      // A step file changes, so the unchanged row needs the old world.
+      project.write({
+        "features/steps/total-is.ts": `${totalStep("equal")}// reworded\n`,
+        "features/cart.feature": feature(scenario("three items", 3, 6), scenario("four items", 4, 8)),
+      });
+      project.commit("head");
+      // A clone inside the working tree that git does not track.
+      if (shape === "nested repository") {
+        mkdirSync(path.join(project.root, "vendor", "sub"), { recursive: true });
+        nested(path.join(project.root, "vendor", "sub"));
+      }
+      const judged = await judge();
+      expect(judged.exitCode).toBe(1);
+      const reason = "vendor/sub is a submodule or a repository of its own, and --base does not support submodules or nested repositories yet";
+      const [three, four] = rows(project.root);
+      expect(rowSummary([three!, four!])).toEqual([
+        ["three items", "unchanged", "moved", ["head:default:pass", "old:default:not-run"]],
+        ["four items", "new", "unproven", ["head:default:pass", "base:default:not-run"]],
+      ]);
+      expect([three!.cells[1]!.reason, four!.cells[1]!.reason]).toEqual([reason, reason]);
+      expect(judged.findings).toEqual([
+        { code: "criterion-moved", do: "nuka run features/cart.feature:3" },
+        { code: "criterion-unproven", do: "nuka run features/cart.feature:7" },
+      ]);
+    } finally {
+      await removeTempDir(source);
+    }
   }, 60_000);
 });

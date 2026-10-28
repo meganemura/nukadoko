@@ -141,17 +141,21 @@ function runsText(runs: number): string {
 
 /** What `nuka run --base` knows of one criterion: how it compares with the
  * ref, whether it carries `@held`, whether the mapping changed, and
- * whether its own tags changed. */
+ * whether its own tags changed. `mappingUnseen`: the mapping counts as
+ * changed only because the comparison could not see all of it
+ * (src/run/world-obstacles.ts), so a reason must not say it changed. */
 export interface RowContext {
   readonly change: "unchanged" | "changed" | "new";
   readonly held: boolean;
   readonly mappingChanged: boolean;
+  readonly mappingUnseen?: boolean;
   readonly retagged: boolean;
 }
 
 // What changed under an unchanged row since the base, as the clause of its
 // reason, or `null` when nothing did.
 function underneathChange(context: RowContext): string | null {
+  if (context.mappingUnseen === true) return `the mapping could not be compared with the base's${context.retagged ? ", and its tags changed since the base" : ""}`;
   if (context.mappingChanged && context.retagged) return "the mapping and its tags changed since the base";
   if (context.mappingChanged) return "the mapping changed since the base";
   if (context.retagged) return "its tags changed since the base";
@@ -367,10 +371,20 @@ export function rowsWithoutRequiredCell(
 /** A finding for each `unproven` and `moved` row, which has no failed
  * execution to carry one: the row's reason, and a `do:` line that judges
  * the row again against the same base, in the environments the run named.
- * Pure. */
-export function judgedRowFindings(table: Pick<RunTable, "rows">, base: string, envFlags: readonly string[]): Finding[] {
+ * Where an obstacle kept the world the verdict reads (the base world for
+ * `unproven`, the old world for `moved`) from being built
+ * (src/run/world-obstacles.ts), `--base` cannot judge the row until it
+ * goes: the `do:` line runs the row without `--base`, and the obstacle's
+ * edit, when it has one, is the `fix:` line. Pure. */
+export function judgedRowFindings(
+  table: Pick<RunTable, "rows">,
+  base: string,
+  envFlags: readonly string[],
+  obstacles: readonly { readonly world: "base" | "old"; readonly fix?: string }[] = [],
+): Finding[] {
   return table.rows.flatMap((row): Finding[] => {
     if (row.verdict !== "unproven" && row.verdict !== "moved") return [];
+    const obstacle = obstacles.find((entry) => entry.world === (row.verdict === "unproven" ? "base" : "old"));
     return [
       {
         severity: "failed",
@@ -378,7 +392,8 @@ export function judgedRowFindings(table: Pick<RunTable, "rows">, base: string, e
         file: row.feature,
         line: row.line,
         message: `Scenario "${row.name}" is ${row.verdict}: it ${row.reason}`,
-        do: ["nuka", "run", `${row.feature}:${row.line}`, "--base", base, ...envFlags].map(shellWord).join(" "),
+        ...(obstacle?.fix === undefined ? {} : { fix: obstacle.fix }),
+        do: ["nuka", "run", `${row.feature}:${row.line}`, ...(obstacle === undefined ? ["--base", base] : []), ...envFlags].map(shellWord).join(" "),
       },
     ];
   });
@@ -472,7 +487,13 @@ export function buildTable(input: TableInput): RunTable {
     const context: RowContext | undefined =
       input.base === undefined || compared === undefined
         ? undefined
-        : { change: compared.change, held: readCriterionTags(criterion.tags).held, mappingChanged: input.base.mappingChanged, retagged: compared.retagged === true };
+        : {
+            change: compared.change,
+            held: readCriterionTags(criterion.tags).held,
+            mappingChanged: input.base.mappingChanged,
+            ...(input.base.mapping.unseen.length === 0 ? {} : { mappingUnseen: true }),
+            retagged: compared.retagged === true,
+          };
     const oldEnvironments = input.base?.oldEnvironments ?? [];
     const oldRoles = rolesOf(criterion.tags, oldEnvironments).map((role, index) => ({ environment: oldEnvironments[index]!.name, role }));
     const planned = plannedWorldCells(headCells, input.proofRuns, context, oldRoles);

@@ -438,7 +438,7 @@ describe("buildTable", () => {
       base: {
         ref: "main",
         commit: "0".repeat(40),
-        mapping: { files: [], config: false, conditions: ["b"], default_environments: false },
+        mapping: { files: [], config: false, conditions: ["b"], default_environments: false, unseen: [] },
         mappingChanged: true,
         changeOf: () => ({ change: "unchanged" }),
         removed: [],
@@ -460,6 +460,29 @@ describe("buildTable", () => {
       { world: "old", environment: "c", role: "required", conditions: { flag: true }, outcome: "fail", line: 5, runs: 1, claim: 0, actuals: [{ value: 7 }] },
     ]);
     expect(row!.verdict).toBe("moved");
+  });
+
+  it("says the mapping could not be compared, not that it changed, where an obstacle hid part of it", () => {
+    const table = buildTable({
+      criteria: [{ feature: "a.feature", line: 3, name: "s", tags: [] }],
+      environments: [{ name: "default", conditions: undefined }],
+      outcomes: (_feature, _line, _environment, world = "head") => (world === "head" ? [{ kind: "pass" }] : []),
+      notRunReason: (_environment, world) => (world === "old" ? "steps is a symbolic link" : undefined),
+      proofRuns: 2,
+      leftOut: 0,
+      base: {
+        ref: "main",
+        commit: "0".repeat(40),
+        mapping: { files: [], config: false, conditions: [], default_environments: false, unseen: ["steps is a symbolic link"] },
+        mappingChanged: true,
+        changeOf: () => ({ change: "unchanged" }),
+        removed: [],
+        oldEnvironments: [{ name: "default", conditions: undefined }],
+      },
+    });
+    const [row] = table.rows;
+    expect(row!.verdict).toBe("moved");
+    expect(row!.reason).toBe("passes in default, but the mapping could not be compared with the base's, and it did not run in the old world in default: steps is a symbolic link");
   });
 
   it("says how many criteria --env left out, in the same words on stderr and in the summary", () => {
@@ -674,6 +697,21 @@ describe("judgedRowFindings", () => {
       for (const [index, finding] of findings.entries()) {
         expect(finding.message).toBe(`Scenario "${red[index]!.name}" is ${red[index]!.verdict}: it passes in default, and more`);
         expect(finding.do).toBe(`nuka run 'features/a b.feature:${red[index]!.line}' --base origin/main --env on`);
+      }
+    }));
+
+  it("runs a row without --base, and gives the obstacle's edit, where an obstacle kept the world its verdict reads from being built", () =>
+    hegel.test((tc) => {
+      const verdicts = tc.draw(gs.arrays(gs.sampledFrom<RunRowVerdict>(["unproven", "moved"]), { minSize: 1, maxSize: 4 }));
+      const blocked = tc.draw(gs.arrays(gs.sampledFrom(["base", "old"] as const), { maxSize: 2 }));
+      const obstacles = [...new Set(blocked)].map((world) => ({ world, fix: `replace the link in the ${world} world` }));
+      const rows = verdicts.map((word, index) => ({ feature: "features/a.feature", line: index + 3, name: `row ${index}`, verdict: word, reason: "passes in default", cells: [] }));
+      const findings = judgedRowFindings({ rows } as unknown as Parameters<typeof judgedRowFindings>[0], "origin/main", [], obstacles);
+      for (const [index, finding] of findings.entries()) {
+        const world = rows[index]!.verdict === "unproven" ? "base" : "old";
+        const obstacle = obstacles.find((entry) => entry.world === world);
+        expect(finding.do).toBe(obstacle === undefined ? `nuka run features/a.feature:${index + 3} --base origin/main` : `nuka run features/a.feature:${index + 3}`);
+        expect(finding.fix).toBe(obstacle?.fix);
       }
     }));
 

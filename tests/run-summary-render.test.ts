@@ -662,7 +662,7 @@ describe("the comparison line of the summary", () => {
       const ref = tc.draw(gs.oneOf(gs.integers({ minValue: 4, maxValue: 40 }).map((size) => commit.slice(0, size)), gs.sampledFrom(["main", "origin/main", "v1.2.0"])));
       // The table, and the line above it, are drawn only for a run with a row.
       const removed = { feature: "features/a.feature", line: 3, name: "gone", change: "removed" as const, conditions: [], cells: [], verdict: "removed" as const, reason: "the base holds this criterion, and head no longer does", lines: ["Then it is gone"] };
-      const table = { ...base.table, base: { ref, commit }, mapping_changed: false, mapping_changes: { files: [], config: false, conditions: [], default_environments: false }, rows: [removed] };
+      const table = { ...base.table, base: { ref, commit }, mapping_changed: false, mapping_changes: { files: [], config: false, conditions: [], default_environments: false, unseen: [] }, rows: [removed] };
       const line = renderRunSummary({ ...base, table }).split("\n").find((text) => text.startsWith("Compared with "));
       const named = commit.startsWith(ref) ? `\`${ref}\`` : `\`${ref}\` (\`${commit.slice(0, 7)}\`)`;
       expect(line).toBe(`Compared with ${named}: 0 unchanged, 0 changed, 0 new, 1 removed. The mapping did not change, so no unchanged criterion needed the old world.`);
