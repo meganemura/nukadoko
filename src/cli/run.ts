@@ -1526,6 +1526,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             treeRoot: tree.root,
             headRoot: rootDir,
             headStateDir: config.stateDir,
+            headSecrets: { envFiles: pass.resolvedEnv.envFiles, publicKeys: config.secrets.public, redactKeys: config.secrets.redact },
             runId,
             envArg: pass.envArg,
             environment,

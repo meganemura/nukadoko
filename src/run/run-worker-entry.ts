@@ -243,8 +243,22 @@ async function main(): Promise<void> {
     publicKeys: config.secrets.public,
     redactKeys: config.secrets.redact,
   });
-  // The world's token is redacted wherever the env files' secrets are.
-  const secrets = world === null ? envSecrets : [...envSecrets, ...world.secrets];
+  // In a tree, head's secrets too (src/run/worker-protocol.ts's
+  // `HeadSecretSources`), and the world's token wherever the env files'
+  // secrets are.
+  const headSecrets =
+    tree === null
+      ? []
+      : await (async () => {
+          const head = await classifyEnvFiles(envRoot, tree.headSecrets.envFiles);
+          return buildSecretSet(envRoot, {
+            secretSourceFiles: head.secretSource,
+            trackedFiles: head.tracked,
+            publicKeys: tree.headSecrets.publicKeys,
+            redactKeys: tree.headSecrets.redactKeys,
+          });
+        })();
+  const secrets = [...envSecrets, ...headSecrets, ...(world?.secrets ?? [])];
   processOutput.redact(secrets);
 
   const probeResult = await probeVersion(resolvedEnv.version);

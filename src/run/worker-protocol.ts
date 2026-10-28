@@ -124,6 +124,19 @@ export interface WorkerTree {
   readonly headRoot: string;
   readonly headStateDir: string;
   readonly check: boolean;
+  /** What head's secret set for the environment is built from. */
+  readonly headSecrets: HeadSecretSources;
+}
+
+/** Head's env files for an environment and its config's `secrets.public`
+ * and `secrets.redact`: names only, so the file that carries them holds
+ * no value. A tree's worker redacts with the set they build as well as
+ * with its own, since the tree's config (the ref's, in the old world)
+ * must not decide which of head's values may print. */
+export interface HeadSecretSources {
+  readonly envFiles: readonly string[];
+  readonly publicKeys: readonly string[];
+  readonly redactKeys: readonly string[];
 }
 
 export function serializeWorkerEnvelope(envelope: WorkerEnvelope): string {

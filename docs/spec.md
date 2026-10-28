@@ -4214,8 +4214,13 @@ of a tree has its directory at `worlds/<environment>@base` or
 answers for (see "Program"). A tree's scenarios run in worker processes
 started in the tree, at any `--concurrency`; each worker runs `nuka check`
 on the tree's files first, unless `--no-check`, and a tree whose files do
-not load or check leaves its cells not run, with the reason. The files a
-worker is handed are written in the run directory. A signal first stops a
+not load or check leaves its cells not run, with the reason. A worker
+reads the environment's env files from head's root and redacts what it
+writes with head's secret set as well as with the tree's, so the ref's
+config, which the old world loads, never decides that one of head's
+values may print. The files a worker is handed are written in the run
+directory, and name the files and keys head's secret set is built from,
+never a value. A signal first stops a
 tree's workers: SIGTERM, the same 5 seconds a world gets, then SIGKILL,
 since a worker busy in a step cannot run its own handler. Then it stops
 the tree's world as it stops head's: it stops a start at once, and gives a

@@ -10,7 +10,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 import { writeProofRunBoundary } from "./progress-log.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
 import { projectRelativeText } from "./trees.js";
-import { parseWorkerEnvelope, type WorkerEnvelope, type WorkerTree } from "./worker-protocol.js";
+import { parseWorkerEnvelope, type HeadSecretSources, type WorkerEnvelope, type WorkerTree } from "./worker-protocol.js";
+
+export type { HeadSecretSources } from "./worker-protocol.js";
 
 // Responsibility: one pass of `nuka run --base` in the base or the old tree
 // (docs/spec.md "Verdicts"): the cells of one world and environment, run in
@@ -57,6 +59,7 @@ export interface TreePassOptions {
   readonly treeRoot: string;
   readonly headRoot: string;
   readonly headStateDir: string;
+  readonly headSecrets: HeadSecretSources;
   readonly runId: string;
   /** `--env`'s name for the environment, or `null` for the implicit
    * `default`. */
@@ -188,7 +191,7 @@ export async function runTreePass(options: TreePassOptions): Promise<TreePassRes
       const featureListPath = path.join(tmpDir, "features.txt");
       await writeFile(featureListPath, `${targets.map((target) => `${target.feature}:${target.line}`).join("\n")}\n`, "utf8");
       const treePath = path.join(tmpDir, "tree.json");
-      const tree: WorkerTree = { world, headRoot: options.headRoot, headStateDir: options.headStateDir, check: options.check };
+      const tree: WorkerTree = { world, headRoot: options.headRoot, headStateDir: options.headStateDir, check: options.check, headSecrets: options.headSecrets };
       await writeFile(treePath, JSON.stringify(tree), "utf8");
       const worldPath = options.view === null ? null : path.join(tmpDir, "world.json");
       if (worldPath !== null && options.view !== null) await writeFile(worldPath, serializeWorldView(options.view), "utf8");

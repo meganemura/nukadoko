@@ -3357,7 +3357,10 @@ tree の world のディレクトリは `worlds/<environment>@base` か `worlds/
 tree の scenario は、`--concurrency` にかかわらず、その tree で始めた worker プロセスで走ります。
 各 worker は、`--no-check` でなければ、まず tree のファイルに `nuka check` を走らせます。
 ファイルが読み込めないか check を通らない tree のセルは、理由を添えて走らないままです。
+worker は environment の env file を head の root から読み、書くものを tree の secret の集合だけでなく head の secret の集合でも redact します。
+そのため、old の world が読み込む基点の config が、head の値の 1 つを表に出してよいと決めることはありません。
 worker に渡すファイルは run ディレクトリに書きます。
+そのファイルは head の secret の集合を作る元のファイルとキーを名指し、値は書きません。
 シグナルは、まず tree の worker を止めます。
 SIGTERM を送り、world と同じ 5 秒を待ち、それから SIGKILL を送ります。
 step の中で手が離せない worker は、自分のハンドラを走らせられないからです。
