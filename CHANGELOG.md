@@ -355,7 +355,8 @@ just until 0.1.
   recipe of that name, and it has to pass
   there. A control proves an unchanged row as it does without `--base`,
   unless the row is moved. The rows are `held`, `proven`, `removed`, `failed`,
-  `unproven` (nothing shows a Then failing without the change), or
+  `unproven` (nothing shows a Then failing without the change, which a
+  compat Then never can, and its reason then says so), or
   `moved` (an approved sentence no longer holds under the steps it was
   approved with), and the gate is red on the last three. The base world
   builds the ref's program file, a `url` function receives `tree` to say

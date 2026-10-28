@@ -49,20 +49,22 @@ import { shellWord } from "../shell/shell-word.js";
 // the row's role in each from the conditions the ref gives them, since an
 // unchanged row's condition tags are the ref's.
 
-/** One execution, read for the table. A `fail` names the claim that broke,
- * by its position among its step's claims, and the actual value it saw. A
- * `broke` a hook caused names the hook in `reason`. */
+/** One execution, read for the table. A `pass` that judged no claim in
+ * Then position says why in `judgedBy` (run.json's `judged_by`), since
+ * no world can then show its Then failing. A `fail` names the claim that
+ * broke, by its position among its step's claims, and the actual value it
+ * saw. A `broke` a hook caused names the hook in `reason`. */
 export type ExecutionOutcome =
-  | { readonly kind: "pass" }
+  | { readonly kind: "pass"; readonly judgedBy?: "compat" | "nothing" }
   | { readonly kind: "fail"; readonly line: number; readonly claim: number; readonly actual: ClaimReadingValue }
   | { readonly kind: "broke"; readonly line: number; readonly reason?: string };
 
-type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks">;
+type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks" | "judged_by">;
 
 /** What one execution came to. `inThen` says whether the step at an index
  * stands in Then position. Pure. */
 export function executionOutcome(execution: Execution, inThen: (index: number) => boolean): ExecutionOutcome {
-  if (execution.status === "passed") return { kind: "pass" };
+  if (execution.status === "passed") return execution.judged_by === undefined ? { kind: "pass" } : { kind: "pass", judgedBy: execution.judged_by };
   const index = execution.steps.findIndex((step) => step.status !== "passed" && step.status !== "skipped");
   if (index === -1) {
     const reason = hookFailure(execution);
@@ -191,6 +193,10 @@ export interface RowContext {
   readonly mappingUnseen?: boolean;
   readonly retagged: boolean;
   readonly renamed: boolean;
+  /** Why head's passing executions judged no claim in Then position, when
+   * they did not: a compat step stands there (`compat`), or no claim step
+   * does (`nothing`). */
+  readonly thenJudgesNoClaim?: "compat" | "nothing";
 }
 
 function listed(parts: readonly string[]): string {
@@ -330,6 +336,15 @@ export function judgeRow(
     ...base.map((cell) => `base ${cell.environment}: ${cellText(cell)}${cell.outcome === "not-run" && cell.reason !== undefined ? ` (${cell.reason})` : ""}`),
     ...controls.map((cell) => `control ${cell.environment}: ${cellText(cell)}`),
   ];
+  // Only a claim in Then position proves, so a row whose Then judges none
+  // is unproven by what its Then is, not by what the base did.
+  if (context.thenJudgesNoClaim !== undefined) {
+    const then = context.thenJudgesNoClaim === "compat" ? "its Then is a compat step, which judges no claim" : "no claim step stands in its Then position";
+    return {
+      verdict: "unproven",
+      reason: `passes in ${passedIn}, but ${then}, so no world can show a Then failing where its behaviour is absent${absent.length === 0 ? "" : ` (${absent.join(", ")})`}`,
+    };
+  }
   return {
     verdict: "unproven",
     reason:
@@ -540,6 +555,10 @@ export function buildTable(input: TableInput): RunTable {
     const roles = rolesOf(criterion.tags, input.environments);
     const headCells = input.environments.map((environment, index) => cellOf(criterion, environment, roles[index]!, "head"));
     const compared = input.base?.changeOf(criterion.feature, criterion.line);
+    const thenJudgesNoClaim = input.environments
+      .flatMap((environment, index) => (roles[index] === "required" ? input.outcomes(criterion.feature, criterion.line, environment.name, "head") : []))
+      .map((outcome) => (outcome.kind === "pass" ? outcome.judgedBy : undefined))
+      .find((judgedBy) => judgedBy !== undefined);
     const context: RowContext | undefined =
       input.base === undefined || compared === undefined
         ? undefined
@@ -550,6 +569,7 @@ export function buildTable(input: TableInput): RunTable {
             ...(input.base.mapping.unseen.length === 0 ? {} : { mappingUnseen: true }),
             retagged: compared.retagged === true,
             renamed: compared.renamedFrom !== undefined,
+            ...(thenJudgesNoClaim === undefined ? {} : { thenJudgesNoClaim }),
           };
     const oldEnvironments = input.base?.oldEnvironments ?? [];
     const oldRoles = rolesOf(criterion.tags, oldEnvironments).map((role, index) => ({ environment: oldEnvironments[index]!.name, role }));

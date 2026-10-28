@@ -3401,6 +3401,9 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 証明するのは claim だけでもあります。
 Then の位置に結び付けられた compat の step や `run` を持つ step は claim を判定しないので、その失敗したアサーションは `broke` です。
 そのため compat のスイートの受け入れ基準は、その Then が claim step になるまで、`held` か `failed` で、`proven` にはなりません(「Claims」を参照)。
+`--base` のもとでは、`new` か `changed` の受け入れ基準は同じ理由で `unproven` です。
+ただし `@held` が付いていて基点で通るときは除きます。
+その理由は、基点で何が起きたかにかかわらず、その Then が claim を判定しないことを言います。
 old のセルの行は、old の world が走らせる基点の feature ファイルのものです。
 
 必須の head のセルは 1 回、または `--repeat` の回数だけ走り、base と old のセルは 1 回走ります。

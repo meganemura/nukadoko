@@ -250,6 +250,12 @@ describe("executionOutcome", () => {
     expect(executionOutcome(execution([step("undefined", undefined, 7), step("skipped"), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 7 });
   });
 
+  it("says why a pass judged no claim in Then position, as run.json's judged_by does", () => {
+    const passed = [step("passed"), step("passed"), step("passed")];
+    expect(executionOutcome({ ...(execution(passed) as object), judged_by: "compat" } as never, inThen)).toEqual({ kind: "pass", judgedBy: "compat" });
+    expect(executionOutcome({ ...(execution(passed) as object), judged_by: "nothing" } as never, inThen)).toEqual({ kind: "pass", judgedBy: "nothing" });
+  });
+
   it("names the hook that failed an execution none of whose steps failed, and when it ran", () => {
     const passed = [step("passed", undefined, 3), step("passed", undefined, 4), step("passed", undefined, 5)];
     expect(executionOutcome(execution(passed, [{ type: "before", status: "passed" }, { type: "after", status: "failed" }]), inThen)).toEqual({
@@ -779,6 +785,16 @@ describe("judgeRow under --base", () => {
       verdict: "unproven",
       reason: "passes in default, and no world where its behaviour is absent ran it, so nothing shows a Then failing without the change",
     });
+    expect(judgeRow([head, at("base", "broke", { line: 5 })], 2, { change: "new", held: false, mappingChanged: false, retagged: false, renamed: false, thenJudgesNoClaim: "compat" })).toEqual({
+      verdict: "unproven",
+      reason: "passes in default, but its Then is a compat step, which judges no claim, so no world can show a Then failing where its behaviour is absent (base default: broke@5)",
+    });
+    expect(judgeRow([head], 2, { change: "changed", held: false, mappingChanged: false, retagged: false, renamed: false, thenJudgesNoClaim: "nothing" })).toEqual({
+      verdict: "unproven",
+      reason: "passes in default, but no claim step stands in its Then position, so no world can show a Then failing where its behaviour is absent",
+    });
+    // @held still holds a row the base passes, whatever its Then is.
+    expect(judgeRow([head, at("base", "pass")], 2, { change: "new", held: true, mappingChanged: false, retagged: false, renamed: false, thenJudgesNoClaim: "compat" }).verdict).toBe("held");
   });
 });
 

@@ -4268,7 +4268,10 @@ nothing about whether the Then can tell the difference, so it is
 with `run` bound in Then position judges no claim, so its failed
 assertion is `broke`, and a compat suite's criteria are `held` or
 `failed`, never `proven`, until their Thens become claim steps (see
-"Claims"). An old cell's line is in the ref's feature file, which the old
+"Claims"). Under `--base`, a `new` or `changed` one is `unproven`
+for the same reason, unless it is tagged `@held` and passes at the base,
+and its reason says that its Then judges no claim, whatever the base
+did. An old cell's line is in the ref's feature file, which the old
 world runs.
 
 A required head cell runs once, or `--repeat` times, and a base or an

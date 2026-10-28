@@ -245,6 +245,10 @@ compat の step は claim を宣言できず、compat の扉はその動作を�
 受け入れ基準を証明するのは claim だけです(docs/spec.ja.md の「断定」を参照)。
 `Then` の位置に結び付けられた compat の step や `run` を持つ step で失敗したアサーションは、`fail` ではなく `broke` です。
 そのため compat のスイートの受け入れ基準は、その `Then` が claim step になるまで、`held` か `failed` で、`proven` にはなりません。
+`nuka run --base` のもとでは、新しい受け入れ基準や変えた受け入れ基準は同じ理由で `unproven`(赤)です。
+ただし `@held` が付いていて基点で通るときは除きます。
+その理由は、その `Then` が claim を判定しない compat の step であることを言います。
+受け入れ基準を変える前にその `Then` を昇格させるか、基点がすでにその振る舞いを持つなら `@held` を付けます。
 
 ## ダッシュボードは `nuka check`
 

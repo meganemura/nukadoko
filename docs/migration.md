@@ -315,6 +315,11 @@ Only a claim proves a criterion (docs/spec.md "Verdicts"). A failed
 assertion in a compat step, or in a step with `run`, bound in `Then`
 position is `broke`, not `fail`, so a compat suite's criteria are `held`
 or `failed`, never `proven`, until their `Then`s become claim steps.
+Under `nuka run --base`, a new or changed one is `unproven` (red) for
+the same reason, unless it is tagged `@held` and passes at the base, and
+its reason says that its `Then` is a compat step, which judges no claim.
+Promote the `Then` of a criterion before you change it, or tag it
+`@held` when the base already has the behaviour.
 
 ## The dashboard is `nuka check`
 

@@ -147,6 +147,37 @@ describe("a url function", () => {
   }, 60_000);
 });
 
+describe("a compat Then", () => {
+  it("leaves a new row unproven, and its reason says a compat step judges no claim, though the Then failed at the base", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "lib/cart.mjs": cartModule("return count;"),
+      "features/cart.feature": "Feature: Cart\n",
+      "features/steps/a-cart.ts": `import { Given, Then } from "nukadoko/compat";
+import assert from "node:assert/strict";
+import { total } from "../../lib/cart.mjs";
+Given("a cart with {int} items", function (count: number) {
+  this.total = total(count);
+});
+Then("the total is {int}", function (expected: number) {
+  assert.equal(this.total, expected);
+});
+`,
+    });
+    rmSync(path.join(project.root, "features/steps/total-is.ts"));
+    project.commit("base");
+    project.write({ "lib/cart.mjs": cartModule(), "features/cart.feature": feature(scenario("three items", 3, 6)) });
+    project.commit("head");
+    const result = await project.cli(["run", "--no-check", "--base", "HEAD~1"]);
+    expect(result.exitCode).toBe(1);
+    const [row] = rows(project.root);
+    expect(rowSummary([row!])).toEqual([["three items", "new", "unproven", ["head:default:pass", "base:default:broke"]]]);
+    expect(row!.reason).toBe(
+      "passes in default, but its Then is a compat step, which judges no claim, so no world can show a Then failing where its behaviour is absent (base default: broke@5)",
+    );
+  }, 60_000);
+});
+
 describe("a proof round that did not finish", () => {
   it("leaves the base world to prove a new row, since the control it ran proves nothing", async () => {
     project = await makeBaseProject();

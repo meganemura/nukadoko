@@ -62,7 +62,9 @@ A cell reads `pass`; `fail@<line>`, a claim broke at that Then line;
 its runs disagree; or `·`, it did not run, and its `reason` says why.
 Only a claim proves: a failed assertion in a compat or `run` step bound
 in Then position is `broke`, so a compat suite's rows are `held` or
-`failed`, never `proven`, until their Thens become claim steps.
+`failed`, never `proven`, until their Thens become claim steps. Under
+`--base`, a new or changed one is `unproven` for that reason, which its
+reason names, unless it is tagged `@held` and passes at the base.
 `(control)` marks a control, and `(2 runs)` how often it ran. A control
 that failed at a Then line runs again until it has broken the same claim
 there `--proof-runs` times (2 by default), each a `proof run <k>/<n>` line on
