@@ -4141,9 +4141,16 @@ criterion is:
 - `removed`: at the ref, and no longer at head.
 
 A name that repeats with differing content on both sides is left `new`
-and `removed`, not paired by position. The ref's criteria are read from
-its feature files at the run's targets, or its whole features directory
-when the run names none. A ref feature file that does not parse is a
+and `removed`, not paired by position. Both sides' criteria are read
+whole, from every feature file under each side's features directory and
+each targeted file, whatever the targets select, so a criterion's
+identity, a rename, and `removed` never depend on the selection: a
+`do:` line that targets one row makes the comparison the whole run made.
+The targets select head's rows alone, and a run given targets calls
+`removed` only a criterion of a feature file the targets name at the
+ref, never one head holds in another file. A head feature file outside
+the targets that does not parse holds no criteria for the comparison.
+A ref feature file that does not parse is a
 `base-feature-unparsed` warning, and head's criteria in it count as
 `new`.
 

@@ -331,7 +331,10 @@ just until 0.1.
   taken only where one candidate matches, the same file first, so the
   answer never depends on the order the files are read in; a criterion
   whose other tags changed is marked `retagged` and runs in the old
-  world, since a tag can select a hook), and any
+  world, since a tag can select a hook; both sides are read whole,
+  whatever the targets, and a run given targets calls removed only a
+  criterion of a file they name, so a `do:` line that targets one row
+  makes the same comparison), and any
   edit to what a person approved makes it `changed`; the others are `new`
   or `removed`. The mapping (the files under the features
   directory other than `.feature` files, the whole config but

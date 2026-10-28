@@ -107,6 +107,7 @@ export interface TableRow {
   line: number;
   name: string;
   change: string | null;
+  renamed_from?: { feature: string; name: string };
   retagged?: boolean;
   verdict: string;
   reason: string;

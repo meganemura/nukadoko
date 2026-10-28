@@ -50,6 +50,15 @@ export { fetchCommandFor, GitRefError, removeStaleTreeRegistrations, resolveRef,
 // outside the project (Ruby gems, a system tool) is the machine's, the same
 // one head's program uses.
 //
+// Both sides' criteria are read whole, every feature file under each
+// side's features directory and each targeted file, whatever the targets:
+// a criterion's identity, a rename, and `removed` then do not depend on
+// the selection, so a `do:` line that targets one row makes the
+// comparison the whole run made. The targets select head's rows alone,
+// and a targeted run calls removed only a criterion of a feature file the
+// targets name at the ref. A head file outside the targets that does not
+// parse holds no criteria here: no run of these targets reads it.
+//
 // The ref's config and program file are loaded to read its features
 // directory and its mapping part. One that does not load at the ref is a
 // mapping that cannot be shown to be head's, so it counts as changed, and
@@ -106,8 +115,8 @@ export interface PreparedBase {
    * has no program file and head's are the old world's, and why when it
    * did not load. */
   readonly oldEnvironments: readonly OldEnvironment[] | null | { readonly problem: string };
-  /** The ref's feature files that were compared, by path relative to the
-   * project root. */
+  /** The ref's feature files, by path relative to the project root: its
+   * whole features directory and each targeted file. */
   readonly refFeatures: ReadonlyMap<string, RefFeature>;
   /** Feature files at the ref that did not parse: their criteria could
    * not be compared, so head's count as new. */
@@ -224,8 +233,9 @@ function problemOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The feature files the ref holds at the run's targets. */
-function refFeatureFiles(project: string, targets: readonly string[]): string[] {
+/** The feature files a tree holds at `targets`, each a directory or a
+ * file relative to `project`. */
+function featureFilesAt(project: string, targets: readonly string[]): string[] {
   const files = new Set<string>();
   for (const target of targets) {
     const absolute = path.join(project, target);
@@ -312,12 +322,11 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     }
     const refFeaturesDir = "problem" in refConfig ? config.featuresDir : refConfig.featuresDir;
 
-    // The criteria: the ref's at the run's targets, head's in every file
-    // it selected from, whole, so a `:line` target compares the file.
+    // The criteria, each side's whole (module header).
     const refFeatures = new Map<string, RefFeature>();
     const unparsed: { feature: string; message: string }[] = [];
     const refCriteria: Criterion[] = [];
-    for (const file of refFeatureFiles(baseProject, input.targets ?? [refFeaturesDir])) {
+    for (const file of featureFilesAt(baseProject, [refFeaturesDir, ...(input.targets ?? [])])) {
       const relativePath = path.relative(baseProject, file);
       try {
         const parsed = parseFeatureSource(readFileSync(file, "utf8"), relativePath);
@@ -327,11 +336,32 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
         unparsed.push({ feature: relativePath, message: problemOf(error) });
       }
     }
-    const headCriteria = input.features.flatMap((feature) => {
-      const parsed = parseFeatureSource(feature.source, feature.relativePath);
-      return criteriaOfFeature(feature.relativePath, parsed.gherkinDocument, parsed.pickles);
+    const headSources = new Map(input.features.map((feature) => [feature.relativePath, feature.source]));
+    for (const file of featureFilesAt(rootDir, [config.featuresDir])) {
+      const relativePath = path.relative(rootDir, file);
+      if (headSources.has(relativePath)) continue;
+      try {
+        headSources.set(relativePath, readFileSync(file, "utf8"));
+      } catch {
+        // Gone since the walk: it holds no criteria.
+      }
+    }
+    const headCriteria = [...headSources].flatMap(([relativePath, source]) => {
+      try {
+        const parsed = parseFeatureSource(source, relativePath);
+        return criteriaOfFeature(relativePath, parsed.gherkinDocument, parsed.pickles);
+      } catch {
+        // Outside the targets, since the run parsed each selected file:
+        // it holds no criteria here (module header).
+        return [];
+      }
     });
-    const criteria = compareCriteria(refCriteria, headCriteria);
+    const matched = compareCriteria(refCriteria, headCriteria);
+    const targetedAtRef = input.targets === null ? null : new Set(featureFilesAt(baseProject, input.targets).map((file) => path.relative(baseProject, file)));
+    const criteria: CriteriaComparison = {
+      changes: matched.changes,
+      removed: targetedAtRef === null ? matched.removed : matched.removed.filter((criterion) => targetedAtRef.has(criterion.feature)),
+    };
 
     // The mapping: head's from its working tree, the ref's from its
     // checkout.
