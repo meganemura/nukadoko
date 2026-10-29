@@ -137,7 +137,10 @@ gets its lines, redacted, in `events.jsonl` beside it, counted in
 unowned, process_spans, process_requests, whole, open }`). A
 `runCommand` process gets the step's trace context as `TRACEPARENT`;
 a command-line tool that copies it into its requests' `traceparent`
-header makes their lines the step's (`process_requests` counts them). Read it to see what the program did inside a
+header makes their lines the step's (`process_requests` counts them).
+Only the program gets the variable that names `{events}`: a step, and
+every process it starts, gets the rest of `env`, so no step writes a
+line that would read as the program's. Read it to see what the program did inside a
 step: which tables it read and wrote, which jobs it enqueued and ran.
 
 `whole: true` says every request the step stamped has its `request`

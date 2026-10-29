@@ -3122,6 +3122,8 @@ and not the program's.
 
 The steps get `env` too, so a step, a `runCommand` child, and the server
 read `DATABASE_PATH` the same way.
+A variable whose value names `{events}` is the one exception: only the
+program gets it (see "Execution events").
 During the world's pass, `process.env` holds `env`, and the previous
 values come back after the pass.
 The `env` fixture is the env files, then `env` over them.
@@ -3694,9 +3696,12 @@ export default defineProgram({
 - A world nukadoko does not serve has no such file: `{events}` in a world
   at a `url`, in a world with neither `serve` nor `url`, or in a `build`
   command is refused by name before anything runs (see "Placeholders").
-- The steps get the variable with the rest of `env` (see "env").
-  nukadoko cannot tell a line a step's own code appended from one the
-  program wrote, so a step writes none.
+- The steps get the rest of `env` (see "env"), without any variable
+  whose value names `{events}`, and so does every process a step
+  starts, since it inherits the step's environment.
+  A line a step's own code appended would read as one the program
+  wrote, and a claim would take a value the step chose for one the
+  program reported.
 - Under `--concurrency` the parent makes the file, and every worker reads
   it for its own steps.
 
@@ -3840,8 +3845,10 @@ Each step's `observed.events` is `null`, the world's `events` in
 
 What this does not reach, in one list:
 
-- A line a step's own code writes to the file reads as the program's
-  (above).
+- A line a step's own code writes to the file reads as the program's.
+  Nothing a step is handed names the file, but it is in the system's
+  temporary directory, and a step that finds it there is not told
+  apart.
 - A request a page sends after the step that loaded it returned carries
   the next step's trace id, so its lines are the next step's.
 - A world at a `url`, and a program that writes its lines somewhere
@@ -5492,7 +5499,8 @@ its scenario record's id, so either record leads to the other.
   (see "Program", "Trace context and the program's log").
 - `observed.events` is the step's slice of the program's execution
   events, `{ "trace_id", "lines", "file", "kinds", "stamped",
-  "unreadable", "unowned", "whole", "open" }`, or `null` for a world at a
+  "unreadable", "unowned", "process_spans", "process_requests", "whole",
+  "open" }`, or `null` for a world at a
   `url`; it is absent when the world's program file does not name
   `{events}` (see "Execution events").
 - `observed.files` (`null` when the execution changed none) lists the

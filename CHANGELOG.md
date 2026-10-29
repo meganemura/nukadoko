@@ -145,7 +145,10 @@ just until 0.1.
   counts to the world's `events` in run.json. The file lives in a 0700
   directory of its own outside the run directory and is removed when the
   world stops. A world at a `url` refuses `{events}` by name, and its
-  steps' `observed.events` is `null`. No claim reads the lines yet.
+  steps' `observed.events` is `null`. Only the program gets the
+  variable that names `{events}`: the steps, and every process a step
+  starts, get the rest of `env`, so no step's code can append a line
+  that reads as the program's. No claim reads the lines yet.
 - **A `runCommand` process carries the step's trace context.** When the
   run has a world, the process gets `TRACEPARENT`, the OpenTelemetry
   convention for trace context in the environment: the step's trace id

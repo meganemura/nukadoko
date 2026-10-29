@@ -13,9 +13,10 @@ export interface WorldView {
   /** The base URL `page`, `context`, `request`, and `pageAs` resolve
    * against; `undefined` for a world with neither `serve` nor `url`. */
   readonly url: string | undefined;
-  /** The program file's `env`, placeholders filled. The steps' process
-   * gets it too, so a step and a `runCommand` child read a variable the
-   * way the program does. */
+  /** The program file's `env`, placeholders filled, without the
+   * variables whose value names `{events}`. The steps' process gets it,
+   * so a step and a `runCommand` child read a variable the way the
+   * program does; only the program may write the events file. */
   readonly env: Readonly<Record<string, string>>;
   /** `{token}` and anything else made for this world, redacted wherever a
    * record could show it. */

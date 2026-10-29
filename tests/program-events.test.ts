@@ -283,6 +283,20 @@ describe("the program's execution events", () => {
     expect(chosen.observed.events).toEqual(reading(chosen, { stamped: 0, unowned: 2, whole: false, open: [{ gap: "processes-unbounded" }] }));
   });
 
+  it("gives the program the variable that names {events} and keeps it from every step, under nuka run and nuka do", async () => {
+    await writeFile(path.join(rootDir, "features", "events.feature"), ["Feature: f", "", "  Scenario: s", "    When the step reads its own env", "    And the step waits", ""].join("\n"));
+    const { exitCode } = await cli(rootDir, ["run"]);
+
+    expect(exitCode).toBe(0);
+    const [steps] = scenarioSteps(rootDir);
+    expect(recordOf(rootDir, steps!.get("the step reads its own env")!).result).toEqual({ named: [] });
+    expect(recordOf(rootDir, steps!.get("wait")!).result!.named).toEqual(["EXECUTION_EVENTS"]);
+
+    const done = await cli(rootDir, ["do", "own-env", "--args", "{}"]);
+    expect(done.exitCode).toBe(0);
+    expect((JSON.parse(done.stdout) as { result: unknown }).result).toEqual({ named: [] });
+  });
+
   it("makes no file and sets no variable for a world whose program file does not name {events}", async () => {
     const program = path.join(rootDir, "nukadoko.program.ts");
     await writeFile(program, readFileSync(program, "utf8").replace(' EXECUTION_EVENTS: "{events}",', ""));

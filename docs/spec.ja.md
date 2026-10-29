@@ -2498,6 +2498,7 @@ env file が持つのは step の secret で、プログラムのものではな
 
 step も `env` を受け取ります。
 そのため step、`runCommand` の子、サーバが、`DATABASE_PATH` を同じように読みます。
+値が `{events}` を名指す変数だけは例外で、プログラムだけがそれを受け取ります(「実行イベント」を参照)。
 world の pass のあいだ、`process.env` は `env` を持ち、pass のあとに元の値に戻ります。
 `env` fixture は、env file の上に `env` を重ねたものです。
 `--concurrency` では、各 worker が同じ値を適用します。
@@ -2916,8 +2917,9 @@ export default defineProgram({
   プログラムのファイルが `{events}` を名指さない world はファイルを持たず、その step record は `observed.events` を持ちません。
 - nukadoko が serve しない world は、そのファイルを持ちません。
   `url` の world、`serve` も `url` も無い world、`build` のコマンドの `{events}` は、何かを実行する前に名前を挙げて拒否されます(「プレースホルダー」を参照)。
-- step は `env` のほかの値と一緒にその変数を受け取ります(「env」を参照)。
-  nukadoko は、step 自身のコードが追記した行とプログラムが書いた行を見分けられないので、step はそこに書きません。
+- step は `env` のほかの値を受け取りますが(「env」を参照)、値が `{events}` を名指す変数は受け取りません。
+  step が始めるプロセスは step の環境変数を受け継ぐので、それらも同じです。
+  step 自身のコードが追記した行はプログラムが書いた行として読まれ、claim は step が選んだ値をプログラムが知らせた値と取り違えるからです。
 - `--concurrency` のもとでは親がファイルを作り、各 worker が自分の step のためにそれを読みます。
 
 行は、その `trace` フィールドが持つ trace id の step のものです。
@@ -3027,7 +3029,9 @@ run サマリはこう言います:
 
 この仕組みが届かないものを、1 つの一覧にまとめます:
 
-- step 自身のコードがファイルに書いた行は、プログラムのものとして読まれます(上記)。
+- step 自身のコードがファイルに書いた行は、プログラムのものとして読まれます。
+  step が受け取るものは、どれもそのファイルを名指しません。
+  しかしファイルはシステムの一時ディレクトリにあり、そこでそれを見つけた step は見分けられません。
 - step が読み込んだページが、その step が返ったあとに送るリクエストは、次の step の trace id を運びます。
   そのため、その行は次の step のものになります。
 - `url` の world と、`{events}` が名指すファイルではない場所に行を書くプログラムには届きません。
@@ -4290,7 +4294,7 @@ scenario record は独立したファイルではなく、その run の `run.js
 - `observed.program_log` は、プログラムのログのうち step の切り出しで、`{ "trace_id", "lines", "file", "stamped" }` です。
   `url` の world では、nukadoko がそのログを読まないので `null` です。
   run に world の URL が無いときは現れません(「テスト対象のプログラム」、「trace context とプログラムのログ」を参照)。
-- `observed.events` は、プログラムの実行イベントのうち step の切り出しで、`{ "trace_id", "lines", "file", "kinds", "stamped", "unreadable", "unowned", "whole", "open" }` です。
+- `observed.events` は、プログラムの実行イベントのうち step の切り出しで、`{ "trace_id", "lines", "file", "kinds", "stamped", "unreadable", "unowned", "process_spans", "process_requests", "whole", "open" }` です。
   `url` の world では `null` で、world のプログラムのファイルが `{events}` を名指さないときは現れません(「実行イベント」を参照)。
 - `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
   各エントリは `{ "path", "change", "bytes", "content" }` です。

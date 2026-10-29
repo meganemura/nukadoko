@@ -143,6 +143,12 @@ export function placeholderGaps(
   return gaps;
 }
 
+/** Whether `text`, as the program file wrote it, names placeholder
+ * `name`. */
+export function textNamesPlaceholder(text: string, name: (typeof PLACEHOLDER_NAMES)[number]): boolean {
+  return [...text.matchAll(PLACEHOLDER)].some((match) => match[1] === name);
+}
+
 /** Whether `recipe` names placeholder `name` in a field its world fills:
  * `env`, `prepare`, or `serve.command`. */
 export function namesPlaceholder(recipe: Pick<ProgramRecipe, "prepare" | "reach" | "env">, name: (typeof PLACEHOLDER_NAMES)[number]): boolean {
@@ -151,7 +157,7 @@ export function namesPlaceholder(recipe: Pick<ProgramRecipe, "prepare" | "reach"
     ...(recipe.reach.kind === "serve" ? commandWords(recipe.reach.serve.command) : []),
     ...Object.values(recipe.env),
   ];
-  return texts.some((text) => [...text.matchAll(PLACEHOLDER)].some((match) => match[1] === name));
+  return texts.some((text) => textNamesPlaceholder(text, name));
 }
 
 /** One gap as a sentence: `prepare[1] names {port}, which has no value

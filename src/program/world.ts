@@ -16,7 +16,7 @@ import { createLineBuffer } from "../sink/line-buffer.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { openEventsInlet, type EventsInlet } from "./events-inlet.js";
 import { captureOutput } from "./in-process-output.js";
-import { describePlaceholderGap, fillPlaceholders, namesPlaceholder, placeholderGaps, type PlaceholderValues } from "./placeholders.js";
+import { describePlaceholderGap, fillPlaceholders, namesPlaceholder, placeholderGaps, textNamesPlaceholder, type PlaceholderValues } from "./placeholders.js";
 import { groupAlive } from "./process-group.js";
 import { openProgramLog, type ProgramLog } from "./program-log.js";
 import type { WorldView } from "./world-view.js";
@@ -96,7 +96,9 @@ import type { WorldView } from "./world-view.js";
 // before its first command runs. When the world stops, after the program
 // has, one pass over that file writes the world's redacted copy beside
 // `program.log` and each step's events that arrived after its record
-// (src/context/events-file.ts), and the file is removed.
+// (src/context/events-file.ts), and the file is removed. The steps get
+// the world's env without any variable that names `{events}`, so no
+// step's code, and no process a step starts, can write to the file.
 //
 // A program nukadoko started must not outlive nukadoko, however nukadoko
 // ends: a signal that arrives while a world is still starting, a step that
@@ -466,7 +468,10 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         }
 
         if (commands.length > 0 || recipe.setup !== undefined) announce(readyLine(timings, url, log.written ? options.displayPath(log.path) : null));
-        const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix, events: inlet?.path ?? null };
+        // A step that could find the events file could append a line the
+        // program never wrote, and a claim would read it as the program's.
+        const stepEnv = Object.fromEntries(Object.entries(worldEnv).filter(([key]) => !textNamesPlaceholder(recipe.env[key]!, "events")));
+        const view: WorldView = { name, url, env: stepEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix, events: inlet?.path ?? null };
         const running = server;
         const events = inlet;
         // A world at a URL has a log and events nukadoko cannot read; a
