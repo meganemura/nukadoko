@@ -3665,8 +3665,13 @@ walk は 1 つの scenario の 1 回の実行です。
 1 つのプロジェクトで同時に走る walk は 1 つだけで、2 つ目の `nuka run --step` は `walk-in-progress` で拒否されます。
 
 2 つのコマンドは state ディレクトリのファイルを通して出会い、各ファイルの書き手は 1 つだけです。
-`walk.lock` は run の pid を持ち、存在しないときにだけ作られます。
-pid が死んでいる lock は引き継がれます。
+`walk.lock/` は lock を取った walk ごとに 1 つのファイルを、walk の番号を名前として持ち、いちばん大きい番号が lock を持ちます。
+その中身は、walk が生きているあいだは run の pid で、終わった後は `released` です。
+run は次の番号のファイルを、存在しないときにだけ、pid を書いた状態で作って lock を取ります。
+そのため、同じ持ち主が死んでいる、または解放されていると見た 2 つの run のうち、作れるのは 1 つだけで、もう 1 つは拒否されます。
+作った後に自分より大きい番号を見つけた run は、身を引きます。
+いちばん大きい番号より下のファイルは、そこから引き継いだ run が消します。
+そのため、どの時点でクラッシュしても、いちばん上には死んだ pid が残り、次の run がそれを引き継ぎます。
 `walk.json` は walk の状態(`starting`、`running`、`paused`、`ended`)を持ち、run だけがそれを丸ごと書いて、所定の場所へ rename します。
 walk がないことを意味するのは、`walk.json` がないときだけです。
 `nuka step` の呼び出しは、読めない `walk.json`(Windows では、run がファイルを rename で置き換えている最中に読むことがあります)を `--timeout` まで読み直し、それでも読めなければ、そのファイルを名指して `unexpected-error` で拒否します。
@@ -3723,7 +3728,7 @@ messages の stream では、中止の後の step が `SKIPPED` になります�
 `run.json` は書かれません。
 scenario が走る前に止まる run(拒否、または `nothing-selected`)は、walk を `not-run` として、表示した finding とともに終わらせます。
 例外を投げた run は、walk を `error` として、その `unexpected-error` とともに終わらせます。
-どちらの場合も `walk.lock` は消されます。
+どちらの場合も、その lock は解放されます。
 kill されたりクラッシュしたりした run は、pid の死んだ walk を残します。
 `nuka step` はそれを `walk-gone` として報告し、walk を始め直す `nuka run <file>:<line> --step` を添えます。
 

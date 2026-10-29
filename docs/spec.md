@@ -4634,8 +4634,15 @@ number is the step number. One walk runs at a time in a project; a second
 `nuka run --step` is refused with `walk-in-progress`.
 
 The two commands meet through files in the state directory, each with
-one writer. `walk.lock` holds the run's pid and is created only when it
-does not exist; a lock whose pid is dead is taken over. `walk.json` holds
+one writer. `walk.lock/` holds one file per walk that took the lock,
+named by the walk's number, and the highest number holds it: the run's
+pid while the walk is live, and `released` once it ended. A run takes
+the lock by creating the next number, only when it does not exist and
+with its pid already in it, so of two runs that find the same holder dead
+or released, one creates it and the other is refused; a run that then
+finds a number above its own gives way. A file below the highest is
+removed by the run that took over from it, so a crash at any point
+leaves a dead pid on top, which the next run takes over. `walk.json` holds
 the walk's state (`starting`, `running`, `paused`, or `ended`), and only
 the run writes it, whole, renamed into place. Only a missing `walk.json`
 means no walk: a `nuka step` call reads through one it cannot read (on
@@ -4706,7 +4713,7 @@ scenario and its fixtures down as in any run, and the walk ends as
 written. A run that stops before its scenario runs (a refusal, or
 `nothing-selected`) ends the walk as `not-run` with the findings it
 printed, and a run that throws ends it as `error` with its
-`unexpected-error`; either way `walk.lock` is removed. A run that was
+`unexpected-error`; either way its lock is released. A run that was
 killed or crashed leaves a walk whose pid is dead, which `nuka step`
 reports as `walk-gone`, with the `nuka run <file>:<line> --step` that
 starts it again.

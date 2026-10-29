@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -111,6 +111,16 @@ function walkState(rootDir: string): Record<string, any> {
   return readJson(path.join(rootDir, ".nukadoko", "walk.json"));
 }
 
+// What the highest file of walk.lock/ holds: the pid of the run that
+// holds the walk, or `released`.
+function lockHolder(rootDir: string): string | null {
+  const dir = path.join(rootDir, ".nukadoko", "walk.lock");
+  const walks = readdirSync(dir)
+    .filter((name) => /^\d+$/.test(name))
+    .map(Number);
+  return walks.length === 0 ? null : readFileSync(path.join(dir, String(Math.max(...walks))), "utf8").trim();
+}
+
 function runJson(rootDir: string, runDir: string): Record<string, any> {
   return readJson(path.join(rootDir, runDir, "run.json"));
 }
@@ -205,7 +215,7 @@ describe("nuka run --step and nuka step", () => {
       expect(summary).toContain("Walked one step at a time (`nuka run --step`): 3 pauses");
       expect(summary).toContain("so this run is not the run a reviewer approves");
       // The lock goes with the walk, so the next walk can start.
-      expect(existsSync(path.join(rootDir, ".nukadoko", "walk.lock"))).toBe(false);
+      expect(lockHolder(rootDir)).toBe("released");
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );
@@ -598,7 +608,7 @@ describe("nuka run --step and nuka step", () => {
       expect(code).toBe(1);
       expect(captured.text()).toContain("unexpected-error");
       expect(walkState(rootDir)).toMatchObject({ state: "ended", number: 1, end: { how: "error", exit_code: 1 } });
-      expect(existsSync(path.join(rootDir, ".nukadoko", "walk.lock"))).toBe(false);
+      expect(lockHolder(rootDir)).toBe("released");
 
       const wait = await nukaStep(rootDir, "wait", "--timeout", "5");
       expect(wait.code).toBe(1);
@@ -697,7 +707,7 @@ describe("nuka run --step and nuka step", () => {
       const answer = await nukaStep(rootDir, "next", "1", "--walk", "1");
       expect(answer.code).toBe(1);
       expect(answer.stdout).toBe("walk 1 ended: interrupted by SIGTERM, exit 143\n");
-      expect(existsSync(path.join(rootDir, ".nukadoko", "walk.lock"))).toBe(false);
+      expect(lockHolder(rootDir)).toBe("released");
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );

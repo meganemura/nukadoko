@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { PageView, RunWalk, RunWalkPause } from "../record/run-result.js";
 import {
@@ -32,7 +33,7 @@ import {
 //
 // Each file has one writer, so no write needs a lock of its own:
 //
-//   <stateDir>/walk.lock            the run, created exclusively, holding its pid
+//   <stateDir>/walk.lock/<n>        the run of walk n, created exclusively, holding its pid, then `released`
 //   <stateDir>/walk.json            the run, replaced whole (written aside, then renamed)
 //   <run_dir>/answers/<n>.json      nuka step, created exclusively, never rewritten
 //   <run_dir>/pauses/<n>/           the run: the views, and the open pages' requests
@@ -40,14 +41,16 @@ import {
 //
 // A process that holds the lock and is gone (a crash, a SIGKILL) leaves a
 // walk.json that is not ended and a pid that is not alive: a reader sees
-// the walk as gone, and the next `nuka run --step` takes the lock over. A
-// pid check, not a lease a process renews: it needs no clock of its own,
-// and `process.kill(pid, 0)` answers the same on Windows.
+// the walk as gone, and the next `nuka run --step` takes the lock over
+// (`takeLock` says how two of them cannot both take it). A pid check, not a
+// lease a process renews: it needs no clock of its own, and
+// `process.kill(pid, 0)` answers the same on Windows.
 
 export type { Pause, StepCall, StepRefusalCode, StepReport, WalkAnswer, WalkEnd, WalkFound, WalkRun, WalkScenario, WalkState };
 export { answerCommand, restartCommand, waitCommand, walkStanding } from "./walk.js";
 
-const LOCK_FILE = "walk.lock";
+const LOCK_DIR = "walk.lock";
+const RELEASED = "released";
 const STATE_FILE = "walk.json";
 const REPORTED_DIR = "walks-reported";
 const POLL_MS = 100;
@@ -165,57 +168,130 @@ function readWalkState(filePath: string): WalkRead {
   return valid ? { state: parsed as WalkState } : { unreadable: "it holds no walk state" };
 }
 
-// The number the next walk gets: one past every walk this project
-// recorded, in walk.json or as a reported end, so a walk.json lost or
-// unreadable cannot give a new walk the number of one whose end a
-// `nuka step` call already printed.
-function nextWalkNumber(dir: string): number {
+// One past every walk this project recorded, in walk.json or as a
+// reported end, so a walk.json lost or unreadable cannot give a new walk
+// the number of one whose end a `nuka step` call already printed.
+function highestWalkRecorded(dir: string): number {
   const stored = readWalkState(path.join(dir, STATE_FILE));
   let last = "state" in stored && stored.state !== null ? stored.state.number : 0;
-  try {
-    for (const name of readdirSync(path.join(dir, REPORTED_DIR))) {
-      if (/^\d+$/.test(name)) last = Math.max(last, Number(name));
-    }
-  } catch {
-    // No walk's end was reported yet.
-  }
-  return last + 1;
+  for (const walk of numberedNames(path.join(dir, REPORTED_DIR))) last = Math.max(last, walk);
+  return last;
 }
 
-// The lock holds the pid of the process that took it. A holder that is not
-// alive left it behind, and taking it over is safe; two processes that both
-// find it dead race for the exclusive create, and one of them loses.
-function takeLock(lockPath: string): number | null {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      writeFileSync(lockPath, `${process.pid}\n`, { flag: "wx" });
-      return null;
-    } catch (error) {
-      if (errorCode(error) !== "EEXIST") throw error;
-    }
-    let holder: number | null = null;
-    try {
-      const pid = Number.parseInt(readFileSync(lockPath, "utf8"), 10);
-      holder = Number.isInteger(pid) ? pid : null;
-    } catch {
-      // Gone between the create and the read: try the create again.
-    }
-    if (holder !== null && holder !== process.pid && processIsAlive(holder)) return holder;
-    try {
-      unlinkSync(lockPath);
-    } catch (error) {
-      if (errorCode(error) !== "ENOENT") throw error;
-    }
+// The whole-number names in a directory, and none when it is missing. A
+// file written aside carries a suffix, so it is never one of them.
+function numberedNames(dir: string): number[] {
+  try {
+    return readdirSync(dir)
+      .filter((name) => /^\d+$/.test(name))
+      .map(Number);
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return [];
+    throw error;
   }
-  return -1;
 }
 
-function releaseLock(lockPath: string): void {
-  try {
-    if (Number.parseInt(readFileSync(lockPath, "utf8"), 10) === process.pid) unlinkSync(lockPath);
-  } catch {
-    // Already gone, or taken over: either way it is not this process's.
+/** The holder of the highest lock file: a pid, `released`, or `null` for
+ * a file that holds neither. */
+interface LockTop {
+  readonly walk: number;
+  readonly holder: number | "released" | null;
+}
+
+// A lock file is linked into place whole, so a read never meets it part
+// written. Only a number below the highest is ever removed, so a file gone
+// between the listing and the read means a higher one exists: list again.
+function lockTop(lockDir: string): LockTop | null {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const walks = numberedNames(lockDir);
+    if (walks.length === 0) return null;
+    const walk = Math.max(...walks);
+    let text: string;
+    try {
+      text = readFileSync(path.join(lockDir, String(walk)), "utf8").trim();
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") continue;
+      throw error;
+    }
+    const pid = Number(text);
+    return { walk, holder: text === RELEASED ? "released" : Number.isInteger(pid) && pid > 0 ? pid : null };
   }
+  throw new Error(`${lockDir} changed on every one of 100 reads`);
+}
+
+// Creates `target` with `text` only when it does not exist. A link is
+// exclusive like a create with `wx`, and the file appears with its whole
+// text: a process killed between a `wx` create and its write would leave
+// an empty lock that no reader could tell from one being written.
+function linkWhole(target: string, text: string): boolean {
+  const aside = `${target}.${process.pid}.${randomUUID()}.tmp`;
+  writeFileSync(aside, text);
+  try {
+    linkSync(aside, target);
+    return true;
+  } catch (error) {
+    if (errorCode(error) === "EEXIST") return false;
+    throw error;
+  } finally {
+    unlinkSync(aside);
+  }
+}
+
+function removeQuietly(filePath: string): void {
+  try {
+    unlinkSync(filePath);
+  } catch (error) {
+    if (errorCode(error) !== "ENOENT") throw error;
+  }
+}
+
+type LockTake = { readonly taken: number } | { readonly holder: number } | { readonly raced: true };
+
+// The lock is a directory with one file per walk that took it, named by
+// the walk's number; the highest number holds it. A run takes the lock by
+// creating the next number, so it never removes a file another process may
+// hold: of two runs that find the same holder dead or released, only one
+// creates the next number, and the other reads the winner as alive. A file
+// is removed only once a higher one exists, and only by the process that
+// created that higher one, or by its own creator giving way. That keeps
+// the highest number in place, so a process that read an old listing and
+// created a number a cleanup had removed finds a higher one when it looks
+// again, and gives way. A crash at any point leaves a dead pid on top,
+// which the next run takes over; no state needs a person to clear it.
+function takeLock(dir: string): LockTake {
+  const lockDir = path.join(dir, LOCK_DIR);
+  mkdirSync(lockDir, { recursive: true });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const top = lockTop(lockDir);
+    // A holder that is this process is a walk it left without ending, as
+    // a test in one process can: it is not a second walk.
+    if (top !== null && typeof top.holder === "number" && top.holder !== process.pid && processIsAlive(top.holder)) {
+      return { holder: top.holder };
+    }
+    const walk = Math.max(top?.walk ?? 0, highestWalkRecorded(dir)) + 1;
+    const file = path.join(lockDir, String(walk));
+    if (!linkWhole(file, `${process.pid}\n`)) continue;
+    if (lockTop(lockDir)?.walk !== walk) {
+      removeQuietly(file);
+      continue;
+    }
+    for (const lower of numberedNames(lockDir)) if (lower < walk) removeQuietly(path.join(lockDir, String(lower)));
+    return { taken: walk };
+  }
+  return { raced: true };
+}
+
+// The file stays, so the highest number never goes back down; it says
+// `released`, which the next run takes over like a dead pid.
+function releaseLock(dir: string, walk: number): void {
+  const file = path.join(dir, LOCK_DIR, String(walk));
+  try {
+    if (Number(readFileSync(file, "utf8").trim()) !== process.pid) return;
+  } catch {
+    // Already gone: a later walk took over and removed it.
+    return;
+  }
+  replaceFile(file, `${RELEASED}\n`);
 }
 
 interface AnswerFile {
@@ -246,8 +322,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Starts the run's side of a walk: takes the lock, numbers the walk one
- * past the last walk.json recorded, and writes it as starting. `announce`
+ * Starts the run's side of a walk: takes the lock, which numbers the walk
+ * one past every walk recorded, and writes it as starting. `announce`
  * gets the two lines of each pause, outside `--json`.
  */
 export function openWalk(options: {
@@ -259,20 +335,19 @@ export function openWalk(options: {
   const { rootDir, announce } = options;
   const dir = stateDirOf(rootDir, options.stateDir);
   mkdirSync(dir, { recursive: true });
-  const lockPath = path.join(dir, LOCK_FILE);
   const statePath = path.join(dir, STATE_FILE);
-  const holder = takeLock(lockPath);
-  if (holder !== null) {
+  const lock = takeLock(dir);
+  if (!("taken" in lock)) {
     return {
       refused: "walk-in-progress",
       message:
-        holder === -1
+        "raced" in lock
           ? "another nuka run --step took the walk lock at the same moment, so this one did not start"
-          : `another walk is in progress in this project: nuka run --step, pid ${holder}`,
+          : `another walk is in progress in this project: nuka run --step, pid ${lock.holder}`,
     };
   }
   let state = startWalk({
-    number: nextWalkNumber(dir),
+    number: lock.taken,
     pid: process.pid,
     target: options.target,
     started_at: new Date().toISOString(),
@@ -345,7 +420,7 @@ export function openWalk(options: {
       try {
         apply({ kind: "ended", end, at: new Date().toISOString() });
       } finally {
-        releaseLock(lockPath);
+        releaseLock(dir, state.number);
       }
     },
   };
