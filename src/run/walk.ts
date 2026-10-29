@@ -104,7 +104,7 @@ function startOf(state: WalkStart): WalkStart {
 
 /** The walk's first state, before the run knows its scenario. */
 export function startWalk(start: WalkStart): WalkState {
-  return { ...startOf(start), state: "starting" };
+  return { state: "starting", ...startOf(start) };
 }
 
 /**
@@ -120,20 +120,20 @@ export function advanceWalk(state: WalkState, event: WalkEvent): WalkState {
   if (state.state === "ended") return state;
   if (event.kind === "ended") {
     const run = state.state === "starting" ? {} : runOf(state);
-    return { ...startOf(state), ...run, state: "ended", end: event.end, ended_at: event.at };
+    return { state: "ended", ...startOf(state), ...run, end: event.end, ended_at: event.at };
   }
   switch (state.state) {
     case "starting":
-      if (event.kind === "begun") return { ...startOf(state), ...event.run, state: "running", after: 0 };
+      if (event.kind === "begun") return { state: "running", ...startOf(state), ...event.run, after: 0 };
       break;
     case "running":
       if (event.kind === "paused" && event.pause.pause > state.after) {
-        return { ...startOf(state), ...runOf(state), state: "paused", pause: event.pause };
+        return { state: "paused", ...startOf(state), ...runOf(state), pause: event.pause };
       }
       break;
     case "paused":
       if (event.kind === "answered" && event.pause === state.pause.pause) {
-        return { ...startOf(state), ...runOf(state), state: "running", after: state.pause.pause };
+        return { state: "running", ...startOf(state), ...runOf(state), after: state.pause.pause };
       }
       break;
   }
@@ -153,6 +153,9 @@ export type WalkSeen =
   | { readonly state: "gone"; readonly last: WalkState }
   | { readonly state: "none"; readonly last: WalkState | null };
 
+/** A walk `nuka step` can report on: anything but `none`. */
+export type WalkFound = Exclude<WalkSeen, { readonly state: "none" }>;
+
 /** What `nuka step` sees in walk.json: a live state whose pid is not
  * alive reads as `gone`. */
 export function seeWalk(stored: WalkState | null, isAlive: (pid: number) => boolean): WalkSeen {
@@ -161,10 +164,8 @@ export function seeWalk(stored: WalkState | null, isAlive: (pid: number) => bool
   return stored;
 }
 
-function numberOf(seen: WalkSeen): number | null {
-  if (seen.state === "none") return null;
-  if (seen.state === "gone") return seen.last.number;
-  return seen.number;
+function numberOf(seen: WalkFound): number {
+  return seen.state === "gone" ? seen.last.number : seen.number;
 }
 
 export type StepCall = { readonly kind: "wait" } | { readonly kind: "answer"; readonly pause: number; readonly answer: WalkAnswer };
@@ -174,7 +175,7 @@ export type StepCall = { readonly kind: "wait" } | { readonly kind: "answer"; re
  * `nuka run --step` started just before it has not recorded yet. An answer
  * is about the walk that was shown. */
 export function callTarget(call: StepCall, atStart: WalkSeen): number {
-  const number = numberOf(atStart) ?? 0;
+  const number = atStart.state === "none" ? (atStart.last?.number ?? 0) : numberOf(atStart);
   if (call.kind === "answer") return number;
   return atStart.state === "none" || atStart.state === "ended" || atStart.state === "gone" ? number + 1 : number;
 }
@@ -183,24 +184,23 @@ export function callTarget(call: StepCall, atStart: WalkSeen): number {
 export type StepRefusalCode = "walk-not-found" | "pause-not-current" | "pause-answered";
 
 export type StepDecision =
-  | { readonly kind: "write-answer" }
+  | { readonly kind: "write-answer"; readonly runDir: string }
   | { readonly kind: "wait" }
-  | { readonly kind: "report"; readonly seen: WalkSeen }
+  | { readonly kind: "report"; readonly seen: WalkFound }
   | { readonly kind: "refuse"; readonly code: StepRefusalCode; readonly message: string; readonly do?: string };
 
 /** `now` as an answer to walk `target` sees it: once a newer walk has
  * replaced that walk, there is nothing of it left to answer. */
-export function seenAs(target: number, now: WalkSeen): WalkSeen {
+function seenAs(target: number, now: WalkSeen): WalkSeen {
   if (now.state === "none") return now;
   const last = now.state === "gone" ? now.last : now;
   return last.number > target ? { state: "none", last } : now;
 }
 
-function whereText(seen: WalkState): string {
+function whereText(seen: Exclude<WalkState, { readonly state: "ended" }>): string {
   if (seen.state === "paused") return `the walk is at pause ${seen.pause.pause}`;
   if (seen.state === "running") return seen.after === 0 ? "the walk is running its first step" : `the walk is running the step after pause ${seen.after}`;
-  if (seen.state === "starting") return "the walk has not reached its first pause";
-  return "the walk ended";
+  return "the walk has not reached its first pause";
 }
 
 /**
@@ -212,8 +212,7 @@ function whereText(seen: WalkState): string {
  */
 export function stepDecision(call: StepCall, target: number, seen: WalkSeen, answers: ReadonlyMap<number, WalkAnswer>): StepDecision {
   if (call.kind === "wait") {
-    const number = numberOf(seen);
-    if (number === null || number < target) return { kind: "wait" };
+    if (seen.state === "none" || numberOf(seen) < target) return { kind: "wait" };
     if (seen.state === "starting" || seen.state === "running") return { kind: "wait" };
     return { kind: "report", seen };
   }
@@ -232,21 +231,26 @@ export function stepDecision(call: StepCall, target: number, seen: WalkSeen, ans
       kind: "refuse",
       code: "pause-answered",
       message: `pause ${call.pause} was already answered ${given}, so this ${call.answer} changes nothing`,
-      do: "nuka step wait",
+      // A wait after an end waits for the next walk, so it is offered only
+      // while this one runs.
+      ...(now.state === "ended" ? {} : { do: "nuka step wait" }),
     };
   }
+  // Nothing is left to answer once a walk ended, and how it ended is what
+  // the caller needs: a repeat of the answer that ended it, or an answer
+  // that came too late.
+  if (now.state === "ended") return { kind: "report", seen: now };
   if (given === undefined) {
-    if (now.state === "paused" && now.pause.pause === call.pause) return { kind: "write-answer" };
+    if (now.state === "paused" && now.pause.pause === call.pause) return { kind: "write-answer", runDir: now.run_dir };
     return {
       kind: "refuse",
       code: "pause-not-current",
       message: `pause ${call.pause} is not the pause the walk waits at: ${whereText(now)}`,
-      ...(now.state === "ended" ? {} : { do: "nuka step wait" }),
+      do: "nuka step wait",
     };
   }
   // Given this way already: a repeat, or this call's own write. Wait until
   // the run has read it and moved on.
-  if (now.state === "ended") return { kind: "report", seen: now };
   if (now.state === "paused" && now.pause.pause > call.pause) return { kind: "report", seen: now };
   return { kind: "wait" };
 }
@@ -279,7 +283,7 @@ export function restartCommand(target: string): string {
 /** The report for a walk as `seen`. A walk still running is one the
  * call's wait ran out on: the call itself is then the `do`, since repeating
  * it is safe. */
-export function stepReport(seen: Exclude<WalkSeen, { readonly state: "none" }>, call: StepCall): StepReport {
+export function stepReport(seen: WalkFound, call: StepCall): StepReport {
   if (seen.state === "gone") {
     return {
       exitCode: 1,

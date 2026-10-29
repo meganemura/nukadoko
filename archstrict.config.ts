@@ -322,6 +322,7 @@ export default {
         "select-pickles.ts",
         "step-stdout.ts",
         "tree-pass.ts",
+        "walk-files.ts",
       ],
     },
     { name: "cli", glob: "src/cli/**", surface: ["run-cli.ts"] },

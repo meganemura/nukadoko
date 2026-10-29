@@ -13,8 +13,17 @@ import { exitProcess } from "./project-exit.js";
 // listeners. A normal return must do that: the test runner calls `runCli`
 // in-process, and a listener left behind would exit that process on the
 // next SIGINT.
+//
+// A record of how the process ended (`setExitRecord`) runs right before
+// each exit this handler makes, after the teardown, and synchronously:
+// `nuka run --step` writes there that the walk was interrupted, which a
+// `nuka step` in another process reads. The default action would exit
+// past it.
 
 export type SignalCleanup = () => Promise<void>;
+
+/** Writes how the process ended, right before a signal's exit. */
+export type ExitRecord = (signal: NodeJS.Signals, exitCode: number) => void;
 
 export interface ProcessSignal {
   /** True after the first SIGINT or SIGTERM. Fixture teardown reads this
@@ -25,6 +34,8 @@ export interface ProcessSignal {
   setScenarioCleanup(cleanup: SignalCleanup | null): void;
   /** Process-scope teardown for this invocation. */
   setProcessCleanup(cleanup: SignalCleanup | null): void;
+  /** What to record right before a signal's exit, after the teardown. */
+  setExitRecord(record: ExitRecord | null): void;
   /** Acts as if `signal` had arrived. A `nuka run --concurrency` worker
    * calls it when its parent is gone. */
   trigger(signal: NodeJS.Signals): void;
@@ -62,10 +73,20 @@ export function installProcessSignalHandlers(): ProcessSignal {
   let exiting = false;
   let scenarioCleanup: SignalCleanup | null = null;
   let processCleanup: SignalCleanup | null = null;
+  let exitRecord: ExitRecord | null = null;
+  // A record that throws must not keep the process from exiting.
+  const exitRecorded = (signal: NodeJS.Signals): never => {
+    try {
+      exitRecord?.(signal, exitCodeForSignal(signal));
+    } catch {
+      // The exit below is what the signal asked for.
+    }
+    return exitProcess(exitCodeForSignal(signal));
+  };
 
   const onSignal = (signal: NodeJS.Signals): void => {
     if (exiting) {
-      exitProcess(exitCodeForSignal(signal));
+      exitRecorded(signal);
     }
     exiting = true;
     interrupted = true;
@@ -83,7 +104,7 @@ export function installProcessSignalHandlers(): ProcessSignal {
         // else still has to reach the exit below, or the process would stay
         // up with the default action already removed.
       } finally {
-        exitProcess(exitCodeForSignal(signal));
+        exitRecorded(signal);
       }
     })();
   };
@@ -101,6 +122,9 @@ export function installProcessSignalHandlers(): ProcessSignal {
     },
     setProcessCleanup(cleanup) {
       processCleanup = cleanup;
+    },
+    setExitRecord(record) {
+      exitRecord = record;
     },
     trigger: onSignal,
     untilExit: () => new Promise<never>(() => {}),

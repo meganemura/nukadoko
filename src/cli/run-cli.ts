@@ -92,6 +92,14 @@ interface DoArgs {
   use?: string[];
 }
 
+interface StepArgs {
+  /** `next` and `stop` only. yargs reads a word that is not a number as
+   * `NaN`, which step.ts refuses with the rest. */
+  pause?: number;
+  timeout?: number;
+  json?: boolean;
+}
+
 interface RunArgs {
   feature?: string[];
   /** `--base <git ref>`: compare with the commit the ref names, and add
@@ -119,6 +127,8 @@ interface RunArgs {
    * (that file's own header explains why the check lives there and not
    * here). */
   concurrency?: number;
+  /** `--step`: pause after each step until `nuka step` answers. */
+  step?: boolean;
 }
 
 interface InitArgs {
@@ -651,6 +661,14 @@ export async function runCli(
             "change and one of held, proven, removed, failed, unproven, or moved, and the run fails on failed, unproven, " +
             "or moved. A shallow clone has to fetch the base first",
         })
+        .option("step", {
+          type: "boolean",
+          default: false,
+          describe:
+            "walk one scenario one step at a time: after each step the run pauses, with the world, the browser, and the " +
+            "fixtures still open, until nuka step next or nuka step stop answers that pause. One scenario in one " +
+            "environment; run it in the background and follow it with nuka step wait",
+        })
         .check(rejectRepeatedFlags(["concurrency", "repeat", "proof-runs", "base"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
@@ -667,6 +685,7 @@ export async function runCli(
         repeat: args.repeat ?? 1,
         proofRuns: args["proof-runs"] ?? DEFAULT_PROOF_RUNS,
         ...(args.base !== undefined ? { base: args.base } : {}),
+        step: args.step ?? false,
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
         stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,
@@ -1035,6 +1054,59 @@ export async function runCli(
     },
   };
 
+  // `nuka step`: one command per action, so each one's help names what it
+  // takes. The same flags on all three, since each waits on the walk.
+  const stepFlags = (y: Argv): Argv =>
+    y
+      .option("timeout", {
+        type: "number",
+        default: 90,
+        describe:
+          "seconds to wait for the walk to reach a pause or its end (default 90). A walk still running then is " +
+          "reported as running, and the same command waits again",
+      })
+      .option("json", {
+        type: "boolean",
+        default: false,
+        describe: "print the walk as one JSON document on stdout, and nothing on stderr",
+      })
+      .check(rejectRepeatedFlags(["timeout"]));
+  const stepAction = (action: "wait" | "next" | "stop", command: string, describe: string): CommandModule<Record<string, never>, StepArgs> => ({
+    command,
+    describe,
+    builder: (y: Argv) =>
+      (action === "wait"
+        ? stepFlags(y)
+        : stepFlags(y).positional("pause", { type: "number", demandOption: true, describe: "the pause number nuka step wait printed" })) as Argv<StepArgs>,
+    handler: async (args: Arguments<StepArgs>) => {
+      if (argsFailed) return;
+      const { runStep } = await import("./step.js");
+      exitCode = await runStep({
+        rootDir,
+        action,
+        ...(args.pause === undefined ? {} : { pause: args.pause }),
+        timeout: args.timeout ?? 90,
+        json: args.json ?? false,
+        notices,
+        stdout,
+        stderr,
+      });
+    },
+  });
+  const stepCommands = [
+    namingMissingConfig(stepAction("wait", "wait", "wait for the walk nuka run --step records to pause or end, and print where it is")),
+    namingMissingConfig(stepAction("next", "next <pause>", "answer a pause: run the next step")),
+    namingMissingConfig(stepAction("stop", "stop <pause>", "answer a pause: skip the steps left, and record the scenario as stopped")),
+  ];
+  const stepCommand: CommandModule = {
+    command: "step",
+    describe: "follow and answer a walk of nuka run --step, one pause at a time",
+    builder: (y: Argv) => stepCommands.reduce((parent: Argv, sub) => parent.command(sub), y).demandCommand(1).strict(),
+    handler: () => {
+      // Never invoked: `demandCommand(1)` above requires a subcommand.
+    },
+  };
+
   const skillCommand: CommandModule = {
     command: "skill",
     describe: "path the agent-facing skills' source directory",
@@ -1062,7 +1134,7 @@ export async function runCli(
     },
     {
       heading: "Exploring",
-      commands: [namingMissingConfig(doCommand)],
+      commands: [namingMissingConfig(doCommand), stepCommand],
     },
     { heading: "Upkeep", commands: [namingMissingConfig(cleanCommand), skillCommand] },
   ];
@@ -1074,6 +1146,7 @@ export async function runCli(
       .map((command) => [firstWord(command.command), []]),
   );
   commandNames.set("skill", [firstWord(skillPathCommand.command)]);
+  commandNames.set("step", stepCommands.map((command) => firstWord(command.command)));
 
   const parser = helpGroups
     .flatMap((group) => group.commands)

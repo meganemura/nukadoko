@@ -129,6 +129,14 @@ const REFUSAL_CODES = {
     description: "A parameter type has the name of a built-in type or of another registered type.",
     fix: "Rename the parameter type, or remove one of the two registrations.",
   },
+  "pause-answered": {
+    description: "nuka step names a pause that was already answered the other way, so this answer changes nothing.",
+    fix: "Run nuka step wait to see where the walk stands, and answer the pause it shows.",
+  },
+  "pause-not-current": {
+    description: "nuka step answers a pause that is not the one the walk waits at: the walk has not reached it, has moved past it, or has ended.",
+    fix: "Run nuka step wait to see the pause the walk waits at, and answer that pause.",
+  },
   "read-only-environment": {
     description: "A step that declares mutates: true targets an environment whose policy is read-only.",
     fix: "Run the step against an environment that allows writes, or declare mutates: false if it only reads.",
@@ -161,6 +169,10 @@ const REFUSAL_CODES = {
     description: "The run directory holds no sources.json, the feature text nuka report --format allure and messages parse the run's scenarios from. A run an earlier release wrote has none.",
     fix: "Run the scenarios again with this release, and render that run.",
   },
+  "step-needs-one-scenario": {
+    description: "nuka run --step walks one execution of one scenario, and the run selects more than that: several scenarios, several environments, --repeat above 1, --base, or a scenario whose conditions do not hold in its environment.",
+    fix: "Name one scenario with <file>:<line>, one environment with --env, and leave out --repeat and --base.",
+  },
   "step-args-invalid": {
     description: "nuka do has no --args, or --args is not valid JSON.",
     fix: "Pass --args as a JSON object with the keys that nuka describe <step> lists.",
@@ -188,6 +200,14 @@ const REFUSAL_CODES = {
   "unknown-step": {
     description: "The command names a step that is not in the vocabulary.",
     fix: "Name a step that nuka steps lists.",
+  },
+  "walk-in-progress": {
+    description: "nuka run --step found another walk in progress in this project: one walk at a time, since nuka step answers the walk the state directory names.",
+    fix: "Finish the walk in progress with nuka step, or stop its nuka run --step process, then start this one.",
+  },
+  "walk-not-found": {
+    description: "nuka step found no walk to answer or wait for: no nuka run --step recorded one, or the walk an answer is for was replaced by a later one.",
+    fix: "Start a walk with nuka run <feature>:<line> --step, then run nuka step wait.",
   },
 } as const satisfies Record<string, RefusalCodeInfo>;
 

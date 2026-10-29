@@ -55,6 +55,7 @@ import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
+import { openWalk, restartCommand, type WalkHandle } from "../run/walk-files.js";
 import { generateRunId } from "../run/run-id.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
@@ -100,7 +101,7 @@ import { asFinding, writeCheckIssueLines } from "./check.js";
 import { formatFinding, warningSink, type Finding } from "../finding/finding.js";
 import { checkCodeFix } from "../check/codes.js";
 import type { RefusalCode } from "./refusal-codes.js";
-import { FAILED_EXIT_CODE, RefusalError, formatEnvelope, refuse, withHint, writeStopped, type Hint } from "./refusal.js";
+import { FAILED_EXIT_CODE, REFUSED_EXIT_CODE, RefusalError, formatEnvelope, refusalOf, withHint, writeStopped, type Hint } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { finalizeOpenRequests, installChannelPatches } from "../context/create-context.js";
 
@@ -312,6 +313,9 @@ export interface RunRunOptions {
    * and run the base and the old world for the rows that need them.
    * `undefined` without it. */
   base?: string;
+  /** `--step`: walk one execution of one scenario, pausing after each
+   * step until `nuka step` answers (src/run/walk-files.ts). */
+  step?: boolean;
   /** `$GITHUB_STEP_SUMMARY` as the CLI read it, `undefined` when unset or
    * empty. Passed in rather than read here so a test decides it. */
   stepSummaryPath: string | undefined;
@@ -419,8 +423,16 @@ export function nothingSelectedFinding(
 export async function runRun(options: RunRunOptions): Promise<number> {
   const { rootDir, concurrency, repeat, stepSummaryPath, stderr } = options;
   const notices = options.notices ?? [];
+  // Under `--step`, the walk this run records. Every way the run stops
+  // before its scenario runs ends it as not run, with what the run printed,
+  // so a `nuka step` waiting for it reports the reason, not a timeout.
+  let walk: WalkHandle | undefined;
+  const stopRun = (findings: readonly Finding[], exitCode: number): number => {
+    walk?.end({ how: "not-run", exit_code: exitCode, findings });
+    return writeStopped({ json: options.json, stdout: options.stdout, stderr, command: "run" }, findings, exitCode);
+  };
   const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint, before: readonly Finding[] = []): number =>
-    refuse({ json: options.json, stdout: options.stdout, stderr, command: "run" }, error, code, hint, [...notices, ...before]);
+    stopRun([...notices, ...before, refusalOf(error, code, "run", hint)], REFUSED_EXIT_CODE);
   // The records are on disk, and the `run` line names run.json. An
   // agent's shell is no terminal and reads stdout together with stderr, so
   // a stream that was on by default would put a line of JSON per scenario
@@ -473,7 +485,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // judged every row `new` would claim a comparison it did not make. A
   // shallow clone that lacks the ref is told how to fetch it.
   let baseRef: { ref: string; commit: string } | undefined;
-  if (options.base !== undefined) {
+  // A walk refuses --base once it is recorded, below: nothing to resolve.
+  if (options.base !== undefined && options.step !== true) {
     const resolved = await resolveRef(rootDir, options.base);
     if ("problem" in resolved) {
       if (resolved.problem === "outside-git") return refused(resolved.message, "base-outside-git");
@@ -509,6 +522,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     return refused(error);
   }
   const featureArgs = options.featureArgs.length === 0 ? [config.featuresDir] : options.featureArgs;
+  // Recorded as soon as the state directory is known, so a refusal from
+  // here on reaches a `nuka step` waiting for this walk.
+  const walkTarget = [...featureArgs, ...options.envs.flatMap((name) => ["--env", name])].map(shellWord).join(" ");
+  if (options.step === true) {
+    const opened = openWalk({
+      rootDir,
+      stateDir: config.stateDir,
+      target: walkTarget,
+      ...(options.json ? {} : { announce: (text: string) => stderr.write(text) }),
+    });
+    if ("refused" in opened) return refused(opened.message, "walk-in-progress", { do: "nuka step wait" });
+    walk = opened;
+  }
   // Without `--env`, the environments that declare conditions, since the
   // scenarios name the conditions they need; `default` when none does.
   const envs = options.envs.length > 0 ? options.envs : defaultEnvironmentNames(program);
@@ -547,6 +573,21 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // The trees of `--base`, removed on every way out of the run.
   let prepared: PreparedBase | undefined;
   try {
+    if (walk !== undefined) {
+      // A walk waits on a person between steps, and a signal is what ends a
+      // pause nobody answers. Installed now, so a signal at any point of
+      // the walk tears down what ran and records the walk as interrupted.
+      const recorded = walk;
+      processSignal = installProcessSignalHandlers();
+      processSignal.setExitRecord((signal, exitCode) => recorded.end({ how: "interrupted", exit_code: exitCode, signal }));
+      if (repeat > 1 || options.base !== undefined) {
+        return refused(
+          `nuka run --step walks one execution of one scenario, and ${repeat > 1 ? `--repeat ${repeat} runs it ${repeat} times` : "--base runs it in more than one world"}`,
+          "step-needs-one-scenario",
+          { do: restartCommand(walkTarget) },
+        );
+      }
+    }
     const select = (): ReturnType<typeof selectPickles> | { refused: unknown } => {
       try {
         return selectPickles(rootDir, featureArgs);
@@ -808,6 +849,34 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ],
         FAILED_EXIT_CODE,
       );
+    }
+
+    // A walk is one execution: one scenario, in one environment, where its
+    // conditions hold, since a control would run again for its proof.
+    // The `do` walks the first scenario, or the first environment, of
+    // what was selected; a control has no command that fixes it.
+    if (walk !== undefined) {
+      const first = flatPickles[0]!;
+      const firstTarget = shellWord(`${first.feature.relativePath}:${first.pickle.location?.line ?? 0}`);
+      const envFlags = options.envs.flatMap((name) => ["--env", shellWord(name)]);
+      const refusal =
+        flatPickles.length > 1
+          ? { reason: `the targets select ${flatPickles.length} scenarios`, do: restartCommand([firstTarget, ...envFlags].join(" ")) }
+          : resolvedEnvs.length > 1
+            ? {
+                reason: `it runs in ${resolvedEnvs.length} environments (${resolvedEnvs.map((resolvedEnv) => resolvedEnv.name).join(", ")})`,
+                do: restartCommand([firstTarget, "--env", shellWord(resolvedEnvs[0]!.name)].join(" ")),
+              }
+            : rolesOf(first.pickle.tags.map((tag) => tag.name), tableEnvironments)[0] === "control"
+              ? { reason: `the scenario's conditions do not hold in ${resolvedEnvs[0]!.name}, so it would run as a control` }
+              : undefined;
+      if (refusal !== undefined) {
+        return refused(
+          `nuka run --step walks one execution of one scenario, and ${refusal.reason}`,
+          "step-needs-one-scenario",
+          refusal.do === undefined ? undefined : { do: refusal.do },
+        );
+      }
     }
 
     // Each environment is a pass of its own: its env files, the
@@ -1264,6 +1333,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         counts: countScenarios(runScenarios, table),
         scenarios: runScenarios,
         table,
+        ...(walk === undefined ? {} : { walk: walk.record() }),
       };
       // The gate: red when the run failed outside the table, or when a row
       // is red, which a run with no failed execution can still have: a
@@ -1325,6 +1395,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           }
         }
       }
+      // After run.json, so a `nuka step` that reads the walk as ended finds
+      // the run's record there.
+      const stopped = runScenarios.find((scenario) => scenario.stopped !== undefined)?.stopped;
+      walk?.end({ how: "finished", exit_code: exitCode, findings: runFindings, ...(stopped === undefined ? {} : { stopped }) });
       if (options.json) options.stdout.write(document);
       // The criteria line is for a run with a control cell or a base, the
       // only kinds whose verdicts the scenario count above it cannot tell.
@@ -1368,10 +1442,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       },
     ): void => {
       writeOutputLocations(progress, [...locations, ...summaryLocation(end.summaryPath, end.runResultWritten)]);
+      // A walk a person stopped did not fail, so the count says stopped.
+      const stopped = failedScenarios.filter((failure) => failure.stopped !== undefined).length;
       writeRunSummary(progress, {
         total: counts.total,
         passed: counts.passed,
-        failed: counts.total - counts.passed,
+        failed: counts.total - counts.passed - stopped,
+        ...(stopped > 0 ? { stopped } : {}),
         ...(end.notRun !== undefined ? { notRun: end.notRun } : {}),
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
@@ -1848,6 +1925,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // read (src/run/verdict-table.ts), so it never counts as a failed
         // scenario here and never turns the pass red.
         const execute = async (feature: (typeof flatPickles)[number]["feature"], pickle: (typeof flatPickles)[number]["pickle"]): Promise<void> => {
+          walk?.begin({
+            run_id: runId,
+            run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
+            scenario: { feature: feature.relativePath, line: pickle.location?.line ?? 0, name: pickle.name, environment: pass.resolvedEnv.name },
+            world: started?.view.url === undefined ? null : { url: started.view.url },
+          });
           const record = await runScenario({
             rootDir,
             config,
@@ -1877,6 +1960,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             fixtureGraph,
             fixtureProcessCache,
             processSignal,
+            ...(walk === undefined ? {} : { pauseAfterStep: walk.pauseAfter }),
           });
 
           // One JSON line per completed scenario record, streamed as it

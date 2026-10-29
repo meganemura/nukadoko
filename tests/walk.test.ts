@@ -190,7 +190,7 @@ describe("stepDecision", () => {
       const answer = tc.draw(gs.sampledFrom(["next", "stop"] as const));
       const call: StepCall = { kind: "answer", pause: k, answer };
       const paused = walkTo(k, answer, "paused");
-      expect(stepDecision(call, START.number, paused.seen, paused.answers)).toEqual({ kind: "write-answer" });
+      expect(stepDecision(call, START.number, paused.seen, paused.answers)).toEqual({ kind: "write-answer", runDir: RUN.run_dir });
       // The answer is on disk, and the run has not read it yet.
       const written = new Map(paused.answers).set(k, answer);
       expect(stepDecision(call, START.number, paused.seen, written)).toEqual({ kind: "wait" });
@@ -220,6 +220,18 @@ describe("stepDecision", () => {
       const { seen, answers } = walkTo(k, answer, "paused");
       if (named === k || answers.has(named)) return;
       expect(stepDecision({ kind: "answer", pause: named, answer }, START.number, seen, answers)).toMatchObject({ kind: "refuse", code: "pause-not-current" });
+    }));
+
+  it("reports an ended walk to any answer that does not contradict one given, since a wait after an end waits for the next walk", () =>
+    hegel.test((tc) => {
+      const k = tc.draw(gs.integers({ minValue: 1, maxValue: STEPS - 1 }));
+      const answer = tc.draw(gs.sampledFrom(["next", "stop"] as const));
+      const { seen, answers } = walkTo(k, answer, "ended");
+      const call: StepCall = { kind: "answer", pause: tc.draw(gs.integers({ minValue: 1, maxValue: STEPS + 1 })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
+      const given = answers.get(call.pause);
+      const decision = stepDecision(call, START.number, seen, answers);
+      if (given !== undefined && given !== call.answer) expect(decision).toEqual({ kind: "refuse", code: "pause-answered", message: expect.any(String) });
+      else expect(decision).toEqual({ kind: "report", seen });
     }));
 
   it("refuses an answer once a later walk replaced the one it is for, and reports a gone walk", () =>

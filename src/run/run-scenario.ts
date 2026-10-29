@@ -72,12 +72,14 @@ import { gherkinStepLines, pickleStepLines } from "./run-document.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
+import type { StepPauseFacts, WalkAnswer } from "./walk-files.js";
 import {
   type AfterStepEndCounts,
   hookDisplayTitle,
   type ScenarioHookRecord,
   type ScenarioRecord,
   type ScenarioStepEntry,
+  type ScenarioStop,
 } from "../record/scenario-record.js";
 import { generateScenarioId } from "./scenario-id.js";
 
@@ -380,6 +382,11 @@ export interface RunScenarioOptions {
    * scenario cache down and disposes the context. Omitted by a caller that
    * has no signal handler of its own. */
   readonly processSignal?: ProcessSignal;
+  /** Under `nuka run --step`: called after each step that ran, once its
+   * AfterStep hooks have run too, and the scenario waits for the answer.
+   * `stop` with steps left skips them, and the record says the scenario
+   * was stopped after this step. Absent, nothing pauses. */
+  readonly pauseAfterStep?: (facts: StepPauseFacts) => Promise<WalkAnswer>;
 }
 
 /** The same message `nuka check`'s undefined-step finding carries, whose
@@ -672,7 +679,7 @@ function buildHookParameter(
   gherkinDocument: GherkinDocument,
   pickle: Pickle,
   testCaseStartedId: string,
-  resultStatus: "PASSED" | "FAILED" | undefined,
+  resultStatus: "PASSED" | "FAILED" | "SKIPPED" | undefined,
   details: {
     readonly durationMs?: number;
     readonly message?: string;
@@ -730,6 +737,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     fixtureGraph,
     fixtureProcessCache,
     processSignal,
+    pauseAfterStep,
   } = options;
 
   // This pickle's own `"scenario"`-scope fixture cache — fresh per pickle,
@@ -908,6 +916,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const afterStepEnd = new Map<string, AfterStepEndCounts>();
   const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
+  // Under `--step`: the step that ran and has not been paused after yet,
+  // and where the walk was stopped. An object, not two `let`s, since
+  // `pushStepRecord` and `pauseIfDue` set them from inside closures.
+  const walk: { due?: { readonly number: number; readonly entry: ScenarioStepEntry; readonly record: StepRecord }; stopped?: ScenarioStop } = {};
   // The outcome After reads. A passing scenario contributes the last
   // executed step's duration (cucumber-js's After `result` is a real step
   // result, and a pass still has a duration). The first failure wins,
@@ -988,6 +1000,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    */
   function pushStepRecord(record: ScenarioStepEntry, durationMs: number, stepRecord: StepRecord | null = null): void {
     stepRecords.push(record);
+    // A step with a written record ran, so a walk pauses after it.
+    if (stepRecord !== null) walk.due = { number: stepRecords.length, entry: record, record: stepRecord };
     onStepEnd?.({
       stepIndex: stepRecords.length,
       totalSteps: pickle.steps.length,
@@ -1688,10 +1702,45 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     }
   }
 
+  // The pause after the step that ran last, under `--step`: at the head
+  // of the next step and after the last one, so a step's AfterStep hooks
+  // have run before the walk shows it. Before the walk waits, the open
+  // pages' traffic moves to the pause's own directory: a page that polls
+  // while the person reads is not the step's work, and the step's record
+  // is already written. After a failure nothing runs on `next` either, so
+  // nothing remains and a `stop` there stops nothing.
+  async function pauseIfDue(): Promise<void> {
+    const due = walk.due;
+    if (pauseAfterStep === undefined || due === undefined) return;
+    walk.due = undefined;
+    const remaining = scenarioFailed ? 0 : pickle.steps.length - due.number;
+    const line = lineOfStep(due.number - 1);
+    const answer = await pauseAfterStep({
+      step: due.number,
+      of: pickle.steps.length,
+      line,
+      text: redactString(due.entry.text, secrets),
+      stepName: due.record.step,
+      status: due.entry.status === "passed" ? "passed" : "failed",
+      stepRecordId: due.record.step_record_id,
+      // Posix, as run.json writes every path a reader joins.
+      record: path.posix.join(RUN_FILE_DIRS.steps, due.record.step_record_id),
+      ...(due.entry.error === undefined ? {} : { error: { message: redactString(due.entry.error.message, secrets) } }),
+      remaining,
+      holdPages: async (dir, recordedAs) => {
+        await contextHandle.beginStep(dir);
+        return contextHandle.viewOpenPages(dir, recordedAs);
+      },
+    });
+    if (answer === "stop" && remaining > 0) walk.stopped = { after_step: due.number, line };
+  }
+
   for (const [stepIndex, pickleStep] of pickle.steps.entries()) {
-    if (scenarioFailed) {
+    await pauseIfDue();
+    if (scenarioFailed || walk.stopped !== undefined) {
       // A step skipped because an earlier
-      // one already failed never executes, so it never reaches any of the
+      // one already failed, or because the walk was stopped before it,
+      // never executes, so it never reaches any of the
       // three `runAfterStepHooks` call sites below either — this `continue`
       // is exactly where that "no after for a skipped step" boundary lives.
       pushStepRecord({ text: pickleStep.text, status: "skipped", step_record_id: null }, 0);
@@ -2294,6 +2343,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     }
   }
 
+  await pauseIfDue();
+
   // After hooks are attempted regardless of Before/step outcome, before
   // dispose() so a hook can still use
   // `this.page`/`this.request` while the browser/request context is open —
@@ -2317,11 +2368,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // hook in this same loop (if any) already folded its own failure in too
     // (cucumber-js's own convention: each After hook sees the running
     // outcome, not only the pre-teardown one).
+    // A walk stopped before its last step is cucumber's SKIPPED, its word
+    // for a test case whose steps did not all run: not FAILED, since
+    // nothing failed, and not PASSED, since the rest never ran.
     const hookParameter = buildHookParameter(
       gherkinDocument,
       pickle,
       scenarioId,
-      scenarioFailed ? "FAILED" : "PASSED",
+      scenarioFailed ? "FAILED" : walk.stopped !== undefined ? "SKIPPED" : "PASSED",
       {
         includeError: true,
         durationMs: scenarioFailed ? (heldFailure?.durationMs ?? 0) : passedDurationMs,
@@ -2401,7 +2455,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // Every step and hook has had its chance to set `scenarioFailed`.
   // Set before the await so a signal delivered on the next turn sees the
   // settled outcome rather than the provisional `"failed"`.
-  scenarioOutcome = scenarioFailed ? "failed" : "passed";
+  // A stopped walk did not finish its scenario, as a signal does not.
+  scenarioOutcome = scenarioFailed || walk.stopped !== undefined ? "failed" : "passed";
   await tearDownScenario();
   const { evidence: browserEvidence, browser: browserInfo } = disposeResult;
 
@@ -2412,7 +2467,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     feature: relativeFeaturePath,
     scenario: pickle.name,
     line: pickle.location?.line ?? 0,
-    status: scenarioFailed ? "failed" : "passed",
+    status: scenarioFailed ? "failed" : walk.stopped !== undefined ? "stopped" : "passed",
+    ...(walk.stopped !== undefined ? { stopped: walk.stopped } : {}),
     environment,
     ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
     // Measured, not declared (src/record/scenario-record.ts's `browser`

@@ -74,9 +74,11 @@ export interface HookParameter {
    * executor already recorded for that step. `message` is that same
    * failure's text, and only when the outcome is a failure: a passing
    * result has no message, matching cucumber-js, which adds one only
-   * from the thrown value. */
+   * from the thrown value. `"SKIPPED"` reaches After alone, for a walk
+   * (`nuka run --step`) stopped before its last step: its steps did not
+   * all run, and none failed. */
   readonly result?: {
-    readonly status: "PASSED" | "FAILED";
+    readonly status: "PASSED" | "FAILED" | "SKIPPED";
     readonly duration: Duration;
     readonly message?: string;
   };

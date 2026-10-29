@@ -6474,6 +6474,21 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               fetch), a git failure (base-git-failed), and a
                               featuresDir at the project root
                               (base-features-at-root) are refused.
+                              --step pauses after each step of the one
+                              scenario it runs, with the world, the
+                              browser, and the fixtures still open, until
+                              the pause is answered with nuka step (one
+                              file:line, one environment, no --repeat
+                              above 1, no --base, else
+                              step-needs-one-scenario; one walk per
+                              project, else walk-in-progress).
+                              Each pause writes a screenshot and an ARIA
+                              snapshot of each open page under
+                              runs/<run_id>/pauses/<n>/, and outside
+                              --json two lines on stderr. A walk stopped
+                              at a pause records its scenario as stopped
+                              (walk-stopped), and run.json lists the
+                              pauses in walk.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set, and writes
@@ -6518,6 +6533,33 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
+nuka step wait [--timeout <s>] [--json]
+                              wait until the walk a nuka run --step
+                              started pauses or ends, then print where it
+                              stands: the step, its record, the views of
+                              the open pages, the world, and the answers.
+                              At a pause it answers nothing. A wait that
+                              finds the last walk ended waits for the
+                              next one (walk-not-found when none starts)
+nuka step next <pause> [--timeout <s>] [--json]
+                              answer the pause the person saw: run the
+                              next step, then print the next pause or the
+                              end. The same answer again prints the same
+                              and writes nothing; another answer to that
+                              pause is refused (pause-answered), and so is
+                              a pause the walk is not at
+                              (pause-not-current)
+nuka step stop <pause> [--timeout <s>] [--json]
+                              answer the pause by stopping: the steps
+                              after it do not run, After hooks and
+                              teardown do, and the scenario is stopped.
+                              For all three, --timeout (default 90
+                              seconds) bounds the wait, and on expiry the
+                              walk prints as running with the same
+                              command as do. Exit 0 for a walk paused,
+                              running, or ended green; 1 for one ended
+                              red, interrupted, or gone (walk-gone); 2
+                              for a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout
