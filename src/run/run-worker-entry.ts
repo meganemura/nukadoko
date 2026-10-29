@@ -11,7 +11,7 @@ import { loadConfig } from "../config/load-config.js";
 import { loadProgram } from "../config/load-program.js";
 import { applyWorldEnv, parseWorldView, type WorldView } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
-import { createTraceVersionWarner } from "../context/trace-actions.js";
+import { createRequestScreenWarner, createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment } from "../environment/resolve-environment.js";
 import { probeVersion } from "../environment/probe-version.js";
@@ -273,6 +273,7 @@ async function main(): Promise<void> {
 
   const git = await probeGitState(rootDir);
   const onUnknownTraceVersion = createTraceVersionWarner(notes("trace-version-unknown"));
+  const onRequestScreenFailed = createRequestScreenWarner(notes("show-requests-failed"));
 
   const runOneRunHook = async (
     hook: (typeof compatRunHooks)[number],
@@ -413,6 +414,7 @@ async function main(): Promise<void> {
           compatHooks,
           defaultTimeoutMs,
           onUnknownTraceVersion,
+          onRequestScreenFailed,
           onStepEnd,
           fixtureGraph,
           fixtureProcessCache,

@@ -77,6 +77,7 @@ const HARNESS_EVIDENCE_FILE_NAMES = [
   "record.json",
   "final.png",
   "trace.zip",
+  "requests.zip",
   "http.jsonl",
   PROGRAM_LOG_SLICE_FILE_NAME,
   PROGRAM_LOG_LATE_FILE_NAME,

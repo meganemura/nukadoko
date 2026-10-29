@@ -28,6 +28,7 @@ import {
   assertValidContextName,
   ContextOptionsConflictError,
   contextFileName,
+  requestsTraceFileName,
   snapshotContextOptions,
 } from "./context-name.js";
 import { createCallsCollector } from "./calls.js";
@@ -58,6 +59,7 @@ import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
 import { withProcessRecording } from "./run-command.js";
 import { createUsedCollector } from "./used.js";
+import { createRequestStage } from "./request-stage.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution builds
 // a typed step's fixture bag from (`buildStepFixtures`, below) — env,
@@ -331,6 +333,7 @@ import { createUsedCollector } from "./used.js";
 export interface EvidenceResult {
   trace?: string;
   named_traces?: NamedTraceEntry[];
+  requests_trace?: string;
   screenshots: ScreenshotEntry[];
   http?: string;
 }
@@ -539,6 +542,9 @@ export interface CreateStepContextOptions {
    * context/evidence.ts): `nuka do` keeps its world's directory, `world`,
    * beside the record. */
   reservedEvidenceNames?: readonly string[];
+  /** Hears the first reason `showRequests` could not draw a request
+   * (request-stage.ts). */
+  onRequestScreenFailed?: (message: string) => void;
   /** The project root. `scratch.copy(source)` resolves a relative `source`
    * against it, so a step names a path in the project the same way whether
    * `nuka` was started there or with another working directory. Defaults
@@ -688,7 +694,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const httpLogFailed = createHttpLogFailedCollector();
   const worldOrigin = originOf(baseURL);
   const trace = worldOrigin === undefined ? undefined : { prefix: options.tracePrefix ?? newTracePrefix(), origin: worldOrigin };
+  // `showRequests` (request-stage.ts): its page opens in the scenario's
+  // browser, launched on the first request when no step has launched it.
+  const requestStage = config.showRequests
+    ? createRequestStage({
+        openContext: async () => (await ensureBrowser("showRequests")).openPlainContext({ viewport: { width: 960, height: 640 } }),
+        onFailure: options.onRequestScreenFailed ?? (() => undefined),
+      })
+    : undefined;
   const observed = createObservedCollector({
+    ...(requestStage === undefined ? {} : { onLine: (entry) => requestStage.show(entry) }),
     unwatchedDirs: [
       ...(config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)]),
       ...(options.recordsDir === undefined ? [] : [path.resolve(options.recordsDir)]),
@@ -788,6 +803,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // does not itself matter — both are cheap, and neither depends on the
   // other having run.
   async function closeCurrentChunk(): Promise<void> {
+    await requestStage?.endStep(path.join(boundaryDir, requestsTraceFileName(pendingChunkFileName)));
     for (const opened of contexts.values()) {
       await opened.handle.flushPageHttpLog();
       if (!opened.chunkOpen) {
@@ -1210,6 +1226,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
   async function disposeOpenedResources(): Promise<DisposeResult> {
     const evidence: EvidenceResult = { screenshots: [] };
+    // Before the browser check: under `nuka do` the stage can still be
+    // launching the browser for the step's last request, and a browser
+    // that lands after the check would never be closed.
+    await requestStage?.endStep(path.join(boundaryDir, requestsTraceFileName(pendingChunkFileName)));
     if (browserHandle) {
       // Closes whatever chunk the *current* boundary still has open (this
       // file's own header) — the only closing point `nuka do` ever reaches
@@ -1219,6 +1239,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // runs. Must run before finalize() below: `endStepChunk` needs a
       // still-open context.
       await closeCurrentChunk();
+      await requestStage?.close();
       // The default context first, then each `pageAs` context in the order
       // it opened, so `screenshots[0]` stays the default page's when there
       // is one.
@@ -1246,6 +1267,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         .filter((entry) => existsSync(path.join(boundaryDir, entry.file)));
       if (namedTraces.length > 0) {
         evidence.named_traces = namedTraces;
+      }
+      const requestsTrace = requestsTraceFileName(pendingChunkFileName);
+      if (existsSync(path.join(boundaryDir, requestsTrace))) {
+        evidence.requests_trace = requestsTrace;
       }
     }
 
@@ -1360,6 +1385,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     boundaryDir = dir;
     pendingChunkTitle = title;
     pendingChunkFileName = chunkFileName ?? "trace.zip";
+    requestStage?.beginStep(title);
     observed.reset();
     used.reset();
     sections.reset();

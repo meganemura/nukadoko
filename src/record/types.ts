@@ -951,6 +951,10 @@ export interface EvidenceMeta {
   /** One entry per `pageAs(name)` context that recorded a chunk, in the
    * order the contexts opened. Present only when non-empty. */
   named_traces?: readonly NamedTraceEntry[];
+  /** The trace of the page `showRequests` draws this boundary's own
+   * requests on (src/context/request-stage.ts). Present only when the
+   * config turns it on and the boundary sent a request. */
+  requests_trace?: string;
   /** Screenshots actually written; empty when no browser was used. One
    * entry per browser context: `final.png` for the default context, then
    * `final.<name>.png` for each `pageAs(name)` context, whatever the

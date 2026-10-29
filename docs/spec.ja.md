@@ -3749,6 +3749,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   デフォルトの context は `{ "file": "final.png", "at": "..." }`、`pageAs(name)` の context はそれぞれ `{ "file": "final.<name>.png", "at": "...", "as": "<name>" }` で、デフォルトが先です(「1 つの scenario の複数の人」を参照)。
   `pageAs` の context がある step で書いた trace チャンクは、`evidence.trace` の隣の `evidence.named_traces` に `{ "as", "file" }` として載ります。
   その context からの `actions`、`page_events` のエントリ、http.jsonl の行は `as` を持ちます。
+  `showRequests`(「Environment、secret」を参照)を有効にすると、step 自身のリクエストを描いたページの trace が `evidence.requests_trace` に載ります。
   ブラウザを使う実行の evidence は以前は 2 つのファイルで、step が失敗するたびに同じバッファを別名でもう 1 つ保存していました。
   それを書くこと自体にコストは無かったものの、ツールが一度も計測していないことを暗に主張していました。
   「失敗」スクリーンショットが、最後に撮られたものとは別個の事実として存在するという主張です。
@@ -4329,6 +4330,7 @@ default export が無いファイル、または default export が Promise で�
 | `browser` | Playwright 自身の `LaunchOptions`。そのエンジンの `launch` にそのまま渡される(下記) |
 | `browserContext` | Playwright 自身の `BrowserContextOptions`。`browser.newContext()` に渡される(下記) |
 | `requestContext` | `request` fixture に対応する `newContext` のオプション(下記) |
+| `showRequests` | 実験的。step が自分のプロセスから送るリクエストを、trace されるページに描く(デフォルトは `false`。下記) |
 | `secrets` | `public`/`redact` のリスト。キーごとの redact の扱いを調整する(上記) |
 | `parameterTypes` | カスタムの cucumber-expressions parameter type(下記) |
 | `worldParameters` | compat の World が `parameters` として受け取るオブジェクト(デフォルトは `{}`。下記) |
@@ -4382,6 +4384,22 @@ Playwright のオプションを zod で列挙し直すと、Playwright が 1 �
 `nukadoko.program.ts` の `serve` か `url` から来る world の URL が base URL の唯一の出所であり、2 つ目の出所はそれと食い違いうるからです。
 `storageState` はそのまま Playwright に渡ります。
 ログイン状態のファイルを持つプロジェクトは、ここでそれを名指します。
+
+`showRequests` は実験的な機能で、デフォルトは `false` です。
+step が自分のプロセスから送るリクエスト(`request` fixture、`fetch`、`node:http`)にはページがありません。
+そのため trace viewer の画面はその横で空白になり、API を呼ぶだけの step には trace そのものがありません。
+`showRequests: true` にすると、nukadoko はそうしたリクエストを 1 つずつ専用のページに描き、そのページを trace します。
+ページは step から届かない browser context に開きます。
+リクエストごとに `POST /notes → 201` のような名前の trace グループが 1 つでき、送った本文と受け取った本文が画面に出ます。
+ページに出すのは redact 済みの http.jsonl の行そのものなので、http.jsonl に無い値は出ません。
+trace は step の `trace.zip` の隣に `requests.zip`(hook では `<chunk>-requests.zip`)として書かれ、`evidence.requests_trace` に載ります。
+その action は step record の `actions` に入りません。
+ページを描くための操作であり、step 自身の操作ではないからです。
+page のリクエストは描きません。
+それはすでに画面に出ています。
+ページは scenario のブラウザに開き、まだどの step も起動していなければ最初のリクエストで起動します。
+そのため `browserType` のバイナリが必要です。
+描けないときは run が `show-requests-failed` で 1 回だけ警告し、どの step もこの機能が無いときと同じように走ります。
 
 `parameterTypes` のエントリは、カスタムの cucumber-expressions parameter type を登録します(`{ name, regexp, transformer? }`)。
 たとえば `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }` は、`will{negated:negation} return` という pattern を素の `z.boolean()` の args キーに結び付けられるようにします。

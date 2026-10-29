@@ -125,6 +125,11 @@ this failure, nothing earlier in the scenario to scrub past first.
 A `pageAs(name)` context records apart from the default one: its trace is
 the `evidence.named_traces[]` entry whose `as` is that name, with `file`
 naming `trace.<name>.zip`, and its screenshot is `final.<name>.png`.
+A step that only called an API has no page to show. With `showRequests:
+true` in `nukadoko.config.ts`, `evidence.requests_trace` names a trace
+(`requests.zip`) whose screen shows each request the step sent and the
+body that came back, redacted as http.jsonl is. http.jsonl holds the same
+facts as text, and is quicker to read.
 
 ## A step that timed out
 

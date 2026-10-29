@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { inflateRawSync } from "node:zlib";
 import type { ActionEntry, NamedTraceEntry } from "../record/types.js";
-import { contextFileName } from "./context-name.js";
+import { contextFileName, requestsTraceFileName } from "./context-name.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: turn one step's own trace.zip (browser-evidence.ts's
@@ -95,6 +95,9 @@ export interface TraceEvidence {
   /** Mirrors `EvidenceMeta.named_traces`: the chunks `pageAs(name)`
    * contexts wrote for the same boundary. */
   readonly named_traces?: readonly NamedTraceEntry[];
+  /** Mirrors `EvidenceMeta.requests_trace`. Its actions are the drawing of
+   * http.jsonl lines, not the boundary's own, so none land in `actions`. */
+  readonly requests_trace?: string;
   readonly actions?: readonly ActionEntry[];
   readonly truncated?: { readonly actions: number };
 }
@@ -386,9 +389,11 @@ export async function collectTraceEvidence(
     sources.push({ ...read, actions: read.actions.map((action) => ({ ...action, as })) });
   }
   const merged = mergeContextActions(sources);
+  const requestsTrace = requestsTraceFileName(fileName);
   return {
     ...(own !== undefined ? { trace: fileName } : {}),
     ...(namedTraces.length > 0 ? { named_traces: namedTraces } : {}),
+    ...(existsSync(path.join(stepRecordDir, requestsTrace)) ? { requests_trace: requestsTrace } : {}),
     ...(merged.actions.length > 0 ? { actions: merged.actions } : {}),
     ...(merged.truncatedCount !== undefined ? { truncated: { actions: merged.truncatedCount } } : {}),
   };
@@ -396,10 +401,11 @@ export async function collectTraceEvidence(
 
 /** The `trace`/`named_traces` pair of `evidence`, for a step record or a
  * hook record to spread in. */
-export function traceFileFields(evidence: TraceEvidence): Pick<TraceEvidence, "trace" | "named_traces"> {
+export function traceFileFields(evidence: TraceEvidence): Pick<TraceEvidence, "trace" | "named_traces" | "requests_trace"> {
   return {
     ...(evidence.trace !== undefined ? { trace: evidence.trace } : {}),
     ...(evidence.named_traces !== undefined ? { named_traces: evidence.named_traces } : {}),
+    ...(evidence.requests_trace !== undefined ? { requests_trace: evidence.requests_trace } : {}),
   };
 }
 
@@ -482,5 +488,16 @@ export function createTraceVersionWarner(stderr: WritableSink): (version: number
     }
     warned = true;
     stderr.write(unknownTraceVersionWarning(version));
+  };
+}
+
+/** Writes the first failure of a run once, so a run of many scenarios
+ * whose browser cannot start says it one time. */
+export function createRequestScreenWarner(sink: WritableSink): (message: string) => void {
+  let warned = false;
+  return (message) => {
+    if (warned) return;
+    warned = true;
+    sink.write(`showRequests could not draw requests on a page, so no requests trace was written (http.jsonl still has every request): ${message}\n`);
   };
 }

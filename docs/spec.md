@@ -4736,7 +4736,8 @@ its scenario record's id, so either record leads to the other.
   `pageAs` context's trace chunk for a step is listed in
   `evidence.named_traces` as `{ "as", "file" }`, beside `evidence.trace`,
   and `actions`, `page_events` entries, and http.jsonl lines from it carry
-  `as`. A browser-using execution's evidence used to be two files, the
+  `as`. With `showRequests` (see "Environments and secrets"), the trace of the page
+  that draws the step's own requests is `evidence.requests_trace`. A browser-using execution's evidence used to be two files, the
   same buffer saved under a second name whenever the step failed. That cost
   nothing to write but implied something the tool never measured: that a
   "failure" screenshot exists as a distinct fact from the last one taken. It
@@ -5591,6 +5592,7 @@ missing file.
 | `browser` | Playwright's own `LaunchOptions`, passed to that engine's `launch` (below) |
 | `browserContext` | Playwright's own `BrowserContextOptions`, passed to `browser.newContext()` (below) |
 | `requestContext` | the matching `newContext` options for the `request` fixture (below) |
+| `showRequests` | experimental: draw each request a step sends from its own process on a traced page (default `false`, below) |
 | `secrets` | `public`/`redact` lists that adjust a key's redaction handling (above) |
 | `parameterTypes` | custom cucumber-expressions parameter types (below) |
 | `worldParameters` | object a compat World receives as `parameters` (default `{}`, below) |
@@ -5654,6 +5656,24 @@ the world's URL, from `serve` or `url` in `nukadoko.program.ts`, is the
 single source for the base URL, and a second one could disagree with it. `storageState` passes
 through to Playwright unchanged, so a project that keeps a login state file
 names it here.
+
+`showRequests` is experimental and defaults to `false`. A request a step
+sends from its own process (the `request` fixture, `fetch`, `node:http`) has
+no page, so the trace viewer shows a blank screen beside it, or no trace at
+all for a step that only calls an API. With `showRequests: true`, nukadoko
+draws each such request on a page of its own, in a browser context the step
+cannot reach, and traces that page: one trace group per request, named like
+`POST /notes → 201`, with the body sent and the body received. The page shows
+the http.jsonl line as written, after redaction, so it holds no value
+http.jsonl does not. The trace is written beside the step's `trace.zip` as
+`requests.zip` (a hook's as `<chunk>-requests.zip`) and listed in
+`evidence.requests_trace`. Its actions are not in the step record's
+`actions`, because they draw the page and are not the step's own. A page
+request is not drawn: the page is already on the screen. The page opens in
+the scenario's browser, which it launches on the first request when no step
+has, so it needs the `browserType` binary installed. When it cannot be drawn,
+the run warns once with `show-requests-failed` and every step runs as it
+would without it.
 
 A `parameterTypes` entry registers a custom cucumber-expressions parameter
 type with the shape `{ name, regexp, transformer? }`. For example,

@@ -20,7 +20,7 @@ import { applyWorldEnv } from "../program/world-view.js";
 import { createStepContext, finalizeOpenRequests, installChannelPatches, type DisposeResult } from "../context/create-context.js";
 import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
-import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
+import { collectTraceEvidence, createRequestScreenWarner, createTraceVersionWarner } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { probeVersion } from "../environment/probe-version.js";
@@ -493,6 +493,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     const contextHandle = createStepContext({
       config,
+      onRequestScreenFailed: createRequestScreenWarner(warnings("show-requests-failed")),
       baseURL: world?.view.url,
       programLog: world?.view.log,
       tracePrefix: world?.view.tracePrefix,

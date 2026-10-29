@@ -5,7 +5,7 @@ import { redact, redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { type ChannelHttpLine, type ChannelRecorder, type PendingCapture, type SocketUse, withoutChannelRecording } from "./channels.js";
 import { MAX_ENTRIES } from "./file-snapshot.js";
-import { httpLogEntryOf } from "./http-log.js";
+import { type HttpLogEntry, httpLogEntryOf } from "./http-log.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import { lateProcessFileName, processOutputFileName } from "./process-output.js";
 import type { ProcessRecorder } from "./run-command.js";
@@ -228,6 +228,8 @@ export function createObservedCollector(
      * requests to that origin get a `traceparent`. Absent without a world
      * URL. */
     readonly trace?: { readonly prefix: string; readonly origin: string };
+    /** Hears each request line as it is written, redacted. */
+    readonly onLine?: (entry: HttpLogEntry) => void;
   } = {},
 ): ObservedCollector {
   const unwatchedDirs = (options.unwatchedDirs ?? []).map((dir) => path.resolve(dir));
@@ -345,7 +347,9 @@ export function createObservedCollector(
 
   function appendLine(dir: string, line: ChannelHttpLine, late: boolean): void {
     const entry = { ...httpLogEntryOf(line, secrets), ...(late ? { after_step_end: true as const } : {}) };
-    const text = `${JSON.stringify(redact(entry, secrets))}\n`;
+    const redacted = redact(entry, secrets) as typeof entry;
+    options.onLine?.(redacted);
+    const text = `${JSON.stringify(redacted)}\n`;
     withoutChannelRecording(() => {
       try {
         mkdirSync(dir, { recursive: true });

@@ -162,6 +162,9 @@ export interface ScenarioHookRecord {
   /** The chunks `pageAs(name)` contexts wrote for this invocation, beside
    * `trace` (`EvidenceMeta.named_traces`). Present only when non-empty. */
   readonly named_traces?: readonly NamedTraceEntry[];
+  /** The `showRequests` trace of this invocation's own requests
+   * (`EvidenceMeta.requests_trace`). */
+  readonly requests_trace?: string;
   /** Every Playwright call this hook invocation made through `ctx.page()`/
    * `this.openPage()`, read back out of its own trace chunk — same shape,
    * same 100-entry cap, same five-key params allowlist as a step's own

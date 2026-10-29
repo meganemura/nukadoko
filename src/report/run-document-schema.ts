@@ -160,6 +160,7 @@ const hook = z
     name: z.string().optional(),
     trace: z.string().optional(),
     named_traces: z.array(z.looseObject({ as: z.string(), file: z.string() })).optional(),
+    requests_trace: z.string().optional(),
     actions: z.array(z.looseObject({ method: z.string(), ms: z.number(), outcome: z.enum(["passed", "failed"]) })).optional(),
     truncated: z.looseObject({ actions: z.number() }).optional(),
   })

@@ -124,6 +124,11 @@ const RUN_CODES = {
     description: "A scenario ran and failed; its step lines and its record say which step and why.",
     fix: "Correct the step or the code under test that the error names.",
   },
+  "show-requests-failed": {
+    severity: "warning",
+    description: "showRequests could not draw a request on its page, so no requests trace was written. http.jsonl still has every request.",
+    fix: "Correct what the message names, such as a browser that is not installed (npx playwright install chromium), or turn showRequests off.",
+  },
   "step-record-unreadable": {
     severity: "warning",
     description: "A step wrote a step record that could not be read back, so run.json and the summary have no declaration or measurement for it.",

@@ -343,6 +343,9 @@ export interface RunScenarioOptions {
    * `runScenario` call for that invocation), so a run whose several steps
    * each hit this still only ever writes the stderr warning once. */
   readonly onUnknownTraceVersion: (version: number) => void;
+  /** Hears the first reason `showRequests` could not draw a request; one
+   * instance per invocation, like `onUnknownTraceVersion`. */
+  readonly onRequestScreenFailed?: (message: string) => void;
   /** Reports one pickle step's own outcome the moment it stops running —
    * one instance per `nuka run`
    * invocation (src/run/progress-log.ts's `createStepProgressLogger`, built
@@ -722,6 +725,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     compatHooks,
     defaultTimeoutMs,
     onUnknownTraceVersion,
+    onRequestScreenFailed,
     onStepEnd,
     fixtureGraph,
     fixtureProcessCache,
@@ -879,6 +883,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     worldDir: programWorld?.dir,
     evidenceDir: scenarioDir,
     rootDir,
+    ...(onRequestScreenFailed === undefined ? {} : { onRequestScreenFailed }),
     ...(options.records === undefined ? {} : { recordsDir: path.join(recordsRoot, recordsStateDir) }),
     env,
     secrets,

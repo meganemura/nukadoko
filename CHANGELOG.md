@@ -7,6 +7,21 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **`showRequests` (experimental) puts a step's own requests on the
+  screen.** A step that calls an API from its own process (the `request`
+  fixture, `fetch`, `node:http`) left the trace viewer blank, or left no
+  trace at all. With `showRequests: true` in `nukadoko.config.ts`, each
+  such request is drawn on a page of its own, from the redacted http.jsonl
+  line, and that page is traced: one trace group per request (`POST /notes
+  → 201`), with the bodies sent and received. The step record lists the
+  trace as `evidence.requests_trace` (`requests.zip`; a hook's is
+  `<chunk>-requests.zip`), and its actions stay out of `actions`. The page
+  uses the scenario's browser and launches it when no step has. A browser
+  that cannot start costs the trace, never the step: the run warns once
+  with the new `show-requests-failed` code. Default `false`.
+
 ## 0.23.0 — 2026-10-29
 
 ### Changed

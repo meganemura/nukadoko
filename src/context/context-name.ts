@@ -125,3 +125,13 @@ export class ContextOptionsConflictError extends Error {
     this.contextName = name;
   }
 }
+
+/** The file a boundary's `showRequests` screen is traced to
+ * (request-stage.ts), beside the chunk file the boundary's own page
+ * writes: `requests.zip` for a step's `trace.zip`,
+ * `hook-before-1-requests.zip` for a hook's `hook-before-1.zip`. A hyphen,
+ * not a dot, so it never meets a `pageAs(name)` file such as
+ * `trace.requests.zip`. */
+export function requestsTraceFileName(chunkFileName: string): string {
+  return chunkFileName === "trace.zip" ? "requests.zip" : chunkFileName.replace(/\.zip$/, "-requests.zip");
+}

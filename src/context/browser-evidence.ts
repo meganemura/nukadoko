@@ -167,6 +167,10 @@ export interface BrowserHandle {
   readonly outputDirs: readonly string[];
   /** Opens one instrumented browser context in this browser. */
   openTracedContext(options: TracedContextOptions): Promise<TracedContextHandle>;
+  /** Opens a context with none of the above: no tracing, no logging, no
+   * screenshot. For nukadoko's own pages (request-stage.ts), which the
+   * step never reaches. */
+  openPlainContext(options: BrowserContextOptions): Promise<BrowserContext>;
   /** Closes the browser and removes the output directory nukadoko created
    * for it. Swallows its own failure, the same as
    * `TracedContextHandle.finalize`: a browser already gone is not a reason
@@ -259,6 +263,7 @@ export async function launchBrowser(options: LaunchBrowserOptions): Promise<Brow
     browserInfo: { type: browser.browserType().name(), version: browser.version() },
     outputDirs: [...new Set([artifactsDir, tracesDir])],
     openTracedContext: (contextOptions) => openTracedContext(browser, contextOptions),
+    openPlainContext: (contextOptions) => browser.newContext(contextOptions),
     async close(): Promise<void> {
       try {
         await browser.close();

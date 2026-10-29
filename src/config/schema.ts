@@ -249,6 +249,13 @@ export const configSchema = z
      * fact) and a missing binary surfaces as Playwright's own error at
      * launch time, unmodified. */
     browserType: z.enum(["chromium", "firefox", "webkit"]).default("chromium"),
+    /** Experimental. Draws each request a step sends from its own process
+     * (`ctx.request()`, `fetch`, `node:http`) on a page of its own, and
+     * traces that page, so a step that only calls an API still has a
+     * screen in the trace viewer (context/request-stage.ts). Off by default:
+     * it launches a browser, which a suite with no page may not have
+     * installed. */
+    showRequests: z.boolean().optional(),
     /** Playwright's own `LaunchOptions` type, taken as-is: coupling to
      * Playwright is an accepted design
      * choice (docs/spec.md "Out of scope"), so there is no vocabulary of our

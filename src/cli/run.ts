@@ -15,7 +15,7 @@ import { placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
-import { createTraceVersionWarner } from "../context/trace-actions.js";
+import { createRequestScreenWarner, createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
@@ -1390,6 +1390,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // version still only ever writes the stderr warning once, not once per
     // occurrence.
     const onUnknownTraceVersion = createTraceVersionWarner(warnings("trace-version-unknown"));
+    const onRequestScreenFailed = createRequestScreenWarner(warnings("show-requests-failed"));
 
     // Same "one instance, threaded unchanged into every `runScenario` call"
     // shape as `onUnknownTraceVersion` just above.
@@ -1871,6 +1872,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             compatHooks,
             defaultTimeoutMs,
             onUnknownTraceVersion,
+            onRequestScreenFailed,
             onStepEnd,
             fixtureGraph,
             fixtureProcessCache,
