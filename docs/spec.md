@@ -4691,6 +4691,16 @@ polls, an EventSource) is not the paused step's work, so it is written to
 `pauses/<n>/http.jsonl`, and neither the step's `http.jsonl` nor its
 `after_step_end` counts it.
 
+An ARIA snapshot holds what each field holds, a password field's value
+included. The run redacts every loaded secret from it, and from each
+view's URL and title, as in any record, so a value a step typed from an
+env file reads `{{secret.NAME}}`; a value that is no loaded secret is
+written as the page holds it. The screenshot is pixels and is not
+redacted. A page's three captures share one deadline of 5 seconds, since
+a page whose script never yields answers none of them: one that does
+not finish in time is `null` in the view (the title too), and the walk
+still pauses.
+
 A stop skips the steps after the pause; After hooks and teardown still
 run. After hooks see cucumber's `SKIPPED`, its word for a test case whose
 steps did not all run, and a fixture's `use()` sees `"failed"`, since the

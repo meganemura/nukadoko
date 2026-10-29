@@ -320,7 +320,7 @@ const document = z.looseObject({
               as: z.string().nullable(),
               page: z.number().int(),
               url: z.string(),
-              title: z.string(),
+              title: z.string().nullable(),
               screenshot: z.string().nullable(),
               aria: z.string().nullable(),
             }),

@@ -12,6 +12,7 @@ import type {
 } from "playwright";
 import type { PageView } from "../record/run-result.js";
 import type { ScreenshotEntry } from "../record/types.js";
+import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
@@ -145,6 +146,30 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // reads, with the fixtures' sign-in and no authentication.
 export type BrowserEngineName = "chromium" | "firefox" | "webkit";
 
+// How long a pause waits for one page's views, all three together. A page
+// whose main thread is stuck answers none of them, and `title()` takes no
+// timeout of its own: without a deadline the pause would never reach the
+// person, though the walk is exactly how they would see that page.
+const VIEW_DEADLINE_MS = 5_000;
+
+// `capture` with what is left of `deadline`, or `null` once it passed or
+// the capture failed. The capture is raced, not awaited, since a stuck page
+// may never settle the promise; a Playwright call that takes a timeout gets
+// the same time, so it gives up on its own too.
+async function beforeDeadline<T>(deadline: number, capture: (timeoutMs: number) => Promise<T>): Promise<T | null> {
+  const left = deadline - Date.now();
+  if (left <= 0) return null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), left);
+  });
+  try {
+    return await Promise.race([capture(left).catch(() => null), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface LaunchBrowserOptions {
   /** `config.browserType` (config/schema.ts), naming which of `chromium`/
    * `firefox`/`webkit` to launch. `undefined` behaves exactly like
@@ -244,8 +269,11 @@ export interface TracedContextHandle {
    * has open into `dir` (`page.png` and `page.aria.yml` for the first page,
    * `page-<n>.*` for the others, with the context's name before the
    * extension as `final.png` has it), and returns each page's view with
-   * those names under `recordedAs`. A capture that fails is `null` in its
-   * view: a page that closed or crashed is no reason to lose the pause. */
+   * those names under `recordedAs`. A capture that fails, or does not
+   * finish within the page's deadline, is `null` in its view, and so is
+   * a title: a page that closed, crashed, or froze is no reason to lose
+   * the pause. The URL, the title, and the snapshot are redacted with
+   * `secrets`; the screenshot is pixels and is not. */
   viewPages(dir: string, recordedAs: string): Promise<PageView[]>;
   /** Captures the final screenshot as `fileName` in `evidenceDir` and
    * closes the context. Returns the screenshot actually written, at most
@@ -385,23 +413,28 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       },
       async viewPages(dir: string, recordedAs: string): Promise<PageView[]> {
         const views: PageView[] = [];
+        const redacted = (text: string): string => redactString(text, options.secrets);
         for (const [index, open] of context.pages().entries()) {
           const stem = contextFileName(index === 0 ? "page" : `page-${index + 1}`, as);
           const screenshotName = `${stem}.png`;
           const ariaName = `${stem}.aria.yml`;
           const recorded = (name: string): string => path.posix.join(recordedAs, name);
-          const screenshot = await open
-            .screenshot({ caret: "initial", path: path.join(dir, screenshotName) })
-            .then(() => recorded(screenshotName), () => null);
-          const aria = await open
-            .ariaSnapshot({ mode: "ai" })
-            .then(async (text) => {
-              await writeFile(path.join(dir, ariaName), text.endsWith("\n") ? text : `${text}\n`);
-              return recorded(ariaName);
-            })
-            .catch(() => null);
-          const title = await open.title().catch(() => "");
-          views.push({ as: as ?? null, page: index + 1, url: open.url(), title, screenshot, aria });
+          const written = (name: string, data: string | Buffer): Promise<string | null> =>
+            writeFile(path.join(dir, name), data).then(
+              () => recorded(name),
+              () => null,
+            );
+          const deadline = Date.now() + VIEW_DEADLINE_MS;
+          // Taken as a buffer and written only once it arrived in time, so a
+          // capture that finishes after the pause moved on writes nothing.
+          const shot = await beforeDeadline(deadline, (timeout) => open.screenshot({ caret: "initial", timeout }));
+          const screenshot = shot === null ? null : await written(screenshotName, shot);
+          // The snapshot holds what fields hold, passwords included, so a
+          // loaded secret a step typed is redacted like in any record.
+          const tree = await beforeDeadline(deadline, (timeout) => open.ariaSnapshot({ mode: "ai", timeout }));
+          const aria = tree === null ? null : await written(ariaName, redacted(tree.endsWith("\n") ? tree : `${tree}\n`));
+          const title = await beforeDeadline(deadline, () => open.title());
+          views.push({ as: as ?? null, page: index + 1, url: redacted(open.url()), title: title === null ? null : redacted(title), screenshot, aria });
         }
         return views;
       },

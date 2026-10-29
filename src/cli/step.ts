@@ -46,7 +46,8 @@ function walkText(seen: WalkFound, fields: Readonly<Record<string, unknown>>): s
       ...pause.views.map((view) => {
         const files = [view.screenshot, view.aria].flatMap((file) => (file === null ? [] : [joined(runDir, file)]));
         const name = view.as === null ? `page ${view.page}` : `page ${view.page} of ${view.as}`;
-        return `  view: ${name} ${view.url} ${JSON.stringify(view.title)}${files.length === 0 ? " (no capture)" : `: ${files.join(" ")}`}`;
+        const title = view.title === null ? "(no title)" : JSON.stringify(view.title);
+        return `  view: ${name} ${view.url} ${title}${files.length === 0 ? " (no capture)" : `: ${files.join(" ")}`}`;
       }),
       ...(world === null ? [] : [`  world: ${world.url}`]),
       `  do: ${answerCommand(seen.number, pause.pause, "next")}${pause.remaining > 0 ? `   (or: ${answerCommand(seen.number, pause.pause, "stop")})` : ""}`,

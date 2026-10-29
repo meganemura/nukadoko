@@ -527,6 +527,94 @@ describe("nuka run --step and nuka step", () => {
     SPAWNED_TEST_TIMEOUT_MS,
   );
 
+  it.skipIf(!chromiumAvailable)(
+    "redacts a loaded secret from a view's URL, title, and ARIA snapshot, a password field's included",
+    async () => {
+      const token = "walk7c4e9a1b2d";
+      await writeFile(path.join(rootDir, ".env.walk"), `WALK_TOKEN=${token}\n`);
+      await writeFile(path.join(rootDir, "nukadoko.config.ts"), 'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({ envFiles: [".env.walk"] });\n');
+      await writeFile(
+        path.join(rootDir, "features", "steps", "the-token-page-is-open.ts"),
+        [
+          'import { z } from "zod";',
+          'import { defineStep } from "../../nukadoko-shim.js";',
+          "export default defineStep({",
+          '  pattern: "the token page is open",',
+          '  description: "Show a page that carries the token in its URL, its title, and two fields",',
+          "  args: z.object({}),",
+          "  returns: z.object({}),",
+          "  mutates: false,",
+          "  async run({ page, env }) {",
+          "    const token = env.WALK_TOKEN ?? '';",
+          "    await page.goto(`data:text/html,<title>Token ${token}</title><label>Token <input value=${token}></label><label>Password <input type=password value=${token}></label>`);",
+          "    return {};",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      await writeFile(path.join(rootDir, "features", "token.feature"), "Feature: A token page\n\n  Scenario: the token page is shown\n    Given the token page is open\n");
+      const run = nukaRun(rootDir, ["features/token.feature:3", "--step"]);
+
+      const paused = await nukaStep(rootDir, "wait", ...FIRST_WAIT);
+      expect(paused.code).toBe(0);
+      const runDir = walkState(rootDir)["run_dir"] as string;
+      const aria = readFileSync(path.join(rootDir, runDir, "pauses", "1", "page.aria.yml"), "utf8");
+      // The snapshot holds what both fields hold; the password too.
+      expect(aria.match(/\{\{secret\.WALK_TOKEN\}\}/g)?.length).toBeGreaterThanOrEqual(2);
+      expect(walkState(rootDir)["pause"]["views"][0]).toMatchObject({ title: "Token {{secret.WALK_TOKEN}}" });
+      expect(walkState(rootDir)["pause"]["views"][0]["url"]).toContain("{{secret.WALK_TOKEN}}");
+      await nukaStep(rootDir, "next", "1", "--walk", "1");
+      expect((await run.closed).code).toBe(0);
+
+      for (const text of [aria, paused.stdout, run.stderr(), readFileSync(path.join(rootDir, ".nukadoko", "walk.json"), "utf8"), readFileSync(path.join(rootDir, runDir, "run.json"), "utf8")]) {
+        expect(text).not.toContain(token);
+      }
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!chromiumAvailable)(
+    "pauses at a page whose main thread is stuck, with the views it could not take as null",
+    async () => {
+      await writeFile(
+        path.join(rootDir, "features", "steps", "the-page-freezes.ts"),
+        [
+          'import { z } from "zod";',
+          'import { defineStep } from "../../nukadoko-shim.js";',
+          "export default defineStep({",
+          '  pattern: "the page freezes",',
+          '  description: "Leave a page whose script never yields",',
+          "  args: z.object({}),",
+          "  returns: z.object({}),",
+          "  mutates: false,",
+          "  async run({ page }) {",
+          '    await page.setContent("<title>Frozen</title><h1>Frozen</h1>");',
+          "    await page.evaluate(() => { setTimeout(() => { for (;;) {} }, 50); });",
+          "    await new Promise((resolve) => setTimeout(resolve, 200));",
+          "    return {};",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      await writeFile(path.join(rootDir, "features", "frozen.feature"), "Feature: A frozen page\n\n  Scenario: the page freezes\n    Given the page freezes\n");
+      const run = nukaRun(rootDir, ["features/frozen.feature:3", "--step"]);
+
+      const paused = await nukaStep(rootDir, "wait", "--timeout", "30");
+      expect(paused.code).toBe(0);
+      expect(paused.stdout).toMatch(/^walk 1 paused after step 1\/1 \(passed\): the page freezes\n/);
+      const view = walkState(rootDir)["pause"]["views"][0];
+      expect(view).toMatchObject({ page: 1, title: null, aria: null });
+      expect(paused.stdout).toContain(`  view: page 1 ${view["url"]} (no title)`);
+      // A stuck page is no reason to keep the walk: a signal still ends it.
+      run.child.kill("SIGTERM");
+      await run.closed;
+      expect(walkState(rootDir)).toMatchObject({ state: "ended", end: { how: "interrupted" } });
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
   describe.skipIf(!chromiumAvailable)("page traffic while paused", () => {
     let server: Server;
     let ticks = 0;

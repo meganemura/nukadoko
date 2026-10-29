@@ -3707,6 +3707,15 @@ Playwright の既定はフォーカスのあるフィールドの style を書�
 walk が待っている間にページが送るもの(ポーリングするページや EventSource)は、一時停止した step の仕事ではありません。
 そのため `pauses/<n>/http.jsonl` に書き、step の `http.jsonl` にも `after_step_end` にも数えません。
 
+ARIA スナップショットは、各フィールドが持つ値を、パスワードのフィールドの値も含めて持ちます。
+run は、どの record とも同じく、ロードした secret をすべてそこから redact し、各ビューの URL とタイトルからも redact します。
+そのため、step が env file の値を入力したものは `{{secret.NAME}}` と読めます。
+ロードした secret でない値は、ページが持つとおりに書かれます。
+スクリーンショットはピクセルなので redact されません。
+1 つのページの 3 つの取得は、5 秒の締め切りを 1 つ共有します。
+スクリプトが制御を返さないページは、どれにも答えないからです。
+時間内に終わらなかった取得はビューの中で `null` になり(タイトルも同じです)、それでも walk は一時停止します。
+
 中止すると、一時停止の後の step は飛ばされますが、After hook と teardown は走ります。
 After hook には cucumber の `SKIPPED` が渡ります。
 これは、step が全部は走らなかったテストケースを指す cucumber の語です。

@@ -429,10 +429,12 @@ export interface PageView {
   readonly as: string | null;
   /** The page's place among its context's pages, from 1. */
   readonly page: number;
+  /** Redacted, as the title and the ARIA snapshot are. */
   readonly url: string;
-  readonly title: string;
+  /** `null` when the page did not give it in time. */
+  readonly title: string | null;
   /** A viewport screenshot and an ARIA snapshot, relative to the run
-   * directory; `null` when that capture failed. */
+   * directory; `null` when that capture failed or ran out of time. */
   readonly screenshot: string | null;
   readonly aria: string | null;
 }
