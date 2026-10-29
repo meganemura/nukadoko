@@ -56,10 +56,11 @@ export default {
   // Leaves and package doors that should not accumulate frozen debt.
   // A bypass here is fixed by extending that module's surface, not by
   // writing it into the todo file.
-  strict: ["binding", "check", "compat", "condition", "entry", "env", "feature", "finding", "issues", "matching", "shell", "sink", "stored-form", "timer", "version"],
+  strict: ["binding", "check", "compat", "condition", "entry", "env", "execution-events", "feature", "finding", "issues", "matching", "shell", "sink", "stored-form", "timer", "version"],
   classify: [
     { glob: "src/condition/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/env/**", tags: ["layer:leaf", "pkghost:library"] },
+    { glob: "src/execution-events/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/finding/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/issues/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/shell/**", tags: ["layer:leaf", "pkghost:library"] },
@@ -126,6 +127,7 @@ export default {
   declaredModules: [
     { name: "condition", glob: "src/condition/**", surface: ["condition.ts"] },
     { name: "env", glob: "src/env/**", surface: ["load-env-files.ts", "parse-env-file.ts"] },
+    { name: "execution-events", glob: "src/execution-events/**", surface: ["format.ts"] },
     { name: "finding", glob: "src/finding/**", surface: ["finding.ts", "run-codes.ts"] },
     { name: "issues", glob: "src/issues/**", surface: ["format-issues.ts"] },
     { name: "shell", glob: "src/shell/**", surface: ["shell-word.ts"] },

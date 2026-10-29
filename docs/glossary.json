@@ -1,5 +1,5 @@
 {
-  "note": "英日の訳語対応。日本語の対訳を持つすべてのファイル(README.ja.md、docs/spec.ja.md、docs/migration.ja.md、docs/migration-playwright-test.ja.md、docs/upgrading.ja.md、docs/ci.ja.md、docs/releasing.ja.md)を書くとき・レビューするときに引く。ここにあるのはそれらのファイルで実際に使われている訳語であり、ここで発明したものではない。読み手は主に AI なので散文と装飾は置かない。新しい訳語が定まったらここに足す。",
+  "note": "英日の訳語対応。日本語の対訳を持つすべてのファイル(README.ja.md、docs/spec.ja.md、docs/migration.ja.md、docs/migration-playwright-test.ja.md、docs/upgrading.ja.md、docs/ci.ja.md、docs/releasing.ja.md、docs/execution-events.ja.md)を書くとき・レビューするときに引く。ここにあるのはそれらのファイルで実際に使われている訳語であり、ここで発明したものではない。読み手は主に AI なので散文と装飾は置かない。新しい訳語が定まったらここに足す。",
   "usage": [
     "jq -r '.terms[] | select(.en | index(\"contract\")) | .ja' docs/glossary.json",
     "jq -r '.terms[] | select(any(.en[]; test(\"wir\"; \"i\")))' docs/glossary.json",
@@ -625,6 +625,49 @@
       "en": ["kind (is-a)", "kinds"],
       "ja": "種類",
       "note": "is-a の期待値が名指す値の種類(string、uuid、timestamp など)。種類の名前はコードスパンで英語のまま。変化の種類(change kind)とは別の語"
+    },
+    {
+      "en": ["execution event", "execution events"],
+      "ja": "実行イベント",
+      "note": "プログラムが 1 つの操作を終えたときに書く 1 行(docs/execution-events.md)。プレースホルダー `{events}`、フィールド `observed.events`、ファイル events.jsonl と events-late.jsonl はコードスパンで英語のまま"
+    },
+    {
+      "en": ["line format", "the format"],
+      "ja": "行の形式",
+      "note": "実行イベントの行の決まり。版は 版 1 のように書く"
+    },
+    {
+      "en": ["writer", "reader"],
+      "ja": "書き手 / 読み手",
+      "note": "実行イベントの行を書くプログラムのコードと、それを読むもの(nukadoko、ログのパイプライン、人)"
+    },
+    {
+      "en": ["inside first"],
+      "ja": "内側が先",
+      "note": "操作の行を、その中のすべての操作の行のあとに書く規則"
+    },
+    {
+      "en": ["commit state"],
+      "ja": "コミットの状態",
+      "note": "db の行の変更が永続したか、しなかったか、わからないか"
+    },
+    {
+      "en": ["savepoint"],
+      "ja": "セーブポイント"
+    },
+    {
+      "en": ["unreadable (line)"],
+      "ja": "読めない行",
+      "note": "1 つの JSON オブジェクトでない行、trace や kind が無い行、必須のフィールドが無いか正しくない行。フィールド `unreadable` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["spliced (line)"],
+      "ja": "継ぎ合わされた行",
+      "note": "2 つの書き込みが混ざって 1 行になったもの"
+    },
+    {
+      "en": ["lower bound", "upper bound"],
+      "ja": "下限 / 上限"
     }
   ],
   "keep_english": [
@@ -831,6 +874,9 @@
     },
     "docs/migration-playwright-test.ja.md": {
       "rule": "日本語化する。ただしコードスパンで書かれたコマンド名とコード識別子はそのまま残す。見出しにコードスパンを含むもの(`from`、`recordStep`)も、前後の句だけを日本語にする"
+    },
+    "docs/execution-events.ja.md": {
+      "rule": "日本語化する。ただし見出しにコードスパンで書かれた種類の名前(`request`、`db` など)はそのまま残し、コロンのあとの句だけを日本語にする"
     },
     "docs/adopting.ja.md": {
       "rule": "日本語化する。ただし手順の番号と、見出しにコードスパンで書かれたコマンド名(`nuka init`、`nuka report`)はそのまま残す"
