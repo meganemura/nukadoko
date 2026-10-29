@@ -2479,9 +2479,24 @@ that pairs with no actual item is missing, and an actual item that pairs
 with no expected item is extra. Each kind gives its count, then its
 first three items, each with its value and its index on its own side,
 then how many more (`; 1 actual item is extra: ["4","chair","2"] (item
-3)`). Two lists whose part between the items equal in place at their
-start and their end makes more than 250,000 pairs of items end without
-it. A broken `fits-text` ends with how
+3)`). A broken `equal` on two lists with an item inserted or removed
+names the items the two do not share in order, in place of the first
+difference, since every item after an inserted one differs by place.
+It keeps the longest run of equal items, in order, so an inserted item
+is one extra item. Between two items it keeps, a stretch that holds as
+many items on each side holds items changed in place: the line names
+how many, and the first with its index, its expected index when that is
+another, and where it first differs. Any other stretch holds missing
+and extra items, named as for `has-same-items` (`; 1 actual item is
+extra: ["4","chair","2"] (item 1); item 4 (expected item 3) changed at
+2: actual "2", expected "1"`). Two lists that differ only in items
+changed in place keep the first difference, which names the field, and
+two that hold the same items in another order say so before it (`; the
+same items in another order, first difference at 0: actual "b",
+expected "a"`). Two lists whose part between the items equal in place
+at their start and their end makes more than 250,000 pairs of items
+end without these parts: with the first difference for `equal`, and
+with the outcome for `has-same-items`. A broken `fits-text` ends with how
 far the expected text fit and the first expected line that fits nothing
 after that, with the actual line where it stopped, or `nothing` past the
 end; when every expected line fits, it names the first actual line left

@@ -76,10 +76,12 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 ```
 
 The actual value and its source, the compare, the expected value and its
-source, then where the two part. A broken `has-same-items` names the
-expected items that are missing and the actual items that are extra,
-each with its index on its own side (`; 1 actual item is extra:
-["4","chair","2"] (item 3)`). The step fails with `claim_broken`, and
+source, then where the two part. A broken `has-same-items`, or `equal`
+on two lists with an item inserted or removed, names the expected items
+that are missing and the actual items that are extra, each with its
+index on its own side (`; 1 actual item is extra: ["4","chair","2"]
+(item 3)`), so an inserted row is one extra item, not a difference at
+every row after it. The step fails with `claim_broken`, and
 the run summary lists every claim under "Claims" with its outcome. A
 broken claim is fixed in the implementation or by asking the person,
 never by a weaker compare.

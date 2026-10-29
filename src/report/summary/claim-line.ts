@@ -140,8 +140,9 @@ function textDifference(actual: string, expected: string): string {
 
 /** Where a broken `equal` claim's two values first differ, for a text
  * too long to read whole in the line or with more than one line, and for
- * two arrays or two objects; `null` otherwise, when both values in the
- * line already show the difference. Pure. */
+ * two arrays or two objects, or for two lists with an item inserted or
+ * removed, the items they do not share in order; `null` otherwise, when
+ * both values in the line already show the difference. Pure. */
 export function equalDifference(actual: unknown, expected: unknown): string | null {
   if (typeof actual === "string" && typeof expected === "string") {
     if (actual === expected) return null;
@@ -151,7 +152,9 @@ export function equalDifference(actual: unknown, expected: unknown): string | nu
   const containers = (Array.isArray(actual) && Array.isArray(expected)) || (isPlainObject(actual) && isPlainObject(expected));
   if (!containers) return null;
   const found = differenceIn(actual, expected, []);
-  return found === null ? null : `first difference at ${differenceAt(found.path, found.actual, found.expected)}`;
+  if (found === null) return null;
+  const first = `first difference at ${differenceAt(found.path, found.actual, found.expected)}`;
+  return Array.isArray(actual) && Array.isArray(expected) ? listDifference(actual, expected, first) : first;
 }
 
 /** A path and what each side holds there, with the line or character
@@ -258,6 +261,64 @@ export function unpairedItems(actual: readonly unknown[], expected: readonly unk
   return { missing, extra };
 }
 
+/** The items two lists do not share in order. Each `changed` pair is an
+ * actual item and the expected item that stands in its place: between
+ * the same two shared items, in a stretch with as many items on each
+ * side. */
+export interface AlignedItems extends UnsharedItems {
+  readonly changed: readonly { readonly actual: number; readonly expected: number }[];
+}
+
+/** The items of two lists that a longest run of equal items, in order,
+ * leaves out, so an item inserted into a list is one extra item and not
+ * a change to every item after it; `null` past `ITEM_PAIRS_LIMIT`.
+ * Items are equal as `equal` judges them. Pure. */
+export function alignedItems(actual: readonly unknown[], expected: readonly unknown[]): AlignedItems | null {
+  const { start, end } = sharedEnds(actual, expected);
+  const actualCount = actual.length - end - start;
+  const expectedCount = expected.length - end - start;
+  if (actualCount * expectedCount > ITEM_PAIRS_LIMIT) return null;
+  const same = (a: number, e: number) => deepEqual(actual[start + a], expected[start + e]);
+  // longest[a * width + e]: how many items, in order, the actual items
+  // from a and the expected items from e share at most.
+  const width = expectedCount + 1;
+  const longest = new Uint32Array((actualCount + 1) * width);
+  const at = (a: number, e: number) => longest[a * width + e] ?? 0;
+  for (let a = actualCount - 1; a >= 0; a -= 1) {
+    for (let e = expectedCount - 1; e >= 0; e -= 1) longest[a * width + e] = same(a, e) ? at(a + 1, e + 1) + 1 : Math.max(at(a + 1, e), at(a, e + 1));
+  }
+  const missing: number[] = [];
+  const extra: number[] = [];
+  const changed: { actual: number; expected: number }[] = [];
+  let stretch: { actual: number[]; expected: number[] } = { actual: [], expected: [] };
+  const closeStretch = () => {
+    if (stretch.actual.length === stretch.expected.length) {
+      for (const [offset, index] of stretch.actual.entries()) changed.push({ actual: index, expected: stretch.expected[offset]! });
+    } else {
+      missing.push(...stretch.expected);
+      extra.push(...stretch.actual);
+    }
+    stretch = { actual: [], expected: [] };
+  };
+  let a = 0;
+  let e = 0;
+  while (a < actualCount || e < expectedCount) {
+    if (a < actualCount && e < expectedCount && same(a, e)) {
+      closeStretch();
+      a += 1;
+      e += 1;
+    } else if (e < expectedCount && (a === actualCount || at(a + 1, e) <= at(a, e + 1))) {
+      stretch.expected.push(start + e);
+      e += 1;
+    } else {
+      stretch.actual.push(start + a);
+      a += 1;
+    }
+  }
+  closeStretch();
+  return { missing, extra, changed };
+}
+
 /** `<value> (item <index>)` for the first few items, then how many more. */
 function listedItems(indexes: readonly number[], items: readonly unknown[]): string {
   const shown = indexes.slice(0, LISTED_ITEMS).map((index) => `${valueText(items[index])} (item ${index})`);
@@ -272,6 +333,33 @@ function unsharedText(unshared: UnsharedItems, actual: readonly unknown[], expec
     ...(unshared.extra.length === 0 ? [] : [`${head(unshared.extra, "actual")} extra: ${listedItems(unshared.extra, actual)}`]),
   ];
   return parts.length === 0 ? null : parts.join("; ");
+}
+
+/** The first changed item, by its actual index and, when another, its
+ * expected one, and where it first differs: `item 1 changed at 2: actual
+ * "3", expected "1"`, or with the count first when more items changed. */
+function changedText(changed: AlignedItems["changed"], actual: readonly unknown[], expected: readonly unknown[]): string | null {
+  const first = changed[0];
+  if (first === undefined) return null;
+  const found = differenceIn(actual[first.actual], expected[first.expected], []);
+  if (found === null) return null;
+  const item = first.actual === first.expected ? `item ${first.actual}` : `item ${first.actual} (expected item ${first.expected})`;
+  const where = `${found.path.length === 0 ? "" : " at "}${differenceAt(found.path, found.actual, found.expected)}`;
+  return changed.length === 1 ? `${item} changed${where}` : `${changed.length} items changed, first ${item}${where}`;
+}
+
+/** Where a broken `equal` claim's two lists part, given the first
+ * difference by place. A list with an item inserted or removed names the
+ * items the two do not share in order, since every item after it would
+ * differ by place. Two lists that differ only in items changed in place
+ * keep the first difference, which names the field, and two lists that
+ * hold the same items say so before it. */
+function listDifference(actual: readonly unknown[], expected: readonly unknown[], first: string): string {
+  const unpaired = unpairedItems(actual, expected);
+  if (unpaired !== null && unpaired.missing.length === 0 && unpaired.extra.length === 0) return `the same items in another order, ${first}`;
+  const aligned = alignedItems(actual, expected);
+  if (aligned === null || (aligned.missing.length === 0 && aligned.extra.length === 0)) return first;
+  return [unsharedText(aligned, actual, expected), changedText(aligned.changed, actual, expected)].filter((part) => part !== null).join("; ");
 }
 
 /** The items a broken `has-same-items` claim's two lists do not share:

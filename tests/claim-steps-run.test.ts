@@ -239,6 +239,28 @@ export default defineStep({
     const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary).toContain('(sentence:table) broken; 1 actual item is extra: ["4","chair"] (item 2); measured: none');
   });
+
+  it("names the row inserted into a list a broken equal on a table reads in order, not a difference at every row after it", async () => {
+    const rootDir = await project({
+      "features/steps/the-orders-in-order-are.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the orders, in order, are",
+  args: z.object({ table: z.array(z.array(z.string())) }),
+  observe() { return { rows: [["id", "name"], ["1", "lamp"], ["4", "chair"], ["2", "mug"]] }; },
+  claims: [{ actual: "rows", compare: "equal", expected: "table" }],
+});
+`,
+      "features/t.feature": feature("Then the orders, in order, are", "  | id | name |", "  | 1  | lamp |", "  | 2  | mug  |"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const message: string = lastClaimStep(rootDir).error.message;
+    expect(message.split("\n")[0]).toBe(
+      'claim broken: [["id","name"],["1","lamp"],["4","chair"],["2","mug"]] (observe:rows) equal [["id","name"],["1","lamp"],["2","mug"]] (sentence:table); 1 actual item is extra: ["4","chair"] (item 2)',
+    );
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain('(sentence:table) broken; 1 actual item is extra: ["4","chair"] (item 2); measured: none');
+  });
 });
 
 describe("a value that is not plain JSON leaves the claim unjudged, and the record says which part", () => {

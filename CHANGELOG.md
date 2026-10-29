@@ -283,6 +283,26 @@ just until 0.1.
   the items equal in place at their start and their end makes more than
   250,000 pairs of items get the line without it.
 
+### Changed
+
+- **A broken `equal` line on two lists with an item inserted or removed
+  names the items the two do not share in order.** It named the first
+  difference by place, and once an item is inserted every item after it
+  differs by place, so the line pointed at the item after the insert.
+  The line now keeps the longest run of equal items, in order, and
+  names the missing and the extra items as a `has-same-items` line
+  does, so an inserted row is one extra item (`; 1 actual item is
+  extra: ["4","chair","2"] (item 3)`, where it read `; first difference
+  at 3.0: actual "4", expected "3"`). Between two items it keeps, a
+  stretch with as many items on each side holds items changed in place,
+  and the line names how many and where the first differs (`; item 4
+  (expected item 3) changed at 2: actual "2", expected "1"`). Two lists
+  that differ only in items changed in place keep the first difference,
+  which names the field, two that hold the same items in another order
+  say so before it (`; the same items in another order, first
+  difference at 0: actual "b", expected "a"`), and two lists past the
+  same 250,000 pairs keep the first difference.
+
 ### Fixed
 
 - **`nuka run --base` runs the base world of the change that adds

@@ -49,6 +49,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   そのような record には `returns_dropped` がないからです。
   そこにある `z.object` がパースしたオブジェクトについての claim は、宣言していないキーで結果が変わりうるところで `unjudged` になります。
   値を返す step を `nuka do` でもう一度動かし、新しい record の id を `--use` に渡します。
+- **要素が挿入されたか取り除かれた 2 つの配列に対する、成り立たない `equal` の行は、2 つが順序どおりには共有しない要素を名指しします。**
+  以前は、位置で比べて最初に異なる場所で終わっていました(`; first difference at 3.0: actual "4", expected "3"` だった行は `; 1 actual item is extra: ["4","chair","2"] (item 3)` になります)。
+  同じ要素を別の順序で持つ 2 つの配列の行は、最初に異なる場所を `the same items in another order, ` で始めます。
+  判定と終了コードは変わらず、step ファイルの変更は要りません。
+  古い文面に一致させていたスクリプトは、新しい文面に一致させてください。
 
 ## 0.23.0 から 0.24.0 へ
 

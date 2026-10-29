@@ -62,6 +62,14 @@ This part does not change release to release.
   there parsed `unjudged` wherever a key it does not declare could
   change it. Run the producing step again with `nuka do` and pass the
   new record id to `--use`.
+- **A broken `equal` line on two lists with an item inserted or removed
+  names the items the two do not share in order,** where it ended with
+  the first difference by place (`; 1 actual item is extra:
+  ["4","chair","2"] (item 3)` where it read `; first difference at 3.0:
+  actual "4", expected "3"`), and a line on two lists that hold the same
+  items in another order starts its first difference with `the same
+  items in another order, `. No verdict or exit code changes, and no
+  step file changes. Update a script that matched the old text.
 
 ## 0.23.0 to 0.24.0
 

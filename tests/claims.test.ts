@@ -55,6 +55,7 @@ import {
 } from "../src/step/evaluate-claims.js";
 import { readAt, snapshot } from "../src/step/snapshot.js";
 import {
+  alignedItems,
   claimLine,
   equalDifference,
   fieldsDifference,
@@ -2096,7 +2097,6 @@ describe("a broken equal names where its two values first differ", () => {
   it("names the line where two texts first differ, and leaves a short one-line text to the values the line shows", () => {
     expect(equalDifference("food: 5.5\nrent: 100", "food: 5.5\nrent: 101")).toBe('first difference at line 2: actual "rent: 100", expected "rent: 101"');
     expect(equalDifference({ rows: [{ note: "x\ny" }] }, { rows: [{ note: "x\nz" }] })).toBe('first difference at rows.0.note, line 2: actual "y", expected "z"');
-    expect(equalDifference([1, 2], [1, 2, 3])).toBe("first difference at 2: actual nothing, expected 3");
     expect(equalDifference("short", "shirt")).toBeNull();
     expect(equalDifference(1, 2)).toBeNull();
   });
@@ -2161,6 +2161,80 @@ describe("a broken has-same-items names the items the two lists do not share", (
     const inserted = [...rows.slice(0, 300), { id: -1 }, ...rows.slice(300)];
     expect(sameItemsDifference(inserted, rows)).toBe('1 actual item is extra: {"id":-1} (item 300)');
     expect(sameItemsDifference([{ id: -1 }, ...rows], [...rows, { id: -2 }])).toBeNull();
+  });
+});
+
+/** How many items, in order, two lists share at most: tries every way,
+ * so it holds only for short lists. */
+function longestShared(actual: readonly unknown[], expected: readonly unknown[]): number {
+  if (actual.length === 0 || expected.length === 0) return 0;
+  if (deepEqual(actual[0], expected[0])) return 1 + longestShared(actual.slice(1), expected.slice(1));
+  return Math.max(longestShared(actual.slice(1), expected), longestShared(actual, expected.slice(1)));
+}
+
+describe("a broken equal on two lists names the items they do not share in order", () => {
+  it("names no item exactly when the two lists are equal", () =>
+    hegel.test((tc) => {
+      const actual = tc.draw(itemLists);
+      const expected = tc.draw(gs.booleans()) ? structuredClone(actual) : tc.draw(itemLists);
+      const { missing, extra, changed } = alignedItems(actual, expected)!;
+      expect(missing.length === 0 && extra.length === 0 && changed.length === 0).toBe(deepEqual(actual, expected));
+    }));
+
+  it("names each item by its index on its own side, and keeps as many items, in order, as the two lists share at most", () =>
+    hegel.test((tc) => {
+      const actual = tc.draw(itemLists);
+      const expected = tc.draw(itemLists);
+      const { missing, extra, changed } = alignedItems(actual, expected)!;
+      const leftActual = [...extra, ...changed.map((pair) => pair.actual)];
+      const leftExpected = [...missing, ...changed.map((pair) => pair.expected)];
+      expect(validIndexes(leftActual, actual)).toBe(true);
+      expect(validIndexes(leftExpected, expected)).toBe(true);
+      expect(deepEqual(withoutIndexes(actual, leftActual), withoutIndexes(expected, leftExpected))).toBe(true);
+      expect(actual.length - leftActual.length).toBe(longestShared(actual, expected));
+    }));
+
+  it("names an inserted item as one extra item, and a removed one as one missing item", () =>
+    hegel.test((tc) => {
+      const items = tc.draw(itemLists);
+      const item = tc.draw(listItems);
+      const at = tc.draw(gs.integers({ minValue: 0, maxValue: items.length }));
+      const inserted = [...items.slice(0, at), item, ...items.slice(at)];
+      const added = alignedItems(inserted, items)!;
+      expect(added.missing).toEqual([]);
+      expect(added.changed).toEqual([]);
+      expect(added.extra).toHaveLength(1);
+      expect(deepEqual(withoutIndexes(inserted, added.extra), items)).toBe(true);
+      const removed = alignedItems(items, inserted)!;
+      expect(removed.extra).toEqual([]);
+      expect(removed.changed).toEqual([]);
+      expect(removed.missing).toHaveLength(1);
+    }));
+
+  it("names the row inserted into a table, the row changed after it, and the rest past three", () => {
+    expect(equalDifference([TABLE_HEADER, LAMP, MUG, CHAIR, DESK], [TABLE_HEADER, LAMP, MUG, DESK])).toBe('1 actual item is extra: ["4","chair","2"] (item 3)');
+    expect(equalDifference([TABLE_HEADER, LAMP, DESK], [TABLE_HEADER, LAMP, MUG, DESK])).toBe('1 expected item is missing: ["2","mug","4"] (item 2)');
+    expect(equalDifference([TABLE_HEADER, CHAIR, LAMP, MUG, ["3", "desk", "2"]], [TABLE_HEADER, LAMP, MUG, DESK])).toBe(
+      '1 actual item is extra: ["4","chair","2"] (item 1); item 4 (expected item 3) changed at 2: actual "2", expected "1"',
+    );
+    const more = [["5", "rug", "1"], ["6", "pen", "9"], ["7", "cup", "2"], ["8", "box", "6"]];
+    expect(equalDifference([TABLE_HEADER, ["1", "lamp", "3"], MUG, CHAIR, DESK, ...more], [TABLE_HEADER, LAMP, MUG, DESK])).toBe(
+      '5 actual items are extra: ["4","chair","2"] (item 3), ["5","rug","1"] (item 5), ["6","pen","9"] (item 6), and 2 more; item 1 changed at 2: actual "3", expected "1"',
+    );
+    expect(equalDifference(["x", "a", "B", "C", "d"], ["a", "b", "c", "d"])).toBe('1 actual item is extra: "x" (item 0); 2 items changed, first item 2 (expected item 1): actual "B", expected "b"');
+    expect(equalDifference([1, 2], [1, 2, 3])).toBe("1 expected item is missing: 3 (item 2)");
+  });
+
+  it("keeps the first difference for items changed in place, and says so when the lists hold the same items in another order", () => {
+    expect(equalDifference([TABLE_HEADER, LAMP, ["2", "mug", "5"], DESK], [TABLE_HEADER, LAMP, MUG, DESK])).toBe('first difference at 2.2: actual "5", expected "4"');
+    expect(equalDifference(["b", "a", "c"], ["a", "b", "c"])).toBe('the same items in another order, first difference at 0: actual "b", expected "a"');
+    expect(equalDifference(["c", "b", "a"], ["a", "b", "c"])).toBe('the same items in another order, first difference at 0: actual "c", expected "a"');
+  });
+
+  it("aligns two long lists that share their start and end, and keeps the first difference past the pairs it may compare", () => {
+    const rows = Array.from({ length: 600 }, (_, index) => ({ id: index }));
+    expect(equalDifference([...rows.slice(0, 300), { id: -1 }, ...rows.slice(300)], rows)).toBe('1 actual item is extra: {"id":-1} (item 300)');
+    expect(equalDifference([{ id: -1 }, ...rows], [...rows, { id: -2 }])).toBe("first difference at 0.id: actual -1, expected 0");
   });
 });
 

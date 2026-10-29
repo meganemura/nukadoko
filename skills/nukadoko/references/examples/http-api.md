@@ -245,7 +245,7 @@ read items an earlier scenario created (S8):
       claim broken: {"id":2,"name":"lamp"} (from:get-item@22.body) equal {"id":1,"name":"lamp"} (sentence:expected); first difference at id: actual 2, expected 1
 ...
   step 5/5  failed  0.0s  the response body is
-      claim broken: [{"id":1,"name":"lamp"},{"id":2,"name":"lamp"},{"id":3,"name":"lamp"},{"id":4,"name":"desk"}] (from:list-items@57.body) equal [{"id":1,"name":"lamp"},{"id":2,"name":"desk"}] (sentence:expected); first difference at 1.name: actual "lamp", expected "desk"
+      claim broken: [{"id":1,"name":"lamp"},{"id":2,"name":"lamp"},{"id":3,"name":"lamp"},{"id":4,"name":"desk"}] (from:list-items@57.body) equal [{"id":1,"name":"lamp"},{"id":2,"name":"desk"}] (sentence:expected); 1 expected item is missing: {"id":2,"name":"desk"} (item 1); 3 actual items are extra: {"id":2,"name":"lamp"} (item 1), {"id":3,"name":"lamp"} (item 2), {"id":4,"name":"desk"} (item 3)
 ...
 7 scenarios: 5 passed, 2 failed  (1s)
 ```
