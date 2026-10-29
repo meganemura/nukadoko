@@ -3032,7 +3032,7 @@ record を書いたあとに届いた step の行も、その step のもので�
 record は書き直しません。
 world が止まるとき、プログラムが止まったあとに、ファイル全体を 1 回読んでそうした行を step record の隣の `events-late.jsonl` に、同じように redact して書きます。
 `run.json` の step は `"events_late": { "lines", "file" }` を持ち、16 MiB を超えたときは `"truncated": true` も持ちます。
-run サマリは「Unmeasured actions」の step の行でその行たちを名指し、`nuka do` は stderr の `events-late` の注記でそのファイルを名指します。
+run サマリは「Unmeasured actions」の step の行でその行たちを名指し、`nuka do` は stderr の `events-late` の注記と、world が止まったあとに書く自身の record の `events_late` で、そのファイルを名指します。
 
 同じ 1 回の読みで、world のファイルの写し `worlds/<environment>/events.jsonl` も書きます。
 各行は同じように redact し、読めなかった行は redact したテキストのまま残します。
@@ -4148,6 +4148,21 @@ nukadoko はその record がどの step のものかを読み、そこを指す
 同じキーについては scenario の中で pattern の capture が勝つのとまったく同じように、`--args` は今も `--use` に勝ちます。
 id はまず `do/` で、次に各 run の `steps/` で探されるので、`nuka do` の呼び出しの step record も `nuka run` の step record も解決できます。
 実際に取り出された record id はこの実行自身の `used` に載るので、複数回の `do` 呼び出しにまたがって手で組み立てた chain も、scenario が駆動した chain と同じくらい後から追跡できます。
+
+claim step の `events` のキー(「実行イベントの数についての claim」を参照)も、同じように step record を受け取ります。
+キーの `of` がその step を名指す step record が、そのキーの実行イベントを供給します。
+claim は、その record が残した行、つまり `events.jsonl` と `events-late.jsonl` を数え、プログラムが報告した種類には world のファイルの写しを使います。
+読みの `of` はその record を名指し、claim の `actual_from` は producer を `<step>@<step record id>` として名指します。
+1 つのキーに 2 つの step record を渡すと拒否されます。
+claim は 1 つの実行のイベントを数えるからです。
+どの `--use` も供給しないキーでは、その claim はキーの `of` を名指して `unjudged` になります。
+record の読みが読む範囲は、producer の切り出しまでです。
+切り出しが見た、どの step のものでもない行はそれぞれの数を広げ、そのあとに来たそうした行は読みません。
+`nuka do` は world を止める前に、その step 自身の実行イベントがまだそろいうる間(行のまだないリクエスト、まだ perform していないジョブ)、最大 10 秒待ちます。
+そこでは、あとの step のタイミングが変わることがないからです。
+record は step の切り出しが読んだものを保ちます。
+その間に届いたものは `events-late.jsonl` にあり、record の `events_late` はそうした行がすべてそろっているかを示すので、あとの `--use` は自分の読みがそろいうるかを知ります。
+まだ 1 行も書いていないプログラムの world は待ちません。
 
 `--use` が運ぶのは値そのものであり、それが指すものがまだそこにあるという保証ではありません。
 上流の step が返した path は、fixture が所有するリソースを指していることがあります。
@@ -5960,7 +5975,11 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               delivered on stderr.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
-                              from an earlier execution's result
+                              from an earlier execution's result, and its
+                              `events` keys from that execution's
+                              execution events; before it stops the world,
+                              it waits up to 10 s while the step's own
+                              execution events may still become whole
 nuka step wait [--walk <n>] [--timeout <s>] [--json]
                               wait until the walk a nuka run --step
                               started pauses or ends, then print where it

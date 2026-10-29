@@ -240,6 +240,18 @@ just until 0.1.
   file names no `{events}` are errors, and `events-unread`, for a world
   at a `url` or a project with no program file, is a warning, since the
   other scenarios still run there.
+- **`nuka do --use` supplies a claim step's `events` keys.** A step
+  record whose step a key's `of` names supplies that key's execution
+  events: the claim counts the lines the record kept, its `events.jsonl`
+  and `events-late.jsonl`, with the world's copy for the kinds the
+  program reported, and names the producer `<step>@<step record id>`.
+  Two records for one key are refused, and a key no `--use` supplies
+  leaves its claims `unjudged`. Before it stops its world, `nuka do`
+  waits up to 10 seconds while the step's own execution events may still
+  become whole, so a line written after the response reaches the
+  record's `events-late.jsonl`, and the record names those lines in
+  `events_late`, as run.json does for a run's step, so a later reading
+  knows whether every one is there.
 - **A line can state a count with `once`, `twice`, or `never`.** The
   literal rule reads the fixed words `once` and `twice` as `1` and `2`,
   under any compare, as a number word, so "the score row was inserted

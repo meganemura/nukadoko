@@ -3873,7 +3873,8 @@ redacted the same way.
 The step in `run.json` carries `"events_late": { "lines", "file" }`,
 with `"truncated": true` past 16 MiB, the run summary names the lines on
 the step's line under "Unmeasured actions", and `nuka do` names the file
-in an `events-late` note on stderr.
+in an `events-late` note on stderr and in its record's `events_late`,
+which it writes after the world stops.
 
 The same pass writes the world's copy of the file,
 `worlds/<environment>/events.jsonl`, every line redacted the same way, a
@@ -5319,6 +5320,30 @@ record from a `nuka do` call and one from a `nuka run` both resolve. The
 record ids actually drawn from land in this execution's own `used`, so a chain
 assembled by hand across several `do` calls is as traceable afterwards as
 one a scenario drove.
+
+A claim step's `events` keys (see "A claim on a count of events") take a
+step record the same way.
+A step record whose step a key's `of` names supplies that key's
+execution events, and the claim counts the lines the record kept: its
+`events.jsonl` and `events-late.jsonl`, with the world's copy of the
+file for the kinds the program reported.
+The reading's `of` names the record, and the claim's `actual_from`
+names the producer as `<step>@<step record id>`.
+Two step records for one key are refused, since a claim counts the
+events of one execution, and a key no `--use` supplies leaves its claims
+`unjudged`, naming the key's `of`.
+A reading of a record has no window: the lines no step owns that the
+producer's slice saw widen each count, and the ones that came after it
+are not read.
+Before `nuka do` stops its world, it waits up to 10 seconds while the
+step's own execution events may still become whole (a request with no
+line yet, a job not yet performed), since no later step's timing can
+change there.
+The record keeps what the step's slice read; what arrives meanwhile is
+in `events-late.jsonl`, and `events_late` in the record says whether
+every such line is there, so a later `--use` knows whether its reading
+can be whole.
+A world whose program has written no line is not waited for.
 
 What crosses with `--use` is the value itself, not a guarantee that
 whatever it names is still there: a path an upstream step returned can
@@ -7525,7 +7550,11 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               delivered on stderr.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
-                              from an earlier execution's result
+                              from an earlier execution's result, and its
+                              `events` keys from that execution's
+                              execution events; before it stops the world,
+                              it waits up to 10 s while the step's own
+                              execution events may still become whole
 nuka step wait [--walk <n>] [--timeout <s>] [--json]
                               wait until the walk a nuka run --step
                               started pauses or ends, then print where it

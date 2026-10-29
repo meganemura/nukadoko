@@ -5,11 +5,15 @@ import {
   argOrigins,
   channelsOfStepRecord,
   claimArgSide,
+  EVENTS_WAIT_MS,
   executeTypedStep,
   recordedChannels,
   withMeasured,
+  type EventsSource,
   type FilledFrom,
 } from "../run/execute-typed-step.js";
+import { settleEvents } from "../context/events-read.js";
+import { recordedEventsProducer } from "./recorded-events.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
@@ -43,7 +47,7 @@ import { buildSecretSet } from "../secrets/build-secret-set.js";
 import type { SecretSet } from "../secrets/types.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact, fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
-import type { Step } from "../step/define-step.js";
+import { eventsCandidates, isClaimStep, type Step } from "../step/define-step.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import {
   formatFixtureDefinitionIssues,
@@ -211,6 +215,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   // Set once the head world runs, so the `finally` below stops it on every
   // path out, a throw included.
   let stopWorld: (() => Promise<void>) | undefined;
+  let eventsLateOfStep: StepRecord["events_late"];
   // The step's slice of the program's log, once its record's `observed`
   // is read, so the world's stop can find its lines that came later. A
   // signal before then stops the world with no step to look for.
@@ -376,6 +381,40 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         producerByKey.set(key, resolved.used.step);
       }
     }
+    // One step record per events key: a claim counts the execution events
+    // of one execution, and two would leave no way to say which the line
+    // means.
+    const eventsUse = new Map<string, ResolveUseSuccess>();
+    for (const resolved of resolvedUses) {
+      for (const key of resolved.events) {
+        const earlier = eventsUse.get(key);
+        if (earlier !== undefined) {
+          return refuse(
+            sinks,
+            `--use: events key "${key}" is supplied by both step record ${earlier.used.step_record_id} (step "${earlier.used.step}") and ` +
+              `step record ${resolved.used.step_record_id} (step "${resolved.used.step}"), and nuka do counts the execution events of one step record per key`,
+            "step-inputs-invalid",
+          );
+        }
+        eventsUse.set(key, resolved);
+      }
+    }
+    // Each events key reads the record --use named for it. A key no --use
+    // supplies is unjudged with the reason: under nuka do no earlier line
+    // ran, and --use is how a producer is named.
+    const eventsSource = (key: string): EventsSource => {
+      const resolved = eventsUse.get(key);
+      if (resolved !== undefined) {
+        return { of: `${resolved.used.step}@${resolved.used.step_record_id}`, producer: recordedEventsProducer(rootDir, config.stateDir, resolved.record) };
+      }
+      const names = isClaimStep(entry.step) ? eventsCandidates(entry.step.events[key]!).map((candidate) => stepNameOf.get(candidate) ?? "a step discovery never registered") : [];
+      return {
+        of: names.join(" or "),
+        unchosen:
+          `events.${key}.of names ${names.map((candidate) => `"${candidate}"`).join(" or ")}, and no --use value names a step record of ${names.length === 1 ? "it" : "any of them"}, ` +
+          "so nuka do has no execution events to count",
+      };
+    };
 
     // Read-only refusal is a setup failure, not an execution failure: the
     // step never runs, so nothing was
@@ -477,6 +516,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // to it, on the signal path as on the normal one.
       stopWorld = runOnce(async () => {
         const { exitedEarly, late, eventsLate } = await started.stop(tracedSteps);
+        // One step, so at most one: the record, written after this stop,
+        // names it, and a later --use reads whether every line is there.
+        eventsLateOfStep = [...eventsLate.values()][0];
         if (exitedEarly !== null) warnings("program-exited").write(`world ${started.view.name}: ${exitedEarly}\n`);
         for (const slice of late.values()) {
           const where = slice.file === null ? "they could not be written beside the record" : `see ${path.relative(rootDir, path.join(evidenceDir, slice.file))}`;
@@ -618,12 +660,16 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             origins.set(key, {
               from: { step_record_id: resolved.used.step_record_id, step: resolved.used.step, key: resolved.sources[key] ?? key },
             });
-            filledFrom.set(key, {
-              step: resolved.producer,
-              stepName: resolved.used.step,
-              key: resolved.sources[key] ?? key,
-              dropped: resolved.dropped,
-            });
+            // A record that fills a key has a producer: only one named by
+            // `events` keys alone has none, and it fills nothing.
+            if (resolved.producer !== undefined) {
+              filledFrom.set(key, {
+                step: resolved.producer,
+                stepName: resolved.used.step,
+                key: resolved.sources[key] ?? key,
+                dropped: resolved.dropped,
+              });
+            }
           }
         }
         // Only a step record actually drawn from lands in `used` (docs/spec.md
@@ -651,6 +697,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // the producer instead.
       argSide: (key) => claimArgSide(key, origins.get(key), () => null),
       filledFrom,
+      ...(isClaimStep(entry.step) && Object.keys(entry.step.events).length > 0 ? { eventsSource } : {}),
       // No line states a value under nuka do: a key --args gave reads as
       // the JSON text it was given.
       sentenceText: (key) =>
@@ -733,6 +780,16 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     const finishedAt = new Date();
 
+    // The step's own lines still on their way land beside its record when
+    // the world stops, where a later --use reads them, so the stop waits
+    // for them first, up to EVENTS_WAIT_MS: no later step's timing can
+    // change here, as it would under nuka run.
+    const ownEvents = observed.events;
+    if (world !== null && ownEvents !== undefined && ownEvents !== null && !ownEvents.whole) {
+      const producer = contextHandle.eventsProducer({ step_record_id: recordId, step: name, line: null }, ownEvents.trace_id);
+      if (producer.source === "live") await settleEvents(producer, Date.now() + EVENTS_WAIT_MS);
+    }
+
     // Same function the signal handler runs. `runOnce` makes a second call,
     // from whichever path loses the race, share that run. A teardown
     // failure never changes `status`.
@@ -782,6 +839,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             attempts: outcome.claims.attempts,
             ...(outcome.claims.readings === undefined ? {} : { readings: [...outcome.claims.readings] }),
             ...(outcome.claims.readingsLeftOut === undefined ? {} : { readings_left_out: { ...outcome.claims.readingsLeftOut } }),
+            ...(outcome.claims.eventsRead === undefined ? {} : { events_read: outcome.claims.eventsRead }),
           };
 
     const stepRecord: StepRecord =
@@ -826,6 +884,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
+            ...(eventsLateOfStep !== undefined ? { events_late: eventsLateOfStep } : {}),
             ...claimFields,
           }
         : {
@@ -873,6 +932,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
+            ...(eventsLateOfStep !== undefined ? { events_late: eventsLateOfStep } : {}),
             ...claimFields,
           };
 

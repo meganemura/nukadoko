@@ -1085,6 +1085,12 @@ export interface StepRecordBase {
    * "Environments and secrets": default is just the name of an
    * environment that may or may not itself be configured. */
   environment: string;
+  /** `nuka do` only: the step's lines of the program's execution events
+   * that arrived after the step ended, in `events-late.jsonl` beside the
+   * record, found when the world stopped, before this record was written.
+   * A `nuka run` step's are in run.json's step entry, since its record is
+   * written before its world stops. Absent when there were none. */
+  events_late?: { readonly lines: number; readonly file: string | null; readonly truncated?: true };
   /** The world this step ran against (run.json's `worlds[].name`), or
    * `null` when the tree has no program file and no world ran. Not the
    * compat World a step reads and writes, which is `world`. Absent on a

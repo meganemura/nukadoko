@@ -1,3 +1,4 @@
+import { statSync } from "node:fs";
 import path from "node:path";
 import { rangeOf } from "../execution-events/count.js";
 import { ownerOf, parseEventLine, type ParsedLine } from "../execution-events/format.js";
@@ -185,6 +186,28 @@ async function readLive(groups: readonly Group[], file: WorldEventsFile, until: 
     if (groups.every(settled) || Date.now() + POLL_MS >= until) return;
     await sleep(POLL_MS);
   }
+}
+
+/** Waits until `producer`'s events are whole, can no longer become
+ * whole, or `until` is near, and keeps nothing: `nuka do` waits so
+ * before it stops its world, since no later step's timing can change
+ * there, and the lines that arrive meanwhile reach the step's
+ * `events-late.jsonl` when the world stops, where a later `--use` reads
+ * them. A world whose program has written no line yet is not waited for:
+ * a program that writes none would cost every call the whole wait. */
+export async function settleEvents(producer: Extract<EventsProducer, { readonly source: "live" }>, until: number): Promise<void> {
+  const tally = createTraceTally({ ...producer.start.inputs, selections: [] });
+  const group: Group = { producer, requests: [], tally, unownedNotKept: 0, truncated: false, replaced: false };
+  let written = false;
+  withoutChannelRecording(() => {
+    try {
+      written = statSync(producer.file.path).size > 0;
+    } catch {
+      // No file to wait on.
+    }
+  });
+  if (!written) return;
+  await readLive([group], producer.file, until, () => {});
 }
 
 /** Folds a recorded producer's lines into its group's tally. */

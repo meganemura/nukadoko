@@ -79,6 +79,12 @@ Across `nuka do` calls, nothing continues by default. Every call builds
 its own browser on a fresh page, with no login state carried over: a step
 that needs it gets it from a fixture. Values still move forward with `--use <step-record-id>`, which
 fills the `from` keys of the next step from a record you already have.
+A claim step's `events` keys take a record the same way:
+`nuka do nothing-was-written --use <place-score's record id>` counts the
+execution events that record kept (`references/program.md`). Before
+`nuka do` stops its world, it waits up to 10 s for the step's own events
+to be whole, so the lines of a job that performs after the response are
+there for that count.
 
 So one shape of an exploration is: keep the unit of a single `do` call
 small enough to see what you need, and grow it by adding parts rather

@@ -14,7 +14,9 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // request line 600 ms after it answered, or when the server is told to
 // stop, whichever comes first. `/after` writes its request line at once
 // and a committed insert 500 ms later, or at the stop: a writer slower
-// than the claim that reads it. `/spliced` splits one line across two writes with another line
+// than the claim that reads it. `/slow` writes its request line 300 ms
+// after it answered, and not at the stop: only a wait before the stop
+// reads it. `/spliced` splits one line across two writes with another line
 // between them. `/secret` writes the world's token inside an event.
 // `/inlet` answers where the events file is, who may read it, and which
 // variables of the server's environment name a file nukadoko made for
@@ -116,6 +118,10 @@ createServer(async (req, res) => {
   res.writeHead(status, { "content-type": "text/plain" });
   res.end(body);
   if (url.pathname === "/up") return;
+  if (url.pathname === "/slow") {
+    setTimeout(() => emit(line), 300);
+    return;
+  }
   if (url.pathname !== "/late") {
     emit(line);
     if (url.pathname === "/after") hold({ trace, kind: "db", id: newId(), parent: id, table: "scores", op: "insert", rows: 1, committed: true }, 500);

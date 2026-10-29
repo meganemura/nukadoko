@@ -1,6 +1,6 @@
 import type { ReturnsDrop, StepRecord, UsedEntryWithResult } from "../record/types.js";
 import { reviveStoredForm } from "../stored-form/revive.js";
-import { malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
+import { eventsCandidates, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
 
 // Responsibility: `nuka do --use <record-id>`'s own lookup (docs/spec.md
 // "Single steps (the agent path)", the `--use` paragraph) — turns one
@@ -18,6 +18,11 @@ import { malformedFromEntryMessage, tryFromCandidates, type Step } from "./defin
 // it is the same "Step object -> the vocabulary name discovery registered it
 // under" map `nuka do`'s own `isRegisteredStep` predicate is built from
 // (one vocabulary walk, not two).
+//
+// A claim step's `events` keys match the same way: a step record whose
+// step one key's `of` names supplies that key's execution events, and the
+// caller reads them from the record (src/cli/recorded-events.ts). Such a
+// record fills no args key, so it lands in no `used` entry.
 //
 // A key naming several candidate producers matches this step record against
 // every one of them via `fromCandidates`, exactly the way a
@@ -56,11 +61,16 @@ export interface ResolveUseSuccess {
    * way run-scenario.ts's `finishExecutedStep` does. */
   readonly used: UsedEntryWithResult;
   /** The step this record's result came from, as this step's `from`
-   * names it. */
-  readonly producer: Step;
+   * names it; `undefined` when only `events` keys name it, so it fills
+   * no key. */
+  readonly producer: Step | undefined;
   /** What the record says that step's `returns` dropped
    * (`returns_dropped`), `undefined` for a record that does not say. */
   readonly dropped: readonly ReturnsDrop[] | undefined;
+  /** The events keys whose `of` names this step record's step. */
+  readonly events: readonly string[];
+  /** The step record itself, whose execution events those keys count. */
+  readonly record: StepRecord;
 }
 
 export type ResolveUseResult = ResolveUseError | ResolveUseSuccess;
@@ -144,7 +154,7 @@ export function resolveUse(
   // whose `from` lists several producers still matches as long as one of
   // them is this step record's own step.
   const matches: Array<readonly [key: string, upstreamKey: string, upstream: Step]> = [];
-  let unnamedKey: string | undefined;
+  let unnamedPlace: string | undefined;
   for (const [key, entry] of Object.entries(step.from)) {
     const candidates = tryFromCandidates(entry);
     if (candidates === null) {
@@ -152,26 +162,36 @@ export function resolveUse(
     }
     for (const [upstream, upstreamKey] of candidates) {
       const upstreamName = stepNameOf.get(upstream);
-      if (upstreamName === undefined) unnamedKey ??= key;
+      if (upstreamName === undefined) unnamedPlace ??= `from.${key}`;
       if (upstreamName === stepRecord.step) {
         matches.push([key, upstreamKey, upstream]);
       }
     }
   }
+  const eventsKeys: string[] = [];
+  const events = isClaimStep(step) ? step.events : {};
+  for (const [key, entry] of Object.entries(events)) {
+    for (const candidate of eventsCandidates(entry)) {
+      const candidateName = stepNameOf.get(candidate);
+      if (candidateName === undefined) unnamedPlace ??= `events.${key}.of`;
+      if (candidateName === stepRecord.step && !eventsKeys.includes(key)) eventsKeys.push(key);
+    }
+  }
   // An upstream with no name may be this record's step under another
   // module instance, so "not named by any entry" would blame the wrong thing.
-  if (matches.length === 0 && unnamedKey !== undefined) {
+  if (matches.length === 0 && eventsKeys.length === 0 && unnamedPlace !== undefined) {
     return {
       ok: false,
       message:
         `--use ${recordId}: its step "${stepRecord.step}" cannot be matched, because the step ` +
-        `\`from.${unnamedKey}\` names has no name here${unnamedNote !== undefined ? `. ${unnamedNote}` : ""}`,
+        `\`${unnamedPlace}\` names has no name here${unnamedNote !== undefined ? `. ${unnamedNote}` : ""}`,
     };
   }
-  if (matches.length === 0) {
+  if (matches.length === 0 && eventsKeys.length === 0) {
+    const places = Object.keys(events).length === 0 ? "`from` entries" : "`from` entries or `events` keys";
     return {
       ok: false,
-      message: `--use ${recordId}: its step "${stepRecord.step}" is not named by any of this step's \`from\` entries`,
+      message: `--use ${recordId}: its step "${stepRecord.step}" is not named by any of this step's ${places}`,
     };
   }
 
@@ -197,7 +217,9 @@ export function resolveUse(
     sources,
     used: { step_record_id: recordId, step: stepRecord.step, result: stepRecord.result },
     // Every match names this record's step, so the first names them all.
-    producer: matches[0]![2],
+    producer: matches[0]?.[2],
     dropped: readReturnsDropped((stepRecord as { returns_dropped?: unknown }).returns_dropped),
+    events: eventsKeys,
+    record: stepRecord,
   };
 }
