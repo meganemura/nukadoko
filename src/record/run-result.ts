@@ -453,10 +453,14 @@ export interface RunRouteCell extends RunPlaceCell {
  * change on for everyone reads what the program did differently on one
  * side than on the other. Evidence, not a verdict. */
 export interface RunPathComparison {
-  /** What the two sides differ in: two environments of the run whose
-   * declared `conditions` differ in `name` alone, `a` holding the
-   * value where it is `false` or not declared (`null`). */
-  readonly between: { readonly kind: "condition"; readonly name: string; readonly a: boolean | string | null; readonly b: boolean | string | null };
+  /** What the two sides differ in: `base`, an environment's base world
+   * (side `a`) against its head world under `nuka run --base`; or
+   * `condition`, two environments of the run whose declared
+   * `conditions` differ in `name` alone, `a` holding the value where it
+   * is `false` or not declared (`null`). */
+  readonly between:
+    | { readonly kind: "base" }
+    | { readonly kind: "condition"; readonly name: string; readonly a: boolean | string | null; readonly b: boolean | string | null };
   readonly a: RunPathSide;
   readonly b: RunPathSide;
   /** Why no criterion of the pair was compared, such as a side whose

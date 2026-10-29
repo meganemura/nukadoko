@@ -779,6 +779,11 @@
       "note": "決まらない受け入れ基準のうち、開いた数がどれも a 側と b 側で同じ範囲で、各 step の欠けを示す語も両側で同じもの。run が見たものに違いは無いが、欠けた行がまだ違いを生みうる。値 `same_so_far` はコードスパンで英語のまま"
     },
     {
+      "en": ["base pair (of paths)", "a pair against the base"],
+      "ja": "基点との組",
+      "note": "nuka run --base のもとで、environment の base の world(a 側)と head の world(b 側)の組。`between` の `{ \"kind\": \"base\" }` はコードスパンで英語のまま。サマリの見出し `base → head` も英語のまま"
+    },
+    {
       "en": ["premise (of a pair)"],
       "ja": "前提",
       "note": "environment の組が切り替える condition。flag の側が違うことは前提であって変化ではないので、組の見出しが名指し、違いには並べない"

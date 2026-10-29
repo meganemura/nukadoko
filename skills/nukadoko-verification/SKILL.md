@@ -159,7 +159,9 @@ has run.
 4. Fix, run again, and open the pull request with
    `nuka run --base <base>`: the new criterion runs against the base's
    code too, and its row is `proven` when its Then fails there in each of
-   `--proof-runs` runs.
+   `--proof-runs` runs. When the program writes execution events, the
+   summary's "Changed paths" says under `base → head` what the program
+   did differently at head, step by step.
 5. Link the scenario from the map's sub-feature.
 
 When the scenario and the program file live in the product's repository,

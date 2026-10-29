@@ -92,6 +92,10 @@ config's fixtures or parameter types, an environment's conditions.
 - An `unchanged` row, when the mapping changed, its tags did
   (`retagged`), or its name or file did (`renamed_from`), also runs in the `old` world, your code under the base's feature file, steps, and conditions, and has to
   pass there. A rewritten step that now checks less is what this catches.
+- When both program files name `{events}`, run.json's `paths` pairs each
+  environment's base world with its head world, step by step, for the rows
+  the base ran: "Changed paths" lists under `base → head` what the program
+  does differently at head. Tell the person what changed; it is evidence.
 
 ## The cells
 

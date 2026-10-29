@@ -191,6 +191,8 @@ describe("parseRunDocument", () => {
         not_compared: [],
       };
       expect(parseRunDocument(JSON.stringify({ ...VALID, paths: [comparison] }))).toEqual({ document: { ...VALID, paths: [comparison] } });
+      const againstBase = { ...comparison, between: { kind: "base" }, a: { world: "base", environment: "reorder-on" }, b: { world: "head", environment: "reorder-on" } };
+      expect(parseRunDocument(JSON.stringify({ ...VALID, paths: [againstBase] }))).toEqual({ document: { ...VALID, paths: [againstBase] } });
       const path = tc.draw(
         gs.sampledFrom([
           "between",

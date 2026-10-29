@@ -521,39 +521,50 @@ function rangeWords(range: CountRange): string {
   return range.at_most === range.at_least ? String(range.at_least) : `${range.at_least} to ${range.at_most}`;
 }
 
-function differenceText(difference: RunPathDifference): string {
-  return `${pathEntryText(difference)} ${rangeWords(difference.a)} → ${rangeWords(difference.b)}`;
+// A flag compares as seen or not, so its range reads as whether the
+// program evaluated it.
+function seenWords(range: CountRange): string {
+  if (range.at_least > 0) return "evaluated";
+  return range.at_most === 0 ? "not evaluated" : "maybe evaluated";
 }
 
-// A route whose status changed reads as one difference, the route then
-// the old status and the new, when every count on it is exact and the
-// requests that went equal the ones that came.
-function requestTexts(differences: readonly RunPathDifference[]): string[] {
-  const routes = new Map<string, (RunPathDifference & { readonly kind: "request" })[]>();
-  for (const difference of differences) {
-    if (difference.kind !== "request") continue;
-    const key = JSON.stringify([difference.method, difference.route]);
-    routes.set(key, [...(routes.get(key) ?? []), difference]);
-  }
-  return [...routes.values()].flatMap((group) => {
-    const gone = group.filter((difference) => difference.b.at_most === 0 && difference.a.at_most === difference.a.at_least);
-    const came = group.filter((difference) => difference.a.at_most === 0 && difference.b.at_most === difference.b.at_least);
-    const total = (list: typeof group, side: "a" | "b"): number => list.reduce((sum, difference) => sum + difference[side].at_least, 0);
-    if (gone.length === 0 || came.length === 0 || gone.length + came.length !== group.length || total(gone, "a") !== total(came, "b")) {
-      return group.map(differenceText);
-    }
-    const { method, route } = group[0]!;
-    return [`${programCode(`${method} ${route ?? "(no route)"}`)} ${gone.map((difference) => difference.status).join(" and ")} → ${came.map((difference) => difference.status).join(" and ")}`];
+function differenceText(difference: RunPathDifference): string {
+  const words = kindRule(difference.kind).compare === "seen" ? seenWords : rangeWords;
+  return `${pathEntryText(difference)} ${words(difference.a)} → ${words(difference.b)}`;
+}
+
+type DifferenceOf<K extends PathKind> = RunPathDifference & { readonly kind: K };
+
+// A route whose status changed, and a flag whose side did, read as one
+// difference, what it is then the old value and the new, when every count
+// on it is exact and as many went as came.
+function switchTexts<D extends RunPathDifference>(differences: readonly D[], group: (difference: D) => string, what: (difference: D) => string, value: (difference: D) => string): string[] {
+  const groups = new Map<string, D[]>();
+  for (const difference of differences) groups.set(group(difference), [...(groups.get(group(difference)) ?? []), difference]);
+  return [...groups.values()].flatMap((list) => {
+    const gone = list.filter((difference) => difference.b.at_most === 0 && difference.a.at_most === difference.a.at_least);
+    const came = list.filter((difference) => difference.a.at_most === 0 && difference.b.at_most === difference.b.at_least);
+    const total = (of: readonly D[], side: "a" | "b"): number => of.reduce((sum, difference) => sum + difference[side].at_least, 0);
+    if (gone.length === 0 || came.length === 0 || gone.length + came.length !== list.length || total(gone, "a") !== total(came, "b")) return list.map(differenceText);
+    return [`${what(list[0]!)} ${gone.map(value).join(" and ")} → ${came.map(value).join(" and ")}`];
   });
+}
+
+function kindTexts(differences: readonly RunPathDifference[]): string[] {
+  const requests = differences.filter((difference): difference is DifferenceOf<"request"> => difference.kind === "request");
+  const flags = differences.filter((difference): difference is DifferenceOf<"flag"> => difference.kind === "flag");
+  return [
+    ...differences.filter((difference) => difference.kind !== "request" && difference.kind !== "flag").map(differenceText),
+    ...switchTexts(requests, (request) => JSON.stringify([request.method, request.route]), (request) => programCode(`${request.method} ${request.route ?? "(no route)"}`), (request) => String(request.status)),
+    ...switchTexts(flags, (flag) => flag.name, (flag) => programCode(flag.name), (flag) => programCode(flag.side)),
+  ];
 }
 
 // The differences of one step by kind, in rank order: `writes \`rooms\` update 0 → 1; requests ...`.
 function differencesText(differences: readonly RunPathDifference[]): string {
   return PATH_KIND_ORDER.flatMap((kind) => {
     const of = differences.filter((difference) => difference.kind === kind);
-    if (of.length === 0) return [];
-    const texts = kind === "request" ? requestTexts(of) : of.map(differenceText);
-    return [`${PATH_KIND_WORDS[kind][1]} ${texts.join(", ")}`];
+    return of.length === 0 ? [] : [`${PATH_KIND_WORDS[kind][1]} ${kindTexts(of).join(", ")}`];
   }).join("; ");
 }
 
@@ -586,10 +597,25 @@ function lineWords(lines: readonly (number | null)[]): string {
 interface PathReading {
   readonly comparison: RunPathComparison;
   readonly scenarios: ReadonlyMap<string, RunScenario>;
+  /** `the base` and `head` against the base; an environment's name
+   * between two environments. */
   readonly sideName: (side: "a" | "b") => string;
+  /** Where a side ran: `at the base`, `at head`, or in its environment. */
+  readonly sideWhere: (side: "a" | "b") => string;
   /** Whether a kind is compared in this pair: the premise of a pair of
    * environments is not. */
   readonly compared: (kind: PathKind) => boolean;
+}
+
+function pathReading(comparison: RunPathComparison, scenarios: ReadonlyMap<string, RunScenario>): PathReading {
+  const base = comparison.between.kind === "base";
+  return {
+    comparison,
+    scenarios,
+    sideName: (side) => (base ? (side === "a" ? "the base" : "head") : codeSpan(comparison[side].environment)),
+    sideWhere: (side) => (base ? (side === "a" ? "at the base" : "at head") : `in ${codeSpan(comparison[side].environment)}`),
+    compared: (kind) => base || kindRule(kind).conditionPremise !== true,
+  };
 }
 
 // What the steps that ran on one side only did there, counted by kind in
@@ -626,7 +652,7 @@ function criterionLines(reading: PathReading, criterion: RunPathCriterion): stri
     const where = stopped.line === undefined ? `, since ${reading.sideName(other)} did not run ${oneSide.length === 1 ? "it" : "them"}` : `, since ${reading.sideName(other)} stopped at line ${stopped.line} (${codeSpan(cellWord(stopped))})`;
     const counts = oneSideKinds(reading, criterion, oneSide, ran);
     const did = PATH_KIND_ORDER.flatMap((kind) => (counts.has(kind) ? [countOf(counts.get(kind)!, ...PATH_KIND_WORDS[kind])] : []));
-    lines.push(`  - ${lineWords(oneSide.map((step) => step.line))} ran only in ${reading.sideName(ran)}${where}: ${did.length === 0 ? "no execution event" : did.join(", ")}`);
+    lines.push(`  - ${lineWords(oneSide.map((step) => step.line))} ran only ${reading.sideWhere(ran)}${where}: ${did.length === 0 ? "no execution event" : did.join(", ")}`);
   }
   return lines;
 }
@@ -656,31 +682,77 @@ function conditionValue(value: boolean | string | null): string {
   return typeof value === "boolean" ? String(value) : codeSpan(programWord(value));
 }
 
-function renderPathComparison(document: RunDocument, comparison: RunPathComparison): string[] {
+function pathHeading(comparison: RunPathComparison): string {
   const { between } = comparison;
-  const heading = `### ${codeSpan(comparison.a.environment)} → ${codeSpan(comparison.b.environment)} (${codeSpan(between.name)} ${conditionValue(between.a)} → ${conditionValue(between.b)})`;
-  if (comparison.unread !== null) return ["", heading, "", `Not compared: ${comparison.unread}.`];
-  const reading: PathReading = {
-    comparison,
-    scenarios: new Map(document.scenarios.map((scenario) => [scenario.scenario_record_id, scenario])),
-    sideName: (side) => codeSpan(comparison[side].environment),
-    compared: (kind) => kindRule(kind).conditionPremise !== true,
-  };
-  const { counts } = comparison;
-  const said = ([["changed", counts.changed], ["open", counts.open], ["the same so far", counts.same_so_far], ["the same", counts.same]] as const).filter(([, n]) => n > 0).map(([word, n]) => `${n} ${word}`);
-  const compared = comparison.criteria.length === 0 ? "No criterion was compared." : `${countOf(comparison.criteria.length, "criterion", "criteria")} compared: ${said.join(", ")}.`;
-  const reasons = new Map<string, number>();
-  for (const entry of comparison.not_compared) reasons.set(entry.reason, (reasons.get(entry.reason) ?? 0) + 1);
-  const notCompared = [...reasons].map(([reason, n]) => ` ${countOf(n, "criterion", "criteria")} ${reason}, so ${n === 1 ? "its path was" : "their paths were"} not compared.`);
-  const listed = comparison.criteria
-    .filter((criterion) => criterion.result !== "same")
-    .map((criterion) => ({ criterion, rank: pathRank(reading, criterion) }))
-    .sort((a, b) => Number(a.criterion.result === "same_so_far") - Number(b.criterion.result === "same_so_far") || a.rank - b.rank);
-  const lines = ["", heading, "", `${compared}${notCompared.join("")}`];
+  if (between.kind === "base") return "### base → head";
+  return `### ${codeSpan(comparison.a.environment)} → ${codeSpan(comparison.b.environment)} (${codeSpan(between.name)} ${conditionValue(between.a)} → ${conditionValue(between.b)})`;
+}
+
+// A criterion's results, from the one that says most to the one that
+// says least, with their words in a count line.
+const PATH_RESULTS: readonly (readonly [RunPathCriterion["result"], string])[] = [
+  ["changed", "changed"],
+  ["open", "open"],
+  ["same_so_far", "the same so far"],
+  ["same", "the same"],
+];
+
+function resultRank(result: RunPathCriterion["result"]): number {
+  return PATH_RESULTS.findIndex(([entry]) => entry === result);
+}
+
+// The comparisons under one heading: a pair of environments alone, or
+// every environment's base pair. Each criterion counts once, as what it
+// came to where it says most, and one listed with the same lines in
+// several base pairs is listed once, naming their environments.
+function renderPathSection(document: RunDocument, comparisons: readonly RunPathComparison[]): string[] {
+  const heading = pathHeading(comparisons[0]!);
+  const named = (environments: readonly string[]): string => environments.map(codeSpan).join(", ");
+  const place = (entry: { readonly feature: string; readonly line: number }): string => `${entry.feature}:${entry.line}`;
+  const read = comparisons.filter((comparison) => comparison.unread === null);
+  const unread = new Map<string, string[]>();
+  for (const comparison of comparisons) if (comparison.unread !== null) unread.set(comparison.unread, [...(unread.get(comparison.unread) ?? []), comparison.b.environment]);
+  const unreadText = [...unread].map(([reason, environments]) => (read.length === 0 && unread.size === 1 ? `Not compared: ${reason}.` : `Not compared in ${named(environments)}: ${reason}.`));
+  if (read.length === 0) return ["", heading, "", unreadText.join(" ")];
+
+  const results = new Map<string, RunPathCriterion["result"]>();
+  for (const criterion of read.flatMap((comparison) => comparison.criteria)) {
+    const was = results.get(place(criterion));
+    if (was === undefined || resultRank(criterion.result) < resultRank(was)) results.set(place(criterion), criterion.result);
+  }
+  const said = PATH_RESULTS.flatMap(([result, word]) => {
+    const n = [...results.values()].filter((entry) => entry === result).length;
+    return n === 0 ? [] : [`${n} ${word}`];
+  });
+  const compared = results.size === 0 ? "No criterion was compared." : `${countOf(results.size, "criterion", "criteria")} compared: ${said.join(", ")}.`;
+  const reasons = new Map<string, Set<string>>();
+  for (const entry of read.flatMap((comparison) => comparison.not_compared)) {
+    if (results.has(place(entry)) || [...reasons.values()].some((places) => places.has(place(entry)))) continue;
+    reasons.set(entry.reason, (reasons.get(entry.reason) ?? new Set()).add(place(entry)));
+  }
+  const notCompared = [...reasons].map(([reason, places]) => ` ${countOf(places.size, "criterion", "criteria")} ${reason}, so ${places.size === 1 ? "its path was" : "their paths were"} not compared.`);
+
+  const scenarios = new Map(document.scenarios.map((scenario) => [scenario.scenario_record_id, scenario]));
+  const rowOrder = new Map(document.table.rows.map((row, index) => [place(row), index]));
+  const items = new Map<string, { readonly criterion: RunPathCriterion; readonly rank: number; readonly lines: readonly string[]; readonly environments: string[] }>();
+  for (const comparison of read) {
+    const reading = pathReading(comparison, scenarios);
+    for (const criterion of comparison.criteria) {
+      if (criterion.result === "same") continue;
+      const lines = criterion.result === "same_so_far" ? [sameSoFarText(criterion)] : criterionLines(reading, criterion);
+      const key = JSON.stringify([place(criterion), lines]);
+      const item = items.get(key) ?? { criterion, rank: pathRank(reading, criterion), lines, environments: [] };
+      item.environments.push(comparison.b.environment);
+      items.set(key, item);
+    }
+  }
+  const sameSoFar = (item: { readonly criterion: RunPathCriterion }): number => Number(item.criterion.result === "same_so_far");
+  const listed = [...items.values()].sort((x, y) => sameSoFar(x) - sameSoFar(y) || x.rank - y.rank || (rowOrder.get(place(x.criterion)) ?? 0) - (rowOrder.get(place(y.criterion)) ?? 0));
+  const lines = ["", heading, "", [`${compared}${notCompared.join("")}`, ...unreadText].join(" ")];
   if (listed.length > 0) lines.push("");
-  for (const { criterion } of listed.slice(0, PATHS_SHOWN)) {
-    const head = `- ${cellCode(`${criterion.feature}:${criterion.line}`)} ${cellText(criterion.name)}`;
-    lines.push(...(criterion.result === "same_so_far" ? [`${head}: ${sameSoFarText(criterion)}`] : [head, ...criterionLines(reading, criterion)]));
+  for (const { criterion, lines: said, environments } of listed.slice(0, PATHS_SHOWN)) {
+    const head = `- ${cellCode(place(criterion))} ${cellText(criterion.name)}${read.length > 1 ? `, in ${named(environments)}` : ""}`;
+    lines.push(...(criterion.result === "same_so_far" ? [`${head}: ${said[0]}`] : [head, ...said]));
   }
   if (listed.length > PATHS_SHOWN) lines.push(`- and ${listed.length - PATHS_SHOWN} more in run.json's \`paths\``);
   return lines;
@@ -700,7 +772,9 @@ function renderPaths(document: RunDocument): string[] {
       "A count that a side's missing lines could still reach is listed as open, never as a change. " +
       "A criterion whose open counts read the same on both sides, under the same gaps, is the same so far, and comes last. " +
       "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes.",
-    ...comparisons.flatMap((comparison) => renderPathComparison(document, comparison)),
+    ...[comparisons.filter((comparison) => comparison.between.kind === "base"), ...comparisons.filter((comparison) => comparison.between.kind === "condition").map((comparison) => [comparison])]
+      .filter((section) => section.length > 0)
+      .flatMap((section) => renderPathSection(document, section)),
   ];
 }
 

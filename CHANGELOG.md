@@ -377,6 +377,19 @@ just until 0.1.
   outgoing calls, jobs, requests, then flags, each with its steps'
   differences. The comparison is evidence, not a verdict: no finding
   gates on it. The field is additive, so no `schema_version` changes.
+- **run.json and the run summary say what the program did differently
+  at head than at the base.** Under `nuka run --base`, `paths` pairs
+  each environment's base world with its head world
+  (`between: { kind: "base" }`), for the rows the base world ran there,
+  aligned by line as a pair of environments is, since the base runs
+  head's pickle. Against the base, a flag's side is what the program
+  did, so a flag whose side changed is a difference, which the summary
+  reads as `off` → `on`. A row the base world did not run is
+  `not_compared` with `did not run at the base`, and a base whose
+  program file names no `{events}` makes the pair `unread` with that
+  reason. The summary gives every base pair one heading, `base → head`,
+  which counts each criterion once, and lists a criterion whose lines are
+  the same in several environments once, naming them.
 
 ### Changed
 

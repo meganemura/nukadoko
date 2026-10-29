@@ -35,11 +35,11 @@ interface Criterion {
 const OFF: RunEnvironment = { name: "reorder-off", target_version: null, conditions: { quick_reorder: false } };
 const ON: RunEnvironment = { name: "reorder-on", target_version: null, conditions: { quick_reorder: true } };
 
-/** A head world that read its events file, or one at a `url` (`null`),
- * or one whose program file names no `{events}` (`"unnamed"`). */
-function world(name: string, events: null | "unnamed" | "read" = "read"): RunWorld {
+/** A world that read its events file, or one at a `url` (`null`), or
+ * one whose program file names no `{events}` (`"unnamed"`). */
+function world(name: string, events: null | "unnamed" | "read" = "read", tree: "head" | "base" = "head"): RunWorld {
   const read = { file: null, lines: 0, owned: 0, late: 0, unowned: 0, unreadable: 0, undefined_kinds: {} };
-  return { name, tree: "head", url: "http://127.0.0.1:4100", commands: [], timings: {}, log: null, error: null, ...(events === "unnamed" ? {} : { events: events === "read" ? read : null }) };
+  return { name, tree, url: "http://127.0.0.1:4100", commands: [], timings: {}, log: null, error: null, ...(events === "unnamed" ? {} : { events: events === "read" ? read : null }) };
 }
 
 function scenarioOf(criterion: Criterion, environment: string, side: Side): RunScenario {
@@ -139,6 +139,53 @@ function compare(off: Side, on: Side, steps = Math.max(off.paths.length, on.path
   const [comparison] = comparePaths(documentOf([{ line: 3, name: "a reorder goes through", steps, sides: { "reorder-off": off, "reorder-on": on } }]));
   return comparison!;
 }
+
+/** A criterion under `--base`: its change, and what each environment's
+ * base world ran of it. */
+interface BaseCriterion extends Criterion {
+  readonly change: "unchanged" | "changed" | "new";
+  readonly base: Readonly<Record<string, Side>>;
+}
+
+/** A run under `--base`, its table built as `nuka run` builds it: a base
+ * cell only where a new or changed row passed at head. */
+function baseDocumentOf(
+  criteria: readonly BaseCriterion[],
+  environments: readonly RunEnvironment[] = [OFF, ON],
+  worlds: readonly RunWorld[] = environments.flatMap((environment) => [world(environment.name), world(environment.name, "read", "base")]),
+): RunDocument {
+  const head = documentOf(criteria, environments, worlds);
+  const atBase = criteria.flatMap((criterion) =>
+    environments.flatMap((environment): RunScenario[] => {
+      const side = criterion.base[environment.name];
+      if (side === undefined) return [];
+      const scenario = scenarioOf(criterion, environment.name, side);
+      return [{ ...scenario, scenario_record_id: `scn-base-${environment.name}-${criterion.line}`, world: "base", row: { feature: FEATURE, line: criterion.line } }];
+    }),
+  );
+  const scenarios = [...head.scenarios, ...atBase];
+  const table = buildTable({
+    criteria: criteria.map((criterion) => ({ feature: FEATURE, line: criterion.line, name: criterion.name, tags: [] })),
+    environments: environments.map((environment) => ({ name: environment.name, conditions: environment.conditions })),
+    outcomes: (feature, line, environment, at = "head") =>
+      scenarios.filter((entry) => (entry.world ?? "head") === at && entry.feature === feature && entry.line === line && entry.environment === environment).map((entry) => executionOutcome(entry, () => true)),
+    notRunReason: () => undefined,
+    proofRuns: 1,
+    leftOut: 0,
+    base: {
+      ref: "main",
+      commit: "0123456789abcdef0123456789abcdef01234567",
+      mapping: { files: [], config: false, conditions: [], default_environments: false, unseen: [] },
+      mappingChanged: false,
+      changeOf: (_, line) => ({ change: criteria.find((criterion) => criterion.line === line)!.change }),
+      removed: [],
+      oldEnvironments: [],
+    },
+  });
+  return { ...head, scenarios, table };
+}
+
+const flag = (side: "on" | "off", name = "quick_reorder"): StepPath["entries"][number] => ({ kind: "flag", name, side, count: 1, gates: ["boolean"] });
 
 describe("comparePaths", () => {
   it("reads as its mirror when the two sides trade places", () =>
@@ -298,6 +345,95 @@ describe("comparePaths", () => {
   });
 });
 
+const placed = (): BaseCriterion => ({
+    line: 3,
+    name: "a reorder goes through",
+    steps: 2,
+    change: "new",
+    sides: {
+      "reorder-off": { paths: [whole({ entries: [flag("on")] }), whole({ entries: [{ kind: "db", table: "orders", op: "insert", count: 1 }] })] },
+      "reorder-on": { paths: [whole({ entries: [flag("on")] }), whole({ entries: [{ kind: "db", table: "orders", op: "insert", count: 1 }] })] },
+    },
+    base: { "reorder-off": { paths: [whole({ entries: [flag("off")] })] }, "reorder-on": { paths: [whole({ entries: [flag("off")] })] } },
+});
+const opened = (): BaseCriterion => ({ line: 7, name: "an order is opened", steps: 1, change: "unchanged", sides: { "reorder-off": { paths: [whole()] }, "reorder-on": { paths: [whole()] } }, base: {} });
+
+describe("comparePaths against the base", () => {
+
+  it("pairs each environment's base with its head, compares a flag's side, and names a criterion the base did not run", () => {
+    const comparisons = comparePaths(baseDocumentOf([placed(), opened()]));
+    expect(comparisons.map((comparison) => [comparison.between, comparison.a, comparison.b])).toEqual([
+      [{ kind: "base" }, { world: "base", environment: "reorder-off" }, { world: "head", environment: "reorder-off" }],
+      [{ kind: "base" }, { world: "base", environment: "reorder-on" }, { world: "head", environment: "reorder-on" }],
+      [{ kind: "condition", name: "quick_reorder", a: false, b: true }, { world: "head", environment: "reorder-off" }, { world: "head", environment: "reorder-on" }],
+    ]);
+    expect(comparisons[0]).toEqual({
+      between: { kind: "base" },
+      a: { world: "base", environment: "reorder-off" },
+      b: { world: "head", environment: "reorder-off" },
+      unread: null,
+      counts: { changed: 1, open: 0, same_so_far: 0, same: 0, not_compared: 1 },
+      criteria: [
+        {
+          feature: FEATURE,
+          line: 3,
+          name: "a reorder goes through",
+          result: "changed",
+          a: { scenario_record_id: "scn-base-reorder-off-3", outcome: "broke", line: 4 },
+          b: { scenario_record_id: "scn-reorder-off-3", outcome: "pass" },
+          steps: [
+            {
+              line: 4,
+              text: "step 1",
+              ran: "both",
+              changed: [
+                { kind: "flag", name: "quick_reorder", side: "off", a: { at_least: 1, at_most: 1 }, b: { at_least: 0, at_most: 0 } },
+                { kind: "flag", name: "quick_reorder", side: "on", a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } },
+              ],
+              open: [],
+              gaps: { a: [], b: [] },
+            },
+            { line: 5, text: "step 2", ran: "b" },
+          ],
+        },
+      ],
+      not_compared: [{ feature: FEATURE, line: 7, reason: "did not run at the base" }],
+    });
+  });
+
+  it("compares no row whose head cell is a control or did not run, since the base never runs one", () => {
+    const tagged = baseDocumentOf([placed()]);
+    const document: RunDocument = {
+      ...tagged,
+      table: { ...tagged.table, rows: tagged.table.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => (cell.world === "head" && cell.environment === "reorder-off" ? { ...cell, role: "control" as const } : cell)) })) },
+    };
+    const [off] = comparePaths(document);
+    expect(off).toMatchObject({ a: { environment: "reorder-off" }, counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 }, criteria: [], not_compared: [] });
+  });
+
+  it("says why a base whose program file names no {events} was not compared, and gives no base pair when neither side read events", () => {
+    const unnamed = [OFF, ON].flatMap((environment) => [world(environment.name), world(environment.name, "unnamed", "base")]);
+    expect(comparePaths(baseDocumentOf([placed()], [OFF, ON], unnamed)).filter((comparison) => comparison.between.kind === "base")).toEqual(
+      ["reorder-off", "reorder-on"].map((environment) => ({
+        between: { kind: "base" },
+        a: { world: "base", environment },
+        b: { world: "head", environment },
+        unread: "the base's program file names no {events}, so the base world wrote no execution events",
+        counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
+        criteria: [],
+        not_compared: [],
+      })),
+    );
+    const none = [OFF, ON].flatMap((environment) => [world(environment.name, "unnamed"), world(environment.name, "unnamed", "base")]);
+    expect(comparePaths(baseDocumentOf([placed()], [OFF, ON], none))).toEqual([]);
+  });
+
+  it("reads a base world that did not start in an environment as each of its criteria not run at the base", () => {
+    const [off] = comparePaths(baseDocumentOf([opened()], [OFF, ON], [world("reorder-off"), world("reorder-on")]));
+    expect(off).toMatchObject({ unread: null, criteria: [], not_compared: [{ feature: FEATURE, line: 7, reason: "did not run at the base" }] });
+  });
+});
+
 describe("the Changed paths section of the summary", () => {
   const section = (document: RunDocument): string[] => {
     const lines = renderRunSummary({ ...document, paths: comparePaths(document) }).split("\n");
@@ -393,5 +529,41 @@ describe("the Changed paths section of the summary", () => {
       { line: 6, name: "an order is opened", steps: 1, sides: { "reorder-on": { paths: [whole()] }, "reorder-off": { paths: [whole()] } } },
     ]);
     expect(section(missing)[6]).toBe("1 criterion compared: 1 the same. 1 criterion did not run in reorder-off, so its path was not compared.");
+  });
+
+  it("lists the base pairs under one heading, a criterion with the same lines in each environment once, and a flag whose side changed as one difference", () => {
+    const receipt: BaseCriterion = {
+      line: 10,
+      name: "a receipt goes out",
+      steps: 1,
+      change: "changed",
+      sides: { "reorder-off": { paths: [whole({ entries: [flag("off", "receipt_v2")] })] }, "reorder-on": { paths: [whole({ entries: [{ kind: "error", class: "Timeout", handled: true, count: 1 }] })] } },
+      base: { "reorder-off": { paths: [whole()] }, "reorder-on": { paths: [whole()] } },
+    };
+    const lines = section(baseDocumentOf([placed(), opened(), receipt]));
+    expect(lines.slice(0, lines.indexOf("### `reorder-off` → `reorder-on` (`quick_reorder` false → true)"))).toEqual([
+      "## Changed paths",
+      "",
+      lines[2],
+      "",
+      "### base → head",
+      "",
+      "2 criteria compared: 2 changed. 1 criterion did not run at the base, so its path was not compared.",
+      "",
+      "- `features/orders.feature:10` a receipt goes out, in `reorder-on`",
+      "  - line 11 `step 1`: errors `Timeout` handled 0 → 1",
+      "- `features/orders.feature:3` a reorder goes through, in `reorder-off`, `reorder-on`",
+      "  - line 4 `step 1`: flags `quick_reorder` `off` → `on`",
+      "  - line 5 ran only at head, since the base stopped at line 4 (`broke@4`): 1 write",
+      "- `features/orders.feature:10` a receipt goes out, in `reorder-off`",
+      "  - line 11 `step 1`: flags `receipt_v2` `off` not evaluated → evaluated",
+      "",
+    ]);
+  });
+
+  it("says once that the base's program file names no {events}", () => {
+    const unnamed = [OFF, ON].flatMap((environment) => [world(environment.name), world(environment.name, "unnamed", "base")]);
+    const lines = section(baseDocumentOf([placed()], [OFF, ON], unnamed));
+    expect(lines.slice(4, 8)).toEqual(["### base → head", "", "Not compared: the base's program file names no {events}, so the base world wrote no execution events.", ""]);
   });
 });

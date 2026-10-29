@@ -4,14 +4,15 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { rowSummary, type TableRow } from "./helpers/base-project.js";
-import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: that `nuka run --base` runs the base world when head's
 // steps count execution events and the ref's program file names no
 // `{events}`, the shape of the change that adds them. The base tree's
 // check does not stop the tree on `events-inlet-missing`: the claim on a
 // count is unjudged there with the gap word, and the row's other cells
-// run as before.
+// run as before. The base world wrote no execution events, so its pair
+// with head in run.json's `paths` says why once and compares nothing.
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" } });
@@ -57,7 +58,7 @@ describe("--base with a ref whose program file names no {events}", () => {
     await removeTempDir(rootDir);
   });
 
-  it("runs the new row at the base, where the claim on a count is unjudged for want of an inlet", async () => {
+  it("runs the new row at the base, where the claim on a count is unjudged for want of an inlet, and says once that the base wrote no events to compare", async () => {
     const { stdout } = await cli(rootDir, ["run", "--base", "base-branch"]);
     const run = latestRunJson(rootDir) as {
       table: { rows: TableRow[] };
@@ -70,5 +71,21 @@ describe("--base with a ref whose program file names no {events}", () => {
     const [claim] = atBase.steps[1]!.claims!;
     expect(claim!.outcome).toBe("unjudged");
     expect(claim!.reason).toContain("(inlet-unnamed): the program file names no {events}");
+
+    const paths = (run as { paths?: { between: { kind: string }; unread: string | null; criteria: unknown[] }[] }).paths ?? [];
+    expect(paths).toEqual([
+      {
+        between: { kind: "base" },
+        a: { world: "base", environment: "default" },
+        b: { world: "head", environment: "default" },
+        unread: "the base's program file names no {events}, so the base world wrote no execution events",
+        counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
+        criteria: [],
+        not_compared: [],
+      },
+    ]);
+    const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
+    const start = summary.indexOf("### base → head");
+    expect(summary.slice(start, start + 3)).toEqual(["### base → head", "", "Not compared: the base's program file names no {events}, so the base world wrote no execution events."]);
   }, 120_000);
 });

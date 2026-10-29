@@ -3193,12 +3193,33 @@ run サマリは、各要素に「Flags」の下の 1 行を付けます:
 - `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
 ```
 
-run の 2 つの environment が宣言する `conditions` がちょうど 1 つの condition だけ違うとき、run はその 2 つの step の実行経路を、受け入れ基準ごとに比べます。
-そのスイッチを全員に有効にしようとする人が、もう一方の側でプログラムが何を違うふうにしたかを読めるようにするためです。
-`run.json` の `paths` は、そうした組ごとに 1 つの要素を持ちます:
+run は、各受け入れ基準の 2 つの側の step の実行経路を比べます。
+変更を全員に有効にしようとする人が、もう一方の側でプログラムが何を違うふうにしたかを読めるようにするためです。
+`nuka run --base` のもとでは、各 environment の base の world と head の world が組になり、base の world がそこで走らせた行を比べます(「断定」を参照)。
+また、run の 2 つの environment が宣言する `conditions` がちょうど 1 つの condition だけ違うとき、その 2 つが組になります。
+`run.json` の `paths` は、組ごとに 1 つの要素を持ち、基点との組が先に来ます:
 
 ```json
 "paths": [
+  {
+    "between": { "kind": "base" },
+    "a": { "world": "base", "environment": "reorder-on" },
+    "b": { "world": "head", "environment": "reorder-on" },
+    "unread": null,
+    "counts": { "changed": 1, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 1 },
+    "criteria": [
+      {
+        "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed",
+        "a": { "scenario_record_id": "scn-20261029-225440-n2kq", "outcome": "pass" },
+        "b": { "scenario_record_id": "scn-20261029-225436-c7rd", "outcome": "pass" },
+        "steps": [
+          { "line": 7, "text": "the client posts to \"/scores\"", "ran": "both", "gaps": { "a": [], "b": [] }, "open": [],
+            "changed": [{ "kind": "db", "table": "audit_log", "op": "insert", "a": { "at_least": 0, "at_most": 0 }, "b": { "at_least": 1, "at_most": 1 } }] }
+        ]
+      }
+    ],
+    "not_compared": [{ "feature": "features/orders.feature", "line": 3, "reason": "did not run at the base" }]
+  },
   {
     "between": { "kind": "condition", "name": "quick_reorder", "a": false, "b": true },
     "a": { "world": "head", "environment": "reorder-off" },
@@ -3225,10 +3246,15 @@ run の 2 つの environment が宣言する `conditions` がちょうど 1 つ�
 ]
 ```
 
-- `between` は、違う 1 つの condition と、a 側と b 側での値を名指します。
+- `between` は、2 つの側が何で違うかを名指します。
+  `{ "kind": "base" }` では、a 側は environment の base の world で、b 側はその head の world です。
+  base の world はほかの行を走らせないので、基点との組は、その environment での head のセルが required で走った行を比べます。
+  `{ "kind": "condition" }` は、違う 1 つの condition と、a 側と b 側での値を名指します。
   a 側は、もう一方が `true` のときにそれが `false` か宣言されていない(`null`)environment で、そうでなければ `environments` で先に来るほうです。
 - 2 つの側はどちらも、1 つの feature ファイルから head の pickle を実行します。
+  base の world の tree は head の features ディレクトリを持つからです。
   そのため、step はその行で揃えます。
+  old の world は基点の feature ファイルを走らせるので、側にはなりません。
   `--repeat` と証明の実行は実行を増やすので、a 側と b 側は、それぞれそのセルの最初の実行から読みます。
   受け入れ基準の `a` と `b` は、その実行と、そのセルの `outcome` と `line` を名指します。
 - a 側と b 側の数は、それぞれ範囲です。
@@ -3249,20 +3275,36 @@ run の 2 つの environment が宣言する `conditions` がちょうど 1 つ�
   `steps` は違いのある step だけを持ち、`same` の受け入れ基準は持ちません。
 - flag の側は、environment の組が切り替えるもので、変化ではありません。
   そのため、そこでは `flag` の項目を比べず、サマリの見出しが condition を名指します。
+  基点と比べるときは、flag の側はプログラムがしたことなので、側が変わった flag はほかと同じ違いです。
 - `not_compared` は、比べなかった受け入れ基準を、`did not run in reorder-off` のような理由とともに名指します。
+  base の world が走らせなかった行の理由は `did not run at the base` です。
 - `unread` は、組のどの受け入れ基準も比べなかった理由を言います。
   nukadoko が実行イベントを読まない `url` の world が一方の側にある場合などです。
+  基点との組では、`the base's program file names no {events}, so the base world wrote no execution events` もそうで、レビューする変更が `{events}` を加えるものなら、これが普通の理由です。
+  どの行もそこで走らなかったので base の world が始まらなかった environment では、組の各受け入れ基準が `did not run at the base` になります。
   2 つの world がどちらも実行イベントを読まなかった組は要素にならず、比べた組が無いとき `paths` はありません。
 - 比較は証拠であって判定ではなく、どの finding もそれで止めません。
   `run.json` 自身のフィールドだけを読むので、`run.json` だけからもう一度同じ比較ができます。
 
-run サマリは、「Removed criteria」のあとの「Changed paths」の下で、各組に見出しと数の行を付け、実行経路が変わったか `open` の受け入れ基準を、組ごとに 20 まで並べます。
+run サマリは、「Removed criteria」のあとの「Changed paths」の下で、environment の各組に見出しを付け、基点との組にはまとめて 1 つの見出し `base → head` を付けます。
+各見出しは数の行を持ちます。
+数の行は、受け入れ基準を、いちばん多くを言うところでの結果として 1 回だけ数えます。
+そして、実行経路が変わったか `open` の受け入れ基準を、見出しごとに 20 まで並べます。
+`base → head` の下では、いくつかの environment で同じ行を持つ受け入れ基準は、それらを名指して 1 回だけ並べます。
+側が変わった flag は、``flags `quick_reorder` `off` → `on` ``のように 1 つの違いとして読みます。
 受け入れ基準の順は、変わった項目と、片側だけで走った step がしたことのうち、いちばん上の種類で決めます。
 種類の順は errors、writes、outgoing calls、jobs、requests、flags で、そのあとは表の順です。
 今のところ同じ受け入れ基準は最後に来て、両側に共通の欠けを示す語を名指す 1 行になります。
 読み手が最初にそこへ向かわないようにするためです:
 
 ```text
+### base → head
+
+1 criterion compared: 1 changed. 1 criterion did not run at the base, so its path was not compared.
+
+- `features/orders.feature:6` a score is placed, in `reorder-off`, `reorder-on`
+  - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1
+
 ### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
 
 6 criteria compared: 1 changed, 1 the same so far, 4 the same.
@@ -3286,6 +3328,8 @@ run サマリは、「Removed criteria」のあとの「Changed paths」の下�
 - 実行経路は、各行がしたことを数え、それより細かくはしません。
   読み取り、行の id、actor、書き込みが永続したか、書き込みがどこで走ったか(リクエストの中かジョブの中か)、数を超えたリクエストの順は数えません。
   実行経路の比較は、`--repeat` の下で a 側や b 側の実行どうしが食い違っても、それぞれをそのセルの最初の実行から読みます。
+- 基点と比べるとき、プログラムのファイルが `{events}` を名指さず、ある environment でどの行も走らせなかった基点は、それを言う記録を残しません。
+  そのため、そこでの受け入れ基準は基点で走らなかったものとして読まれます。
 
 #### 実行イベントの数についての claim
 

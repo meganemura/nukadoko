@@ -381,7 +381,10 @@ const pathStep = z.union([
   z.looseObject({ line: z.number().int().nullable(), text: z.string(), ran: z.enum(["a", "b"]) }),
 ]);
 const pathComparison = z.looseObject({
-  between: z.looseObject({ kind: z.literal("condition"), name: z.string(), a: z.union([z.boolean(), z.string(), z.null()]), b: z.union([z.boolean(), z.string(), z.null()]) }),
+  between: z.union([
+    z.looseObject({ kind: z.literal("base") }),
+    z.looseObject({ kind: z.literal("condition"), name: z.string(), a: z.union([z.boolean(), z.string(), z.null()]), b: z.union([z.boolean(), z.string(), z.null()]) }),
+  ]),
   a: pathSide,
   b: pathSide,
   unread: z.string().nullable(),

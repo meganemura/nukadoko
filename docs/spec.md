@@ -4076,14 +4076,37 @@ The run summary gives each row one line under "Flags":
 - `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
 ```
 
-When two environments of a run declare `conditions` that differ in
-exactly one condition, the run compares their steps' paths, criterion by
-criterion, so a person about to turn the switch on for everyone reads
-what the program did differently on the other side.
-`run.json`'s `paths` holds one entry per such pair:
+The run compares the steps' paths of two sides of each criterion, so a
+person about to turn a change on for everyone reads what the program did
+differently on the other side.
+Under `nuka run --base`, each environment's base world and its head
+world are a pair, for the rows the base world ran there (see
+"Verdicts").
+And when two environments of a run declare `conditions` that differ in
+exactly one condition, the two are a pair.
+`run.json`'s `paths` holds one entry per pair, the base pairs first:
 
 ```json
 "paths": [
+  {
+    "between": { "kind": "base" },
+    "a": { "world": "base", "environment": "reorder-on" },
+    "b": { "world": "head", "environment": "reorder-on" },
+    "unread": null,
+    "counts": { "changed": 1, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 1 },
+    "criteria": [
+      {
+        "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed",
+        "a": { "scenario_record_id": "scn-20261029-225440-n2kq", "outcome": "pass" },
+        "b": { "scenario_record_id": "scn-20261029-225436-c7rd", "outcome": "pass" },
+        "steps": [
+          { "line": 7, "text": "the client posts to \"/scores\"", "ran": "both", "gaps": { "a": [], "b": [] }, "open": [],
+            "changed": [{ "kind": "db", "table": "audit_log", "op": "insert", "a": { "at_least": 0, "at_most": 0 }, "b": { "at_least": 1, "at_most": 1 } }] }
+        ]
+      }
+    ],
+    "not_compared": [{ "feature": "features/orders.feature", "line": 3, "reason": "did not run at the base" }]
+  },
   {
     "between": { "kind": "condition", "name": "quick_reorder", "a": false, "b": true },
     "a": { "world": "head", "environment": "reorder-off" },
@@ -4110,12 +4133,20 @@ what the program did differently on the other side.
 ]
 ```
 
-- `between` names the one condition, with its value on each side.
+- `between` names what the two sides differ in.
+  `{ "kind": "base" }`: side `a` is an environment's base world, and
+  side `b` its head world.
+  A base pair compares each row whose head cell in its environment is
+  required and ran, since the base world runs no other.
+  `{ "kind": "condition" }` names the one condition, with its value on
+  each side.
   Side `a` is the environment where it is `false` or not declared
   (`null`) while the other's is `true`, and otherwise the earlier one in
   `environments`.
-- Both sides run head's pickle from one feature file, so steps align by
-  their line.
+- Both sides run head's pickle from one feature file, since the base
+  world's tree holds head's features directory, so steps align by their
+  line.
+  The old world runs the ref's feature file, so it is never a side.
   A side is read from its cell's first execution, since `--repeat` and
   proof runs add more: a criterion's `a` and `b` name that execution,
   with its cell's `outcome` and `line`.
@@ -4148,19 +4179,33 @@ what the program did differently on the other side.
 - A flag's side is what a pair of environments switches, not a change,
   so no `flag` entry is compared there: the summary's heading names the
   condition.
+  Against the base, a flag's side is what the program did, so a flag
+  whose side changed is a difference like any other.
 - `not_compared` names each criterion that was not, with why, such as
-  `did not run in reorder-off`.
+  `did not run in reorder-off`, or `did not run at the base` for a row
+  the base world did not run.
 - `unread` says why no criterion of the pair was compared, such as a
-  side's world at a `url`, whose events nukadoko does not read.
+  side's world at a `url`, whose events nukadoko does not read, or, for
+  a base pair, `the base's program file names no {events}, so the base
+  world wrote no execution events`, the usual reason when the change
+  under review is the one that adds `{events}`.
+  A base world that did not start in an environment, since no row ran
+  there, makes each criterion of the pair `did not run at the base`.
   A pair whose two worlds read no events gives no entry, and `paths` is
   absent when no pair was compared.
 - The comparison is evidence, not a verdict: no finding gates on it.
   It reads `run.json`'s own fields, so it can be made again from a
   `run.json` alone.
 
-The run summary gives each pair a heading under "Changed paths", after
-"Removed criteria", with a count line, and lists each criterion whose
-path changed or is open, at most 20 per pair.
+The run summary gives each pair of environments a heading under
+"Changed paths", after "Removed criteria", and the base pairs one
+heading together, `base → head`.
+Each heading has a count line, which counts a criterion once, as what it
+came to where it says the most, and lists each criterion whose path
+changed or is open, at most 20 per heading.
+Under `base → head`, a criterion with the same lines in several
+environments is listed once, naming them, and a flag whose side changed
+reads as one difference, such as ``flags `quick_reorder` `off` → `on` ``.
 A criterion is ranked by the highest kind among its changed entries and
 what its one-side steps did, in the order errors, writes, outgoing
 calls, jobs, requests, flags, and then by the table's order.
@@ -4168,6 +4213,13 @@ A criterion the same so far comes last, in one line that names the gap
 words both sides share, so a reader is not sent to it first:
 
 ```text
+### base → head
+
+1 criterion compared: 1 changed. 1 criterion did not run at the base, so its path was not compared.
+
+- `features/orders.feature:6` a score is placed, in `reorder-off`, `reorder-on`
+  - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1
+
 ### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
 
 6 criteria compared: 1 changed, 1 the same so far, 4 the same.
@@ -4196,6 +4248,9 @@ What this does not reach, in one list:
   request or in a job), or the order of requests beyond their counts.
   A comparison of paths reads a side from its cell's first execution,
   even when the executions of a side under `--repeat` disagree.
+- Against the base, a base whose program file names no `{events}` and
+  ran no row in an environment leaves no record that says so, so its
+  criteria there read as not run at the base.
 
 #### A claim on a count of events
 
