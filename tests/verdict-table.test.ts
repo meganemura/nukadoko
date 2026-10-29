@@ -712,6 +712,20 @@ describe("judgeRow under --base", () => {
       expect(needsProofRun("required", outcomes, runs, "old")).toBe(false);
     }));
 
+  it("names each environment as it is spelled, whatever characters its name holds", () =>
+    hegel.test((tc) => {
+      // A name holds characters a replacement string reads as a pattern
+      // (`$&`, `$$`, `$\``), which must reach the reason as written.
+      const name = gs.text({ minSize: 1, maxSize: 6, alphabet: "a$&\x60'" });
+      const first = tc.draw(name);
+      const second = tc.draw(name.filter((value) => value !== first));
+      const pass = (environment: string): RunTableCell => ({ world: "head", environment, role: "required", conditions: {}, outcome: "pass", runs: 1 });
+      const notRun = (environment: string): RunTableCell => ({ world: "old", environment, role: "required", conditions: {}, outcome: "not-run", runs: 0, reason: "the config file did not load" });
+      expect(judgeRow([pass(first), pass(second), notRun(first), notRun(second)], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false }).reason).toBe(
+        `passes in ${first}, ${second}, but the mapping changed since the base, and it did not run in the old world in ${first}, ${second}: the config file did not load`,
+      );
+    }));
+
   it("says why in one sentence for each word", () => {
     const head: RunTableCell = { world: "head", environment: "default", role: "required", conditions: {}, outcome: "pass", runs: 1 };
     const at = (world: "base" | "old", outcomeOf: RunCellOutcome, extra: Partial<RunTableCell> = {}): RunTableCell => ({ world, environment: "default", role: "required", conditions: {}, outcome: outcomeOf, runs: 1, ...extra });

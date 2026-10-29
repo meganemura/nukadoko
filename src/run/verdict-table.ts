@@ -266,7 +266,8 @@ function worldCellsClause(cells: readonly RunTableCell[], proofRuns: number): st
   const template = (cell: RunTableCell): string => worldCellClause({ ...cell, environment: placeholder }, proofRuns);
   const first = template(cells[0]!);
   const environments = cells.filter((cell) => template(cell) === first).map((cell) => cell.environment);
-  return first.replace(placeholder, environments.join(", "));
+  // A function, since a replacement string reads `$&` or `$`` in a name as a pattern.
+  return first.replace(placeholder, () => environments.join(", "));
 }
 
 function controlProofReason(passedIn: string, proof: RunTableCell): string {

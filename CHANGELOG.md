@@ -104,7 +104,8 @@ just until 0.1.
   in every environment each one needed ("it ran none of them", or "only
   3 of the 16") and that each moved row says why. A `moved` or `unproven` reason now names every
   environment whose cell came to the same thing, where it named the
-  first one alone.
+  first one alone. Each name is written as it is spelled, so a name
+  holding `$&` or `$$` does not turn into other text.
 - **`features-dir-missing` no longer names a config file that is not
   there.** In a directory with no config file, the finding pointed at
   `nukadoko.config.ts` and asked to correct `featuresDir` in it. It now
