@@ -3843,6 +3843,72 @@ Each step's `observed.events` is `null`, the world's `events` in
 - events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
+The same pass reads each `flag` line a step owns, so a flag line that
+arrived after its step's record counts as one in the record does.
+`run.json` gathers them into `flags`, one row per flag and side, so a
+reader deciding whether to turn a flag on for everyone finds which
+criteria ran on each side and what their rows came to:
+
+```json
+"flags": [
+  {
+    "name": "quick_reorder",
+    "side": "on",
+    "criteria": [
+      {
+        "feature": "features/orders.feature",
+        "line": 7,
+        "name": "a customer the switch was turned on for sees the reorder button",
+        "verdict": "held",
+        "cells": [
+          { "environment": "reorder-off", "role": "required", "outcome": "pass", "gates": ["actor"] },
+          { "environment": "reorder-on", "role": "required", "outcome": "pass", "gates": ["boolean"] }
+        ]
+      }
+    ],
+    "counts": { "held": 1, "proven": 0, "failed": 0, "unproven": 0, "moved": 0, "controls": 0 }
+  }
+]
+```
+
+- The side is the one each line names, never an environment's
+  `conditions`: a condition is a declaration, and a scenario can turn a
+  flag on for one actor in a world declared off.
+  An execution whose steps evaluated both sides puts its criterion in
+  both rows, as the one above does.
+- There is one row per `name` and `side` that a head step's lines name,
+  by name and then side.
+  `flags` is absent when they name none, so a run of a program that
+  reports no flag reads as it did before.
+- `criteria` holds each criterion whose head executions evaluated the
+  flag on that side, in the table's row order, with its row's `verdict`
+  and the cells those executions belong to, in the table's column order:
+  each cell's `environment`, `role`, `outcome`, and `line` as the table
+  has them, and `gates`, each `gate` the cell's lines named, the format's
+  words first and `null` for a line that named none.
+  Gates are listed in the cell, not split into rows, so one flag and side
+  stays one row.
+- `counts` counts the criteria by `verdict`, and every criterion once.
+  A criterion counts under its verdict only when one of its cells on the
+  side is `required`.
+  One seen on the side only in controls counts under `controls`, since
+  its verdict is what its required cells on another side came to.
+  The control's cell is listed with its outcome, which reads as the
+  table reads it: a control that broke is never proof.
+  The verdict is the row's, over all its cells, so a criterion whose
+  required cell failed on the other side reads `failed` on this one too.
+- A row is evidence, not a verdict on the flag: nukadoko does not say
+  whether a flag may be turned on.
+  `name` and `side` are the line's own words, so a reader joins a row with
+  what the program records about the same flag where it runs by those two
+  values.
+- A world at a `url` gives no row, since nukadoko reads none of its
+  lines.
+  Nor does a line a hook's request caused, which carries no step's trace
+  id, nor an execution of the base or the old world under `--base`, whose
+  cells the table already reads, nor a removed criterion, which has no
+  execution.
+
 What this does not reach, in one list:
 
 - A line a step's own code writes to the file reads as the program's.
@@ -4441,6 +4507,10 @@ to act on the run without opening another file:
   environment that meets their conditions, 0 without `--env`.
   `proof_runs` is `--proof-runs`, what the `runs` of a control and of a
   base cell are measured against. It is the table the run summary draws.
+- `flags`, present only when a head step's lines of the program's
+  execution events name a flag, has one row per flag and side: the
+  criteria that evaluated it there, with their verdicts and cells, and
+  their counts (see "Execution events").
 - `counts` holds `scenarios`, `passed`, `failed`, and `stopped` (the ones
   a walk stopped, 0 outside `--step`), which count the
   executions of required head cells, and `not_run`, which counts the

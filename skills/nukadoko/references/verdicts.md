@@ -36,6 +36,20 @@ it (`<n> criteria not run`). A control never turns the run red. Tag only what th
 on the switch, and write the Then so it would fail on the other side: a
 When that errors there proves nothing.
 
+When the program writes `flag` lines to `{events}`
+(`references/program.md`), run.json's `flags` has one row per flag and
+side the head steps' lines named: the side the program got, not the one
+`conditions` declares. Each row lists the criteria that evaluated the
+flag on that side, with the row's `verdict` and the cells there (with
+the `gates` the lines named), and `counts` them by verdict; a criterion
+seen on the side only in controls counts as `controls`, because its
+verdict is about another side. Read it before a flag is turned on for
+everyone: `failed` on the `on` side is a criterion that does not hold
+with the flag on, and a control listed only under the side its environment
+does not declare never ran the side it was meant to. Join a row with the
+program's own record of the flag by `name` and `side`. The row is
+evidence; whether to turn the flag on is the person's to decide.
+
 ## Compared with the base
 
 `nuka run --base <the base>` is the run a pull request carries. It

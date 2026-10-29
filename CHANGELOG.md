@@ -162,6 +162,24 @@ just until 0.1.
   lines that carry one in `process_requests`, and docs/execution-events.md
   asks a command-line tool to send the variable on. A process's requests
   are never waited for, so its step stays `processes-unbounded`.
+- **run.json says, per flag and side, which criteria ran there and what
+  they came to.** When a head step's execution events hold a `flag`
+  line, run.json's new `flags` has one row per flag `name` and `side`,
+  the side as the line names it, never as an environment's `conditions`
+  declare it, so a scenario that turns a flag on for one person in a
+  world declared off stands in both rows. Each row lists the criteria
+  whose steps evaluated the flag on that side, with their table row's
+  `verdict` and the cells there (`environment`, `role`, `outcome`,
+  `line`, and the `gates` the lines named), and counts them by verdict.
+  A criterion seen on the side only in controls is counted as
+  `controls`, since its verdict is about another side, so a control
+  that broke there is never counted as proof. The lines are read when
+  the world stops, so a flag line a job wrote after its step's record
+  counts too. A run whose lines name no flag, a world at a `url`, and
+  the base and old worlds under `--base` add no row. The rows are
+  evidence to join with the program's own record of the flag by `name`
+  and `side`; nukadoko does not judge whether a flag may be turned on.
+  The field is additive, so no `schema_version` changes.
 
 ### Fixed
 

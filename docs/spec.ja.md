@@ -3027,6 +3027,65 @@ run サマリはこう言います:
 - events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
+同じ 1 回の読みで、step が持つ `flag` の行もそれぞれ読みます。
+そのため、step の record のあとに届いた flag の行も、record の中の行と同じように数えます。
+`run.json` はそれを `flags` に集め、flag と側の組ごとに 1 つの要素にします。
+flag を全員に有効にするかを決める読み手が、どの受け入れ基準がそれぞれの側で走り、その行が何になったかを見つけられるようにするためです:
+
+```json
+"flags": [
+  {
+    "name": "quick_reorder",
+    "side": "on",
+    "criteria": [
+      {
+        "feature": "features/orders.feature",
+        "line": 7,
+        "name": "a customer the switch was turned on for sees the reorder button",
+        "verdict": "held",
+        "cells": [
+          { "environment": "reorder-off", "role": "required", "outcome": "pass", "gates": ["actor"] },
+          { "environment": "reorder-on", "role": "required", "outcome": "pass", "gates": ["boolean"] }
+        ]
+      }
+    ],
+    "counts": { "held": 1, "proven": 0, "failed": 0, "unproven": 0, "moved": 0, "controls": 0 }
+  }
+]
+```
+
+- 側(`side`)は各行が名指すもので、environment の `conditions` では決してありません。
+  condition は宣言で、scenario は off と宣言した world の中で 1 人にだけ flag を有効にできるからです。
+  step が両方の側を評価した実行は、上の例のように、その受け入れ基準を両方の要素に入れます。
+- head の step の行が名指す `name` と `side` の組ごとに 1 つの要素があり、名前、次に側の順に並びます。
+  どの行も flag を名指さないとき、`flags` はありません。
+  そのため、flag を報告しないプログラムの run は、以前と同じに読めます。
+- `criteria` は、head の実行がその側で flag を評価した受け入れ基準を、断定の表の行の順に持ちます。
+  それぞれは行の `verdict` と、その実行が属するセルを、表の列の順に持ちます。
+  各セルは、表が持つとおりの `environment`、`role`、`outcome`、`line` と、`gates` を持ちます。
+  `gates` は、そのセルの行が名指した `gate` のそれぞれで、形式の語が先に並び、ゲートを名指さなかった行は `null` です。
+  ゲートは要素に分けず、セルの中に並べます。
+  1 つの flag と側が、1 つの要素のままであるようにするためです。
+- `counts` は受け入れ基準を `verdict` ごとに数え、どの受け入れ基準も 1 回だけ数えます。
+  受け入れ基準をその断定で数えるのは、その側のセルのどれかが `required` のときだけです。
+  その側で対照のセルにしか現れない受け入れ基準は、`controls` で数えます。
+  その断定は、別の側の必須のセルが出したものだからです。
+  対照のセルは成否とともに並び、表が読むとおりに読めます。
+  `broke` の対照は、決して証明になりません。
+  断定は、すべてのセルにわたる行の断定です。
+  そのため、別の側で必須のセルが失敗した受け入れ基準は、この側でも `failed` と読めます。
+- 要素は証跡で、flag についての断定ではありません。
+  nukadoko は、flag を有効にしてよいかを言いません。
+  `name` と `side` は行そのものの語です。
+  そのため読み手は、プログラムが動く場所で同じ flag について記録するものと、この 2 つの値で要素を突き合わせます。
+- `url` の world は要素を生みません。
+  nukadoko はその行を 1 つも読まないからです。
+  hook のリクエストが引き起こした行も要素を生みません。
+  どの step の trace id も持たないからです。
+  `--base` のもとでの base と old の world の実行も、要素を生みません。
+  そのセルは、表がすでに読んでいるからです。
+  消えた受け入れ基準も、実行が無いので要素を生みません。
+
 この仕組みが届かないものを、1 つの一覧にまとめます:
 
 - step 自身のコードがファイルに書いた行は、プログラムのものとして読まれます。
@@ -3498,6 +3557,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
   `proof_runs` は `--proof-runs` で、対照と base のセルの `runs` はこれと比べて読みます。
   run サマリが描く表はこれです。
+- `flags` は、プログラムの実行イベントのうち head の step の行が flag を名指すときだけあり、flag と側の組ごとに 1 つの要素を持ちます。
+  要素は、その側で flag を評価した受け入れ基準を、その断定とセルとともに持ち、それを数えます(「実行イベント」を参照)。
 - `counts` は、必須の head のセルの実行を数える `scenarios`、`passed`、`failed`、`stopped`(walk が中止したもので、`--step` の外では 0)と、`not-run` の必須の head のセルを数える `not_run` と、証明の実行を含めて head の対照の実行を数える `controls` と、`not-run` の head の対照のセルを数える `controls_not_run` を持ちます。
   対照はゲートするテストではなく証拠なので、別に数えます。
   base と old の実行は、表が読むものです。

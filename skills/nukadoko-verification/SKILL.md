@@ -180,7 +180,10 @@ two environments of `nukadoko.program.ts` and tag the scenario
 table reads `proven` when the Then breaks there at the same line in each
 of `--proof-runs` runs, and `held` when it passes there, which says what
 green on the base branch says: the scenario does not say what the report
-says (`skills/nukadoko/references/verdicts.md`).
+says (`skills/nukadoko/references/verdicts.md`). When the program writes
+`flag` execution events, run.json's `flags` names the side each cell's
+steps got: a control listed only under the side with the fix never ran the
+side without it.
 
 ## 7. Prototypes and plan steps
 

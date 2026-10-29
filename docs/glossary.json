@@ -642,6 +642,16 @@
       "note": "実行イベントの行を書くプログラムのコードと、それを読むもの(nukadoko、ログのパイプライン、人)"
     },
     {
+      "en": ["side (of a flag)", "sides"],
+      "ja": "側",
+      "note": "flag の行の `side` の値(`on`、`off`、変種の名前)。プログラムが受け取ったもので、environment の condition が宣言するものではない。フィールド名 `side` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["flag row (an entry of run.json's flags)", "row per flag and side"],
+      "ja": "`flags` の要素",
+      "note": "run.json の `flags` の、flag と側の組ごとの 1 つ。断定の表の行(受け入れ基準)とも実行イベントの行とも別なので、行 と書かず 要素 と書く"
+    },
+    {
       "en": ["inside first"],
       "ja": "内側が先",
       "note": "操作の行を、その中のすべての操作の行のあとに書く規則"

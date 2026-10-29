@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { ownerOf, parseEventLine, type ParsedLine } from "../execution-events/format.js";
+import { flagOf, ownerOf, parseEventLine, type FlagEvaluation, type ParsedLine } from "../execution-events/format.js";
 import { createTraceTally } from "../execution-events/tally.js";
 import type { EventsSlice } from "../record/types.js";
 import { redact, redactString } from "../secrets/redact.js";
@@ -13,8 +13,10 @@ import { traceIdIn } from "./trace-context.js";
 // Responsibility: the execution events a world's program appends to the
 // file `{events}` names (docs/execution-events.md, docs/spec.md "Execution
 // events"): each step's slice of them, written beside its record when the
-// step ends, and, once the world has stopped, the world's redacted copy
-// and each step's lines that arrived after its record. Boundary: owns no
+// step ends, and, once the world has stopped, the world's redacted copy,
+// each step's lines that arrived after its record, and the flags each
+// trace evaluated, read in that one pass so a late flag line counts as
+// one in the slice does. Boundary: owns no
 // file (the program writes it, src/program/world.ts makes and removes
 // it), and decides nothing a line says (src/execution-events/ does).
 // Reading forward, the wait, the cap, and the late pass are
@@ -149,6 +151,10 @@ export interface WorldEvents {
   readonly undefinedKinds: Readonly<Record<string, number>>;
   /** Each step with a line after its slice, by trace id. */
   readonly late: ReadonlyMap<string, LateSlice>;
+  /** The distinct flag evaluations of each trace id of the world, by
+   * trace id, from every line the file holds: a step's slice and its
+   * late lines alike. */
+  readonly flags: ReadonlyMap<string, readonly FlagEvaluation[]>;
 }
 
 /** Reads the whole events file of a stopped world: writes its redacted
@@ -160,6 +166,7 @@ export function collectWorldEvents(filePath: string, prefix: string, steps: read
   let unowned = 0;
   let unreadable = 0;
   const undefinedKinds = new Map<string, number>();
+  const flags = new Map<string, Map<string, FlagEvaluation>>();
   let pending: string[] = [];
   let pendingBytes = 0;
   let copied = true;
@@ -192,6 +199,12 @@ export function collectWorldEvents(filePath: string, prefix: string, steps: read
       if (parsed.state === "unreadable") unreadable += 1;
       else if (owner === undefined) unowned += 1;
       if (parsed.state === "undefined-kind") undefinedKinds.set(parsed.kind, (undefinedKinds.get(parsed.kind) ?? 0) + 1);
+      const flag = flagOf(parsed);
+      if (flag !== undefined && owner !== undefined) {
+        const seen = flags.get(owner) ?? new Map<string, FlagEvaluation>();
+        seen.set(JSON.stringify([flag.name, flag.side, flag.gate]), flag);
+        flags.set(owner, seen);
+      }
       if (!copied) return;
       const text = keptText(line, secrets);
       pending.push(text);
@@ -200,5 +213,6 @@ export function collectWorldEvents(filePath: string, prefix: string, steps: read
     },
   });
   withoutChannelRecording(flush);
-  return { copied, lines, owned, unowned, unreadable, undefinedKinds: Object.fromEntries(undefinedKinds), late };
+  const evaluated = new Map([...flags].map(([traceId, seen]) => [traceId, [...seen.values()]]));
+  return { copied, lines, owned, unowned, unreadable, undefinedKinds: Object.fromEntries(undefinedKinds), late, flags: evaluated };
 }

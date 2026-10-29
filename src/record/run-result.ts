@@ -313,6 +313,61 @@ export interface RunTable {
   readonly proof_runs: number;
 }
 
+/** run.json's `flags`: one row per flag and side that a `flag` line of a
+ * head step names (docs/spec.md "Execution events"), the side as the line
+ * names it, never as an environment's conditions declare it
+ * (src/run/flag-rows.ts). Evidence for a reader's decision, not a
+ * verdict. */
+export interface RunFlagRow {
+  readonly name: string;
+  readonly side: string;
+  /** Each criterion with a head execution whose steps evaluated the flag
+   * on this side, in the table's row order. */
+  readonly criteria: readonly RunFlagCriterion[];
+  readonly counts: RunFlagCounts;
+}
+
+/** A criterion of a flag row: the table row's identity and verdict, and
+ * the head cells whose executions evaluated the flag on the row's side. */
+export interface RunFlagCriterion {
+  readonly feature: string;
+  readonly line: number;
+  readonly name: string;
+  /** The table row's verdict, over all its cells, on every side. */
+  readonly verdict: Exclude<RunRowVerdict, "removed">;
+  /** In the table's column order. */
+  readonly cells: readonly RunFlagCell[];
+}
+
+/** A head cell of a flag row's criterion, as the table holds it, with
+ * the gates of its flag lines on the row's side. */
+export interface RunFlagCell {
+  readonly environment: string;
+  readonly role: "required" | "control";
+  readonly outcome: RunCellOutcome;
+  /** The line `fail`, `broke`, `stopped`, and `flaky` name. */
+  readonly line?: number;
+  /** Each gate the cell's flag lines on this side name, once: the
+   * format's gates in its order, then any other word, then `null` for a
+   * line that named none. */
+  readonly gates: readonly (string | null)[];
+}
+
+/** A flag row's criteria by the verdict of their table row, counted where
+ * the criterion has a required cell on the row's side. A criterion whose
+ * cells on the side are all controls is counted under `controls` alone:
+ * its row's verdict rests on cells of another side, and a control that
+ * broke is never proof (docs/spec.md "Verdicts"). The six counts sum to
+ * the row's criteria. */
+export interface RunFlagCounts {
+  readonly held: number;
+  readonly proven: number;
+  readonly failed: number;
+  readonly unproven: number;
+  readonly moved: number;
+  readonly controls: number;
+}
+
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
 export interface RunEnvironment {
   readonly name: string;
@@ -459,6 +514,9 @@ export type RunFields = {
   /** The verdict table: what each criterion's cells came to, and the
    * verdict the exit code follows. */
   readonly table: RunTable;
+  /** Present only when a `flag` line of a head step names a flag: one row
+   * per flag and side (`RunFlagRow`). */
+  readonly flags?: readonly RunFlagRow[];
   /** Present only for a run started with `nuka run --step`: each pause,
    * and how it was answered. Between steps the world and the browser were
    * open to anything, so a reader or a gate tells such a run apart by

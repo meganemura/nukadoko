@@ -126,6 +126,25 @@ export type ParsedLine =
 /** A line that has an owner: every state but `unreadable`. */
 export type ReadableLine = Exclude<ParsedLine, { readonly state: "unreadable" }>;
 
+/** What one `flag` line says: the flag, the side the program got, and
+ * the gate that decided it, `null` when the line names none as text. A
+ * gate is an optional field, passed through as the line wrote it, so it
+ * may be a word the format does not define. */
+export interface FlagEvaluation {
+  readonly name: string;
+  readonly side: string;
+  readonly gate: string | null;
+}
+
+/** The evaluation a `flag` event reports, or `undefined` for any other
+ * line. */
+export function flagOf(line: ParsedLine): FlagEvaluation | undefined {
+  if (line.state !== "event" || line.kind !== "flag") return undefined;
+  // The parser read both as strings, or the line would not be an event.
+  const { name, side, gate } = line.object as { readonly name: string; readonly side: string; readonly gate?: unknown };
+  return { name, side, gate: typeof gate === "string" ? gate : null };
+}
+
 const TRACEPARENT = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/;
 const BARE_TRACE_ID = /^[0-9a-f]{32}$/;
 const ALL_ZEROS = /^0+$/;

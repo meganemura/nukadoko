@@ -311,6 +311,7 @@ export default {
       surface: [
         "base-run.ts",
         "execute-typed-step.ts",
+        "flag-rows.ts",
         "match-step.ts",
         "probe-git.ts",
         "verdict-table.ts",

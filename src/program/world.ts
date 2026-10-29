@@ -8,6 +8,7 @@ import { collectWorldEvents, EVENTS_WORLD_FILE_NAME } from "../context/events-fi
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
+import type { FlagEvaluation } from "../execution-events/format.js";
 import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldName } from "../record/run-result.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -95,8 +96,9 @@ import type { WorldView } from "./world-view.js";
 // program appends its execution events to (src/program/events-inlet.ts)
 // before its first command runs. When the world stops, after the program
 // has, one pass over that file writes the world's redacted copy beside
-// `program.log` and each step's events that arrived after its record
-// (src/context/events-file.ts), and the file is removed. The steps get
+// `program.log` and each step's events that arrived after its record,
+// and reads the flags each trace evaluated (src/context/events-file.ts),
+// and the file is removed. The steps get
 // the world's env without any variable that names `{events}`, so no
 // step's code, and no process a step starts, can write to the file.
 //
@@ -128,6 +130,10 @@ export interface WorldStop {
   /** Each step's execution events that arrived after its record was
    * written, by trace id. Empty when the world has no events file. */
   readonly eventsLate: ReadonlyMap<string, LateSlice>;
+  /** The flags each trace of the world evaluated, by trace id, from every
+   * line of its events file, a late one included. Empty when the world
+   * has no events file. */
+  readonly flags: ReadonlyMap<string, readonly FlagEvaluation[]>;
 }
 
 export interface StartedWorld {
@@ -502,12 +508,14 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               };
             }
             let eventsLate: ReadonlyMap<string, LateSlice> = new Map();
+            let flags: ReadonlyMap<string, readonly FlagEvaluation[]> = new Map();
             if (events !== undefined) {
               try {
                 const copy = path.join(dir, EVENTS_WORLD_FILE_NAME);
                 const traced = (steps ?? []).flatMap((step) => (step.eventLines === undefined ? [] : [{ traceId: step.traceId, lines: step.eventLines, dir: step.dir }]));
                 const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy);
                 eventsLate = found.late;
+                flags = found.flags;
                 worldEvents = {
                   file: found.copied ? options.recordPath(copy) : null,
                   lines: found.lines,
@@ -525,6 +533,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               exitedEarly: exitedEarly === null ? null : redactString(`${exitedEarly}; see ${options.displayPath(log.path)}`, allSecrets),
               late,
               eventsLate,
+              flags,
             };
           },
           record: () => record(null),

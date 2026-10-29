@@ -50,6 +50,8 @@ import {
 } from "../run/progress-log.js";
 import { buildTable, executionOutcome, foldHeadCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
+import type { FlagEvaluation } from "../execution-events/format.js";
+import { flagRows } from "../run/flag-rows.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
 import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -985,8 +987,20 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             ];
           }),
         );
-      const { exitedEarly, late, eventsLate } = await world.stop(steps);
+      const { exitedEarly, late, eventsLate, flags } = await world.stop(steps);
       worlds.push(world.record());
+      // Read here, where every line of the world has its owner, so a flag
+      // line that came after its step's record counts too.
+      if (flags.size > 0) {
+        for (const scenario of runScenarios) {
+          if (!inWorld(scenario)) continue;
+          const evaluated = scenario.steps.flatMap((step) => {
+            const traceId = step.observed?.events?.trace_id;
+            return traceId === undefined ? [] : (flags.get(traceId) ?? []);
+          });
+          if (evaluated.length > 0) flagEvaluations.set(scenario.scenario_record_id, [...(flagEvaluations.get(scenario.scenario_record_id) ?? []), ...evaluated]);
+        }
+      }
       if (late.size > 0 || eventsLate.size > 0) {
         for (const [index, scenario] of runScenarios.entries()) {
           if (!inWorld(scenario)) continue;
@@ -1134,6 +1148,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       return isClaimStep(entry.step) ? "claim" : "run";
     };
     const runScenarios: RunScenario[] = [];
+    // The flags each execution's steps evaluated, by scenario record id,
+    // filled as each world stops, for run.json's `flags`.
+    const flagEvaluations = new Map<string, readonly FlagEvaluation[]>();
     // A scenario's evidence directory is made before it runs, so its id is
     // taken on disk for every worker of the run, and most scenarios leave it
     // empty. Those are removed once the run is over, not when the scenario
@@ -1327,6 +1344,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // before the line runs.
       if (base !== undefined) rows.push(...judgedRowFindings(table, base.commit, rerunFlags, base.obstacles));
       runFindings.push(...rows);
+      const flags = flagRows({ scenarios: runScenarios, evaluated: (id) => flagEvaluations.get(id) ?? [], table });
       const fields: RunFields = {
         run_id: runId,
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
@@ -1348,6 +1366,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         counts: countScenarios(runScenarios, table),
         scenarios: runScenarios,
         table,
+        ...(flags.length === 0 ? {} : { flags }),
         ...(walk === undefined ? {} : { walk: walk.record() }),
       };
       // The gate: red when the run failed outside the table, or when a row

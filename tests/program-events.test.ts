@@ -189,6 +189,9 @@ describe("the program's execution events", () => {
     const copy = readFileSync(path.join(latestRunDir(rootDir), "worlds", "default", "events.jsonl"), "utf8").trimEnd().split("\n");
     expect(copy).toHaveLength(18);
     expect(copy.filter((line) => line.includes('"x_note"'))).toEqual([expect.stringContaining('"x_note":"token {{secret.WORLD_TOKEN}}"')]);
+    // The one flag line went down with the spliced line around it, so no
+    // step read a flag, and run.json names none.
+    expect(run).not.toHaveProperty("flags");
 
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     expect(summary.filter((line) => line.includes("events of world"))).toEqual([
@@ -300,14 +303,20 @@ describe("the program's execution events", () => {
   it("makes no file and sets no variable for a world whose program file does not name {events}", async () => {
     const program = path.join(rootDir, "nukadoko.program.ts");
     await writeFile(program, readFileSync(program, "utf8").replace(' EXECUTION_EVENTS: "{events}",', ""));
-    await writeFile(path.join(rootDir, "features", "events.feature"), ["Feature: f", "", "  Scenario: s", '    When the client gets "/rooms/7"', "    And the step waits", ""].join("\n"));
+    await writeFile(
+      path.join(rootDir, "features", "events.feature"),
+      ["Feature: f", "", "  Scenario: s", '    When the client gets "/rooms/7"', '    And customer "kim" opens order 7', "    And the step waits", ""].join("\n"),
+    );
     const { exitCode } = await cli(rootDir, ["run"]);
 
     expect(exitCode).toBe(0);
     const [steps] = scenarioSteps(rootDir);
+    expect(steps!.size).toBe(3);
     for (const step of steps!.values()) expect(step.observed).not.toHaveProperty("events");
     expect(recordOf(rootDir, steps!.get("wait")!).result).toEqual({ file: null, fileMode: null, dirMode: null, named: [] });
     expect(latestRunJson(rootDir).worlds[0]).not.toHaveProperty("events");
+    // The order page evaluated the flag, but no file took the line.
+    expect(latestRunJson(rootDir)).not.toHaveProperty("flags");
     expect(existsSync(path.join(latestRunDir(rootDir), "worlds", "default", "events.jsonl"))).toBe(false);
     expect(readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).not.toContain("events of world");
   });
@@ -335,16 +344,20 @@ describe("execution events of a world at a URL", () => {
 
   it("records null on every step, and says once why nothing was read", async () => {
     await writeUrlProgram(rootDir, url);
+    await writeFile(path.join(rootDir, "features", "events.feature"), `${readFileSync(path.join(rootDir, "features", "events.feature"), "utf8")}    And customer "kim" opens order 7\n`);
     const { exitCode } = await cli(rootDir, ["run"]);
 
     expect(exitCode).toBe(0);
     const [steps] = scenarioSteps(rootDir);
-    expect(steps!.size).toBe(7);
+    expect(steps!.size).toBe(8);
     for (const step of steps!.values()) {
       expect(step.observed.events).toBeNull();
       expect(recordOf(rootDir, step).observed.events).toBeNull();
     }
     expect(latestRunJson(rootDir).worlds[0].events).toBeNull();
+    // The order page is a step that evaluates the flag where nukadoko
+    // reads lines; here it reads none, so run.json names no flag.
+    expect(latestRunJson(rootDir)).not.toHaveProperty("flags");
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     expect(summary.filter((line) => line.includes("events of world"))).toEqual([
       `- events of world default: not read, since the program runs at ${url}, which nukadoko did not start`,

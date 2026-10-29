@@ -94,7 +94,7 @@ describe("a world nukadoko serves", () => {
       ),
     );
 
-    expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map(), eventsLate: new Map() });
+    expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map(), eventsLate: new Map(), flags: new Map() });
     expect(await answers(port)).toBe(false);
     expect(readFileSync(path.join(dir, "program.log"), "utf8")).toBe("$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}\n");
     expect(world.record()).toEqual({

@@ -19,11 +19,25 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // so the line is in the file before any step reads it: written after, it
 // would reach the first step's reading as a line no step owns, or not,
 // as the race went.
+//
+// The flag `quick_reorder` is on for everyone when QUICK_REORDER is
+// `true`, and otherwise for each person `/switches?as=` turned it on
+// for. `/orders/:id?as=` evaluates it for that person and answers
+// `reorder` or `plain`, or `missing` for order 404; `/reorders?as=`
+// answers 201 only where it is on. `/receipts` enqueues a job the worker
+// performs 600 ms later, which evaluates the flag itself.
 const jobs = process.env.JOBS_DIR;
 mkdirSync(jobs, { recursive: true });
 fork(new URL("./worker.mjs", import.meta.url).pathname);
 
 const held = new Set();
+const switchedOn = new Set();
+
+const quickReorder = (who) => {
+  if (process.env.QUICK_REORDER === "true") return { side: "on", gate: "boolean" };
+  if (switchedOn.has(who)) return { side: "on", gate: "actor" };
+  return { side: "off", gate: "boolean" };
+};
 process.on("SIGTERM", () => {
   for (const line of held) emit(line);
   process.exit(0);
@@ -61,6 +75,19 @@ createServer(async (req, res) => {
     const file = path.join(jobs, `${job.job_id}.json`);
     writeFileSync(file, JSON.stringify(job));
     if (!parked) await waitUntilGone(file);
+  } else if (url.pathname.startsWith("/orders/") || url.pathname === "/reorders") {
+    route = url.pathname === "/reorders" ? "/reorders" : "/orders/:id";
+    const { side, gate } = quickReorder(url.searchParams.get("as") ?? "");
+    emit({ trace, kind: "flag", id: newId(), parent: id, name: "quick_reorder", side, gate });
+    if (url.pathname === "/reorders") status = side === "on" ? 201 : 403;
+    else body = url.pathname === "/orders/404" ? "missing" : side === "on" ? "reorder" : "plain";
+  } else if (url.pathname === "/switches") {
+    switchedOn.add(url.searchParams.get("as") ?? "");
+  } else if (url.pathname === "/receipts") {
+    status = 202;
+    const job = { trace, name: "ReceiptJob", queue: "default", job_id: newId(), not_before: Date.now() + 600 };
+    emit({ trace, kind: "job", id: newId(), parent: id, name: job.name, queue: job.queue, phase: "enqueue", job_id: job.job_id });
+    writeFileSync(path.join(jobs, `${job.job_id}.json`), JSON.stringify(job));
   } else if (url.pathname === "/spliced") {
     emitRaw(`{"trace":"${trace}","kind":"db",`);
     emit({ trace, kind: "flag", id: newId(), parent: id, name: "score_input_slider", side: "off" });

@@ -155,7 +155,9 @@ variable), `request-unreported`, `jobs-pending` (with
 `file-replaced`. A line that arrived later is in `events-late.jsonl`,
 and the run summary names it. The whole file, redacted, is in
 `worlds/<environment>/events.jsonl`; a world at a `url` has none, and
-`observed.events` is `null` there.
+`observed.events` is `null` there. A `flag` line, late or not, also puts
+its step's criterion in run.json's `flags`, under the side the line
+names (`references/verdicts.md`).
 
 ## Environments and programs nukadoko does not start
 
