@@ -147,8 +147,9 @@ just until 0.1.
   production as much as for tests. Each step record gets the lines whose
   `trace` carries its trace id, from every process the program runs, in
   `events.jsonl` beside it, redacted and written again as JSON, and
-  counts them in `observed.events`: by kind, how many did not read, and
-  whether the step's work is `whole`, every stamped request reported
+  counts them in `observed.events`: by kind, how many did not read, the
+  span ids of the requests it stamped (`stamped_spans`), and whether the
+  step's work is `whole`, every stamped request reported
   and every enqueued job performed, with `open` naming each reason it is
   not (`no-lines`, `request-unreported`, `jobs-pending`, and the rest).
   A step that sent the world no stamped request and ran no `runCommand`
@@ -164,6 +165,8 @@ just until 0.1.
   variable that names `{events}`: the steps, and every process a step
   starts, get the rest of `env`, so no step's code can append a line
   that reads as the program's. No claim reads the lines yet.
+  `evidence.attach` and `evidence.path` refuse `events.jsonl`,
+  `events-late.jsonl`, and `events-read.jsonl`, names the harness writes.
 - **A `runCommand` process carries the step's trace context.** When the
   run has a world, the process gets `TRACEPARENT`, the OpenTelemetry
   convention for trace context in the environment: the step's trace id

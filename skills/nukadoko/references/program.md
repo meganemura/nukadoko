@@ -133,8 +133,8 @@ the file `{events}` names, in the format of docs/execution-events.md:
 `traceparent`, a job's the one that enqueued it, so the lines of every
 process the program runs reach the step that caused them. Each step record
 gets its lines, redacted, in `events.jsonl` beside it, counted in
-`observed.events` (`{ trace_id, lines, file, kinds, stamped, unreadable,
-unowned, process_spans, process_requests, whole, open }`). A
+`observed.events` (`{ trace_id, lines, file, kinds, stamped, stamped_spans,
+unreadable, unowned, process_spans, process_requests, whole, open }`). A
 `runCommand` process gets the step's trace context as `TRACEPARENT`;
 a command-line tool that copies it into its requests' `traceparent`
 header makes their lines the step's (`process_requests` counts them).

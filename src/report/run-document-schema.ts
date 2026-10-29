@@ -130,6 +130,7 @@ const observed = z.looseObject({
       file: z.string().nullable(),
       kinds: z.record(z.string(), z.number().int()),
       stamped: z.number().int(),
+      stamped_spans: z.array(z.string()).optional(),
       unreadable: z.number().int(),
       unowned: z.number().int(),
       process_spans: z.array(z.string()).optional(),

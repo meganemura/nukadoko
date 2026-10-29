@@ -203,6 +203,7 @@ export default {
         "windows-command.ts",
         "trace-actions.ts",
         "events-file.ts",
+        "events-read.ts",
         "program-log-slice.ts",
         "trace-context.ts",
         "used.ts",

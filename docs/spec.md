@@ -668,8 +668,8 @@ The fixture names:
   `name` that contains a path separator is refused. A `name` equal to `.`,
   `..`, or the empty string is also refused. A `name` of `record.json`,
   `final.png`, `trace.zip`, `http.jsonl`, `program-log.txt`,
-  `program-log-late.txt`, `events.jsonl`, or `events-late.jsonl`, under
-  `nuka do` a `name` of `world` (the world's
+  `program-log-late.txt`, `events.jsonl`, `events-late.jsonl`, or
+  `events-read.jsonl`, under `nuka do` a `name` of `world` (the world's
   directory beside the record), or a `name` of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused too,
   including a spelling that differs only by case (`ReservedEvidenceNameError`). Those
@@ -3784,6 +3784,7 @@ value is still JSON and the file shows exactly what was read.
   "file": "events.jsonl",
   "kinds": { "db": 2, "job": 2, "request": 1 },
   "stamped": 1,
+  "stamped_spans": ["00f067aa0ba902b7"],
   "unreadable": 0,
   "unowned": 0,
   "process_spans": [],
@@ -3794,6 +3795,9 @@ value is still JSON and the file shows exactly what was read.
 ```
 
 - `trace_id` and `stamped` are the ones `observed.program_log` holds.
+- `stamped_spans` are the span ids of those stamped requests, in the
+  order sent, at most 1000, so a later reading of the record can match
+  each request to its `request` line.
 - `lines` is how many readable lines carried the trace id when the
   step's record was written.
 - `file` is `null` when `lines` is 0.
@@ -5657,8 +5661,8 @@ its scenario record's id, so either record leads to the other.
   (see "Program", "Trace context and the program's log").
 - `observed.events` is the step's slice of the program's execution
   events, `{ "trace_id", "lines", "file", "kinds", "stamped",
-  "unreadable", "unowned", "process_spans", "process_requests", "whole",
-  "open" }`, or `null` for a world at a
+  "stamped_spans", "unreadable", "unowned", "process_spans",
+  "process_requests", "whole", "open" }`, or `null` for a world at a
   `url`; it is absent when the world's program file does not name
   `{events}` (see "Execution events").
 - `observed.files` (`null` when the execution changed none) lists the
@@ -5885,7 +5889,7 @@ its scenario record's id, so either record leads to the other.
   empty string, is refused before anything is written, never silently
   rewritten into something safe. A `name` of `record.json`, `final.png`,
   `trace.zip`, `http.jsonl`, `program-log.txt`, `program-log-late.txt`,
-  `events.jsonl`, or `events-late.jsonl`, under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
+  `events.jsonl`, `events-late.jsonl`, or `events-read.jsonl`, under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
   `final.<name>.png` for a valid `pageAs` name, or of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by

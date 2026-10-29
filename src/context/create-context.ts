@@ -10,6 +10,8 @@ import type {
   CallEntry,
   NamedTraceEntry,
   ErrorKind,
+  EventsProducerRecord,
+  EventsReadRecord,
   HttpOmittedCounts,
   ObservedCounts,
   PageEventsSnapshot,
@@ -54,6 +56,7 @@ import { createHttpOmittedCollector } from "./http-omitted.js";
 import { type AfterStepEnd, createObservedCollector, finalizeOpenRequests } from "./observed.js";
 import { createPageEventsCollector } from "./page-events.js";
 import { createEventsReader } from "./events-file.js";
+import { readEvents, type EventsProducer, type EventsRequest } from "./events-read.js";
 import { createProgramLogReader } from "./program-log-slice.js";
 import { newTracePrefix, originOf } from "./trace-context.js";
 import { pollWithRecording } from "./poll.js";
@@ -377,6 +380,16 @@ export interface StepContextHandle {
    * Live: read it when the scenario record is built. Never exposed on
    * `ctx`. */
   afterStepEnd(): AfterStepEnd;
+  /** Executor-only: where a claim step of this scenario reads the
+   * execution events of the earlier step `of`, whose trace is `traceId`:
+   * the world's file from where that step's slice began, or why there is
+   * nothing to read (src/context/events-read.ts). One trace gives one
+   * producer, so every key that reads it shares one reading. */
+  eventsProducer(of: EventsProducerRecord, traceId: string): EventsProducer;
+  /** Executor-only: reads `requests`, waiting until `until` (epoch
+   * milliseconds) at the latest, and writes `events-read.jsonl` beside the
+   * current step's record. Never exposed on `ctx`. */
+  readEvents(requests: readonly EventsRequest[], until: number): Promise<Readonly<Record<string, EventsReadRecord>>>;
   /** Executor-only: every step record this execution actually read a value
    * from since the current step boundary began — through `ctx.resultOf` or a
    * `from` injection alike — deduplicated by step record id, in read order.
@@ -1445,11 +1458,31 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     await closeCurrentChunk();
   }
 
+  // One producer per trace, so the keys that read it share one reading.
+  const producers = new Map<string, EventsProducer>();
+  function eventsProducer(of: EventsProducerRecord, traceId: string): EventsProducer {
+    const known = producers.get(traceId);
+    if (known !== undefined) return known;
+    let producer: EventsProducer;
+    if (eventsReader === undefined) {
+      // A world nukadoko serves has a log path; one whose program file
+      // names no {events} has no events file to read.
+      producer = { source: "unread", of, gap: trace !== undefined && typeof options.programLog === "string" ? "inlet-unnamed" : "world-unread" };
+    } else {
+      const start = eventsReader.producer(traceId);
+      producer = start === undefined ? { source: "unread", of, gap: "producer-not-run" } : { source: "live", of, start, file: eventsReader.world };
+    }
+    producers.set(traceId, producer);
+    return producer;
+  }
+
   return {
     ctx,
     dispose,
     observedSnapshot,
     afterStepEnd: () => observed.afterStepEnd(),
+    eventsProducer,
+    readEvents: (requests, until) => readEvents(requests, { until, dir: boundaryDir, secrets }),
     usedSnapshot,
     recordUsed,
     sectionsSnapshot,

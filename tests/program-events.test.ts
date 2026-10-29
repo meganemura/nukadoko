@@ -31,6 +31,7 @@ interface EventsFacts {
   readonly file: string | null;
   readonly kinds: Record<string, number>;
   readonly stamped: number;
+  readonly stamped_spans: readonly string[];
   readonly unreadable: number;
   readonly unowned: number;
   readonly process_spans: readonly string[];
@@ -94,7 +95,18 @@ function sliceOf(rootDir: string, step: StepFacts): EventLine[] {
   return linesIn(path.join(latestRunDir(rootDir), step.record, file));
 }
 
-/** What a reading of one step's events is, with its trace id. */
+/** The span ids of the requests the step sent with nukadoko's
+ * traceparent, from its http.jsonl, in the order sent. */
+function spansSent(rootDir: string, step: StepFacts): string[] {
+  const file = path.join(latestRunDir(rootDir), step.record, "http.jsonl");
+  if (!existsSync(file)) return [];
+  const sent = readFileSync(file, "utf8").trimEnd().split("\n").map((text) => (JSON.parse(text) as { traceparent?: string }).traceparent ?? "");
+  const own = new RegExp(`^00-${step.observed.program_log!.trace_id}-([0-9a-f]{16})-01$`);
+  return sent.flatMap((value) => own.exec(value)?.slice(1, 2) ?? []);
+}
+
+/** What a reading of one step's events is, with its trace id. Its
+ * span ids are checked against http.jsonl apart (expectOnePass). */
 function reading(step: StepFacts, rest: Partial<EventsFacts>): EventsFacts {
   return {
     trace_id: step.observed.program_log!.trace_id,
@@ -102,6 +114,7 @@ function reading(step: StepFacts, rest: Partial<EventsFacts>): EventsFacts {
     file: null,
     kinds: {},
     stamped: 1,
+    stamped_spans: expect.any(Array) as unknown as string[],
     unreadable: 0,
     unowned: 0,
     process_spans: [],
@@ -121,6 +134,9 @@ function expectOnePass(rootDir: string, steps: Map<string, StepFacts>): void {
   };
   for (const key of Object.keys(LINES) as (keyof typeof LINES)[]) {
     for (const line of sliceOf(rootDir, step(key))) expect(line.trace).toMatch(new RegExp(`^00-${step(key).observed.events!.trace_id}-[0-9a-f]{16}-01$`));
+    // A reading of the record later matches each request to its line by these.
+    expect(step(key).observed.events!.stamped_spans, key).toEqual(spansSent(rootDir, step(key)));
+    expect(step(key).observed.events!.stamped_spans).toHaveLength(step(key).observed.events!.stamped);
   }
 
   expect(step("rooms").observed.events).toEqual(reading(step("rooms"), { lines: 2, file: "events.jsonl", kinds: { db: 1, request: 1 } }));
@@ -271,6 +287,7 @@ describe("the program's execution events", () => {
         file: "events.jsonl",
         kinds: { db: 1, request: 1 },
         stamped: 0,
+        stamped_spans: [],
         process_spans: [span!],
         process_requests: 1,
         whole: false,

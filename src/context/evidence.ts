@@ -5,6 +5,7 @@ import type { EvidenceAttachmentEntry, EvidenceMeta } from "../record/types.js";
 import { isNamedContextHarnessFile } from "./context-name.js";
 import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js";
 import { EVENTS_LATE_FILE_NAME, EVENTS_SLICE_FILE_NAME } from "./events-file.js";
+import { EVENTS_READ_FILE_NAME } from "./events-read.js";
 import { PROGRAM_LOG_LATE_FILE_NAME, PROGRAM_LOG_SLICE_FILE_NAME } from "./program-log-slice.js";
 import { isProcessOutputFileName } from "./process-output.js";
 
@@ -85,6 +86,7 @@ const HARNESS_EVIDENCE_FILE_NAMES = [
   PROGRAM_LOG_LATE_FILE_NAME,
   EVENTS_SLICE_FILE_NAME,
   EVENTS_LATE_FILE_NAME,
+  EVENTS_READ_FILE_NAME,
 ] as const;
 
 /** Registry key. `toLowerCase` is the locale-independent Unicode default

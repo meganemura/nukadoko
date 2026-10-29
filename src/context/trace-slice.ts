@@ -71,10 +71,11 @@ function sleep(ms: number): Promise<void> {
 }
 
 /** Hands each complete line of `filePath` from byte `from` to its end to
- * `onLine`, a chunk at a time, and returns the byte after the last
- * complete line: a line still being written is read by the next call. A
- * file that does not exist yet has no lines. */
-export function forEachLogLine(filePath: string, from: number, onLine: (line: string) => void): number {
+ * `onLine`, with the byte the line starts at, a chunk at a time, and
+ * returns the byte after the last complete line: a line still being
+ * written is read by the next call. A file that does not exist yet has no
+ * lines. */
+export function forEachLogLine(filePath: string, from: number, onLine: (line: string, at: number) => void): number {
   let fd: number;
   try {
     fd = openSync(filePath, "r");
@@ -90,7 +91,13 @@ export function forEachLogLine(filePath: string, from: number, onLine: (line: st
       if (count === 0) return offset;
       const bytes = carry.length === 0 ? chunk.subarray(0, count) : Buffer.concat([carry, chunk.subarray(0, count)]);
       const { lines, consumed } = completeLines(bytes);
-      for (const line of lines) onLine(line);
+      // Each line starts after the line feed before it: decoding never
+      // makes or removes one, so the lines and the line feeds pair up.
+      let start = 0;
+      for (const line of lines) {
+        onLine(line, offset + start);
+        start = bytes.indexOf(0x0a, start) + 1;
+      }
       offset += consumed;
       carry = bytes.subarray(consumed);
     }
@@ -151,6 +158,9 @@ export interface TraceFileReader {
    * reading as it waits for the step's lines still on their way (module
    * header). */
   readStep(lastStampAt: number | undefined, own: (line: string) => boolean): Promise<void>;
+  /** The byte the next read starts at: no line before it can carry a
+   * trace id made after the last read. */
+  offset(): number;
 }
 
 /** A reader of `filePath` from the file's size now. `readable`, asked
@@ -160,6 +170,7 @@ export interface TraceFileReader {
 export function createTraceFileReader(filePath: string, readable: (offset: number) => boolean = () => true): TraceFileReader {
   let offset = sizeOf(filePath) ?? 0;
   return {
+    offset: () => offset,
     async readStep(lastStampAt, own) {
       let lastOwnLineAt: number | undefined;
       const read = (): void => {

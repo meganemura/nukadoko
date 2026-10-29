@@ -573,7 +573,7 @@ fixture の名前:
   step が一方のメソッドを必要とする頻度は、もう一方を必要とする頻度とほぼ同じです。
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl` と等しい `name` も拒否されます。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl` と等しい `name` も拒否されます。
   `nuka do` では、record の隣にある world の directory の名前 `world` も拒否されます。
   `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も拒否されます。
   大文字小文字だけが違う綴りも同じです。
@@ -2975,6 +2975,7 @@ step は、プログラムのログと同じようにファイルを読みます
   "file": "events.jsonl",
   "kinds": { "db": 2, "job": 2, "request": 1 },
   "stamped": 1,
+  "stamped_spans": ["00f067aa0ba902b7"],
   "unreadable": 0,
   "unowned": 0,
   "process_spans": [],
@@ -2985,6 +2986,8 @@ step は、プログラムのログと同じようにファイルを読みます
 ```
 
 - `trace_id` と `stamped` は、`observed.program_log` が持つものと同じです。
+- `stamped_spans` は、その `traceparent` を付けたリクエストの span id で、送った順に、多くて 1000 個です。
+  あとで record を読むとき、それぞれのリクエストをその `request` の行と突き合わせられます。
 - `lines` は、step の record を書いたときにその trace id を持っていた、読める行の数です。
 - `file` は、`lines` が 0 のとき `null` です。
 - `kinds` は、それらの行を `kind` ごとに数えます。
@@ -4413,7 +4416,7 @@ scenario record は独立したファイルではなく、その run の `run.js
 - `observed.program_log` は、プログラムのログのうち step の切り出しで、`{ "trace_id", "lines", "file", "stamped" }` です。
   `url` の world では、nukadoko がそのログを読まないので `null` です。
   run に world の URL が無いときは現れません(「テスト対象のプログラム」、「trace context とプログラムのログ」を参照)。
-- `observed.events` は、プログラムの実行イベントのうち step の切り出しで、`{ "trace_id", "lines", "file", "kinds", "stamped", "unreadable", "unowned", "process_spans", "process_requests", "whole", "open" }` です。
+- `observed.events` は、プログラムの実行イベントのうち step の切り出しで、`{ "trace_id", "lines", "file", "kinds", "stamped", "stamped_spans", "unreadable", "unowned", "process_spans", "process_requests", "whole", "open" }` です。
   `url` の world では `null` で、world のプログラムのファイルが `{events}` を名指さないときは現れません(「実行イベント」を参照)。
 - `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
   各エントリは `{ "path", "change", "bytes", "content" }` です。
@@ -4563,7 +4566,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。

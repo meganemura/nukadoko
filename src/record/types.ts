@@ -236,7 +236,9 @@
 
 import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { DeclaredSnapshot } from "../compat/declared.js";
-import type { TraceGap } from "../execution-events/tally.js";
+import type { CountRange } from "../execution-events/count.js";
+import type { EventSelection } from "../execution-events/selection.js";
+import type { EventsGap, MaybeCounts, TraceGap } from "../execution-events/tally.js";
 
 /** Dropped-request counts by Playwright's own `request.resourceType()`
  * (`"image"`, `"stylesheet"`, `"script"`, ...) — the step record's own
@@ -295,6 +297,10 @@ export interface EventsSlice {
   readonly kinds: Readonly<Record<string, number>>;
   /** How many requests the step sent to the world with a `traceparent`. */
   readonly stamped: number;
+  /** The span ids of those requests, at most 1000, in the order sent: a
+   * reading of this record (`nuka do --use`) matches each to its
+   * `request` line. Absent on a record written before it existed. */
+  readonly stamped_spans?: readonly string[];
   /** Lines whose text carries the step's trace id and that are not one
    * readable line of the format. They are in no other count, and only in
    * the world's copy of the file. */
@@ -788,6 +794,10 @@ export interface MeasuredChannel {
  * declaration carries it. */
 export interface ClaimComparisonRecord {
   readonly actual?: unknown;
+  /** A claim on a count of execution events whose range is not one
+   * number: `actual` is then absent, so no reader takes a bound for the
+   * count. */
+  readonly actual_range?: CountRange;
   readonly actual_from: string;
   readonly view?: ClaimView;
   readonly at?: string;
@@ -1240,6 +1250,59 @@ export interface StepRecordBase {
    * how many of them were change points (0 when every change point is in
    * `readings`). */
   readings_left_out?: { readings: number; change_points: number };
+  /** A claim step that reads execution events only: each `events` key,
+   * as it read (docs/spec.md "Execution events"). A claim measured on one
+   * names `events_read.<key>` as its channel. */
+  events_read?: Readonly<Record<string, EventsReadRecord>>;
+}
+
+/** The step a reading of execution events read the events of. */
+export interface EventsProducerRecord {
+  readonly step_record_id: string;
+  readonly step: string;
+  /** Its line in the feature file; `null` when the pickle step names none. */
+  readonly line: number | null;
+}
+
+/** One events key of a claim step, as it read: the count of the lines of
+ * the producer's trace its selection matches, as a range, and what keeps
+ * that range from being one number. */
+export interface EventsReadRecord {
+  /** The step whose events were read; `null` when no earlier line of the
+   * scenario ran one. */
+  readonly of: EventsProducerRecord | null;
+  /** That step's trace id; `null` when nothing was read. */
+  readonly trace_id: string | null;
+  /** What was counted. */
+  readonly count: EventSelection;
+  /** `[yes, yes + maybe]` on a whole reading, `[yes, null]` on one that
+   * is not. */
+  readonly range: CountRange;
+  /** Every request the producer stamped has its line, every job enqueued
+   * in its trace performed, the selected kind was reported somewhere in
+   * the world, and nothing was lost: `open` is empty. */
+  readonly whole: boolean;
+  /** Why it is not, one gap word each. */
+  readonly open: readonly EventsGap[];
+  /** The lines that may match, by cause. */
+  readonly maybe: MaybeCounts;
+  /** Readable lines of the trace the reading counted. The world's stop
+   * counts again over every line, and a claim on more lines than these is
+   * judged again (`after_world_stop` in run.json). */
+  readonly lines: number;
+  /** Lines whose text carries the trace id and that did not read. */
+  readonly unreadable: number;
+  /** Readable lines no step owns read in the producer's window: from
+   * where its slice began to the reading. */
+  readonly unowned: number;
+  /** `events-read.jsonl` beside the record, which holds every line this
+   * step's readings counted, of every key, redacted; `null` when none. */
+  readonly file: string | null;
+  /** How long the reading waited for the producer's events to be whole. */
+  readonly waited_ms: number;
+  /** The lines came to more than 16 MiB, so the file holds the first of
+   * them and the reading is not whole. */
+  readonly truncated?: true;
 }
 
 export interface StepRecordPassed extends StepRecordBase {

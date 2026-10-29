@@ -1,13 +1,13 @@
 import { appendFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { flagOf, ownerOf, parseEventLine, type FlagEvaluation, type ParsedLine } from "../execution-events/format.js";
-import { createTraceTally } from "../execution-events/tally.js";
+import { createKindsSeen, createTraceTally, type KindsSeen, type TallyInputs } from "../execution-events/tally.js";
 import type { EventsSlice } from "../record/types.js";
 import { redact, redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { withoutChannelRecording } from "./channels.js";
 import type { StampedBoundaryTrace } from "./observed.js";
-import { collectLate, createTraceFileReader, StepLines, type LateSlice, type TracedStep } from "./trace-slice.js";
+import { collectLate, createTraceFileReader, forEachLogLine, StepLines, type LateSlice, type TracedStep } from "./trace-slice.js";
 import { traceIdIn } from "./trace-context.js";
 
 // Responsibility: the execution events a world's program appends to the
@@ -66,13 +66,13 @@ function readLine(text: string): EventsLine {
 
 /** The line as a copy keeps it: the parsed object redacted and written
  * again, or the text redacted when there is no object (module header). */
-function keptText(line: EventsLine, secrets: SecretSet): string {
-  if (line.parsed.state === "unreadable") return redactString(line.text, secrets);
+export function keptLine(text: string, parsed: ParsedLine, secrets: SecretSet): string {
+  if (parsed.state === "unreadable") return redactString(text, secrets);
   try {
-    return JSON.stringify(redact(line.parsed.object, secrets));
+    return JSON.stringify(redact(parsed.object, secrets));
   } catch {
     // Two keys that redact to one: the text, redacted, loses neither.
-    return redactString(line.text, secrets);
+    return redactString(text, secrets);
   }
 }
 
@@ -85,10 +85,44 @@ function identityOf(filePath: string): { readonly dev: number; readonly ino: num
   }
 }
 
+/** The world's events file, as a claim step's reading reads it
+ * (events-read.ts). */
+export interface WorldEventsFile {
+  readonly path: string;
+  /** The eight characters every trace id of the world starts with. */
+  readonly prefix: string;
+  /** Whether the file is still the one nukadoko made, asked before each
+   * read from `offset`: once it answers false, it always does. */
+  readable(offset: number): boolean;
+  /** The kinds the world's program has reported, through the end of the
+   * file as it stands now. */
+  kindsSeen(): KindsSeen;
+}
+
+/** Where a step's events start in the world's file, and what its trace
+ * needs to be told whole: what a later step's reading of them starts
+ * from. */
+export interface ProducerStart {
+  readonly traceId: string;
+  /** The byte the step's slice began reading at. No line before it can
+   * carry the step's trace id (trace-slice.ts). */
+  readonly from: number;
+  readonly inputs: Omit<TallyInputs, "selections">;
+}
+
 export interface EventsReader {
   /** Reads what the file gained since the last call and writes the slice
    * of `trace`'s boundary into `dir`. */
   slice(dir: string, trace: StampedBoundaryTrace): Promise<EventsSlice>;
+  /** Where the step whose trace is `traceId` began, `undefined` when this
+   * reader sliced no such step. */
+  producer(traceId: string): ProducerStart | undefined;
+  readonly world: WorldEventsFile;
+}
+
+/** What a tally needs of a boundary's trace. */
+export function tallyInputsOf(trace: StampedBoundaryTrace): Omit<TallyInputs, "selections"> {
+  return { spans: trace.spans, spansNotKept: trace.spansNotKept, ranProcesses: trace.processes > 0, processSpans: trace.processSpans };
 }
 
 /** A reader of the events file at `filePath` for the world whose trace
@@ -96,17 +130,40 @@ export interface EventsReader {
 export function createEventsReader(filePath: string, prefix: string, secrets: SecretSet): EventsReader {
   const made = identityOf(filePath);
   let replaced = made === undefined;
-  const reader = createTraceFileReader(filePath, (offset) => {
+  const readable = (offset: number): boolean => {
     if (replaced) return false;
     const now = identityOf(filePath);
     replaced = now === undefined || now.dev !== made!.dev || now.ino !== made!.ino || now.size < offset;
     return !replaced;
-  });
+  };
+  const reader = createTraceFileReader(filePath, readable);
+  const producers = new Map<string, ProducerStart>();
+  // The world's kinds, read forward from the file's start the first time
+  // a reading asks: earlier scenarios' lines say what the program reports.
+  const kinds = createKindsSeen();
+  let kindsRead = 0;
   return {
+    world: {
+      path: filePath,
+      prefix,
+      readable,
+      kindsSeen() {
+        withoutChannelRecording(() => {
+          try {
+            if (readable(kindsRead)) kindsRead = forEachLogLine(filePath, kindsRead, (text) => kinds.note(parseEventLine(text)));
+          } catch {
+            // A file that cannot be read reports no kind.
+          }
+        });
+        return kinds;
+      },
+    },
+    producer: (traceId) => producers.get(traceId),
     async slice(dir, trace) {
-      const tally = createTraceTally({ spans: trace.spans, spansNotKept: trace.spansNotKept, ranProcesses: trace.processes > 0, processSpans: trace.processSpans });
+      const inputs = tallyInputsOf(trace);
+      producers.set(trace.traceId, { traceId: trace.traceId, from: reader.offset(), inputs });
+      const tally = createTraceTally(inputs);
       const kept = new StepLines();
-      let unowned = 0;
       await reader.readStep(trace.lastStampAt, (text) => {
         const line = readLine(text);
         const { parsed } = line;
@@ -116,10 +173,10 @@ export function createEventsReader(filePath: string, prefix: string, secrets: Se
           return true;
         }
         const owner = ownerOf(parsed, prefix);
-        if (owner === null) unowned += 1;
+        if (owner === null) tally.unowned(parsed);
         if (owner !== trace.traceId) return false;
         tally.owned(parsed);
-        kept.keep(keptText(line, secrets));
+        kept.keep(keptLine(text, parsed, secrets));
         return true;
       });
       const reading = tally.reading({ truncated: kept.budget.truncated, replaced });
@@ -129,8 +186,9 @@ export function createEventsReader(filePath: string, prefix: string, secrets: Se
         file: kept.write(dir, EVENTS_SLICE_FILE_NAME),
         kinds: reading.kinds,
         stamped: trace.stamped,
+        stamped_spans: trace.spans,
         unreadable: reading.unreadable,
-        unowned,
+        unowned: reading.unowned,
         process_spans: trace.processSpans,
         process_requests: reading.processRequests,
         whole: reading.whole,
@@ -191,7 +249,7 @@ export function collectWorldEvents(filePath: string, prefix: string, steps: read
   const { owned, late } = collectLate(filePath, steps, {
     read: readLine,
     ownerOf: (line) => ownerOf(line.parsed, prefix) ?? undefined,
-    keep: (line) => keptText(line, secrets),
+    keep: (line) => keptLine(line.text, line.parsed, secrets),
     fileName: EVENTS_LATE_FILE_NAME,
     onLine(line, owner) {
       lines += 1;
@@ -206,7 +264,7 @@ export function collectWorldEvents(filePath: string, prefix: string, steps: read
         flags.set(owner, seen);
       }
       if (!copied) return;
-      const text = keptText(line, secrets);
+      const text = keptLine(line.text, parsed, secrets);
       pending.push(text);
       pendingBytes += text.length;
       if (pendingBytes > COPY_FLUSH_BYTES) flush();
