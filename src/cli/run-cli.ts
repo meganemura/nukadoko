@@ -1107,7 +1107,13 @@ export async function runCli(
   const stepCommands = [
     namingMissingConfig(stepAction("wait", "wait", "wait for the walk nuka run --step records to pause or end, and print where it is")),
     namingMissingConfig(stepAction("next", "next <pause>", "answer a pause of the walk --walk names: run the next step")),
-    namingMissingConfig(stepAction("stop", "stop <pause>", "answer a pause of the walk --walk names: skip the steps left, and record the scenario as stopped")),
+    namingMissingConfig(
+      stepAction(
+        "stop",
+        "stop <pause>",
+        "answer a pause of the walk --walk names: skip the steps left, and record the scenario as stopped; after the last step or a failure no step is left, and the scenario keeps the status it ran to",
+      ),
+    ),
   ];
   const stepCommand: CommandModule = {
     command: "step",

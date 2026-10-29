@@ -6721,8 +6721,10 @@ nuka step next <pause> --walk <n> [--timeout <s>] [--json]
 nuka step stop <pause> --walk <n> [--timeout <s>] [--json]
                               answer the pause by stopping: the steps
                               after it do not run, After hooks and
-                              teardown do, and the scenario is stopped.
-                              For all three, --timeout (default 90
+                              teardown do, and the scenario is stopped;
+                              after the last step or a failure no step
+                              is left, and the scenario keeps the status
+                              it ran to. For all three, --timeout (default 90
                               seconds) bounds the wait, and on expiry the
                               walk prints as starting (its run has not
                               begun the scenario) or running, with the
