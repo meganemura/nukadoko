@@ -219,7 +219,8 @@ describe("compares", () => {
         }),
       );
       const extra = tc.draw(gs.text({ alphabet: "c", minSize: 1, maxSize: 2 }));
-      const value = tc.draw(gs.oneOf<unknown>(gs.just(null), jsonValues));
+      // Short enough that the line shows it whole: a longer value is cut there.
+      const value = tc.draw(gs.oneOf<unknown>(gs.just(null), jsonValue(1)));
       const wider = { ...fields, [extra]: value };
       const [actual, expected] = tc.draw(gs.booleans()) ? [wider, fields] : [fields, wider];
       expect(holds(await compare("equal", actual, expected))).toBe(false);
