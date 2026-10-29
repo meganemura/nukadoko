@@ -61,7 +61,7 @@ function scenario(
   feature: string,
   line: number,
   name: string,
-  status: "passed" | "failed",
+  status: RunScenario["status"],
   durationMs: number,
   extra: Partial<RunScenario> = {},
 ): RunScenario {
@@ -263,6 +263,53 @@ describe("renderRunSummary", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  it("says a walk paused for answers, names a stopped walk as stopped, and offers to rerun it without calling it failed", () => {
+    const pause = (n: number, record: string, pausedAt: string, answeredAt: string, answer: "next" | "stop") => ({
+      pause: n,
+      line: 3 + n,
+      step_record_id: record,
+      paused_at: pausedAt,
+      answered_at: answeredAt,
+      answer,
+      views: [],
+    });
+    const markdown = renderRunSummary(run({
+      verdict: "failed",
+      counts: { scenarios: 1, passed: 0, failed: 0, stopped: 1, not_run: 0, controls: 0, controls_not_run: 0 },
+      scenarios: [
+        scenario("features/walk.feature", 3, "an order is placed", "stopped", 1000, {
+          steps: [
+            step("a cart with one item", { line: 4, record: "steps/stp-0" }),
+            step("the order is placed", { line: 5, record: "steps/stp-1" }),
+            step("the order is confirmed", { line: 6, status: "skipped" }),
+          ],
+          stopped: { after_step: 2, line: 5 },
+          do: "nuka run features/walk.feature:3",
+        }),
+      ],
+      walk: {
+        pauses: [
+          pause(1, "stp-0", "2026-10-15T12:00:10.000Z", "2026-10-15T12:00:40.000Z", "next"),
+          pause(2, "stp-1", "2026-10-15T12:00:41.000Z", "2026-10-15T12:12:41.000Z", "stop"),
+        ],
+      },
+    }));
+    expect(markdown.split("\n").slice(0, 11)).toEqual([
+      "<!-- nukadoko:run -->",
+      "# nukadoko run failed: 1 criterion, 0 held, 1 failed",
+      "",
+      "Walked one step at a time (`nuka run --step`): 2 pauses, the longest 12m 0s. Between steps the world and the browser were open to anything, so this run is not the run a reviewer approves.",
+      "",
+      "| verdict | criterion | head default |",
+      "| --- | --- | --- |",
+      "| failed | `features/walk.feature:3` an order is placed | stopped@5 |",
+      "",
+      "- `features/walk.feature:3` an order is placed: the walk was stopped with nuka step stop after line 5 in default, so the steps after it did not run and nothing shows it holds",
+      '  - step "the order is placed": `the walk was stopped after this step with nuka step stop`; record `steps/stp-1`',
+    ]);
+    expect(markdown.split("\n").slice(-7)).toEqual(["", "## Rerun a stopped scenario", "", "```sh", "nuka run features/walk.feature:3", "```", ""]);
   });
 
   it("draws one column per world and environment, and folds a cell's runs under --repeat", () => {

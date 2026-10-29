@@ -1,5 +1,6 @@
 import type { Finding } from "../finding/finding.js";
 import { stepRecordRelativeDir } from "../record/state-layout.js";
+import type { ScenarioStatus, ScenarioStop } from "../record/scenario-record.js";
 import type { UsedEntryWithResult } from "../record/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
@@ -351,6 +352,9 @@ export interface RunSummary {
   readonly total: number;
   readonly passed: number;
   readonly failed: number;
+  /** Executions a walk was stopped in (`nuka run --step`), not counted in
+   * `failed`. */
+  readonly stopped?: number;
   /** Required cells that never ran, as run.json's `counts.not_run`
    * counts them (a BeforeAll that failed first). */
   readonly notRun?: number;
@@ -365,6 +369,9 @@ export interface FailedScenario {
   /** The first line of the first error the record holds, a step's or a
    * hook's, when it holds one. */
   readonly error?: string;
+  /** For a scenario a walk was stopped in: where, so its finding says a
+   * stop, not a failure. */
+  readonly stopped?: ScenarioStop;
 }
 
 /** What a failed scenario's finding carries, read from its record: the
@@ -374,6 +381,8 @@ export function failedScenarioOf(record: {
   readonly line: number;
   readonly scenario: string;
   readonly environment: string;
+  readonly status?: ScenarioStatus;
+  readonly stopped?: ScenarioStop;
   readonly steps: readonly { readonly error?: { readonly message: string } }[];
   readonly hooks: readonly { readonly error?: { readonly message: string } }[];
 }): FailedScenario {
@@ -385,6 +394,7 @@ export function failedScenarioOf(record: {
     scenario: record.scenario,
     environment: record.environment,
     ...(first !== undefined ? { error: first } : {}),
+    ...(record.status === "stopped" && record.stopped !== undefined ? { stopped: record.stopped } : {}),
   };
 }
 
@@ -423,7 +433,7 @@ export function formatSummaryDuration(durationMs: number): string {
 export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void {
   stderr.write(
     `${summary.total} scenario${summary.total === 1 ? "" : "s"}: ${summary.passed} passed, ` +
-      `${summary.failed} failed${(summary.notRun ?? 0) > 0 ? `, ${summary.notRun} not run` : ""}  (${formatSummaryDuration(summary.durationMs)})\n`,
+      `${summary.failed} failed${(summary.stopped ?? 0) > 0 ? `, ${summary.stopped} stopped` : ""}${(summary.notRun ?? 0) > 0 ? `, ${summary.notRun} not run` : ""}  (${formatSummaryDuration(summary.durationMs)})\n`,
   );
 }
 
@@ -534,6 +544,17 @@ export function writeRepeatTallies(stderr: WritableSink, tallies: readonly Repea
 export function failedScenarioFindings(failures: readonly FailedScenario[], conditions: RunConditions): Finding[] {
   return failures.map((failure) => {
     const name = scenarioLabel(failure.scenario, failure.environment, conditions);
+    if (failure.stopped !== undefined) {
+      const at = failure.stopped.line === null ? "" : ` (line ${failure.stopped.line})`;
+      return {
+        severity: "failed",
+        code: "walk-stopped",
+        file: failure.feature,
+        line: failure.line,
+        message: `${name}: the walk was stopped after step ${failure.stopped.after_step}${at} with nuka step stop, so the steps after it did not run`,
+        do: formatRerunCommand(failure, conditions.rerunFlags(failure.environment)),
+      };
+    }
     return {
       severity: "failed",
       code: "scenario-failed",

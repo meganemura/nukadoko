@@ -79,7 +79,7 @@ function codeSpan(text: string): string {
 
 /** The findings the verdict table already shows: a failed scenario is its
  * cell, and a row with no required cell is its reason line. */
-const TABLE_CODES: ReadonlySet<string> = new Set(["scenario-failed", "criterion-without-required-cell"]);
+const TABLE_CODES: ReadonlySet<string> = new Set(["scenario-failed", "walk-stopped", "criterion-without-required-cell"]);
 /** Head's executions: the base and the old world's are the table's. */
 function headScenarios(document: RunDocument): readonly RunScenario[] {
   return document.scenarios.filter((scenario) => scenario.world === undefined);
@@ -140,6 +140,7 @@ function renderTitle(document: RunDocument): string[] {
     if (count(word) > 0) counts.push(`${count(word)} ${word}`);
   }
   const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
+  if (document.walk !== undefined) lines.push("", walkSentence(document.walk));
   // A red row whose red cells all did not run says why in its reason, but
   // not where to look: a world that did not start names its log here. A row
   // red for a cell that ran, or for having no required cell, is the table's
@@ -229,6 +230,19 @@ function renderCondition(document: RunDocument): string[] {
   ];
 }
 
+// A walk is a run that paused after each step for an answer: its verdicts
+// were measured, but between steps the world and the browser were open to
+// anything, which no record covers. The longest pause says how long that
+// was.
+function walkSentence(walk: NonNullable<RunDocument["walk"]>): string {
+  const longest = Math.max(0, ...walk.pauses.map((pause) => Date.parse(pause.answered_at) - Date.parse(pause.paused_at)));
+  const pauses = countOf(walk.pauses.length, "pause", "pauses");
+  return (
+    `Walked one step at a time (\`nuka run --step\`): ${pauses}, the longest ${formatSummaryDuration(longest)}. ` +
+    "Between steps the world and the browser were open to anything, so this run is not the run a reviewer approves."
+  );
+}
+
 function failedProcess(step: RunScenario["steps"][number]): string | undefined {
   const processes = step.observed?.processes ?? [];
   for (let index = processes.length - 1; index >= 0; index -= 1) {
@@ -239,6 +253,10 @@ function failedProcess(step: RunScenario["steps"][number]): string | undefined {
 }
 
 function describeFailure(scenario: RunScenario): SummaryFailure | undefined {
+  if (scenario.status === "stopped" && scenario.stopped !== undefined) {
+    const last = scenario.steps[scenario.stopped.after_step - 1];
+    return { where: `step "${last?.text ?? ""}"`, errorLine: "the walk was stopped after this step with nuka step stop", recordPath: last?.record ?? null };
+  }
   const step = scenario.steps.find((entry) => entry.status !== "passed" && entry.status !== "skipped");
   if (step !== undefined) {
     const command = failedProcess(step);
@@ -397,7 +415,7 @@ function renderReasons(document: RunDocument): string[] {
               at.line === row.line &&
               (scenario.world ?? "head") === world &&
               scenario.environment === cell.environment &&
-              scenario.status === "failed"
+              scenario.status !== "passed"
             );
           });
     const failure = execution === undefined ? undefined : describeFailure(execution);
@@ -606,13 +624,21 @@ function renderFindings(document: RunDocument): string[] {
   ];
 }
 
+// The heading names what the commands under it rerun: a stopped walk did
+// not fail, so a heading that called it failed would state something false.
 function renderRerun(document: RunDocument): string[] {
   const commands = new Set<string>();
+  let failed = false;
+  let stopped = false;
   for (const scenario of headScenarios(document)) {
-    if (scenario.do !== undefined) commands.add(scenario.do);
+    if (scenario.do === undefined) continue;
+    commands.add(scenario.do);
+    if (scenario.status === "stopped") stopped = true;
+    else failed = true;
   }
   if (commands.size === 0) return [];
-  return ["", "## Rerun a failed scenario", "", "```sh", ...commands, "```"];
+  const what = failed && stopped ? "failed or stopped" : stopped ? "stopped" : "failed";
+  return ["", `## Rerun a ${what} scenario`, "", "```sh", ...commands, "```"];
 }
 
 /** The summary of the run `document` records. */

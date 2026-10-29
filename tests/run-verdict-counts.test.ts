@@ -20,7 +20,7 @@ describe("nuka run: the count lines", () => {
       const stderr = createCaptureSink();
       const exitCode = await runCli(["run"], { rootDir, stdout: createCaptureSink(), stderr });
       expect(exitCode).toBe(1);
-      expect(latestRunJson(rootDir).counts).toEqual({ scenarios: 3, passed: 3, failed: 0, not_run: 2, controls: 2, controls_not_run: 2 });
+      expect(latestRunJson(rootDir).counts).toEqual({ scenarios: 3, passed: 3, failed: 0, stopped: 0, not_run: 2, controls: 2, controls_not_run: 2 });
       expect(stderr.text()).toMatch(/^3 scenarios: 3 passed, 0 failed, 2 not run {2}\(\d+s\)\n2 control runs, 2 not run\ncriteria: 2 held, 0 proven, 2 failed\n/m);
     } finally {
       await removeTempDir(rootDir);

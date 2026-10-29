@@ -331,7 +331,7 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
         verdict: "failed",
         reason: "did not run in default: a BeforeAll hook failed",
       });
-      expect(document.counts).toEqual({ scenarios: 0, passed: 0, failed: 0, not_run: 2, controls: 0, controls_not_run: 0 });
+      expect(document.counts).toEqual({ scenarios: 0, passed: 0, failed: 0, stopped: 0, not_run: 2, controls: 0, controls_not_run: 0 });
       expect(document.table.rows).toEqual([row("features/one-scenario.feature"), row("features/two-scenario.feature")]);
       const hookFailed = {
         severity: "failed",

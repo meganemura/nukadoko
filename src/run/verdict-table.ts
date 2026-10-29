@@ -53,18 +53,23 @@ import { shellWord } from "../shell/shell-word.js";
  * Then position says why in `judgedBy` (run.json's `judged_by`), since
  * no world can then show its Then failing. A `fail` names the claim that
  * broke, by its position among its step's claims, and the actual value it
- * saw. A `broke` a hook caused names the hook in `reason`. */
+ * saw. A `broke` a hook caused names the hook in `reason`. A `stopped`
+ * names the line of the step a walk was stopped after: the steps after
+ * it did not run, which is neither a pass nor something the program
+ * broke. */
 export type ExecutionOutcome =
   | { readonly kind: "pass"; readonly judgedBy?: "compat" | "nothing" }
   | { readonly kind: "fail"; readonly line: number; readonly claim: number; readonly actual: ClaimReadingValue }
-  | { readonly kind: "broke"; readonly line: number; readonly reason?: string };
+  | { readonly kind: "broke"; readonly line: number; readonly reason?: string }
+  | { readonly kind: "stopped"; readonly line: number };
 
-type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks" | "judged_by">;
+type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks" | "judged_by" | "stopped">;
 
 /** What one execution came to. `inThen` says whether the step at an index
  * stands in Then position. Pure. */
 export function executionOutcome(execution: Execution, inThen: (index: number) => boolean): ExecutionOutcome {
   if (execution.status === "passed") return execution.judged_by === undefined ? { kind: "pass" } : { kind: "pass", judgedBy: execution.judged_by };
+  if (execution.status === "stopped") return { kind: "stopped", line: execution.stopped?.line ?? execution.line };
   const index = execution.steps.findIndex((step) => step.status !== "passed" && step.status !== "skipped");
   if (index === -1) {
     const reason = hookFailure(execution);
@@ -89,7 +94,7 @@ function hookFailure(execution: Execution): string | undefined {
   const hook = execution.hooks.find((entry) => entry.status === "failed");
   if (hook === undefined) return undefined;
   if (hook.type === "before") return "a Before hook failed before its steps ran";
-  if (hook.type === "after") return "an After hook failed after its steps passed";
+  if (hook.type === "after") return execution.stopped === undefined ? "an After hook failed after its steps passed" : "an After hook failed after the walk was stopped";
   if (hook.type !== "after_step") return undefined;
   const step = hook.step_index === undefined ? undefined : execution.steps[hook.step_index];
   return `an AfterStep hook failed after the step at line ${step?.line ?? execution.line} passed`;
@@ -114,6 +119,7 @@ function sameOutcome(a: ExecutionOutcome, b: ExecutionOutcome): boolean {
   if (a.kind === "pass" || b.kind === "pass") return a.kind === b.kind;
   if (a.kind === "fail" && b.kind === "fail") return a.line === b.line && a.claim === b.claim;
   if (a.kind === "broke" && b.kind === "broke") return a.line === b.line && a.reason === b.reason;
+  if (a.kind === "stopped" && b.kind === "stopped") return a.line === b.line;
   return false;
 }
 
@@ -128,6 +134,7 @@ export function foldCell(outcomes: readonly ExecutionOutcome[]): Pick<RunTableCe
   if (outcomes.every((outcome) => sameOutcome(outcome, first))) {
     if (first.kind === "pass") return { outcome: "pass", runs: outcomes.length };
     if (first.kind === "broke") return { outcome: "broke", line: first.line, runs: outcomes.length, ...(first.reason === undefined ? {} : { reason: first.reason }) };
+    if (first.kind === "stopped") return { outcome: "stopped", line: first.line, runs: outcomes.length };
     const actuals = outcomes.map((outcome) => (outcome as Extract<ExecutionOutcome, { kind: "fail" }>).actual);
     return { outcome: "fail", line: first.line, runs: outcomes.length, claim: first.claim, actuals };
   }
@@ -240,6 +247,7 @@ function failedReason(red: RunTableCell): string {
   if (red.outcome === "not-run") return `did not run ${where}: ${red.reason ?? "no execution was recorded"}`;
   if (red.outcome === "fail") return `a claim broke at line ${red.line} ${where}`;
   if (red.outcome === "broke") return red.reason === undefined ? `stopped at line ${red.line} ${where} before a claim there was judged` : `${where}, ${red.reason}`;
+  if (red.outcome === "stopped") return `the walk was stopped with nuka step stop after line ${red.line} ${where}, so the steps after it did not run and nothing shows it holds`;
   return `its ${runsText(red.runs)} ${where} disagree, the first that did not pass at line ${red.line}`;
 }
 
@@ -252,6 +260,7 @@ function worldCellClause(cell: RunTableCell, proofRuns: number): string {
   if (cell.outcome === "not-run") return `it did not run ${where}: ${cell.reason ?? "no execution was recorded"}`;
   if (cell.outcome === "pass") return `it passed ${where}`;
   if (cell.outcome === "broke") return cell.reason === undefined ? `it stopped at ${line} ${where} before a claim there was judged` : `${where}, ${cell.reason}`;
+  if (cell.outcome === "stopped") return `the walk was stopped after ${line} ${where}`;
   if (cell.outcome === "flaky") return `its ${runsText(cell.runs)} ${where} disagree, the first that did not pass at ${line}`;
   return cell.world === "base" && cell.runs < proofRuns
     ? `a claim broke at ${line} ${where} in only ${runsText(cell.runs)}, and proof needs ${proofRuns}`
@@ -367,7 +376,7 @@ export function judgeRow(
 }
 
 /** A cell as the summary and a reason name it: `pass`, `fail@12`,
- * `broke@9`, `flaky@12`, or `·` when it did not run. Pure. */
+ * `broke@9`, `stopped@9`, `flaky@12`, or `·` when it did not run. Pure. */
 export function cellText(cell: Pick<RunTableCell, "outcome" | "line">): string {
   if (cell.outcome === "not-run") return "·";
   if (cell.outcome === "pass") return "pass";

@@ -41,6 +41,7 @@ const outcome: Generator<ExecutionOutcome> = gs.oneOf(
   gs
     .tuples(line, gs.sampledFrom([undefined, "a Before hook failed before its steps ran", "an After hook failed after its steps passed"]))
     .map(([at, reason]): ExecutionOutcome => (reason === undefined ? { kind: "broke", line: at } : { kind: "broke", line: at, reason })),
+  line.map((at): ExecutionOutcome => ({ kind: "stopped", line: at })),
 );
 /** Two executions agree: the same kind at the same line, for a fail the
  * same claim, whatever value each saw, and for a broke the same hook. */
@@ -51,7 +52,7 @@ const agrees = (a: ExecutionOutcome, b: ExecutionOutcome): boolean =>
       (a.kind !== "fail" || a.claim === (b as { claim: number }).claim) &&
       (a.kind !== "broke" || a.reason === (b as { reason?: string }).reason)));
 
-const cellOutcome = gs.sampledFrom<RunCellOutcome>(["pass", "fail", "broke", "flaky", "not-run"]);
+const cellOutcome = gs.sampledFrom<RunCellOutcome>(["pass", "fail", "broke", "stopped", "flaky", "not-run"]);
 const cell = gs
   .tuples(gs.sampledFrom(["required", "control"] as const), cellOutcome, line, gs.integers({ minValue: 1, maxValue: 4 }))
   .map(([role, cellResult, at, runs]): Omit<RunTableCell, "environment"> => ({
@@ -159,6 +160,10 @@ describe("judgeRow", () => {
       verdict: "failed",
       reason: "in flag-on, an After hook failed after its steps passed",
     });
+    expect(judgeRow([{ ...pass("flag-on", "required"), outcome: "stopped", line: 4 }], 2)).toEqual({
+      verdict: "failed",
+      reason: "the walk was stopped with nuka step stop after line 4 in flag-on, so the steps after it did not run and nothing shows it holds",
+    });
     expect(judgeRow([{ ...pass("flag-on", "required"), outcome: "flaky", line: 7, runs: 3 }], 2)).toEqual({
       verdict: "failed",
       reason: "its 3 runs in flag-on disagree, the first that did not pass at line 7",
@@ -248,6 +253,18 @@ describe("executionOutcome", () => {
     expect(executionOutcome(execution([step("passed"), step("failed", "claim_broken", 8), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 8 });
     expect(executionOutcome(execution([step("failed", "step_error", 7), step("skipped"), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 7 });
     expect(executionOutcome(execution([step("undefined", undefined, 7), step("skipped"), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 7 });
+  });
+
+  it("reads a walk stopped after a step as stopped at that step's line, never as broke", () => {
+    const stopped = (stop: { after_step: number; line: number | null }, hooks: { type: string; status: string }[] = []) =>
+      ({ status: "stopped", stopped: stop, line: 2, steps: [step("passed", undefined, 3), step("skipped"), step("skipped")], hooks }) as never;
+    expect(executionOutcome(stopped({ after_step: 1, line: 3 }), inThen)).toEqual({ kind: "stopped", line: 3 });
+    // A step with no line in the document stands at the scenario's line.
+    expect(executionOutcome(stopped({ after_step: 1, line: null }), inThen)).toEqual({ kind: "stopped", line: 2 });
+    // An After hook that failed after the stop failed the scenario, and its
+    // reason does not claim the steps passed.
+    const failed = { status: "failed", stopped: { after_step: 1, line: 3 }, line: 2, steps: [step("passed", undefined, 3), step("skipped")], hooks: [{ type: "after", status: "failed" }] } as never;
+    expect(executionOutcome(failed, inThen)).toEqual({ kind: "broke", line: 2, reason: "an After hook failed after the walk was stopped" });
   });
 
   it("says why a pass judged no claim in Then position, as run.json's judged_by does", () => {

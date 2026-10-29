@@ -252,6 +252,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     scenario: record.scenario,
     environment: record.environment,
     status: record.status,
+    ...(record.stopped === undefined ? {} : { stopped: record.stopped }),
     started_at: record.started_at,
     finished_at: record.finished_at,
     ...(record.browser === undefined ? {} : { browser: record.browser }),
@@ -259,7 +260,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     hooks: record.hooks,
     ...(wroteScenarioEvidence(record) ? { evidence: { ...record.evidence, dir: input.evidenceDir } } : {}),
     ...(record.teardown_errors === undefined ? {} : { teardown_errors: record.teardown_errors }),
-    ...(record.status === "failed" ? { do: input.rerun } : {}),
+    ...(record.status !== "passed" ? { do: input.rerun } : {}),
     claims,
     ...(judged === undefined ? {} : { judged_by: judged }),
   };

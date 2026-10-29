@@ -175,7 +175,8 @@ const scenario = z.looseObject({
   line: z.number().int(),
   scenario: z.string(),
   environment: z.string(),
-  status: z.enum(["passed", "failed"]),
+  status: z.enum(["passed", "failed", "stopped"]),
+  stopped: z.looseObject({ after_step: z.number().int().min(1), line: z.number().int().nullable() }).optional(),
   started_at: z.iso.datetime(),
   finished_at: z.iso.datetime(),
   browser: z.looseObject({ type: z.string(), version: z.string() }).optional(),
@@ -198,6 +199,9 @@ const scenario = z.looseObject({
     .optional(),
   judged_by: z.enum(["compat", "nothing"]).optional(),
   role: z.enum(["required", "control"]).optional(),
+}).refine((entry) => entry.status !== "stopped" || entry.stopped !== undefined, {
+  message: "a stopped scenario names the step it was stopped after",
+  path: ["stopped"],
 });
 
 // The verdict table (src/run/verdict-table.ts), which the summary leads
@@ -212,7 +216,7 @@ const tableCell = z
     environment: z.string(),
     role: z.enum(["required", "control"]),
     conditions: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
-    outcome: z.enum(["pass", "fail", "broke", "flaky", "not-run"]),
+    outcome: z.enum(["pass", "fail", "broke", "stopped", "flaky", "not-run"]),
     line: z.number().int().optional(),
     runs: z.number().int(),
     claim: z.number().int().min(0).optional(),
@@ -222,7 +226,7 @@ const tableCell = z
     reason: z.string().optional(),
   })
   .refine((cell) => cell.outcome === "pass" || cell.outcome === "not-run" || cell.line !== undefined, {
-    message: "a fail, broke, or flaky cell names the line it stopped at",
+    message: "a fail, broke, stopped, or flaky cell names the line it stopped at",
     path: ["line"],
   })
   .refine((cell) => (cell.outcome === "fail" ? cell.claim !== undefined && cell.actuals?.length === cell.runs : cell.claim === undefined && cell.actuals === undefined), {
@@ -294,12 +298,38 @@ const document = z.looseObject({
     scenarios: z.number().int(),
     passed: z.number().int(),
     failed: z.number().int(),
+    stopped: z.number().int().optional(),
     controls: z.number().int(),
     not_run: z.number().int(),
     controls_not_run: z.number().int(),
   }),
   scenarios: z.array(scenario),
   table,
+  walk: z
+    .looseObject({
+      pauses: z.array(
+        z.looseObject({
+          pause: z.number().int().min(1),
+          line: z.number().int().nullable(),
+          step_record_id: z.string(),
+          paused_at: z.iso.datetime(),
+          answered_at: z.iso.datetime(),
+          answer: z.enum(["next", "stop"]),
+          views: z.array(
+            z.looseObject({
+              as: z.string().nullable(),
+              page: z.number().int(),
+              url: z.string(),
+              title: z.string(),
+              screenshot: z.string().nullable(),
+              aria: z.string().nullable(),
+            }),
+          ),
+          http: z.string().optional(),
+        }),
+      ),
+    })
+    .optional(),
   findings: z.array(
     z.looseObject({
       severity: z.string(),

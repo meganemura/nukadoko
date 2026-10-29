@@ -99,6 +99,18 @@ import type { ActionEntry, ErrorKind, NamedTraceEntry, ScreenshotEntry } from ".
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 
+/** `stopped` only for a walk (`nuka run --step`) stopped at a pause with
+ * steps still to run: those steps did not run, so the scenario neither
+ * passed nor failed. */
+export type ScenarioStatus = "passed" | "failed" | "stopped";
+
+/** Where a walk was stopped: after the step `after_step` (counted from 1)
+ * at `line`, `null` when the pickle step names no line. */
+export interface ScenarioStop {
+  readonly after_step: number;
+  readonly line: number | null;
+}
+
 export interface ScenarioStepEntry {
   readonly text: string;
   readonly status: ScenarioStepStatus;
@@ -216,8 +228,13 @@ export interface ScenarioRecord {
    * Examples row's line for an expanded Scenario Outline. */
   readonly line: number;
   /** `passed` only when every step passed; any failed/skipped/undefined/
-   * ambiguous step makes the whole scenario `failed`. */
-  readonly status: "passed" | "failed";
+   * ambiguous step makes the whole scenario `failed`, except the steps a
+   * walk was stopped before, which make it `stopped`. */
+  readonly status: ScenarioStatus;
+  /** Present when a walk was stopped at a pause with steps still to run.
+   * `status` is then `stopped`, or `failed` when an After hook failed
+   * after the stop. */
+  readonly stopped?: ScenarioStop;
   readonly environment: string;
   readonly target_version?: string;
   /** The browser engine and version this scenario's run actually launched

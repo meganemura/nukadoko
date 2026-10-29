@@ -276,7 +276,7 @@ describe("nuka run --base", () => {
     // Five items failed at the base, and ran once more for proof.
     expect(tree.filter((scenario) => scenario.scenario === "five items")).toHaveLength(2);
     expect(tree.every((scenario) => scenario.do === undefined)).toBe(true);
-    expect(document.counts).toEqual({ scenarios: 5, passed: 5, failed: 0, controls: 0, controls_not_run: 0, not_run: 0 });
+    expect(document.counts).toEqual({ scenarios: 5, passed: 5, failed: 0, stopped: 0, controls: 0, controls_not_run: 0, not_run: 0 });
     // The trees are gone once the run is over.
     expect(existsSync(path.join(rootDir, document.run_dir as string, "trees"))).toBe(false);
     expect(git(rootDir, "worktree", "list").split("\n")).toHaveLength(1);

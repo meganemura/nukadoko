@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
-import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
+import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStatus, ScenarioStepStatus, ScenarioStop } from "./scenario-record.js";
 import type { ClaimReadingValue, ClaimRecord, ErrorKind, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
@@ -118,7 +118,11 @@ export interface RunScenario {
   /** The environment this execution ran under, one of the run's
    * `environments`. */
   readonly environment: string;
-  readonly status: "passed" | "failed";
+  readonly status: ScenarioStatus;
+  /** Present when a walk was stopped with steps still to run: the step it
+   * was stopped after, and its line. `status` is then `stopped`, or
+   * `failed` when an After hook failed after the stop. */
+  readonly stopped?: ScenarioStop;
   readonly started_at: string;
   readonly finished_at: string;
   /** The browser this scenario launched, when it launched one. */
@@ -131,8 +135,8 @@ export interface RunScenario {
    * of them, since the directory is then removed. */
   readonly evidence?: ScenarioEvidence;
   readonly teardown_errors?: readonly { readonly fixture: string; readonly message: string }[];
-  /** For a failed scenario: the command that runs it alone, in its own
-   * environment. Absent for a control execution, whose failure is what the
+  /** For a failed or stopped scenario: the command that runs it alone, in
+   * its own environment. Absent for a control execution, whose failure is what the
    * table reads as proof, not a failure to rerun. */
   readonly do?: string;
   /** How this execution counts in the table (`table.rows[].cells[].role`):
@@ -173,9 +177,11 @@ export interface RunScenarioClaims {
  * every one passed; `fail` when every one broke the same claim of a Then
  * at `line`; `broke` when every one stopped at `line` before a claim there
  * was judged (a Given or When error, an undefined line, a claim nukadoko
- * could not judge, a hook); `flaky` when they disagree, `line` naming
- * the first that did not pass; `not-run` when none ran, with the reason. */
-export type RunCellOutcome = "pass" | "fail" | "broke" | "flaky" | "not-run";
+ * could not judge, a hook); `stopped` when a walk (`nuka run --step`) was
+ * stopped after the step at `line`, so the steps after it did not run;
+ * `flaky` when they disagree, `line` naming the first that did not pass;
+ * `not-run` when none ran, with the reason. */
+export type RunCellOutcome = "pass" | "fail" | "broke" | "stopped" | "flaky" | "not-run";
 
 /** A world of the run (docs/spec.md "Verdicts"): `head`, the tree the run
  * was started in; `base`, the ref's code under head's criteria and
@@ -396,6 +402,10 @@ export type RunFields = {
     readonly scenarios: number;
     readonly passed: number;
     readonly failed: number;
+    /** Required executions a walk stopped before their last step
+     * (`nuka run --step`); 0 outside a walk. Not in `failed`. Absent in a
+     * run.json an earlier build wrote. */
+    readonly stopped?: number;
     readonly not_run: number;
     readonly controls: number;
     readonly controls_not_run: number;
@@ -405,7 +415,49 @@ export type RunFields = {
   /** The verdict table: what each criterion's cells came to, and the
    * verdict the exit code follows. */
   readonly table: RunTable;
+  /** Present only for a run started with `nuka run --step`: each pause,
+   * and how it was answered. Between steps the world and the browser were
+   * open to anything, so a reader or a gate tells such a run apart by
+   * this field. */
+  readonly walk?: RunWalk;
 };
+
+/** One open page as a walk's pause saw it, after its step ended. */
+export interface PageView {
+  /** The `pageAs(name)` context the page belongs to; `null` for the
+   * default context. */
+  readonly as: string | null;
+  /** The page's place among its context's pages, from 1. */
+  readonly page: number;
+  readonly url: string;
+  readonly title: string;
+  /** A viewport screenshot and an ARIA snapshot, relative to the run
+   * directory; `null` when that capture failed. */
+  readonly screenshot: string | null;
+  readonly aria: string | null;
+}
+
+/** One pause of a walk: the step it came after, and its answer. */
+export interface RunWalkPause {
+  /** The step the run paused after, counted from 1 in its scenario. */
+  readonly pause: number;
+  readonly line: number | null;
+  readonly step_record_id: string;
+  readonly paused_at: string;
+  readonly answered_at: string;
+  readonly answer: "next" | "stop";
+  /** The open pages, looked at after the step's record was written. */
+  readonly views: readonly PageView[];
+  /** Requests the open pages sent while the run waited at this pause,
+   * relative to the run directory; present when they sent any. They are
+   * not in the step's own `http.jsonl`. */
+  readonly http?: string;
+}
+
+/** run.json's `walk`. */
+export interface RunWalk {
+  readonly pauses: readonly RunWalkPause[];
+}
 
 /** run.json as a reader gets it: the envelope every `--json` shares, and
  * the run's own fields. */
@@ -424,10 +476,12 @@ export function countScenarios(scenarios: readonly Pick<RunScenario, "status" | 
   const head = scenarios.filter((scenario) => scenario.world === undefined);
   const required = head.filter((scenario) => scenario.role !== "control");
   const passed = required.filter((scenario) => scenario.status === "passed").length;
+  const stopped = required.filter((scenario) => scenario.status === "stopped").length;
   return {
     scenarios: required.length,
     passed,
-    failed: required.length - passed,
+    failed: required.length - passed - stopped,
+    stopped,
     not_run: notRunCells(table, "required"),
     controls: head.length - required.length,
     controls_not_run: notRunCells(table, "control"),

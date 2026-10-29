@@ -149,6 +149,12 @@ const RUN_CODES = {
     description: "The environment's version probe did not answer, so the records have no target version.",
     fix: "Correct the environment's version setting in nukadoko.program.ts, or the endpoint it names.",
   },
+  "walk-stopped": {
+    severity: "failed",
+    description:
+      "A walk (nuka run --step) was stopped at a pause with nuka step stop, so the steps after it did not run and nothing shows the scenario holds. The scenario is stopped, not failed, and its row is red.",
+    fix: "Run the scenario without --step, or walk it to its last step, for a run that shows it holds.",
+  },
   "world-setup-failed": {
     severity: "warning",
     description: "A compat World could not be set up for a scenario.",

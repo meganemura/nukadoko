@@ -1304,9 +1304,17 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
     description: resolveDescription(gherkinDocument, scenario),
     // A passed scenario with a step whose record could not be read is not
     // shown passed: the result would read as complete. A failed one keeps
-    // its own status and failure.
-    status: record.status === "passed" && unreadable !== undefined ? "broken" : record.status,
-    message: classifiedFailure?.message ?? (record.status === "passed" ? unreadable?.step.message : undefined),
+    // its own status and failure. Allure has no word for a walk stopped
+    // before its last step; `skipped` is its word for a test that did not
+    // run to its end, and the message says where it was stopped.
+    status: record.status === "stopped" ? "skipped" : record.status === "passed" && unreadable !== undefined ? "broken" : record.status,
+    message:
+      classifiedFailure?.message ??
+      (record.status === "passed"
+        ? unreadable?.step.message
+        : record.status === "stopped" && record.stopped !== undefined
+          ? `the walk (nuka run --step) was stopped after step ${record.stopped.after_step} with nuka step stop, so the steps after it did not run`
+          : undefined),
     trace: classifiedFailure?.rawMessage,
     startMs,
     stopMs,

@@ -118,7 +118,7 @@ describe("nuka run: the verdict table", () => {
         { name: "flag-on", target_version: null, base_url: null, conditions: { banner: true } },
       ]);
       expect(document.table).toEqual(table(2));
-      expect(document.counts).toEqual({ scenarios: 5, passed: 5, failed: 0, not_run: 0, controls: 5, controls_not_run: 0 });
+      expect(document.counts).toEqual({ scenarios: 5, passed: 5, failed: 0, stopped: 0, not_run: 0, controls: 5, controls_not_run: 0 });
       expect(document.findings).toEqual([]);
       // A control's failure is proof, not a failure to rerun.
       const controls = (document.scenarios as { role: string; do?: string; status: string }[]).filter((entry) => entry.role === "control");
@@ -172,7 +172,7 @@ describe("nuka run: the verdict table", () => {
     const { exitCode, document, summary } = await run(["features/banner.feature", "--env", "flag-on", "--no-check"]);
     expect(exitCode).toBe(0);
     expect(document.verdict).toBe("passed");
-    expect(document.counts).toEqual({ scenarios: 1, passed: 1, failed: 0, not_run: 0, controls: 0, controls_not_run: 0 });
+    expect(document.counts).toEqual({ scenarios: 1, passed: 1, failed: 0, stopped: 0, not_run: 0, controls: 0, controls_not_run: 0 });
     expect(document.table.rows.map((row: { line: number; verdict: string; reason: string }) => [row.line, row.verdict, row.reason])).toEqual([[4, "held", "passes in flag-on"]]);
     expect(document.table.left_out).toBe(1);
     expect(summary.split("\n").slice(1, 3)).toEqual(["# nukadoko run passed: 1 criterion, 1 held", ""]);

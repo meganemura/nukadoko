@@ -72,16 +72,24 @@ describe("parseRunDocument", () => {
       expect("problem" in result && result.problem.includes(`${key}: `)).toBe(true);
     }));
 
-  it("refuses a fail, broke, or flaky cell with no line, which the summary would print as @undefined", () =>
+  it("refuses a fail, broke, stopped, or flaky cell with no line, which the summary would print as @undefined", () =>
     hegel.test((tc) => {
-      const outcome = tc.draw(gs.sampledFrom(["fail", "broke", "flaky"]));
+      const outcome = tc.draw(gs.sampledFrom(["fail", "broke", "stopped", "flaky"]));
       const cell = { world: "head", environment: "default", role: "required", conditions: {}, outcome, runs: 1 };
       const document = { ...VALID, table: { ...VALID.table, rows: [{ ...VALID.table.rows[0], cells: [cell] }] } };
       const result = parseRunDocument(JSON.stringify(document));
-      expect("problem" in result && result.problem).toContain("table.rows.0.cells.0.line: a fail, broke, or flaky cell names the line it stopped at");
+      expect("problem" in result && result.problem).toContain("table.rows.0.cells.0.line: a fail, broke, stopped, or flaky cell names the line it stopped at");
       const fail = outcome === "fail" ? { claim: 0, actuals: [{ value: 503 }] } : {};
       expect(parseRunDocument(JSON.stringify({ ...document, table: { ...document.table, rows: [{ ...document.table.rows[0], cells: [{ ...cell, line: 4, ...fail }] }] } }))).toHaveProperty("document");
     }));
+
+  it("refuses a stopped scenario that does not name the step it was stopped after, and reads one that does", () => {
+    const entry = { ...VALID.scenarios[0], status: "stopped" };
+    const without = parseRunDocument(JSON.stringify({ ...VALID, scenarios: [entry] }));
+    expect("problem" in without && without.problem).toContain("scenarios.0.stopped: a stopped scenario names the step it was stopped after");
+    const named = parseRunDocument(JSON.stringify({ ...VALID, scenarios: [{ ...entry, stopped: { after_step: 1, line: 4 } }] }));
+    expect(named).toHaveProperty("document");
+  });
 
   it("refuses a fail cell without the claim that broke or a value for each run, and any other cell with them", () =>
     hegel.test((tc) => {
