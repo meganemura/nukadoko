@@ -1710,7 +1710,12 @@ ones nothing validated.
   it. The one exception is the fixed word `not` right before the table
   word: "the list is not empty" claims `not-equal []`, and then
   `not-equal` is the only compare, since `equal []` would claim the
-  opposite of the line. A `not` with a capture between it and the word,
+  opposite of the line. The fixed words `neither` and `nor` right
+  before a table word negate it the same way: "the reply is neither empty
+  nor blank" claims `not-equal ""`. `neither` states an empty value
+  itself only when no fixed `nor` follows it in the pattern, so "the reply
+  is neither blank nor whitespace" states nothing and a literal on it is
+  refused. A `not` with a capture between it and the word,
   or inside an optional group, does not count. A word inside a capture, an optional group,
   or an alternation is not fixed, since a line may not say it, and a step
   with several patterns needs every pattern to state the literal. Anything
@@ -6563,7 +6568,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               z.number(), or z.array(): its claim compares
                               that value with the word's literal of the same
                               JSON type ("", 0, or []), with equal, or with
-                              not-equal right after the word "not". With no
+                              not-equal right after the word "not",
+                              "neither", or "nor". With no
                               --from, several, one of another type, or one
                               whose type the word fixes no value of, --then
                               refuses and writes no literal. A pattern that

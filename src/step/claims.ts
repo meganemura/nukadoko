@@ -204,7 +204,14 @@ class InvalidClaimError extends Error {}
 // the reader no way to see that. The one exception is the fixed word
 // `not` right before the table word: "the list is not empty" says
 // `not-equal []`, and then `not-equal` is the only compare, since
-// `equal []` would claim the opposite of the line.
+// `equal []` would claim the opposite of the line. `neither` and `nor`
+// right before a table word negate it the same way ("neither empty nor
+// blank"), and `neither` states an empty value itself only when no `nor`
+// follows it: "neither blank nor whitespace" denies two things and states
+// none.
+
+/** The fixed words that negate the table word right after them. */
+const NEGATING_WORDS: ReadonlySet<string> = new Set(["not", "neither", "nor"]);
 
 /** The values a word fixes, compared case-insensitively. */
 export const LITERAL_WORDS: Readonly<Record<string, readonly ClaimLiteral[]>> = {
@@ -340,6 +347,8 @@ export interface LiteralStatement {
   readonly words: string;
   readonly byTable: boolean;
   readonly compare: "equal" | "not-equal" | null;
+  /** The fixed word that negates a table word, as the pattern writes it. */
+  readonly negatedBy?: string;
 }
 
 /** How `pattern` states `literal`, or `null` when it does not. Pure. */
@@ -353,11 +362,13 @@ export function literalStatement(pattern: string, literal: unknown): LiteralStat
   if (spelled !== undefined) return { words: spelled, byTable: false, compare: null };
   for (const [index, word] of all.entries()) {
     if (!word.fixed) continue;
-    const values = LITERAL_WORDS[word.text.toLowerCase()];
+    const lower = word.text.toLowerCase();
+    const values = LITERAL_WORDS[lower];
     if (!values?.some((value) => sameLiteral(literal, value))) continue;
+    if (lower === "neither" && all.slice(index + 1).some((later) => later.fixed && later.text.toLowerCase() === "nor")) continue;
     const before = index > 0 ? all[index - 1]! : null;
-    const negated = before !== null && before.fixed && before.text.toLowerCase() === "not";
-    return { words: word.text, byTable: true, compare: negated ? "not-equal" : "equal" };
+    const negated = before !== null && before.fixed && NEGATING_WORDS.has(before.text.toLowerCase());
+    return negated ? { words: word.text, byTable: true, compare: "not-equal", negatedBy: before.text } : { words: word.text, byTable: true, compare: "equal" };
   }
   return null;
 }
@@ -563,9 +574,9 @@ function checkExpected(label: string, expected: unknown, compare: unknown, shape
     // patterns say "is empty" and "is not empty" can claim neither.
     for (const stated of statements) {
       if (stated === null || stated.compare === null || stated.compare === compare) continue;
-      const words = stated.compare === "not-equal" ? `words "not ${stated.words}" rule out` : `word "${stated.words}" fixes`;
+      const words = stated.compare === "not-equal" ? `words "${(stated.negatedBy ?? "not").toLowerCase()} ${stated.words}" rule out` : `word "${stated.words}" fixes`;
       throw new InvalidClaimError(
-        `${label}.expected is the literal ${describe(literal)}, which the ${words}, and ${label}.compare is ${describe(compare)}. A value a word fixes is compared with equal alone, or with not-equal alone right after the word "not" ("is not empty"): another compare against it holds for nearly anything, and the word does not show it`,
+        `${label}.expected is the literal ${describe(literal)}, which the ${words}, and ${label}.compare is ${describe(compare)}. A value a word fixes is compared with equal alone, or with not-equal alone right after the word "not", "neither", or "nor" ("is not empty"): another compare against it holds for nearly anything, and the word does not show it`,
       );
     }
     return;

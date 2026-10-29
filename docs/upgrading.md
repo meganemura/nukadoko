@@ -48,6 +48,12 @@ This part does not change release to release.
 
 ## 0.22.0 to the next release
 
+- **`neither` and `nor` right before `no`, `none`, `nothing`, or `empty`
+  negate it, as `not` does.** A claim that compared "the reply is
+  neither empty nor blank" with `equal ""` held for an empty reply, the
+  opposite of the line, and is now refused at import, naming the words
+  "neither empty". Claim `not-equal` there, or rewrite the claim so the
+  line states what it compares.
 - **A step whose `observe` no claim reads is refused at import.** Every
   claim's actual is a `from` key and no expected value is `{ observe }`,
   so what `observe` returns changes no verdict; the usual cause is a key

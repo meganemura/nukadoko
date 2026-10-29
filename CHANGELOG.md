@@ -45,6 +45,10 @@ just until 0.1.
   links to it any more" may claim `{ literal: [] }` (or `0` or `""`),
   compared with `equal`, where only `no`, `none`, `nothing`, and
   `empty` could before.
+  `neither` and `nor` right before a table word negate it as `not`
+  does ("neither empty nor blank" claims `not-equal ""`), and a
+  `neither` that a `nor` follows states nothing, so "the reply is neither
+  blank nor whitespace" cannot claim `""` with `equal`.
 - **A number word in a pattern states its number.** A fixed word from
   `zero` to `twelve` states that whole number as its digits would,
   under any compare: "a relationship path follows at least three routed

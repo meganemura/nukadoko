@@ -1415,6 +1415,10 @@ discovery は、`defineStep` が返したオブジェクトそのものである
   ただ 1 つの例外は、表の語のすぐ前にある固定の語 `not` です。
   "the list is not empty" は `not-equal []` を claim し、そのとき比べられるのは `not-equal` だけです。
   `equal []` は行と逆のことを claim するからです。
+  表の語のすぐ前にある固定の語 `neither` と `nor` も、同じように否定します。
+  "the reply is neither empty nor blank" は `not-equal ""` を claim します。
+  `neither` 自身が空の値を述べるのは、pattern の中でそのあとに固定の `nor` が続かないときだけです。
+  そのため "the reply is neither blank nor whitespace" は何も述べず、そこへのリテラルは拒否されます。
   `not` と表の語のあいだにキャプチャがあるときや、`not` が省略可能なグループの中にあるときは、数えません。
   キャプチャ、省略可能なグループ、選択肢の中にある語は固定ではありません。
   行がその語を言わないことがあるからです。
@@ -5277,7 +5281,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               z.number(), or z.array(): its claim compares
                               that value with the word's literal of the same
                               JSON type ("", 0, or []), with equal, or with
-                              not-equal right after the word "not". With no
+                              not-equal right after the word "not",
+                              "neither", or "nor". With no
                               --from, several, one of another type, or one
                               whose type the word fixes no value of, --then
                               refuses and writes no literal. A pattern that

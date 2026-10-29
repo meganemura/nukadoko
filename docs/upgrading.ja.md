@@ -40,6 +40,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.22.0 から次のリリースへ
 
+- **`no`、`none`、`nothing`、`empty` のすぐ前の `neither` と `nor` は、`not` と同じようにそれを否定します。**
+  "the reply is neither empty nor blank" を `equal ""` と比べていた claim は、空の返事で成り立っていました。
+  これは行と逆のことです。
+  その claim は import の時点で拒否され、語 "neither empty" を名指しします。
+  そこでは `not-equal` で claim するか、行が比べるものを述べるように claim を書き直してください。
 - **`observe` をどの claim も読まない step は、import の時点で拒否されます。**
   すべての claim の actual が `from` のキーで、どの期待値も `{ observe }` でないので、`observe` が返すものはどの判定も変えません。
   よくある原因は、`observe` が `from` のキーと同じ名前で返したキーで、`from` の値がそれを隠していました。

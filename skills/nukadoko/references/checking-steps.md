@@ -58,8 +58,9 @@ Pick the source from the sentence; the record names it in `expected_from`.
   pattern's own words, `zero` to `twelve` as a number word (any compare), or
   `0`, `""`, or `[]` for `no`, `none`, `nothing`, or `neither` (`""` or `[]`
   for `empty`) with `compare: "equal"` only, or `"not-equal"` only right
-  after the fixed word `not` ("is not empty"). Any other literal is refused:
-  `Then the command succeeds` cannot claim `0`.
+  after the fixed word `not`, `neither`, or `nor` ("is not empty"). A
+  `neither` that a `nor` follows states nothing. Any other literal is
+  refused: `Then the command succeeds` cannot claim `0`.
 - **A second reading** ("A is listed before B"): `expected: { observe:
   "<path>" }`, a value `observe` returned beside the actual one.
 

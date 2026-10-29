@@ -9,6 +9,7 @@ import {
   claimsProblem,
   LITERAL_WORDS,
   literalStatedBy,
+  literalStatement,
   NUMBER_WORDS,
   itemPathsOverlap,
   placeAt,
@@ -743,7 +744,7 @@ describe("the literal rule, exactly", () => {
       const problem = claimsProblem([{ actual: "result", compare, expected: { literal } }], literalShape(pattern));
       if (compare === allowed) expect(problem).toBeNull();
       else expect(problem).toBe(
-        `claims[0].expected is the literal ${JSON.stringify(literal)}, which the ${negated ? `words "not ${word}" rule out` : `word "${word}" fixes`}, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it`,
+        `claims[0].expected is the literal ${JSON.stringify(literal)}, which the ${negated ? `words "not ${word}" rule out` : `word "${word}" fixes`}, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\", \"neither\", or \"nor\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it`,
       );
     }));
 
@@ -781,6 +782,23 @@ describe("the literal rule, exactly", () => {
     expect(literalStatedBy(pattern, [])).toBe("neither");
     expect(claimsProblem([{ actual: "result", compare: "equal", expected: { literal: [] } }], literalShape(pattern))).toBeNull();
   });
+
+  it("a neither that a nor follows states nothing, and neither or nor right before a table word negates it as not does", () =>
+    hegel.test((tc) => {
+      const [word, values] = tc.draw(gs.sampledFrom(Object.entries(LITERAL_WORDS).filter(([entry]) => entry !== "neither")));
+      const literal = tc.draw(gs.sampledFrom(values));
+      const plain = tc.draw(gs.sampledFrom(["blank", "whitespace", "stale", "late"]));
+      const negating = tc.draw(gs.sampledFrom(["neither", "nor", "Neither", "NOR"]));
+      const negated = negating.toLowerCase() === "neither" ? `the reply is ${negating} ${word} nor ${plain}` : `the reply is neither ${plain} ${negating} ${word}`;
+      expect(literalStatement(negated, literal)).toMatchObject({ words: word, compare: "not-equal", negatedBy: negating });
+      expect(claimsProblem([{ actual: "result", compare: "equal", expected: { literal } }], literalShape(negated))).not.toBeNull();
+      expect(claimsProblem([{ actual: "result", compare: "not-equal", expected: { literal } }], literalShape(negated))).toBeNull();
+      const denied = `the reply is neither ${plain} nor ${tc.draw(gs.sampledFrom(["stale", "late", "short"]))}`;
+      for (const value of LITERAL_WORDS["neither"]!) {
+        expect(literalStatement(denied, value)).toBeNull();
+        expect(claimsProblem([{ actual: "result", compare: "equal", expected: { literal: value } }], literalShape(denied))).not.toBeNull();
+      }
+    }));
 
   it("refuses a table literal under every compare when one pattern says the word and another says not the word", () => {
     const shape = { ...literalShape("the list is empty"), patterns: ["the list is empty", "the list is not empty"] };

@@ -563,12 +563,13 @@ export const THEN_STATES_NO_VALUE =
   "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty)";
 
 /** Every fixed word of `pattern` that states a literal (`LITERAL_WORDS`),
- * in order, with the values it fixes. Pure. */
+ * in order, with the values it states there: the claim rule decides, so a
+ * `neither` that a `nor` follows states nothing here either. Pure. */
 function literalWords(pattern: string | null): readonly { readonly word: string; readonly values: readonly ClaimLiteral[] }[] {
   if (pattern === null) return [];
   return fixedWords(pattern).flatMap((word) => {
-    const values = LITERAL_WORDS[word.toLowerCase()];
-    return values === undefined || values.length === 0 ? [] : [{ word, values }];
+    const values = (LITERAL_WORDS[word.toLowerCase()] ?? []).filter((value) => literalStatement(pattern, value)?.words === word);
+    return values.length === 0 ? [] : [{ word, values }];
   });
 }
 
@@ -592,7 +593,8 @@ export function wordLiteral(
   if (pattern === null || jsonType === null) return null;
   for (const { word, values } of literalWords(pattern)) {
     const literal = values.find((value) => jsonTypeOfLiteral(value) === jsonType);
-    if (literal !== undefined) return { word, literal, compare: literalStatement(pattern, literal)?.compare ?? "equal" };
+    const compare = literal === undefined ? null : literalStatement(pattern, literal)?.compare;
+    if (literal !== undefined && (compare === "equal" || compare === "not-equal")) return { word, literal, compare };
   }
   return null;
 }

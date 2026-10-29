@@ -1311,7 +1311,7 @@ export default defineStep({
     });
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
     expect(checked.stdout + checked.stderr).toContain(
-      `defineStep claims[0].expected is the literal ${literal}, which the word "${word}" fixes, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it.`,
+      `defineStep claims[0].expected is the literal ${literal}, which the word "${word}" fixes, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\", \"neither\", or \"nor\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it.`,
     );
   });
 
@@ -1333,7 +1333,7 @@ export default defineStep({
     const checked = await cli(refused, ["check", "features/t.feature"]);
     expect(checked.exitCode).toBe(1);
     expect(checked.stdout + checked.stderr).toContain(
-      `defineStep claims[0].expected is the literal [], which the words "not empty" rule out, and claims[0].compare is "equal". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it.`,
+      `defineStep claims[0].expected is the literal [], which the words "not empty" rule out, and claims[0].compare is "equal". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\", \"neither\", or \"nor\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it.`,
     );
   });
 });

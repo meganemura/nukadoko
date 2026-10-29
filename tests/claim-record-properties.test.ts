@@ -237,17 +237,27 @@ describe("the literal nuka scaffold --then writes for a word", () => {
 
   it("is of the chained value's JSON type, one the literal rule accepts with the compare it writes, and there exactly when a word fixes a value of that type", () =>
     hegel.testAsync(async (tc) => {
-      const words = tc.draw(gs.arrays(gs.sampledFrom(["the", "list", "is", "not", "shows", "{count:int}", "NO", "none", "nothing", "empty"]), { minSize: 1, maxSize: 5 }));
+      const words = tc.draw(gs.arrays(gs.sampledFrom(["the", "list", "is", "not", "shows", "{count:int}", "NO", "none", "nothing", "empty", "neither", "nor"]), { minSize: 1, maxSize: 5 }));
       const pattern = words.join(" ");
       const jsonType = tc.draw(gs.sampledFrom<ChainedJsonType>(["string", "number", "array", null]));
       const chosen = wordLiteral(pattern, jsonType);
-      const fixesOne = words.some((word) => (LITERAL_WORDS[word.toLowerCase()] ?? []).some((value) => jsonTypeOf(value) === jsonType));
+      const shape = { patterns: [pattern], argsKeys: null, requiredArgsKeys: null, fromKeys: new Set(["got"]), captureKeys: new Set<string>(), hasObserve: false, rewrittenArgs: new Map(), stringArgs: null };
+      // A word fixes a value of the type when the claim rule accepts that
+      // value under one of the two compares a word allows.
+      const accepted = (value: unknown) => (["equal", "not-equal"] as const).some((compare) => claimsProblem([{ actual: "got", compare, expected: { literal: value as never } }], shape) === null);
+      const fixesOne = words.some((word) => (LITERAL_WORDS[word.toLowerCase()] ?? []).some((value) => jsonTypeOf(value) === jsonType && accepted(value)));
       expect(chosen !== null).toBe(jsonType !== null && fixesOne);
       if (chosen === null) return;
       expect(jsonTypeOf(chosen.literal)).toBe(jsonType);
       expect(LITERAL_WORDS[chosen.word.toLowerCase()]).toContainEqual(chosen.literal);
       expect(literalStatedBy(pattern, chosen.literal)).not.toBeNull();
-      const shape = { patterns: [pattern], argsKeys: null, requiredArgsKeys: null, fromKeys: new Set(["got"]), captureKeys: new Set<string>(), hasObserve: false, rewrittenArgs: new Map(), stringArgs: null };
       expect(claimsProblem([{ actual: "got", compare: chosen.compare, expected: { literal: chosen.literal } }], shape)).toBeNull();
     }));
+
+  it("writes no literal for a neither that a nor follows, and not-equal for a table word right after neither or nor", () => {
+    expect(wordLiteral("the reply is neither blank nor whitespace", "string")).toBeNull();
+    expect(wordLiteral("the reply is neither empty nor blank", "string")).toEqual({ word: "empty", literal: "", compare: "not-equal" });
+    expect(wordLiteral("the reply is neither blank nor empty", "array")).toEqual({ word: "empty", literal: [], compare: "not-equal" });
+    expect(wordLiteral("neither host path links to it any more", "array")).toEqual({ word: "neither", literal: [], compare: "equal" });
+  });
 });
