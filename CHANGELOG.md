@@ -271,6 +271,29 @@ just until 0.1.
   `0`, compared with `equal` alone (or `not-equal` alone right after
   `not`), as `no` does. `nuka scaffold --then` writes a literal for each
   of the three words.
+- **The program file can name the places the program has.** `lists`
+  in `nukadoko.program.ts` names one command per kind of place,
+  `routes` and `flags`, and each prints one JSON object per line in the
+  words the execution events use: `{ method, route, handler? }` for a
+  route, the method uppercase and the route's template, and
+  `{ name, sides }` for a flag. A key of the program's own starts with
+  `x_`; any other key the kind does not have is refused, and so is a
+  lowercase method, which would match no request line. In a world
+  nukadoko serves with `{events}`, each command runs once after `setup`,
+  in the tree's root with the world's env and placeholders, so it can
+  ask the running program; it has 60,000 ms, `{ command, timeout_ms }`
+  sets another limit, and its stderr goes to `program.log`. A list is
+  read whole or not at all: a command that cannot start, exits with
+  another code than 0, passes its limit, prints more than 16 MiB, or
+  prints one line that is not one entry of its kind leaves the list
+  unread and raises the new `program-list-unread` warning, which names
+  the command and the line, and the world still runs every scenario.
+  run.json's world gets `lists`, with each kind's `entries` count or
+  the `error` that says why it was not read, and a `lists` phase in
+  `commands` and `lists_ms` in `timings`. A world at a `url`, a world
+  with no events file, the base and old worlds under `--base`, and
+  `nuka do` read no list. docs/spec.md "Lists" gives the one-line
+  command a Rails application prints its routes with.
 - **A broken `has-same-items` line names the items the two lists do not
   share.** It ended with the outcome alone, so a reader compared the two
   lists by eye. It now names the expected items that no actual item

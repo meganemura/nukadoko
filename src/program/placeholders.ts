@@ -84,7 +84,7 @@ export function fillPlaceholders(text: string, values: PlaceholderValues): { rea
 /** A field of a recipe that names a placeholder its world has no value for. */
 export interface PlaceholderGap {
   /** The field, as a message names it: `build[0]`, `prepare[1]`,
-   * `serve.command`, or `env.PORT`. */
+   * `serve.command`, `lists.routes`, or `env.PORT`. */
   readonly where: string;
   readonly name: PlaceholderName;
   /** Why the world has no value for it. */
@@ -113,15 +113,20 @@ function conditionAbsence(name: string, conditions: Conditions | undefined): str
 
 /** Each field of `recipe`, and each placeholder it names, that its world
  * has no value for, in the order the world would reach them: build,
- * prepare, serve, then env. A placeholder named twice in one field is one
- * gap. */
+ * prepare, serve, lists, then env. A placeholder named twice in one field
+ * is one gap. A `lists` command runs only in a world nukadoko serves, so
+ * only a served world's are read. */
 export function placeholderGaps(
-  recipe: Pick<ProgramRecipe, "build" | "prepare" | "reach" | "env"> & { readonly conditions?: Conditions | undefined },
+  recipe: Pick<ProgramRecipe, "build" | "prepare" | "reach" | "env"> & {
+    readonly lists?: ProgramRecipe["lists"] | undefined;
+    readonly conditions?: Conditions | undefined;
+  },
 ): PlaceholderGap[] {
   const fields: { readonly where: string; readonly texts: readonly string[]; readonly reach: ProgramRecipe["reach"]["kind"] | "build" }[] = [
     ...recipe.build.map(({ command }, index) => ({ where: `build[${index}]`, texts: commandWords(command), reach: "build" as const })),
     ...recipe.prepare.map(({ command }, index) => ({ where: `prepare[${index}]`, texts: commandWords(command), reach: recipe.reach.kind })),
     ...(recipe.reach.kind === "serve" ? [{ where: "serve.command", texts: commandWords(recipe.reach.serve.command), reach: recipe.reach.kind }] : []),
+    ...(recipe.reach.kind === "serve" ? (recipe.lists ?? []).map(({ kind, command }) => ({ where: `lists.${kind}`, texts: commandWords(command), reach: recipe.reach.kind })) : []),
     ...Object.entries(recipe.env).map(([key, value]) => ({ where: `env.${key}`, texts: [value], reach: recipe.reach.kind })),
   ];
   const gaps: PlaceholderGap[] = [];

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
 import { BOOLEAN_TEXTS, CONDITION_NAME_PATTERN, CONDITION_VALUE_PATTERN, type Conditions } from "../condition/condition.js";
+import { LIST_KINDS, type ListKind } from "../execution-events/lists.js";
 // Responsibility: the validated shape of nukadoko.program.ts's default
 // export (docs/spec.md "Program"): how nukadoko builds, prepares, starts,
 // or reaches the program under test, the environment its processes get,
@@ -43,6 +44,9 @@ const commandSchema = z
 export const DEFAULT_COMMAND_TIMEOUT_MS = 600_000;
 export const DEFAULT_SETUP_TIMEOUT_MS = 60_000;
 export const DEFAULT_URL_TIMEOUT_MS = 60_000;
+/** How long a `lists` command may run: a list is read while the world
+ * waits to run its first scenario. */
+export const DEFAULT_LIST_TIMEOUT_MS = 60_000;
 
 /** Every `timeout_ms` of the file: whole milliseconds, from 1 to the
  * longest delay a timer keeps (src/timer/max-delay.ts), refused when the
@@ -63,9 +67,20 @@ export interface TimedCommand {
   readonly timeout_ms: number;
 }
 
-function timedCommand(entry: z.infer<typeof stepCommandSchema>): TimedCommand {
-  if (typeof entry === "string" || Array.isArray(entry)) return { command: entry, timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS };
-  return { command: entry.command, timeout_ms: entry.timeout_ms ?? DEFAULT_COMMAND_TIMEOUT_MS };
+function timedCommand(entry: z.infer<typeof stepCommandSchema>, timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS): TimedCommand {
+  if (typeof entry === "string" || Array.isArray(entry)) return { command: entry, timeout_ms: timeoutMs };
+  return { command: entry.command, timeout_ms: entry.timeout_ms ?? timeoutMs };
+}
+
+/** `lists`: one command per kind of list the program prints
+ * (src/execution-events/lists.ts), each a `build` entry's shape. */
+const listsSchema = z
+  .object({ routes: stepCommandSchema.optional(), flags: stepCommandSchema.optional() } satisfies Record<ListKind, unknown>)
+  .strict();
+
+/** A list a world reads, with its command and limit. */
+export interface ProgramList extends TimedCommand {
+  readonly kind: ListKind;
 }
 
 /** What a `url` function knows before the program is reached. */
@@ -206,6 +221,10 @@ const programFields = {
     ])
     .optional(),
   env: z.record(z.string(), z.string()).optional(),
+  /** Run once per served world with an events file, after `setup`, with
+   * the world's env: each prints the program's places of one kind
+   * (docs/spec.md "Lists"). */
+  lists: listsSchema.optional(),
   /** A function, or one with a `timeout_ms` of its own as `run`. */
   setup: z.union([setupFunctionSchema, z.object({ run: setupFunctionSchema, timeout_ms: timeoutSchema.optional() }).strict()]).optional(),
 };
@@ -317,6 +336,8 @@ export interface ProgramRecipe {
   readonly build: readonly TimedCommand[];
   readonly prepare: readonly TimedCommand[];
   readonly reach: ProgramReach;
+  /** One per kind `lists` names, in LIST_KINDS order. */
+  readonly lists: readonly ProgramList[];
   readonly env: Readonly<Record<string, string>>;
   readonly setup: { readonly run: ProgramSetup; readonly timeout_ms: number } | undefined;
   /** The environment's `conditions`, which fill `{condition.<name>}`
@@ -334,6 +355,13 @@ function reachOf(fields: { serve?: ProgramServe | undefined; url?: UrlField | un
   return { kind: "url", url: fields.url.resolve, timeout_ms: fields.url.timeout_ms ?? DEFAULT_URL_TIMEOUT_MS };
 }
 
+function listsOf(lists: Program["lists"]): readonly ProgramList[] {
+  return LIST_KINDS.flatMap((kind) => {
+    const entry = lists?.[kind];
+    return entry === undefined ? [] : [{ kind, ...timedCommand(entry, DEFAULT_LIST_TIMEOUT_MS) }];
+  });
+}
+
 function setupOf(setup: SetupField | undefined): ProgramRecipe["setup"] {
   if (setup === undefined) return undefined;
   if (typeof setup === "function") return { run: setup, timeout_ms: DEFAULT_SETUP_TIMEOUT_MS };
@@ -344,12 +372,14 @@ function setupOf(setup: SetupField | undefined): ProgramRecipe["setup"] {
  * writes replaces the top level's, except `env`, whose keys merge with the
  * environment's winning, so an environment that changes one variable does
  * not repeat the rest. `serve` and `url` are one choice: an environment that
- * writes either replaces the top level's. Pure. */
+ * writes either replaces the top level's. An environment's `lists`
+ * replaces the top level's whole, so `lists: {}` reads none there. Pure. */
 export function layerProgram(program: Program, environment: ProgramEnvironment | undefined): ProgramRecipe {
   return {
-    build: (environment?.build ?? program.build ?? []).map(timedCommand),
-    prepare: (environment?.prepare ?? program.prepare ?? []).map(timedCommand),
+    build: (environment?.build ?? program.build ?? []).map((entry) => timedCommand(entry)),
+    prepare: (environment?.prepare ?? program.prepare ?? []).map((entry) => timedCommand(entry)),
     reach: (environment === undefined ? undefined : reachOf(environment)) ?? reachOf(program) ?? { kind: "none" },
+    lists: listsOf(environment?.lists ?? program.lists),
     env: { ...(program.env ?? {}), ...(environment?.env ?? {}) },
     setup: setupOf(environment?.setup ?? program.setup),
     conditions: environment?.conditions,

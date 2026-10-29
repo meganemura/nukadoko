@@ -187,7 +187,7 @@ const integersStayExact: SourceReviver = (_key, value, context) => {
 
 /** The first key one object of `text` holds twice, or `undefined`.
  * `text` is JSON that parsed, so every string and bracket is whole. */
-function repeatedKey(text: string): string | undefined {
+export function repeatedKey(text: string): string | undefined {
   const frames: { readonly keys: Set<string> | null; expectKey: boolean }[] = [];
   for (let at = 0; at < text.length; at += 1) {
     const char = text[at];

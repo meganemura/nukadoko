@@ -18,7 +18,8 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // after it answered, and not at the stop: only a wait before the stop
 // reads it. `/spliced` splits one line across two writes with another line
 // between them. `/secret` writes the world's token inside an event.
-// `/inlet` answers where the events file is, who may read it, and which
+// `/missing` matches no route, so its request line names none. `/inlet`
+// answers where the events file is, who may read it, and which
 // variables of the server's environment name a file nukadoko made for
 // events. `/lobby` reads the rooms, asks the flag `score_input_slider`, and
 // records that it asked as one committed insert into `events`: a GET whose
@@ -76,7 +77,10 @@ createServer(async (req, res) => {
   let route = url.pathname;
   let status = 200;
   let body = "ok";
-  if (url.pathname.startsWith("/rooms/")) {
+  if (url.pathname.startsWith("/missing")) {
+    route = null;
+    status = 404;
+  } else if (url.pathname.startsWith("/rooms/")) {
     route = "/rooms/:id";
     emit({ trace, kind: "db", id: newId(), parent: id, table: "rooms", op: "read", rows: 1 });
   } else if (url.pathname === "/scores" && url.searchParams.get("rollback") === "1") {

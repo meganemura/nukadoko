@@ -2960,6 +2960,7 @@ both trees sit inside.
 | `serve` | `{ command, port, ready, timeout_ms }`: the server nukadoko starts, waits for, and stops (below) |
 | `url` | an `http:` or `https:` URL, or a function of the world that returns one, for a program nukadoko does not start (below) |
 | `env` | the variables the world's processes and the steps' process get, with placeholders (below) |
+| `lists` | `{ routes, flags }`: one command per kind of place the program has, each printing one JSON object per place, read in a world nukadoko serves with an events file (see "Lists") |
 | `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, signal, url, port, env }` (`{ run, timeout_ms }` to give it a limit of its own, below) |
 | `environments` | named overrides of any field above, plus `policy`, `envFiles`, `version`, and `conditions` (below) |
 | `defaultEnvironments` | the environments a run without `--env` starts, in this order: names of `environments`, or `default` (below) |
@@ -3098,6 +3099,7 @@ the terminal to say on what.
 | `serve`, until `ready` answers | 60,000 ms | `serve.timeout_ms` |
 | `setup` | 60,000 ms | `setup: { run, timeout_ms }` |
 | a `url` function | 60,000 ms | `url: { resolve, timeout_ms }` |
+| each `lists` command | 60,000 ms | `{ command, timeout_ms }` in place of the command |
 
 ```ts
 export default defineProgram({
@@ -3134,8 +3136,8 @@ nukadoko even then (see "serve").
 
 ### Placeholders
 
-`env` values and the words of `prepare` and `serve` commands may name a
-placeholder:
+`env` values and the words of `prepare`, `serve`, and `lists` commands
+may name a placeholder:
 
 | Placeholder | Its value |
 | --- | --- |
@@ -3150,6 +3152,8 @@ placeholder:
 
 `build` runs once per tree, before any world exists, so a `build` command
 may name `{root}` alone.
+A `lists` command runs only in a world nukadoko serves, which has every
+value but a `{condition.<name>}` its environment does not declare.
 Every world with a URL has a port, so an environment that swaps `serve`
 for a `url` keeps a top-level `PORT: "{port}"`.
 A placeholder the world has no value for is refused by name before
@@ -3251,7 +3255,7 @@ reads state creates it first and claims only on what it created.
   the start is running, starts no worker, and reports `run-incomplete`
   instead of `program-start-failed`: the program did not fail.
 - A world prints one line on stderr as each `build`, `prepare`,
-  `serve`, and `setup` phase starts, so a long wait says what it waits
+  `serve`, `setup`, and `lists` phase starts, so a long wait says what it waits
   on.
   A world that ran a command or `setup` prints one more once it is
   ready, with what each phase took, the URL, and the log.
@@ -3319,7 +3323,7 @@ them:
 - `commands` lists what the world ran, placeholders filled and redacted.
   A `build` appears in the first world that ran it.
 - `timings` holds a key for each phase that ran: `build_ms`,
-  `prepare_ms`, `serve_ms`, `setup_ms`, and `stop_ms`.
+  `prepare_ms`, `serve_ms`, `setup_ms`, `lists_ms`, and `stop_ms`.
 - `log` is relative to the run directory, `null` when the world ran no
   command.
 - `error` is why the program did not start, `null` when it did.
@@ -3338,6 +3342,8 @@ them:
   does not define.
   It is `null` for a world at a `url`, and absent for a world whose
   program file does not name `{events}` or that did not start.
+- `lists` holds each list the world read, by kind, with how many
+  entries it holds or why it was not read (see "Lists").
 
 Each step record names its world in `world_name`, the `name` of a
 `worlds` entry, or `null` when no world ran.
@@ -4258,6 +4264,107 @@ What this does not reach, in one list:
   range: a program that writes lines without the request's trace leaves
   an absence unproven.
 - A line written after the world stopped is in no count.
+
+### Lists
+
+A program has places a scenario can reach, such as its routes and its
+flags.
+The execution events say which of them a step reached; only the program
+can say which it has.
+`lists` in the program file names one command per kind of place, and
+each command prints the program's places of that kind, one JSON object
+per line:
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "node server.js", ready: "/up" },
+  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+  lists: {
+    routes: "node scripts/routes.mjs",
+    flags: ["node", "scripts/flags.mjs", "{url}"],
+  },
+});
+```
+
+| Kind | A line | Its fields |
+| --- | --- | --- |
+| `routes` | `{"method":"PUT","route":"/rooms/:id","handler":"rooms#update"}` | `method` and `route`, each as a `request` line names it: the method in uppercase, and the route's template; `handler`, optional, what the route runs, in the program's own words |
+| `flags` | `{"name":"quick_reorder","sides":["off","on"]}` | `name`, and `sides`, every side a `flag` line may name for the flag |
+
+- A list names each place in the words the execution events use, and
+  nukadoko compares the two as text, exactly.
+  A method in lowercase would match no `request` line, whose method is
+  uppercase, so a list that holds one is refused.
+- A key a program makes up for itself starts with `x_`, and nukadoko
+  reads it for nothing.
+  Any other key the kind does not have is refused, so a misspelt
+  `handler` is not read as one that is absent.
+- A line of whitespace alone is passed over, and a CR before a line
+  feed is too.
+- An entry printed twice is one entry.
+  A route printed twice with two handlers keeps both, since a `request`
+  line names its method and route and not which handler ran, and a flag
+  printed twice keeps every side either line declares.
+
+A Rails application prints its routes with no dependency.
+The command is one argv word to `bin/rails runner`, so no shell reads it:
+
+```ts
+lists: {
+  routes: [
+    "bin/rails",
+    "runner",
+    'Rails.application.routes.routes.reject(&:internal).each { |r| r.verb.split("|").each { |verb| puts({ method: verb, route: r.path.spec.to_s.delete_suffix("(.:format)"), handler: r.defaults.values_at(:controller, :action).compact.join("#").presence }.compact.to_json) } }',
+  ],
+},
+```
+
+A route that answers more than one method has one line per method, and
+a mounted application, which has no controller, has no `handler`.
+
+Each command runs once per world, in a world nukadoko serves whose
+program file names `{events}`, of the tree the run was started in:
+
+- It runs after `serve` answers `ready` and `setup` has run, so a
+  command may ask the running program, as a client of its API does.
+- It runs in the tree's root with the world's env, its words fill the
+  placeholders a `prepare` command's do, what it prints on stderr goes
+  to `program.log`, and what it prints on stdout is the list.
+- It has 60,000 ms to finish (see "Limits").
+- A world at a `url`, a world with neither `serve` nor `url`, a world
+  with no events file, the base and old worlds of `nuka run --base`, and
+  `nuka do` read no list: a list is read against the lines of a run's
+  steps, which no other world has.
+- An environment's `lists` replaces the top level's whole, so
+  `lists: {}` reads none in that environment.
+
+A list is read whole or not at all.
+When its command cannot start, exits with a code other than 0, passes
+its limit, prints more than 16 MiB, or prints one line that is not one
+entry of its kind, the world still runs its scenarios, and no row of the
+table turns red.
+The world's record says why the list was not read, the run raises
+`program-list-unread`, a warning that names the command and, for a line,
+its number and what is wrong with it, and nothing of the list counts.
+Read in part, a list would leave out what the line it could not read
+named, and a request to that route would read as one the list does not
+name.
+
+`run.json`'s world records each list it read, by kind:
+
+```json
+"lists": {
+  "routes": { "entries": 31, "error": null },
+  "flags": { "entries": null, "error": "lists.flags command bin/rails runner script/flags.rb exited with code 1" }
+}
+```
+
+- `entries` is how many places the list holds, each counted once.
+- `error` is why the list was not read, and `entries` is then `null`.
+- `lists` is absent from a world that read none.
 
 ### A Ruby program
 

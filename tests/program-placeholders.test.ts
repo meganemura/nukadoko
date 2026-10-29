@@ -90,13 +90,16 @@ describe("placeholderGaps", () => {
       const build = tc.draw(gs.arrays(command, { maxSize: 2 }));
       const prepare = tc.draw(gs.arrays(command, { maxSize: 2 }));
       const env = Object.fromEntries(tc.draw(gs.arrays(gs.tuples(gs.sampledFrom(["A", "B", "C"]), word), { maxSize: 3 })));
+      const lists = tc.draw(gs.arrays(command, { maxSize: 2 })).map((words, index) => ({ kind: (["routes", "flags"] as const)[index]!, ...timed(words) }));
       const reach = reachOf(kind);
-      const gaps = placeholderGaps({ build: build.map(timed), prepare: prepare.map(timed), reach, env });
+      const gaps = placeholderGaps({ build: build.map(timed), prepare: prepare.map(timed), reach, lists, env });
 
       const fields: [string, readonly string[], "serve" | "url" | "none" | "build"][] = [
         ...build.map((words, index): [string, readonly string[], "build"] => [`build[${index}]`, words, "build"]),
         ...prepare.map((words, index): [string, readonly string[], typeof kind] => [`prepare[${index}]`, words, kind]),
         ...(kind === "serve" ? [["serve.command", ["node", "server.js"], kind] as [string, readonly string[], typeof kind]] : []),
+        // A list runs only in a world nukadoko serves.
+        ...(kind === "serve" ? lists.map((list): [string, readonly string[], typeof kind] => [`lists.${list.kind}`, list.command as readonly string[], kind]) : []),
         ...Object.entries(env).map(([key, value]): [string, readonly string[], typeof kind] => [`env.${key}`, [value], kind]),
       ];
       for (const [where, words, fieldKind] of fields) {

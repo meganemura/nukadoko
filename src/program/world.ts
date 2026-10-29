@@ -9,7 +9,8 @@ import { collectLateLines, type LateSlice, type TracedStep } from "../context/pr
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
 import type { FlagEvaluation } from "../execution-events/format.js";
-import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldName } from "../record/run-result.js";
+import { parseList, type ListedPlaces, type ListKind } from "../execution-events/lists.js";
+import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldList, RunWorldName } from "../record/run-result.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
@@ -102,6 +103,16 @@ import type { WorldView } from "./world-view.js";
 // the world's env without any variable that names `{events}`, so no
 // step's code, and no process a step starts, can write to the file.
 //
+// Such a world of head's tree, under a starter that reads lists (`nuka
+// run`'s), runs each `lists` command once the program answers and
+// `setup` has run, so a command may ask the running program, with the
+// world's env, and reads what it printed (src/execution-events/lists.ts).
+// Only those worlds read lists: a list is read against the steps' event
+// lines, which no other world has, and only a run's record reads it. A
+// list command that fails, passes its limit, or prints what is not a list
+// fails no world: the record names why its list was not read, and nothing
+// of it counts.
+//
 // A program nukadoko started must not outlive nukadoko, however nukadoko
 // ends: a signal that arrives while a world is still starting, a step that
 // calls process.exit, or a crash. Every child this module starts is listed
@@ -142,6 +153,9 @@ export interface WorldStop {
 export interface StartedWorld {
   readonly ok: true;
   readonly view: WorldView;
+  /** The entries of each list the world read, by kind; a list that was
+   * not read is absent (its record says why). */
+  readonly lists: Partial<ListedPlaces>;
   /** Stops the program and closes the log, then finds the late lines of
    * `steps`, the pass's steps, copies the world's events (module
    * header), and counts each of `recounts`, the claim steps' readings
@@ -184,6 +198,9 @@ export interface WorldStarterOptions {
    * world whose `url` function answers with it is `unavailable` (module
    * header). */
   readonly headUrls?: ReadonlyMap<string, string>;
+  /** `true` when head's served worlds read the program file's `lists`
+   * (module header). */
+  readonly lists?: true;
 }
 
 export interface WorldStarter {
@@ -199,6 +216,8 @@ const READY_REQUEST_MS = 2_000;
 export const STOP_GRACE_MS = 5_000;
 const STREAMS_CLOSE_MS = 1_000;
 const GROUP_POLL_MS = 50;
+/** The most a list command may print; past it the list is not read. */
+const LIST_OUTPUT_CAP_BYTES = 16 * 1024 * 1024;
 
 class WorldStartError extends Error {}
 
@@ -284,7 +303,8 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       const allSecrets: SecretSet = [...secrets, ...worldSecrets];
       const log = openProgramLog(path.join(dir, "program.log"), allSecrets);
       const commands: RunWorldCommand[] = [];
-      const timings: Partial<Record<"build_ms" | "prepare_ms" | "serve_ms" | "setup_ms" | "stop_ms", number>> = {};
+      const timings: Partial<Record<"build_ms" | "prepare_ms" | "serve_ms" | "setup_ms" | "lists_ms" | "stop_ms", number>> = {};
+      const listed: Partial<Record<ListKind, RunWorldList>> = {};
       let url: string | undefined;
       let server: ServeProcess | undefined;
       let programLog: RunWorld["program_log"];
@@ -303,6 +323,13 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         error: error === null ? null : redactString(error, allSecrets),
         ...(programLog === undefined ? {} : { program_log: programLog }),
         ...(worldEvents === undefined ? {} : { events: worldEvents }),
+        ...(Object.keys(listed).length === 0
+          ? {}
+          : {
+              lists: Object.fromEntries(
+                Object.entries(listed).map(([kind, list]) => [kind, list.error === null ? list : { entries: null, error: redactString(list.error, allSecrets) }]),
+              ),
+            }),
       });
       const run = (phase: RunWorldCommand["phase"], argv: readonly string[], timeoutMs: number, env: NodeJS.ProcessEnv): Promise<void> => {
         commands.push({ phase, argv });
@@ -477,6 +504,24 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           timings.setup_ms = Date.now() - started;
         }
 
+        let places: Partial<ListedPlaces> = {};
+        if (options.lists === true && tree === "head" && inlet !== undefined && recipe.lists.length > 0) {
+          const started = Date.now();
+          const lists = recipe.lists.map((list) => ({ kind: list.kind, argv: filledArgv(list.command, values, `lists.${list.kind}`), timeoutMs: list.timeout_ms }));
+          announce(`lists started: ${lists.map((list) => display(list.argv)).join("; ")}`);
+          for (const list of lists) {
+            commands.push({ phase: "lists", argv: list.argv });
+            const read = await readList(list.kind, list.argv, list.timeoutMs, childEnv, options.rootDir, log, abort);
+            if ("problem" in read) {
+              listed[list.kind] = { entries: null, error: read.problem };
+            } else {
+              listed[list.kind] = { entries: read.entries.length, error: null };
+              places = { ...places, [list.kind]: read.entries };
+            }
+          }
+          timings.lists_ms = Date.now() - started;
+        }
+
         if (commands.length > 0 || recipe.setup !== undefined) announce(readyLine(timings, url, log.written ? options.displayPath(log.path) : null));
         // A step that could find the events file could append a line the
         // program never wrote, and a claim would read it as the program's.
@@ -493,6 +538,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         return {
           ok: true,
           view,
+          lists: places,
           async stop(steps, recounts) {
             const started = Date.now();
             const exitedEarly = running === undefined || running.exit === null ? null : `the program ${describeExit(running)} during the pass`;
@@ -603,11 +649,41 @@ function spawnPlan(argv: readonly string[], env: NodeJS.ProcessEnv): { file: str
   return process.platform === "win32" ? windowsSpawnPlan(file, args, env) : { file, args, verbatim: false };
 }
 
-/** Runs one build or prepare command to its end, in a process group of
- * its own, and kills what is left of the group once the command exits
- * (module header). A start failure, a non-zero exit, or `timeoutMs`
+/** Runs one list command to its end and reads what it printed: the
+ * list's entries, or why it was not read. A failure is the list's and
+ * never the world's (module header), so only an abort is thrown. */
+async function readList<K extends ListKind>(
+  kind: K,
+  argv: readonly string[],
+  timeoutMs: number,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  log: ProgramLog,
+  abort: AbortSignal | undefined,
+): Promise<{ readonly entries: ListedPlaces[K] } | { readonly problem: string }> {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  const phase = `lists.${kind}`;
+  try {
+    await runToEnd(phase, argv, timeoutMs, env, cwd, log, abort, (chunk) => {
+      bytes += chunk.length;
+      if (bytes <= LIST_OUTPUT_CAP_BYTES) chunks.push(chunk);
+    });
+  } catch (error) {
+    if (error instanceof WorldStartAborted) throw error;
+    return { problem: error instanceof Error ? error.message : String(error) };
+  }
+  if (bytes > LIST_OUTPUT_CAP_BYTES) return { problem: `${phase} command ${display(argv)} printed more than 16 MiB` };
+  const read = parseList(kind, Buffer.concat(chunks).toString("utf8"));
+  return "problem" in read ? { problem: `${phase} command ${display(argv)} printed a line that is not one entry of the list: ${read.problem}` } : read;
+}
+
+/** Runs one build, prepare, or list command to its end, in a process
+ * group of its own, and kills what is left of the group once the command
+ * exits (module header). A start failure, a non-zero exit, or `timeoutMs`
  * passing is a WorldStartError naming the command; `abort` kills the group
- * at once. */
+ * at once. Its stdout goes to `onStdout` when given, and to the log
+ * otherwise. */
 function runToEnd(
   phase: string,
   argv: readonly string[],
@@ -616,6 +692,7 @@ function runToEnd(
   cwd: string,
   log: ProgramLog,
   abort: AbortSignal | undefined,
+  onStdout?: (chunk: Buffer) => void,
 ): Promise<void> {
   log.note(`$ ${display(argv)}`);
   const plan = spawnPlan(argv, env);
@@ -632,7 +709,7 @@ function runToEnd(
     const group = processGroup(child, groupOfItsOwn);
     const out = log.stream();
     const err = log.stream();
-    child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+    child.stdout.on("data", (chunk: Buffer) => (onStdout === undefined ? out.push(chunk) : onStdout(chunk)));
     child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
     const closed = new Promise<void>((done) => child.once("close", () => done()));
     let settled = false;
@@ -885,10 +962,10 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms).unref());
 }
 
-/** `build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (log <path>)`,
+/** `build 2.1s, prepare 0.4s, serve 1.9s, lists 0.3s, http://localhost:41873  (log <path>)`,
  * after `world <name>: `. */
 function readyLine(timings: RunWorld["timings"], url: string | undefined, log: string | null): string {
-  const phases = (["build", "prepare", "serve", "setup"] as const).flatMap((phase) => {
+  const phases = (["build", "prepare", "serve", "setup", "lists"] as const).flatMap((phase) => {
     const ms = timings[`${phase}_ms`];
     return ms === undefined ? [] : [`${phase} ${(ms / 1000).toFixed(1)}s`];
   });

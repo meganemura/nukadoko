@@ -941,6 +941,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // A command is filled with absolute paths (`{root}`, `{dir}`), and
       // every path nukadoko prints is relative to the project.
       progress: { write: (chunk: string) => progress.write(projectRelativeText(chunk, rootDir)) },
+      lists: true,
     });
     const worlds: RunWorld[] = [];
     // The URL each of head's worlds reached, unredacted, so the base world
@@ -957,6 +958,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       if (started.ok) {
         redactOutput(started.view.secrets);
         if (started.view.url !== undefined) headUrls.set(pass.resolvedEnv.name, started.view.url);
+        const record = started.record();
+        for (const [kind, list] of Object.entries(record.lists ?? {})) {
+          if (list.error === null) continue;
+          const log = record.log === null ? "" : `; see ${projectRelativeText(path.join(runDirAbsolute, record.log), rootDir)}`;
+          warn({ severity: "warning", code: "program-list-unread", message: `world ${record.name}: the ${kind} list was not read: ${list.error}${log}` });
+        }
         return started;
       }
       worlds.push(started.record());

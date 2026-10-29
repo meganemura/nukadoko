@@ -77,9 +77,8 @@ the daemon keeps running, out of nukadoko's reach.
 ## When it does not start
 
 A world that does not start fails the run with `program-start-failed`,
-which names the command, how it ended (a phase past its limit
-included), and the end of the world's
-`program.log`: read that file first, at
+which names the command, how it ended (a phase past its limit included),
+and the end of the world's `program.log`: read that file first, at
 `.nukadoko/runs/<run_id>/worlds/<environment>/program.log`. No scenario
 runs in that environment. A fixed `port` something else already answers
 on is refused the same way, since every request would reach a server
@@ -155,7 +154,8 @@ arrived later is in `events-late.jsonl`, and the run summary names it. The
 whole file, redacted, is in `worlds/<environment>/events.jsonl`; a world at a
 `url` has none, and `observed.events` is `null` there. A `flag` line, late or
 not, also puts its step's criterion in run.json's `flags`, under the side the
-line names (`references/verdicts.md`).
+line names (`references/verdicts.md`). `lists` names the routes and flags the
+program has, one JSON line each (docs/spec.md "Lists").
 
 ## Claiming what the program did
 

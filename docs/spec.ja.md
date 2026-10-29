@@ -2354,6 +2354,7 @@ run の前の検査は、どの build よりも先に head の step ファイル
 | `serve` | `{ command, port, ready, timeout_ms }`: nukadoko が起動し、待ち、止めるサーバ(下記) |
 | `url` | nukadoko が起動しないプログラムの `http:` か `https:` の URL、またはそれを返す world の関数(下記) |
 | `env` | world のプロセスと step のプロセスが受け取る変数。プレースホルダーを使える(下記) |
+| `lists` | `{ routes, flags }`。プログラムが持つ箇所の種類ごとに 1 つのコマンドで、それぞれ箇所ごとに 1 つの JSON オブジェクトを出力する。nukadoko が起動し、イベントのファイルを持つ world で読む(「一覧」を参照) |
 | `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, signal, url, port, env }`(専用の持ち時間を与えるには `{ run, timeout_ms }`、下記) |
 | `environments` | 上のどのフィールドも上書きする名前付きの設定。加えて `policy`、`envFiles`、`version`、`conditions`(下記) |
 | `defaultEnvironments` | `--env` の無い run が起動する environment をこの順に並べたもの。`environments` の名前か `default`(下記) |
@@ -2462,6 +2463,7 @@ world のどの段階にも持ち時間があります。
 | `serve`、`ready` が答えるまで | 60,000 ms | `serve.timeout_ms` |
 | `setup` | 60,000 ms | `setup: { run, timeout_ms }` |
 | `url` の関数 | 60,000 ms | `url: { resolve, timeout_ms }` |
+| `lists` の各コマンド | 60,000 ms | コマンドの代わりに `{ command, timeout_ms }` |
 
 ```ts
 export default defineProgram({
@@ -2490,7 +2492,7 @@ world はそれを待たずに失敗し、`program.log` は、関数が持ち時
 
 ### プレースホルダー
 
-`env` の値と、`prepare` と `serve` のコマンドの語は、プレースホルダーを名指せます:
+`env` の値と、`prepare`、`serve`、`lists` のコマンドの語は、プレースホルダーを名指せます:
 
 | プレースホルダー | 値 |
 | --- | --- |
@@ -2504,6 +2506,8 @@ world はそれを待たずに失敗し、`program.log` は、関数が持ち時
 | `{condition.<name>}` | world の environment が `conditions` でその condition に宣言する値のテキスト。`true`、`false`、または文字列 |
 
 `build` は tree ごとに 1 回、どの world よりも前に実行するので、`build` のコマンドが名指せるのは `{root}` だけです。
+`lists` のコマンドは nukadoko が起動する world でだけ実行します。
+その world は、environment が宣言しない `{condition.<name>}` のほかは、すべての値を持ちます。
 URL を持つ world はどれもポートを持つので、`serve` を `url` に替える environment も、トップレベルの `PORT: "{port}"` をそのまま使えます。
 world が値を持たないプレースホルダーは、何かを実行する前に名前を挙げて拒否されます。
 `serve` も `url` も無い world の `{port}` や `{url}`、nukadoko が serve しない world の `{events}`、そして environment がその condition を宣言しない world の `{condition.<name>}` です。
@@ -2577,7 +2581,7 @@ pass のすべての scenario は同じプログラムに届くので、ある s
   そのため、まだ答えていないサーバが残されることはありません。
   `--concurrency` では、world を起動する親が、起動中に動いているものを kill し、worker を 1 つも起動せず、`program-start-failed` ではなく `run-incomplete` を報告します。
   プログラムが失敗したわけではないからです。
-- world は、`build`、`prepare`、`serve`、`setup` の各段階が始まるときに stderr に 1 行を出します。
+- world は、`build`、`prepare`、`serve`、`setup`、`lists` の各段階が始まるときに stderr に 1 行を出します。
   そのため、長い待ちは何を待っているのかを示します。
   コマンドか `setup` を実行した world は、準備ができた時点でもう 1 行を出し、各段階にかかった時間、URL、ログを示します。
   コマンドの `{dir}` や `{root}` のようにプロジェクトの下にあるパスは、nukadoko が出力するほかのパスと同じく、プロジェクトのルートからの相対パスで出力されます:
@@ -2631,7 +2635,7 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
 - `commands` は world が実行したものを、プレースホルダーを埋め、redact して並べます。
   `build` は、それを実行した最初の world に現れます。
 - `timings` は、実行した段階ごとにキーを持ちます。
-  `build_ms`、`prepare_ms`、`serve_ms`、`setup_ms`、`stop_ms` です。
+  `build_ms`、`prepare_ms`、`serve_ms`、`setup_ms`、`lists_ms`、`stop_ms` です。
 - `log` は run ディレクトリからの相対パスで、world が何のコマンドも実行しなかったときは `null` です。
 - `error` はプログラムが起動しなかった理由で、起動したときは `null` です。
 - `program_log` は、world が止まるときに数えます(「trace context とプログラムのログ」を参照)。
@@ -2643,6 +2647,8 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
 - `events` は、world が止まるときに `{events}` が名指すファイルを数えます(「実行イベント」を参照)。
   すべての行、step の trace id を持つ行、そのうち step の record のあとに届いた行、それを持たない行、読めなかった行、そして形式が定めない種類の行を数えます。
   `url` の world では `null` で、プログラムのファイルが `{events}` を名指さない world と起動しなかった world には現れません。
+- `lists` は、world が読んだ各一覧を種類ごとに持ちます。
+  それぞれ、持つ項目の数か、読まなかった理由です(「一覧」を参照)。
 
 各 step record は、自分の world を `world_name` で名指します。
 `worlds` のエントリの `name` か、world が動かなかったときは `null` です。
@@ -3333,6 +3339,98 @@ claim はまだ届く途中の行で判定されたので、セルはどちら�
 - どの step のものでもない行は数える step のものかもしれないので、範囲を広げます。
   リクエストの trace を付けずに行を書くプログラムでは、不在は示せないままです。
 - world が止まったあとに書かれた行は、どの数にも入りません。
+
+### 一覧
+
+プログラムには、scenario が届きうる箇所があります。
+ルートや flag がその例です。
+実行イベントは、step がそのどれに届いたかを言います。
+プログラムがどの箇所を持つかは、プログラムにしか言えません。
+プログラムのファイルの `lists` は、箇所の種類ごとに 1 つのコマンドを名指します。
+各コマンドは、その種類のプログラムの箇所を、1 行に 1 つの JSON オブジェクトで出力します:
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "node server.js", ready: "/up" },
+  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+  lists: {
+    routes: "node scripts/routes.mjs",
+    flags: ["node", "scripts/flags.mjs", "{url}"],
+  },
+});
+```
+
+| 種類 | 行の例 | フィールド |
+| --- | --- | --- |
+| `routes` | `{"method":"PUT","route":"/rooms/:id","handler":"rooms#update"}` | `method` と `route`。どちらも `request` の行が名指すとおりで、メソッドは大文字、ルートはそのテンプレートです。`handler` は任意で、ルートが実行するものをプログラム自身の語で書きます |
+| `flags` | `{"name":"quick_reorder","sides":["off","on"]}` | `name` と `sides`。`sides` は、`flag` の行がその flag について名指しうるすべての側です |
+
+- 一覧は、各箇所を実行イベントと同じ語で名指します。
+  nukadoko は、その 2 つを文字列として、そのまま比べます。
+  小文字のメソッドは、メソッドが大文字である `request` の行のどれにも一致しません。
+  そのため、それを持つ一覧は拒否されます。
+- プログラムが自分のために作るキーは `x_` で始め、nukadoko はそれを何にも使いません。
+  種類が持たないそれ以外のキーは拒否されます。
+  綴りを誤った `handler` が、無いものとして読まれないようにするためです。
+- 空白だけの行は読み飛ばします。
+  行送りの前の CR も同じです。
+- 2 回出力された項目は、1 つの項目です。
+  2 つのハンドラで 2 回出力されたルートは、両方を持ちます。
+  `request` の行が名指すのはメソッドとルートで、どのハンドラが動いたかではないからです。
+  2 回出力された flag は、どちらかの行が宣言するすべての側を持ちます。
+
+Rails のアプリケーションは、依存無しでルートを出力できます。
+コマンドは `bin/rails runner` への 1 つの argv の語なので、shell はそれを読みません:
+
+```ts
+lists: {
+  routes: [
+    "bin/rails",
+    "runner",
+    'Rails.application.routes.routes.reject(&:internal).each { |r| r.verb.split("|").each { |verb| puts({ method: verb, route: r.path.spec.to_s.delete_suffix("(.:format)"), handler: r.defaults.values_at(:controller, :action).compact.join("#").presence }.compact.to_json) } }',
+  ],
+},
+```
+
+複数のメソッドに答えるルートは、メソッドごとに 1 行を持ちます。
+mount したアプリケーションには controller が無いので、`handler` がありません。
+
+各コマンドは、run を始めた tree の、nukadoko が起動し、プログラムのファイルが `{events}` を名指す world で、world ごとに 1 回実行します:
+
+- `serve` が `ready` に答え、`setup` が終わったあとに実行します。
+  そのため、コマンドは API のクライアントがするように、動いているプログラムに問い合わせられます。
+- tree のルートで、world の env を付けて実行します。
+  語は `prepare` のコマンドと同じプレースホルダーを埋めます。
+  stderr に出力したものは `program.log` に入り、stdout に出力したものが一覧です。
+- 終わるまでの持ち時間は 60,000 ms です(「持ち時間」を参照)。
+- `url` の world、`serve` も `url` も無い world、イベントのファイルが無い world、`nuka run --base` の base と old の world、そして `nuka do` は、一覧を読みません。
+  一覧は run の step の行と突き合わせて読むもので、それを持つ world はほかに無いからです。
+- environment の `lists` は、トップレベルのものを丸ごと置き換えます。
+  そのため `lists: {}` と書いた environment では、どの一覧も読みません。
+
+一覧は、全部を読むか、まったく読まないかのどちらかです。
+コマンドが起動できない、0 以外のコードで終わる、持ち時間を過ぎる、16 MiB を超えて出力する、またはその種類の項目ではない行を 1 つ出力する、のいずれかのとき、world はそれでも scenario を実行し、表のどの行も赤になりません。
+world の record は、一覧を読まなかった理由を言います。
+run は警告の `program-list-unread` を出し、コマンドと、行のときはその番号とどこが誤りかを名指します。
+その一覧のものは、何も数えません。
+一部だけ読むと、一覧は読めなかった行が名指したものを欠きます。
+すると、そのルートへのリクエストは、一覧が名指さないものとして読まれてしまいます。
+
+`run.json` の world は、読んだ各一覧を種類ごとに記録します:
+
+```json
+"lists": {
+  "routes": { "entries": 31, "error": null },
+  "flags": { "entries": null, "error": "lists.flags command bin/rails runner script/flags.rb exited with code 1" }
+}
+```
+
+- `entries` は、一覧が持つ箇所の数で、それぞれ 1 回だけ数えます。
+- `error` は一覧を読まなかった理由で、そのとき `entries` は `null` です。
+- 一覧を 1 つも読まなかった world には、`lists` がありません。
 
 ### Ruby のプログラム
 

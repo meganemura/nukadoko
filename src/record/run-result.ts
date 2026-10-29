@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { ListKind } from "../execution-events/lists.js";
 import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
@@ -404,7 +405,7 @@ export interface RunEnvironment {
 
 /** One command a world ran, in the order it ran. */
 export interface RunWorldCommand {
-  readonly phase: "build" | "prepare" | "serve";
+  readonly phase: "build" | "prepare" | "serve" | "lists";
   readonly argv: readonly string[];
 }
 
@@ -426,7 +427,7 @@ export interface RunWorld {
    * needed them, since a tree builds once per run. */
   readonly commands: readonly RunWorldCommand[];
   /** Milliseconds per phase, for the phases that ran. */
-  readonly timings: Readonly<Partial<Record<"build_ms" | "prepare_ms" | "serve_ms" | "setup_ms" | "stop_ms", number>>>;
+  readonly timings: Readonly<Partial<Record<"build_ms" | "prepare_ms" | "serve_ms" | "setup_ms" | "lists_ms" | "stop_ms", number>>>;
   /** `program.log`, relative to the run directory, or `null` when the
    * world ran no command. */
   readonly log: string | null;
@@ -444,7 +445,16 @@ export interface RunWorld {
    * `{events}`, one with no URL, one that did not start, and in a
    * run.json an earlier build wrote. */
   readonly events?: RunWorldEvents | null;
+  /** Each list of the program file's `lists` the world read
+   * (docs/spec.md "Lists"), by kind. Present only for a head world
+   * nukadoko served with an events file, whose program file names
+   * `lists`. */
+  readonly lists?: Readonly<Partial<Record<ListKind, RunWorldList>>>;
 }
+
+/** One list a world read: how many entries it holds, or why it was not
+ * read, and then nothing of it counts. */
+export type RunWorldList = { readonly entries: number; readonly error: null } | { readonly entries: null; readonly error: string };
 
 /** A served world's execution events, counted when the world stopped. */
 export interface RunWorldEvents {

@@ -728,7 +728,24 @@
       "en": ["group (of the lines a count counted)", "the lines a count counted"],
       "ja": "グループ / 数えた行",
       "note": "実行イベントの数が数えた行を、その種類のグループのフィールドが同じ値を持つ行ごとにまとめたもの。フィールド `counted`、`fields`、`lines` と、claim の行の `counted 1 line: ...` はコードスパンで英語のまま"
-    }
+    },
+    {
+      "en": ["list (of a program's places)", "lists", "route list", "flag list"],
+      "ja": "一覧",
+      "note": "プログラムのファイルの `lists` のコマンドが出力する、プログラムが持つ箇所の一覧。ルートの一覧、flag の一覧と書く。キー名 `lists` と種類 `routes`、`flags` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["place (a route or a flag a program has)", "places"],
+      "ja": "箇所",
+      "note": "一覧が名指す、プログラムが持つもの(ルート、flag の側)。claim の一辺が読む 場所 とは別の語にしてある"
+    },
+    {
+      "en": ["entry (of a list)", "entries"],
+      "ja": "項目",
+      "note": "一覧の 1 つの箇所。フィールド `entries` はコードスパンで英語のまま"
+    },
+    { "en": ["route", "routes"], "ja": "ルート", "note": "リクエストを受けるパスのテンプレート(`/rooms/:id`)とメソッドの組。`request` の行の `route` フィールドはコードスパンで英語のまま" },
+    { "en": ["handler", "handlers"], "ja": "ハンドラ", "note": "ルートが実行するもの(`rooms#update`)。サーバ と同じく長音を付けない。フィールド名 `handler` はコードスパンで英語のまま" }
   ],
   "keep_english": [
     {

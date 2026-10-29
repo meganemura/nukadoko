@@ -8,6 +8,7 @@ import { loadProgram } from "../src/config/load-program.js";
 import {
   commandWords,
   DEFAULT_COMMAND_TIMEOUT_MS,
+  DEFAULT_LIST_TIMEOUT_MS,
   DEFAULT_SETUP_TIMEOUT_MS,
   DEFAULT_URL_TIMEOUT_MS,
   layerProgram,
@@ -135,6 +136,22 @@ describe("layerProgram", () => {
       else if (own?.url !== undefined) expect(recipe.reach).toEqual({ kind: "url", url: own.url, timeout_ms: DEFAULT_URL_TIMEOUT_MS });
       else expect(recipe.reach).toEqual({ kind: "none" });
     }));
+
+  it("takes lists whole from the environment when it writes them, so lists: {} reads none there", () => {
+    const top = programSchema.parse({
+      serve: { command: "node server.js" },
+      lists: { routes: "node routes.mjs", flags: { command: ["bin/flags"], timeout_ms: 9 } },
+      environments: { own: { lists: { flags: "node flags.mjs" } }, none: { lists: {} }, same: {} },
+    });
+    expect(layerProgram(top, undefined).lists).toEqual([
+      { kind: "routes", command: "node routes.mjs", timeout_ms: DEFAULT_LIST_TIMEOUT_MS },
+      { kind: "flags", command: ["bin/flags"], timeout_ms: 9 },
+    ]);
+    expect(layerProgram(top, top.environments!.own).lists).toEqual([{ kind: "flags", command: "node flags.mjs", timeout_ms: DEFAULT_LIST_TIMEOUT_MS }]);
+    expect(layerProgram(top, top.environments!.none).lists).toEqual([]);
+    expect(layerProgram(top, top.environments!.same).lists).toEqual(layerProgram(top, undefined).lists);
+    expect(programSchema.safeParse({ lists: { rotues: "node routes.mjs" } }).success).toBe(false);
+  });
 });
 
 describe("readyPathProblem", () => {

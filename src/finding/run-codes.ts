@@ -78,6 +78,12 @@ const RUN_CODES = {
     description: "The program a world served exited while the scenarios still ran, so the requests after that found nothing listening.",
     fix: "Read the world's program.log, which the message names, for why the program exited.",
   },
+  "program-list-unread": {
+    severity: "warning",
+    description:
+      "A command under lists in nukadoko.program.ts failed, passed its limit, or printed a line that is not one entry of its list, so that world's list was not read and nothing of it counts.",
+    fix: "Correct the command the message names, or what it prints: one JSON object per line, in the shape docs/spec.md \"Lists\" gives for its kind. Its stderr is in the world's program.log.",
+  },
   "program-log-late": {
     severity: "note",
     description:
