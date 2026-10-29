@@ -14,11 +14,12 @@ import { repoRoot } from "./helpers/fixtures.js";
 // Responsibility: the judgment of a count over execution events
 // (src/execution-events/selection.ts, commit-state.ts, tally.ts, count.ts):
 // what a selection names and refuses, what one line says about it, the
-// commit state of a write, the counts a trace's lines add up to, and the
-// range a compare is judged on. A compare holds or breaks only when every
-// count in the range gives that answer, and gives that answer whenever
-// they all do; the counts of a trace do not depend on the order its lines
-// arrive in.
+// commit state of a write, the counts a trace's lines add up to with
+// the groups of the lines each counts, and the range a compare is judged
+// on. A compare holds or breaks only when every count in the range gives
+// that answer, and gives that answer whenever they all do; the counts of
+// a trace, and their groups, do not depend on the order its lines arrive
+// in.
 
 const readable = (text: string): ReadableLine => {
   const line = parseEventLine(text);
@@ -251,18 +252,40 @@ describe("createTraceTally's counts", () => {
     tally.unowned(readable(JSON.stringify({ trace: traceparent(U, SPANS[1]!), kind: "db", table: "scores", op: "insert", committed: true })));
     tally.unowned(readable(JSON.stringify({ trace: traceparent(U, SPANS[1]!), kind: "db", table: "rooms", op: "insert", committed: true })));
     const reading = tally.reading({ truncated: false, replaced: false });
-    expect(reading.counts).toEqual([{ yes: 0, maybe: { unreadable: 1, undefined_kind: 1, unknown_version: 1, field_unknown: 1, commit_unknown: 1, unowned: 1 } }]);
+    expect(reading.counts).toEqual([{ yes: 0, maybe: { unreadable: 1, undefined_kind: 1, unknown_version: 1, field_unknown: 1, commit_unknown: 1, unowned: 1 }, counted: [] }]);
     expect(reading.unowned).toBe(2);
     expect(rangeOf(reading.counts[0]!, false)).toEqual({ at_least: 0, at_most: null });
   });
 
-  it("decides a write's count when the transaction's line comes after it", () => {
+  it("decides a write's count when the transaction's line comes after it, and counts it in its table's group then", () => {
     const tally = fold([], [], [{ kind: "db", op: "insert", committed: true }]);
     tally.owned(line({ kind: "db", table: "scores", op: "insert", parent: "t1" }));
-    expect(tally.reading({ truncated: false, replaced: false }).counts[0]).toEqual({ yes: 0, maybe: { ...NO_MAYBE, commit_unknown: 1 } });
+    tally.owned(line({ kind: "db", table: "events", op: "insert", committed: true }));
+    expect(tally.reading({ truncated: false, replaced: false }).counts[0]).toEqual({
+      yes: 1,
+      maybe: { ...NO_MAYBE, commit_unknown: 1 },
+      counted: [{ kind: "db", fields: { op: "insert", table: "events" }, lines: 1 }],
+    });
     tally.owned(line({ kind: "tx", id: "t1", phase: "commit" }));
-    expect(tally.reading({ truncated: false, replaced: false }).counts[0]).toEqual({ yes: 1, maybe: NO_MAYBE });
+    expect(tally.reading({ truncated: false, replaced: false }).counts[0]).toEqual({
+      yes: 2,
+      maybe: NO_MAYBE,
+      counted: [
+        { kind: "db", fields: { op: "insert", table: "events" }, lines: 1 },
+        { kind: "db", fields: { op: "insert", table: "scores" }, lines: 1 },
+      ],
+    });
   });
+
+  it("groups exactly the lines it counts, in groups of the selected kind, whatever the trace holds", () =>
+    hegel.test((tc) => {
+      const texts = tc.draw(gs.arrays(op, { maxSize: 14 })).map((entry) => render(entry, T, U, ""));
+      const reading = fold(texts, SPANS).reading({ truncated: false, replaced: false });
+      reading.counts.forEach((count, index) => {
+        expect(count.counted.reduce((total, group) => total + group.lines, 0)).toBe(count.yes);
+        for (const group of count.counted) expect([group.kind, group.lines > 0]).toEqual([selections[index]!.kind, true]);
+      });
+    }));
 
   it("counts the same in any order the trace's lines arrive in", () =>
     hegel.test((tc) => {

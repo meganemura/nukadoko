@@ -147,6 +147,7 @@ describe("readEvents from the world's file", () => {
       trace_id: null,
       count: WRITES,
       range: { at_least: 0, at_most: null },
+      counted: [],
       whole: false,
       open: [{ gap: "producer-not-run" }],
       maybe: { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 },

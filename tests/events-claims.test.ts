@@ -62,8 +62,8 @@ function inputsWith(side: EventsCountSide, pattern: string, args: Record<string,
 }
 
 /** A reading of `range` as the count makes one: a range with no upper
- * bound has a gap open (`gap`), and a wider bounded one has lines that
- * may match. */
+ * bound has a gap open (`gap`), a wider bounded one has lines that may
+ * match, and the lines it counted are inserts into one table. */
 const readingSide = (range: CountRange, gap: EventsGap = { gap: "no-requests" }): EventsCountSide => ({
   label: LABEL,
   of: "post@4",
@@ -71,6 +71,7 @@ const readingSide = (range: CountRange, gap: EventsGap = { gap: "no-requests" })
     range.at_most === null
       ? { range, whole: false, open: [gap], maybe: NO_MAYBE }
       : { range, whole: true, open: [], maybe: { ...NO_MAYBE, unreadable: range.at_most - range.at_least } },
+  counted: range.at_least === 0 ? [] : [{ kind: "db", fields: { op: "insert", table: "scores" }, lines: range.at_least }],
 });
 
 const ranges = gs.composite((tc): CountRange => {
@@ -250,6 +251,7 @@ describe("judging a count", () => {
     const [judged] = await evaluateClaims([onWrites("equal", { literal: 0 })], inputsWith(readingSide({ at_least: 1, at_most: null }, pending), pattern));
     expect(judged!.record).toEqual({
       actual_range: { at_least: 1, at_most: null },
+      counted: [{ kind: "db", fields: { op: "insert", table: "scores" }, lines: 1 }],
       actual_from: LABEL,
       compare: "equal",
       expected: 0,
@@ -260,6 +262,7 @@ describe("judging a count", () => {
     const [open] = await evaluateClaims([onWrites("equal", { literal: 0 })], inputsWith(readingSide({ at_least: 0, at_most: null }, pending), pattern));
     expect(open!.record).toEqual({
       actual_range: { at_least: 0, at_most: null },
+      counted: [],
       actual_from: LABEL,
       compare: "equal",
       expected: 0,
@@ -270,7 +273,7 @@ describe("judging a count", () => {
     });
     const [unread] = await evaluateClaims(
       [onWrites("equal", { literal: 0 })],
-      inputsWith({ label: LABEL, of: "post@4", reading: { range: { at_least: 0, at_most: null }, whole: false, open: [{ gap: "world-unread" }], maybe: NO_MAYBE } }, pattern),
+      inputsWith({ label: LABEL, of: "post@4", reading: { range: { at_least: 0, at_most: null }, whole: false, open: [{ gap: "world-unread" }], maybe: NO_MAYBE }, counted: [] }, pattern),
     );
     expect(unread!.record).toMatchObject({
       outcome: "unjudged",

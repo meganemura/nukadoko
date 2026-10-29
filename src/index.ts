@@ -101,6 +101,7 @@ export type { Claim, ClaimExpected, ClaimLiteral, ClaimPoll, ComparisonClaim, Ea
 export type { EventsCount } from "./step/define-step.js";
 export type { DeclaredEventSelection, EventSelection, SentenceValue } from "./execution-events/selection.js";
 export type { CountCompare, CountRange } from "./execution-events/count.js";
+export type { CountedGroup } from "./execution-events/counted.js";
 export type { EventsGap, GapWord, MaybeCounts } from "./execution-events/tally.js";
 export type { EventsProducerRecord, EventsReadRecord, EventsSlice } from "./record/types.js";
 export { defineStep, InvalidStepDefinitionError } from "./step/define-step.js";

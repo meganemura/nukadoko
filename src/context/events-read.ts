@@ -291,7 +291,7 @@ export async function readEvents(requests: readonly EventsRequest[], options: Ev
   for (const request of requests) {
     const { producer, selection } = request;
     if (producer.source === "unread") {
-      records[request.key] = { of: producer.of, trace_id: null, count: selection, range: { at_least: 0, at_most: null }, whole: false, open: [{ gap: producer.gap }], maybe: NO_MAYBE, lines: 0, unreadable: 0, unowned: 0, file: null, waited_ms: 0 };
+      records[request.key] = { of: producer.of, trace_id: null, count: selection, range: { at_least: 0, at_most: null }, counted: [], whole: false, open: [{ gap: producer.gap }], maybe: NO_MAYBE, lines: 0, unreadable: 0, unowned: 0, file: null, waited_ms: 0 };
       continue;
     }
     const group = groups.get(producer)!;
@@ -308,6 +308,7 @@ export async function readEvents(requests: readonly EventsRequest[], options: Ev
       trace_id: traceIdOf(producer),
       count: selection,
       range: rangeOf({ yes: count.yes, maybe }, whole),
+      counted: count.counted,
       whole,
       open,
       maybe,

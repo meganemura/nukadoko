@@ -723,6 +723,11 @@
       "en": ["counts again once the world stops", "after the world stopped"],
       "ja": "world が止まったときの数え直し",
       "note": "world が止まったあと、各読みを trace のすべての行で数え直すこと。判定が変わった claim はフィールド `after_world_stop` を持ち、そのセルは `broke`。フィールド名はコードスパンで英語のまま"
+    },
+    {
+      "en": ["group (of the lines a count counted)", "the lines a count counted"],
+      "ja": "グループ / 数えた行",
+      "note": "実行イベントの数が数えた行を、その種類のグループのフィールドが同じ値を持つ行ごとにまとめたもの。フィールド `counted`、`fields`、`lines` と、claim の行の `counted 1 line: ...` はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

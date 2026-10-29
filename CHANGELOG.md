@@ -236,7 +236,15 @@ just until 0.1.
   judged on lines still on their way: `nuka run` reports it as the
   finding `claim-judged-early`, since its scenario may have passed, and
   the summary's claim line says what the whole count came to. A claim
-  line shows a count that is a range as its range. `nuka check` names a claim it can
+  line shows a count that is a range as its range, and, under every
+  outcome, the lines the count counted, grouped by what each one reports
+  (the table and the statement, the route and the status, the job, the
+  flag and its side), at most three groups and then how many lines the
+  rest hold: "nothing was written" on a page that records each flag it
+  asks breaks with `counted 1 line: db insert into events`, so the reader
+  sees which table took the write without opening `events-read.jsonl`.
+  The reading's `counted` and the claim's own `counted` list every
+  group. `nuka check` names a claim it can
   only leave unjudged before a world starts: `events-producer-missing`
   when no earlier line runs a candidate, `events-producer-ambiguous` when
   two do, and `events-inlet-missing` for a served world whose program

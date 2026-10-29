@@ -1,4 +1,5 @@
 import { describeRange } from "../../execution-events/count.js";
+import { describeCounted } from "../../execution-events/counted.js";
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
 import { fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 
@@ -226,6 +227,14 @@ function reasonText(record: ClaimComparisonRecord | ClaimEachRecord): string {
   return record.reason === undefined ? differenceText(record) : `: ${record.reason}`;
 }
 
+/** What a count of execution events counted, after its outcome and its
+ * reason, under every outcome: a count that held on the wrong table reads
+ * as plainly as one that broke on it. */
+function countedText(record: ClaimComparisonRecord | ClaimEachRecord): string {
+  const counted = isEach(record) || record.counted === undefined ? "" : describeCounted(record.counted);
+  return counted === "" ? "" : `; counted ${counted}`;
+}
+
 /** The outcome of the item an `each` line names. */
 const namedOutcome = (record: ClaimEachRecord): "broken" | "unjudged" => (record.outcome === "unjudged" ? "unjudged" : "broken");
 
@@ -257,7 +266,7 @@ function itemName(item: Extract<ClaimItemRecord, { selected: true }>): string {
  * the expected value and not what the item held, and an `each` nukadoko
  * could not judge names its first such item and comparison, and why. Pure. */
 export function claimLine(record: ClaimComparisonRecord | ClaimEachRecord): string {
-  const line = `${claimText(record)} ${record.outcome}${reasonText(record)}`;
+  const line = `${claimText(record)} ${record.outcome}${reasonText(record)}${countedText(record)}`;
   if (!isEach(record)) return line;
   const item = namedItem(record);
   const claim = item?.claims.find((entry) => entry.outcome === namedOutcome(record));
@@ -280,7 +289,7 @@ export function brokenClaimsMessage(records: readonly (ClaimComparisonRecord | C
   return records
     .filter((record) => record.outcome === "broken" || record.outcome === "unjudged")
     .flatMap((record) => [
-      `claim ${record.outcome}: ${claimText(record)}${reasonText(record)}`,
+      `claim ${record.outcome}: ${claimText(record)}${reasonText(record)}${countedText(record)}`,
       ...(isEach(record) ? namedItemLines(record) : []),
     ])
     .join("\n");

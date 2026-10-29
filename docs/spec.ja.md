@@ -1873,7 +1873,7 @@ compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)�
 claim step の record には、次の固有のフィールドがあります(「Records」を参照)。
 
 - `claims`: step が宣言した順の、各 claim です。
-  比較は、`actual`(`view`、`at`、`count` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し、実行イベントの数では 1 つの数のときのその数で、範囲のときは代わりに `actual_range`)、`actual_from`、claim が名指しするときの `view`、`at`、`count`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
+  比較は、`actual`(`view`、`at`、`count` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し、実行イベントの数では 1 つの数のときのその数で、範囲のときは代わりに `actual_range` で、どちらにも数えた行の `counted` が付きます)、`actual_from`、claim が名指しするときの `view`、`at`、`count`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
   `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値、parameter type の transformer が書き換えた値、読み取りの途中で過ぎた step の締め切り)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
@@ -3229,6 +3229,7 @@ claim step の record は、各読みをキーごとに `events_read` に持ち�
     "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
     "count": { "kind": "db", "op": ["insert", "update", "delete", "other"], "committed": true },
     "range": { "at_least": 0, "at_most": 0 },
+    "counted": [],
     "whole": true,
     "open": [],
     "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "commit_unknown": 0, "unowned": 0 },
@@ -3245,17 +3246,50 @@ claim step の record は、各読みをキーごとに `events_read` に持ち�
   前のどの行も走らせなかったとき、どちらも `null` です。
 - `count` は選び方で、文から取った値は埋めてあります。
 - `range` は `{ "at_least", "at_most" }` で、読みがそろっていないとき `at_most` は `null` です。
+- `counted` は、`at_least` が数える行を、それぞれが報告することでグループにまとめ、行の多いグループから並べます: `{ "kind": "db", "fields": { "op": "insert", "table": "events" }, "lines": 1 }`。
+  グループのフィールドは下の表にあります。
 - `whole` と `open` は `observed.events` と同じで、読みの欠けである `producer-not-run`、`world-unread`、`inlet-unnamed`、`kind-unreported` が加わります。
 - `lines` は読みが数えた trace の読める行、`unreadable` はテキストが trace id を持ち読めなかった行、`unowned` は読んだ範囲の、どの step のものでもない読める行の数です。
 - 読みが 1 行も数えなかったとき `file` は `null` で、行が 16 MiB を超えたときは `"truncated": true` があります。
 - `waited_ms` は読みが待った時間です。
 
+グループのフィールドは、行が報告する仕事を名指し、id や外への呼び出しの path のような、1 つの行だけが持つ値は名指しません。
+そのため、グループの数はプログラムの語彙に従い、record はすべてのグループを並べます。
+どのフィールドも形式が必須とするものなので、数えたどの行もそれを持ちます:
+
+| 種類 | グループのフィールド |
+| --- | --- |
+| `request` | `method`、`route`、`status` |
+| `db` | `op`、`table` |
+| `tx` | `phase` |
+| `job` | `name`、`phase` |
+| `http` | `method`、`origin`、`status` |
+| `flag` | `name`、`side` |
+| `error` | `class`、`handled` |
+
+`db` のグループはコミットの状態を持ちません。
+選び方の `committed` が、数えるどの行についてもそれを決めるからです。
+
 claim の record は、範囲が 1 つの数のときは数を `actual` に、そうでないときは `actual_range` に持ち、両方は持ちません。
+読みの `counted` も、自分の `counted` として持ちます。
 `actual_from` は `events:<step>@<line> count <selection>` で、`measured` は claim step 自身の `events_read.<key>` を名指します:
 
 ```text
 0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; measured: events_read.writes
 ```
+
+結果と reason のあとに、行は数が数えた行を名指します。
+claim が成り立っても、成り立たなくても、`unjudged` でも同じです。
+成り立った数も、claim が扱わない行を数えたかもしれないからです。
+GET で feature flag を尋ね、尋ねたことを記録するページは、claim が扱わないテーブルで "nothing was written" を成り立たなくします:
+
+```text
+1 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) broken; counted 1 line: db insert into events; measured: events_read.writes
+```
+
+グループが複数あるときは、それぞれがその行の数を名指します: `counted 3 lines: 2 db insert into scores, 1 db update rankings`。
+3 つ目のグループより後は、残りのグループが持つ行の数を述べます: `..., and 4 more lines in 2 groups`。
+1 行も数えなかった数は、何も加えません。
 
 1 つの数でない数は、その場所に範囲を示します:
 

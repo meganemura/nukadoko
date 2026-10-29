@@ -34,6 +34,7 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ConsoleErrorEntry",
     "CountCompare",
     "CountRange",
+    "CountedGroup",
     "DeclaredEventSelection",
     "DeclaredLabel",
     "DeclaredLink",

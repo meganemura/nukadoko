@@ -67,9 +67,14 @@ describe("nuka do --use: a claim on a count of a recorded step's execution event
 
     const written = await doStep(rootDir, "nothing-was-written", {}, [id]);
     expect(written.exitCode).toBe(1);
+    const counted = [
+      { kind: "db", fields: { op: "insert", table: "scores" }, lines: 1 },
+      { kind: "db", fields: { op: "update", table: "rankings" }, lines: 1 },
+    ];
     expect(written.record.claims).toEqual([
       {
         actual: 2,
+        counted,
         actual_from: `events:post@${id} ${WRITES}`,
         compare: "equal",
         expected: 0,
@@ -79,7 +84,7 @@ describe("nuka do --use: a claim on a count of a recorded step's execution event
         measured: { step_record_id: written.record.step_record_id, channel: "events_read.writes" },
       },
     ]);
-    expect(written.record.events_read!.writes).toMatchObject({ of: { step_record_id: id, step: "post", line: null }, range: { at_least: 2, at_most: 2 }, whole: true });
+    expect(written.record.events_read!.writes).toMatchObject({ of: { step_record_id: id, step: "post", line: null }, range: { at_least: 2, at_most: 2 }, counted, whole: true });
 
     const inserted = await doStep(rootDir, "inserted-once", {}, [id]);
     expect(inserted.exitCode).toBe(0);

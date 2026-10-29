@@ -80,6 +80,20 @@ source. The step fails with `claim_broken`, and the run summary lists
 every claim under "Claims" with its outcome. A broken claim is fixed in
 the implementation or by asking the person, never by a weaker compare.
 
+A claim on a count of execution events ends with what the count counted,
+grouped by what each line reports, whatever the outcome:
+
+```text
+claim broken: 1 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing); counted 1 line: db insert into events
+```
+
+`events_read.<key>.counted` in the step record lists every group, and
+`events-read.jsonl` holds each line. A group the sentence does not mean,
+such as a table the program writes for its own bookkeeping, is a question
+for the person: the implementation stops the write, or the step's `count`
+names the tables the sentence means. A held count is read the same way,
+since it may have counted the wrong table.
+
 ## Reading a step record as a timeline
 
 Read the failed step's own step record as one timeline rather than a bag of

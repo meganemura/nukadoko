@@ -597,7 +597,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
         if ("unchosen" in plan.source) return [plan.key, { label: plan.label, unjudged: plan.source.unchosen }];
         const record = read[plan.key];
         if (record === undefined) return [plan.key, { label: plan.label, unjudged: failure }];
-        return [plan.key, { label: plan.label, of: plan.source.of, reading: { range: record.range, whole: record.whole, open: record.open, maybe: record.maybe } }];
+        return [plan.key, { label: plan.label, of: plan.source.of, reading: { range: record.range, whole: record.whole, open: record.open, maybe: record.maybe }, counted: record.counted }];
       }),
     );
     stepBudget = budgetFrom(Date.now());

@@ -292,7 +292,10 @@ export function matchLine(selection: EventSelection, line: ReadableLine): LineMa
   return "committed" in selection && selection.committed !== undefined ? "commit-state" : "yes";
 }
 
-function valueText(value: unknown): string {
+/** A value as a label names it: a word of letters, digits, and `_:/.@-`
+ * as it is, any other value as JSON, and a value from the sentence as
+ * `sentence:<capture>`. Pure. */
+export function valueText(value: unknown): string {
   if (isSentenceValue(value)) return `sentence:${value.sentence}`;
   return typeof value === "string" && /^[\w:/.@-]+$/.test(value) ? value : JSON.stringify(value);
 }

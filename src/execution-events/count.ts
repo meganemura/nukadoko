@@ -24,7 +24,7 @@ export interface CountRange {
 
 /** The range a selection's count lies in: `[yes, yes + maybe]` on a
  * whole reading, `[yes, unbounded]` on one that is not. */
-export function rangeOf(count: SelectionCount, whole: boolean): CountRange {
+export function rangeOf(count: Pick<SelectionCount, "yes" | "maybe">, whole: boolean): CountRange {
   return { at_least: count.yes, at_most: whole ? count.yes + maybeTotal(count.maybe) : null };
 }
 

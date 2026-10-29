@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { GROUP_FIELDS } from "../execution-events/counted.js";
+import type { EventKindName } from "../execution-events/format.js";
 import { GAP_WORDS } from "../execution-events/tally.js";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { RunDocument } from "../record/run-result.js";
@@ -40,9 +42,16 @@ const countRange = z.looseObject({ at_least: z.number().int(), at_most: z.number
 
 const eventsGap = z.looseObject({ gap: z.enum(GAP_WORDS) });
 
+const countedGroup = z.looseObject({
+  kind: z.enum(Object.keys(GROUP_FIELDS) as [EventKindName, ...EventKindName[]]),
+  fields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  lines: z.number().int(),
+});
+
 const comparisonClaim = z.looseObject({
   actual: z.unknown().optional(),
   actual_range: countRange.optional(),
+  counted: z.array(countedGroup).optional(),
   actual_from: z.string(),
   view: z.string().optional(),
   at: z.string().optional(),

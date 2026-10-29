@@ -28,6 +28,7 @@ import { op, PREFIX, render, SPANS, T, traceparent, U } from "./helpers/event-li
 const WRITES: EventSelection = { kind: "db", op: ["insert", "update", "delete", "other"], committed: true };
 const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 };
 const OF = { step_record_id: "step-1", step: "place-score", line: 4 };
+const scores = (lines: number) => ({ kind: "db" as const, fields: { op: "insert", table: "scores" }, lines });
 
 let dir: string;
 beforeEach(() => {
@@ -45,7 +46,7 @@ const append = (file: string, texts: readonly string[]): void => appendFileSync(
 const producerTrace: StampedBoundaryTrace = { traceId: T, stamped: 1, lastStampAt: undefined, spans: [SPANS[0]!], spansNotKept: 0, processes: 0, processSpans: [] } as unknown as StampedBoundaryTrace;
 
 function readRecord(over: Partial<EventsReadRecord> = {}): EventsReadRecord {
-  return { of: OF, trace_id: T, count: WRITES, range: { at_least: 1, at_most: 1 }, whole: true, open: [], maybe: NO_MAYBE, lines: 2, unreadable: 0, unowned: 0, file: "events-read.jsonl", waited_ms: 3, ...over };
+  return { of: OF, trace_id: T, count: WRITES, range: { at_least: 1, at_most: 1 }, counted: [scores(1)], whole: true, open: [], maybe: NO_MAYBE, lines: 2, unreadable: 0, unowned: 0, file: "events-read.jsonl", waited_ms: 3, ...over };
 }
 
 function claimOn(key: string, over: Record<string, unknown> = {}): RunClaim {
@@ -80,7 +81,13 @@ function scenarioOf(slice: EventsSlice | null, readings: Readonly<Record<string,
   };
 }
 
-const recountedOf = (yes: number, lines: number, over: Partial<Recounted> = {}): Recounted => ({ lines, unreadable: 0, count: { yes, maybe: NO_MAYBE }, open: [], ...over });
+const recountedOf = (yes: number, lines: number, over: Partial<Recounted> = {}): Recounted => ({
+  lines,
+  unreadable: 0,
+  count: { yes, maybe: NO_MAYBE, counted: yes === 0 ? [] : [scores(yes)] },
+  open: [],
+  ...over,
+});
 
 describe("the world's stop counts a reading again", () => {
   it("counts the line that arrived after the claim, and the cell of the claim that held on fewer lines is broke", async () => {
@@ -103,7 +110,7 @@ describe("the world's stop counts a reading again", () => {
     expect(places).toEqual([{ scenario: 0, step: 1, key: "writes" }]);
     expect(recounts).toEqual([{ traceId: T, inputs: tallyInputsOfSlice(slice), selection: WRITES, replaced: false }]);
     const { recounted } = collectWorldEvents(file, PREFIX, [], [], path.join(dir, "world", "events.jsonl"), recounts);
-    expect(recounted).toEqual([{ lines: 3, unreadable: 0, count: { yes: 2, maybe: NO_MAYBE }, open: [] }]);
+    expect(recounted).toEqual([{ lines: 3, unreadable: 0, count: { yes: 2, maybe: NO_MAYBE, counted: [scores(2)] }, open: [] }]);
 
     const judged = withAfterWorldStop(scenario, (step, key) => (step === 1 && key === "writes" ? recounted[0] : undefined));
     expect(judged.steps[1]!.claims).toEqual([

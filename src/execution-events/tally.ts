@@ -1,4 +1,5 @@
 import { createCommitIndex } from "./commit-state.js";
+import { createLineGroups, type CountedGroup } from "./counted.js";
 import type { EventKindName, JsonObject, ParsedLine, ReadableLine } from "./format.js";
 import { matchLine, type EventSelection } from "./selection.js";
 
@@ -6,9 +7,10 @@ import { matchLine, type EventSelection } from "./selection.js";
 // report, folded in the order the file holds them: how many there are of
 // each kind, whether every request the step sent and every job it
 // enqueued has reported its end, and, for each selection a count names,
-// how many lines match and how many may. Pure. Boundary: which lines are
-// the trace's, and reading and redacting them, are the caller's; what a
-// count's range says of a claim is count.ts's.
+// how many lines match, what they were (counted.ts), and how many may.
+// Pure. Boundary: which lines are the trace's, and reading and redacting
+// them, are the caller's; what a count's range says of a claim is
+// count.ts's.
 //
 // The format writes an operation's line when the operation ends, after
 // the lines of everything inside it (docs/execution-events.md "Inside
@@ -118,6 +120,8 @@ export type MaybeCounts = Readonly<Record<MaybeCause, number>>;
 export interface SelectionCount {
   readonly yes: number;
   readonly maybe: MaybeCounts;
+  /** The `yes` lines, grouped by what they were. */
+  readonly counted: readonly CountedGroup[];
 }
 
 /** What the folded lines say so far. */
@@ -186,6 +190,7 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
   const jobs = new Map<string, { enqueues: number; performs: number }>();
   const commits = createCommitIndex();
   const counts = selections.map(() => ({ yes: 0, maybe: noMaybe() }));
+  const grouped = selections.map((selection) => createLineGroups(selection.kind));
   // Per selection, the db lines that match it if their change persisted
   // as it states: decided at each reading (module header).
   const awaitingCommit = selections.map((): JsonObject[] => []);
@@ -196,7 +201,10 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
       commits.note(line);
       selections.forEach((selection, index) => {
         const match = matchLine(selection, line);
-        if (match === "yes") counts[index]!.yes += 1;
+        if (match === "yes") {
+          counts[index]!.yes += 1;
+          grouped[index]!.add(line.object);
+        }
         else if (match === "commit-state") awaitingCommit[index]!.push(line.object);
         else if (match !== "no") counts[index]!.maybe[match] += 1;
       });
@@ -243,14 +251,18 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
       const decided = selections.map((selection, index): SelectionCount => {
         const count = counts[index]!;
         const wanted = "committed" in selection && selection.committed === true ? "persisted" : "not-persisted";
-        let yes = count.yes;
+        const matched: JsonObject[] = [];
         let unknown = 0;
         for (const object of awaitingCommit[index]!) {
           const state = commits.stateOf(object);
-          if (state === wanted) yes += 1;
+          if (state === wanted) matched.push(object);
           else if (state === "unknown") unknown += 1;
         }
-        return { yes, maybe: { ...count.maybe, commit_unknown: count.maybe.commit_unknown + unknown } };
+        return {
+          yes: count.yes + matched.length,
+          maybe: { ...count.maybe, commit_unknown: count.maybe.commit_unknown + unknown },
+          counted: grouped[index]!.groups(matched),
+        };
       });
       return { lines, kinds: Object.fromEntries(kinds), unreadable, unowned, processRequests, whole: open.length === 0, open, counts: decided };
     },

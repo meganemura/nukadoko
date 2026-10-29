@@ -237,6 +237,7 @@
 import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { CountRange } from "../execution-events/count.js";
+import type { CountedGroup } from "../execution-events/counted.js";
 import type { EventSelection } from "../execution-events/selection.js";
 import type { EventsGap, MaybeCounts, TraceGap } from "../execution-events/tally.js";
 
@@ -798,6 +799,9 @@ export interface ClaimComparisonRecord {
    * number: `actual` is then absent, so no reader takes a bound for the
    * count. */
   readonly actual_range?: CountRange;
+  /** A claim on a count of execution events that read them: the lines
+   * the count counted, as `events_read.<key>.counted` groups them. */
+  readonly counted?: readonly CountedGroup[];
   readonly actual_from: string;
   readonly view?: ClaimView;
   readonly at?: string;
@@ -1284,6 +1288,13 @@ export interface EventsReadRecord {
   /** `[yes, yes + maybe]` on a whole reading, `[yes, null]` on one that
    * is not. */
   readonly range: CountRange;
+  /** The `yes` lines, grouped by the fields that tell one line of the
+   * selected kind from another (`GROUP_FIELDS` in
+   * src/execution-events/counted.ts), most lines first: what the count
+   * counted, without opening `events-read.jsonl`. Every group is listed,
+   * since the fields name the program's vocabulary, never a value one
+   * line holds alone. */
+  readonly counted: readonly CountedGroup[];
   /** Every request the producer stamped has its line, every job enqueued
    * in its trace performed, the selected kind was reported somewhere in
    * the world, and nothing was lost: `open` is empty. */

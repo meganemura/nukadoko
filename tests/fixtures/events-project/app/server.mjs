@@ -20,7 +20,9 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // between them. `/secret` writes the world's token inside an event.
 // `/inlet` answers where the events file is, who may read it, and which
 // variables of the server's environment name a file nukadoko made for
-// events. `/up`, the readiness probe, writes its line before it answers,
+// events. `/lobby` reads the rooms, asks the flag `score_input_slider`, and
+// records that it asked as one committed insert into `events`: a GET whose
+// bookkeeping writes a row. `/up`, the readiness probe, writes its line before it answers,
 // so the line is in the file before any step reads it: written after, it
 // would reach the first step's reading as a line no step owns, or not,
 // as the race went.
@@ -110,6 +112,10 @@ createServer(async (req, res) => {
     emitRaw(`"table":"rooms","op":"read"}\n`);
   } else if (url.pathname === "/secret") {
     emit({ trace, kind: "db", id: newId(), parent: id, table: "admins", op: "read", rows: 1, x_note: `token ${process.env.ADMIN_TOKEN}` });
+  } else if (url.pathname === "/lobby") {
+    emit({ trace, kind: "db", id: newId(), parent: id, table: "rooms", op: "read", rows: 4 });
+    emit({ trace, kind: "flag", id: newId(), parent: id, name: "score_input_slider", side: "off", gate: "boolean" });
+    emit({ trace, kind: "db", id: newId(), parent: id, table: "events", op: "insert", rows: 1, committed: true });
   } else if (url.pathname === "/inlet") {
     body = JSON.stringify(inlet());
   }

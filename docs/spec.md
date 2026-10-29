@@ -2377,7 +2377,8 @@ A claim step's record has these fields of its own (see "Records"):
   carries `actual` (after `view`, `at`, and `count`; absent when the
   place held nothing or a value no snapshot could copy; for a count of
   execution events, the count when it is one number, and `actual_range`
-  in its place when it is a range), `actual_from`,
+  in its place when it is a range, with `counted`, the lines it counted),
+  `actual_from`,
   `view`, `at`, and `count` when the claim names them, `compare`, `expected` (absent on the
   same terms), `expected_from`, `expected_view` when the claim names it,
   `expected_text`, `outcome` (`held`, `broken`, `unobserved`, or
@@ -4115,6 +4116,7 @@ beside it:
     "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
     "count": { "kind": "db", "op": ["insert", "update", "delete", "other"], "committed": true },
     "range": { "at_least": 0, "at_most": 0 },
+    "counted": [],
     "whole": true,
     "open": [],
     "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "commit_unknown": 0, "unowned": 0 },
@@ -4133,6 +4135,10 @@ beside it:
   in.
 - `range` is `{ "at_least", "at_most" }`, `at_most` `null` when the
   reading is not whole.
+- `counted` groups the lines `at_least` counts by what each one
+  reports, most lines first:
+  `{ "kind": "db", "fields": { "op": "insert", "table": "events" }, "lines": 1 }`.
+  The fields of a group are in the table below.
 - `whole` and `open` are as for `observed.events`, with the gaps of a
   reading added: `producer-not-run`, `world-unread`, `inlet-unnamed`,
   and `kind-unreported`.
@@ -4144,14 +4150,50 @@ beside it:
   `"truncated": true` says the lines came to more than 16 MiB.
 - `waited_ms` is how long the reading waited.
 
+A group's fields name the work a line reports, and never a value that
+one line holds alone, such as an id or an outgoing call's path.
+So the groups follow the program's vocabulary, and the record lists
+every group.
+Each field is one the format requires, so every line counted holds it:
+
+| Kind | Fields of a group |
+| --- | --- |
+| `request` | `method`, `route`, `status` |
+| `db` | `op`, `table` |
+| `tx` | `phase` |
+| `job` | `name`, `phase` |
+| `http` | `method`, `origin`, `status` |
+| `flag` | `name`, `side` |
+| `error` | `class`, `handled` |
+
+A `db` group has no commit state: the selection's `committed` fixes it
+for every line the count counts.
+
 The claim's record holds the count as `actual` when the range is one
-number, and as `actual_range` when it is not, never both.
+number, and as `actual_range` when it is not, never both, and the
+reading's `counted` as its own `counted`.
 `actual_from` is `events:<step>@<line> count <selection>`, and
 `measured` names the claim step's own `events_read.<key>`:
 
 ```text
 0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; measured: events_read.writes
 ```
+
+After the outcome and the reason, the line names the lines the count
+counted, whether the claim held, broke, or is unjudged: a count that
+held may still have counted lines the claim is not about.
+A page whose GET asks a feature flag, and records that it asked, breaks
+"nothing was written" on a table the claim is not about:
+
+```text
+1 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) broken; counted 1 line: db insert into events; measured: events_read.writes
+```
+
+Several groups each name their lines,
+`counted 3 lines: 2 db insert into scores, 1 db update rankings`, and
+past the third group the line says how many lines the rest hold,
+`..., and 4 more lines in 2 groups`.
+A count that counted no line adds nothing.
 
 A count that is not one number shows its range in that place:
 

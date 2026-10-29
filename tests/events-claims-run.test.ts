@@ -26,6 +26,7 @@ async function cli(rootDir: string, args: string[]): Promise<{ exitCode: number;
 interface ClaimFacts {
   readonly actual?: number;
   readonly actual_range?: { readonly at_least: number; readonly at_most: number | null };
+  readonly counted?: readonly { readonly kind: string; readonly fields: Record<string, unknown>; readonly lines: number }[];
   readonly actual_from: string;
   readonly outcome: string;
   readonly reason?: string;
@@ -39,7 +40,7 @@ interface StepFacts {
   readonly step_record_id: string;
   readonly record: string;
   readonly claims?: readonly ClaimFacts[];
-  readonly events_read?: Record<string, { readonly range: unknown; readonly whole: boolean; readonly open: readonly { readonly gap: string }[]; readonly file: string | null }>;
+  readonly events_read?: Record<string, { readonly range: unknown; readonly counted: unknown; readonly whole: boolean; readonly open: readonly { readonly gap: string }[]; readonly file: string | null }>;
 }
 
 const WRITES = "count db where op in [insert, update, delete, other], committed true";
@@ -86,6 +87,7 @@ describe("a claim on a count of execution events, under nuka run", () => {
     expect(readClaim.claims).toEqual([
       {
         actual: 0,
+        counted: [],
         actual_from: `events:get@4 ${WRITES}`,
         compare: "equal",
         expected: 0,
@@ -104,6 +106,10 @@ describe("a claim on a count of execution events, under nuka run", () => {
     expect(write.status).toBe("failed");
     expect(write.steps.map((step) => step.claims?.map((claim) => [claim.actual, claim.outcome]))).toEqual([undefined, [[1, "held"]], [[1, "held"]], [[2, "broken"]]]);
     expect(write.steps[1]!.claims![0]!.actual_from).toBe("events:post@8 count db where table scores, op in [insert, update, delete, other], committed true");
+    expect(write.steps[3]!.claims![0]!.counted).toEqual([
+      { kind: "db", fields: { op: "insert", table: "scores" }, lines: 1 },
+      { kind: "db", fields: { op: "update", table: "rankings" }, lines: 1 },
+    ]);
 
     const rolledBack = scenarios.get("a rolled-back write")!;
     expect(rolledBack.status).toBe("passed");
@@ -113,6 +119,7 @@ describe("a claim on a count of execution events, under nuka run", () => {
     expect(sentNothing.status).toBe("failed");
     expect(sentNothing.steps[1]!.claims![0]).toEqual({
       actual_range: { at_least: 0, at_most: null },
+      counted: [],
       actual_from: `events:nothing@18 ${WRITES}`,
       compare: "equal",
       expected: 0,
@@ -141,6 +148,37 @@ describe("a claim on a count of execution events, under nuka run", () => {
     ]);
   });
 
+  it("names the lines each count counted, by what they were, in the record, the failure message, and the summary, under every outcome", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "events.feature"),
+      feature([
+        ["a page that records a signal", ['When the client gets "/lobby"', "Then nothing was written"]],
+        ["a score", ['When the client posts to "/scores"', "Then the score row was inserted once"]],
+        ["a parked job", ['When the client posts to "/scores?park=1"', "Then a recalculation was enqueued once"]],
+      ]),
+    );
+    const { exitCode, stderr } = await cli(rootDir, ["run"]);
+    expect(exitCode).toBe(1);
+    const scenarios = scenariosOf(rootDir);
+    // The page's GET broke "nothing was written" with a bookkeeping insert,
+    // and the record says which table took it.
+    const signal = scenarios.get("a page that records a signal")!.steps[1]!;
+    const events = [{ kind: "db", fields: { op: "insert", table: "events" }, lines: 1 }];
+    expect(signal.claims![0]).toMatchObject({ actual: 1, counted: events, outcome: "broken" });
+    expect(signal.events_read!.writes!.counted).toEqual(events);
+    expect(stderr).toContain(`claim broken: 1 (events:get@4 ${WRITES}) equal 0 (literal:nothing); counted 1 line: db insert into events\n`);
+
+    const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
+    expect(summary).toContain(`  - 1 (events:get@4 ${WRITES}) equal 0 (literal:nothing) broken; counted 1 line: db insert into events; measured: events_read.writes`);
+    expect(summary).toContain(
+      "  - 1 (events:post@8 count db where table scores, op insert, committed true) equal 1 (literal:once) held; counted 1 line: db insert into scores; measured: events_read.inserts",
+    );
+    const parked = summary.find((line) => line.startsWith("  - at least 1") && line.includes("count job"));
+    expect(parked).toMatch(
+      /^ {2}- at least 1, with no upper bound \(events:post@12 count job where name ScoreRecalcJob, phase enqueue\) equal 1 \(literal:once\) unjudged: the events of post@12 are not whole \(jobs-pending\): job [0-9a-f]{16} was enqueued and has not performed, so the count is at least 1, with no upper bound, and equal 1 is not known; counted 1 line: job ScoreRecalcJob enqueue; measured: events_read\.enqueued$/,
+    );
+  });
+
   it("makes the cell broke once the world stops, when a line of the producer's trace arrived after the claim held", async () => {
     await writeFile(
       path.join(rootDir, "features", "events.feature"),
@@ -166,7 +204,7 @@ describe("a claim on a count of execution events, under nuka run", () => {
         lines: 2,
         range: { at_least: 1, at_most: 1 },
         outcome: "broken",
-        reason: '1 line of the trace of step "get" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 1, so the claim breaks',
+        reason: late,
       },
     });
     expect(run.table.rows).toMatchObject([

@@ -164,9 +164,9 @@ count: { kind: "db", op: ["insert", "update", "delete", "other"], committed:
 true } } }` beside a claim on `actual: "writes"` and a number. It waits while
 they may still be `whole` (the step's `timeout`, else 10 s), and is `unjudged`,
 naming the gap, while the count is a range: an absence holds on a whole reading
-only. `events_read` keeps the reading; a line that arrives after the claim
-makes the cell `broke`. `events-inlet-missing` and `events-unread` name a world
-that reads none; a `--base` ref without `{events}` still runs.
+only. Its line and `events_read` name what it `counted`; a line after the
+claim makes the cell `broke`. `events-inlet-missing` and `events-unread` name
+a world that reads none; a `--base` ref without `{events}` still runs.
 
 ## Environments and programs nukadoko does not start
 
