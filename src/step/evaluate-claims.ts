@@ -468,14 +468,26 @@ export async function compareValues(
       return { holds: textFit(actual as string, expected as string).fits };
     }
     case "is-a": {
-      // The one compare whose two sides have different types by design:
-      // the expected side names a kind, and the actual value is of it.
+      // One of the two compares whose sides differ in type by design (the
+      // other is lacks-field): the expected side names a kind, and the actual
+      // value is of it.
       if (expectedType !== "string") return { reason: `is-a reads the name of a kind as a string, and the expected value is ${article(expectedType)}` };
       const kind = valueKind(expected as string);
       if (kind === undefined) {
         return { reason: `is-a names one of the kinds ${VALUE_KINDS.join(", ")}, and the expected value is ${JSON.stringify(expected)}` };
       }
       return { holds: kind(actual) };
+    }
+    case "lacks-field": {
+      // The other compare whose sides differ in type by design: the
+      // expected side names a field, and the actual object has no own key
+      // of that name. A key set to null is present, so "has no password
+      // field" breaks on { password: null }; a key whose value is
+      // undefined is not in the snapshot, as JSON would not write it.
+      if (actualType !== "object") return { reason: `lacks-field reads an object, and the actual value is ${article(actualType)}` };
+      if (expectedType !== "string") return { reason: `lacks-field reads the name of a field as a string, and the expected value is ${article(expectedType)}` };
+      if ((expected as string).trim() === "") return { reason: "lacks-field has a blank field name, which almost every object lacks" };
+      return { holds: !Object.hasOwn(actual as object, expected as string) };
     }
     case "has-item": {
       if (actualType !== "array") return { reason: `has-item reads an array, and the actual value is ${article(actualType)}` };

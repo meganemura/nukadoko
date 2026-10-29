@@ -90,6 +90,22 @@ just until 0.1.
   are two places, so `nuka check` does not report them as one
   (`claim-compares-itself`), and an `each` judges a `where` claim and an
   item claim as one value only when both count or neither does.
+- **A claim can state that a field is not there.** `lacks-field` holds
+  when the actual object has no own key of the expected name, so "the
+  response has no password field" is `{ actual: "body", compare:
+  "lacks-field", expected: { literal: "password" } }`, or a capture such
+  as `{field:word}` names the field. A field set to `null` is there, and
+  the broken line names it and its value (`; field "password" is present
+  and holds null`); an actual value that is not an object breaks the
+  claim and names its type, and a missing parent breaks it as any
+  undefined value does, so neither holds for a field nothing looked for.
+  A blank name, which almost every object lacks, breaks the claim too.
+  `defineStep` refuses a literal that is not a string, an `expected_view`
+  that makes a list, and an actual value read as text, lines, or a comma
+  list with no `at`, since each claim would break on every line. A
+  `where` claim that selects the items with no `deleted_at` field reads
+  that field's place, so it leaves a claim on another field of theirs to
+  the data and is refused beside one on `deleted_at` or the item itself.
 
 - **Each step record holds what the program did inside the step.** A
   program file that names the new `{events}` placeholder

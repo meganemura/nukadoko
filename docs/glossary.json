@@ -683,6 +683,11 @@
       "en": ["count (a claim that counts)", "counts", "the count of"],
       "ja": "数える / 要素の数",
       "note": "claim の `count: true` で、`view` と `at` が残した配列をその要素の数に置き換えること。数えた値は「要素の数」と書く。ラベルの `count of` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["lacks (a field)", "an absent field", "present (a field)"],
+      "ja": "(フィールドが)ない / ある",
+      "note": "`lacks-field` で、オブジェクトがその名前の自身のキーを持たないこと。`null` を入れたフィールドは「ある」と書く。比較の名前はコードスパンで英語のまま。不在の主張(absence claim)の一つの形"
     }
   ],
   "keep_english": [

@@ -40,18 +40,16 @@ validates one frozen copy, and a copy of the step (`{ ...step }`) fails.
 Pick the source from the sentence; the record names it in `expected_from`.
 
 - **The sentence states it** (a capture, the docstring, or the table):
-  `expected: "code"`, the key itself, recorded as `sentence:code`. The key
-  has to be required in `args`, with no default, and its schema must not
-  rewrite the value (`z.coerce`, a transform, a pipe, `trim`, `catch`, a
-  default inside, or a refine on an object, an array, or the args object is
-  refused; a schema that still changes it leaves the claim `unjudged`). Read
-  it as JSON, lines, or a comma list with `expected_view` on a `z.string()`
-  key. With no `observe`, a claim reads each value the line states: an
-  unread capture is refused, an unread docstring or table
-  `claim-sentence-unread`.
-- **An earlier step returned it** ("the item count is unchanged"):
-  `expected: { from: "<from key>.<path>" }`, recorded as
-  `from:<step>@<line>.<key>`.
+  `expected: "code"`, recorded as `sentence:code`. The key is required in
+  `args`, with no default, and its schema must not rewrite the value
+  (`z.coerce`, a transform, a pipe, `trim`, `catch`, a default inside, or a
+  refine on an object, an array, or the args object is refused; a schema that
+  still changes it leaves the claim `unjudged`). Read it as JSON, lines, or a
+  comma list with `expected_view` on a `z.string()` key. With no `observe`, a
+  claim reads each value the line states: an unread capture is refused, an
+  unread docstring or table `claim-sentence-unread`.
+- **An earlier step returned it** ("the item count is unchanged"): `expected:
+  { from: "<from key>.<path>" }`, recorded as `from:<step>@<line>.<key>`.
 - **The pattern's fixed words state it** ("is refused", "exits 0"):
   `expected: { literal: "refused" }`, or `compare: "is-a", expected: {
   literal: "UUID" }` for "the order id is a UUID". The literal is exactly the
@@ -105,23 +103,25 @@ export default defineStep({
 returns, never a key the sentence fills (a `from` key hides an `observe` key of
 its name, so a step whose claims read no `observe` key is refused); a path
 reads own properties only (not `constructor`, not a getter). `view: "text"`
-trims the end (the newline a program prints last), `"lines"` also splits it
-into lines, `"json"` parses it, and `"comma-list"` splits it at commas; `at`
-then takes a path inside the viewed value, so parsing is data: `{ actual:
-"stdout", view: "json", at: "sections.git.0.dirty_count", compare: "equal",
-expected: "count" }`. `count: true` then compares the number of items of the
-array there, with a number compare only (`at-least` the literal `1` for "at
-least one row"), and breaks on a value that is not an array. `{ actual, each: {
-where?, claims } }` applies item claims to every item of an array (paths inside
-are relative to the item), and breaks when the array, or what `where` selects,
-is empty. A `where` claim whose path starts an item claim's, or the reverse, is
-refused with `equal`, `has-same-items`, `has-fields`, `fits-text`, `is-a`,
+trims the end (a program's last newline), `"lines"` also splits it into lines,
+`"json"` parses it, and `"comma-list"` splits it at commas; `at` then takes a
+path inside the viewed value, so parsing is data: `{ actual: "stdout", view:
+"json", at: "sections.git.0.dirty_count", compare: "equal", expected: "count"
+}`. `count: true` then compares the number of items of the array there, with a
+number compare only (`at-least` the literal `1` for "at least one row"), and
+breaks on a value that is not an array. `{ actual, each: { where?, claims } }`
+applies item claims to every item of an array (paths inside are relative to the
+item), and breaks when the array, or what `where` selects, is empty. A `where`
+claim whose path starts an item claim's, or the reverse, is refused with
+`equal`, `has-same-items`, `has-fields`, `lacks-field`, `fits-text`, `is-a`,
 `has-item`, `matches`, `contains-text`, `starts-with-text`, or
 `ends-with-text`, and breaks the claim where it implies it.
 
 The compares: `equal` (structural), `not-equal`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `has-item`, `has-same-items` (in any
 order), `has-fields` (the expected fields at any depth, each array whole),
+`lacks-field` (no key of the expected name: "has no password field" is
+`expected: { literal: "password" }`, and a field set to `null` is a key),
 `fits-text` (line by line; a line `...` is any lines, `[..]` any text in its
 line), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
 `url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A JSON
@@ -129,35 +129,34 @@ docstring (`expected_view: "json"`) claims a whole response with `equal` (a
 field it leaves out breaks it, a `null` one too) or some of its fields with
 `has-fields`, which takes only that; output that changes each run takes
 `fits-text`, never `{ from }` or `{ observe }`. Two values of different JSON
-types break the claim (`is-a` aside), and so does an expected value nearly
-every value holds (a blank text, a pattern matching `""`, an object with no
-field, only `...` and `[..]`). Each side is a plain JSON copy, and `observe`
-gets a clone of its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a
-`Proxy`, or nesting past 256 levels leaves the claim `unjudged` (return an ISO
-string or a number). Each claim or item the step's deadline cuts off, a running
-`matches` included, is `unjudged`, with how many. `nuka check` reads each
-`from` path against the producer's `returns` (`claim-path-unknown`), reports a
-claim whose sides are one place (`claim-compares-itself`) and an `is-a` capture
-that names no kind (`claim-kind-unknown`), and refuses a parameter type with a
-transformer on an expected key (`claim-expected-transformed`).
+types break the claim (`is-a` and `lacks-field` aside), and so does an expected
+value nearly every value holds (a blank text or field name, a pattern matching
+`""`, an object with no field, only `...` and `[..]`). Each side is a plain
+JSON copy, and `observe` gets a clone of its inputs; a `Date`, a bigint, `NaN`,
+an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the claim
+`unjudged` (return an ISO string or a number). Each claim or item the step's
+deadline cuts off, a running `matches` included, is `unjudged`, with how many.
+`nuka check` reports a `from` path the producer's `returns` does not declare
+(`claim-path-unknown`), a claim whose sides are one place
+(`claim-compares-itself`), an `is-a` capture that names no kind
+(`claim-kind-unknown`), and a parameter type with a transformer on an expected
+key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 
 `observe(fixtures, args)` reads the world when no earlier step returned the
-value. It gets every args key but the ones a claim compares with, or the
-`from` key of an actual compared with `{ observe }`, and reading one, or
-calling `resultOf`, throws: an earlier step's value reaches a claim through
-`from` alone. A throw records `unobserved`.
-
-Return what you measured, never a verdict: a text, a number, a list (a claim
-with `count: true` counts it, so return the list, not its length). A boolean
-literal is refused when the actual value comes from `observe`, since
-`{ visible: true }` is the judgment made in code. For a yes or no in the
-sentence, return the word it uses (`outcome: "accepted" | "refused"`,
-`examples/workflow.md`), or the measurement behind it. Give every `args` and
-`returns` field of a step you write or rewrite a `.describe()`, so
-`nuka describe` connects a criterion's wording to the field that answers it; a
-note on a step you are not changing is a report.
+value. It gets every args key but the ones a claim compares with, or the `from`
+key of an actual compared with `{ observe }`, and reading one, or calling
+`resultOf`, throws: an earlier step's value reaches a claim through `from`
+alone. A throw records `unobserved`. Return what you measured, never a verdict:
+a text, a number, a list (a claim with `count: true` counts it, so return the
+list, not its length). A boolean literal is refused when the actual value comes
+from `observe`, since `{ visible: true }` is the judgment made in code. For a
+yes or no in the sentence, return the word it uses
+(`outcome: "accepted" | "refused"`, `examples/workflow.md`), or the measurement
+behind it. Give every `args` and `returns` field of a step you write or rewrite
+a `.describe()`, so `nuka describe` connects a criterion's wording to the field
+that answers it; a note on a step you are not changing is a report.
 
 `poll: { timeout_ms }` runs `observe` again every 100 ms until every claim
 holds on two readings in a row, then judges the last reading once (a poll

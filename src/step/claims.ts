@@ -21,6 +21,7 @@ export const CLAIM_COMPARES = [
   "has-item",
   "has-same-items",
   "has-fields",
+  "lacks-field",
   "fits-text",
   "is-a",
   "matches",
@@ -650,6 +651,30 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
         : `reads args.${claim.expected} through expected_view ${view}, which makes ${article(VIEW_MAKES[view]!)}`;
     throw new InvalidClaimError(`${label}.expected ${what}, never an object, so has-fields always breaks. Read the docstring as JSON with expected_view: "json"`);
   },
+  // The expected side names one field, so it is a word and never a list,
+  // and a field can be absent only from an object: a view that always
+  // makes a string or an array leaves no field to lack.
+  "lacks-field": (label, claim) => {
+    const literal = literalOf(claim.expected);
+    if (literal !== null && typeof literal.literal !== "string") {
+      throw new InvalidClaimError(
+        `${label}.expected is the literal ${describe(literal.literal)}, which is never the name of a field, and lacks-field names the field its actual object lacks, so the claim always breaks. State the field's name in the pattern's fixed words`,
+      );
+    }
+    const expectedView = claim.expected_view as (typeof CLAIM_VIEWS)[number] | undefined;
+    if (expectedView !== undefined && VIEW_MAKES[expectedView] === "array") {
+      throw new InvalidClaimError(
+        `${label}.expected reads args.${String(claim.expected)} through expected_view ${expectedView}, which makes an array and never the name of a field, so lacks-field always breaks. Name one field, and leave expected_view out`,
+      );
+    }
+    const view = claim.view as (typeof CLAIM_VIEWS)[number] | undefined;
+    const made = view === undefined || claim.at !== undefined ? null : VIEW_MAKES[view];
+    if (made !== null) {
+      throw new InvalidClaimError(
+        `${label} reads its actual value through view ${view!}, which always makes ${article(made)} and never an object, so lacks-field always breaks. Read the text with view json, or claim a value that is an object`,
+      );
+    }
+  },
   // The stand-ins are read in the expected text wherever it came from, so
   // an expected text a program wrote is a template nobody stated: a first
   // run that printed a "..." line lets a second run print any lines there.
@@ -833,8 +858,8 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
     // A where clause whose place overlaps an item claim's, and whose
     // compare decides the value there (equal, has-same-items), or selects
     // by a part or a kind of it no claim can be told apart from
-    // (has-fields, fits-text, is-a, contains-text, starts-with-text,
-    // ends-with-text, matches, has-item),
+    // (has-fields, lacks-field, fits-text, is-a, contains-text,
+    // starts-with-text, ends-with-text, matches, has-item),
     // selects the items by the value the claim then judges: "every item
     // that is done is done". An order compare or not-equal leaves a range
     // the claim can still break on ("every item over 10 costs at most
@@ -842,10 +867,10 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
     // (`whereImplies`).
     ((each.where ?? []) as Record<string, unknown>[]).forEach((entry, whereIndex) => {
       if (!WHERE_DECIDES.has(entry["compare"] as string)) return;
-      const place = itemPath(entry);
-      const overlapping = (each.claims as Record<string, unknown>[]).findIndex((item) => itemPathsOverlap(itemPath(item), place));
+      const place = itemReadPath(entry);
+      const overlapping = (each.claims as Record<string, unknown>[]).findIndex((item) => itemPathsOverlap(itemReadPath(item), place));
       if (overlapping === -1) return;
-      const other = itemPath((each.claims as Record<string, unknown>[])[overlapping]!);
+      const other = itemReadPath((each.claims as Record<string, unknown>[])[overlapping]!);
       const relation = other.length === place.length ? "the same place" : other.length > place.length ? "a place inside it" : "a place that holds it";
       throw new InvalidClaimError(
         `${label}.each.where[${whereIndex}] selects by ${describeItemPath(place)} with ${String(entry["compare"])}, and ${label}.each.claims[${overlapping}] reads ${describeItemPath(other)}, ${relation}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
@@ -954,7 +979,7 @@ export function claimArgKeysRead(claims: readonly Claim[]): ReadonlySet<string> 
 /** The compares a `where` clause may not use on a place that overlaps an
  * item claim's: each decides the value there, or selects by a part or a
  * kind of it that the claim cannot be told apart from. */
-const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "has-same-items", "has-fields", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"]);
+const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "has-same-items", "has-fields", "lacks-field", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"]);
 
 /** Whether two places inside one item overlap: one path is the start of
  * the other, after `actual` and `at` are joined (`itemPath`). Pure. */
@@ -974,6 +999,19 @@ export function itemPathsOverlap(a: readonly string[], b: readonly string[]): bo
 export function itemPath(claim: { readonly actual?: unknown; readonly at?: unknown }): readonly string[] {
   const split = (path: unknown): readonly string[] => (typeof path === "string" ? (pathSegments(path) ?? [path]) : []);
   return [...split(claim.actual), ...split(claim.at)];
+}
+
+/** The place inside an item a claim reads to judge it: its path, and
+ * for a lacks-field claim whose field is a literal, that field under it,
+ * so a where clause that selects the items with no deleted_at field
+ * leaves a claim on their status to the data. A field the line fills is
+ * not known before a line binds, so such a claim reads its whole object
+ * here. Pure. */
+function itemReadPath(claim: Record<string, unknown>): readonly string[] {
+  const path = itemPath(claim);
+  if (claim.compare !== "lacks-field") return path;
+  const literal = literalOf(claim.expected);
+  return literal !== null && typeof literal.literal === "string" ? [...path, literal.literal] : path;
 }
 
 function describeItemPath(segments: readonly string[]): string {

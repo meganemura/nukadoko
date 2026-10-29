@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
-import type { ClaimCompare, ClaimEachRecord } from "../src/record/types.js";
+import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord } from "../src/record/types.js";
 import { repoRoot } from "./helpers/fixtures.js";
 import {
   ANY_INDEX,
@@ -51,7 +51,7 @@ import {
   type Reading,
 } from "../src/step/evaluate-claims.js";
 import { readAt, snapshot } from "../src/step/snapshot.js";
-import { equalDifference, fieldsDifference, fitsDifference } from "../src/report/summary/claim-line.js";
+import { claimLine, equalDifference, fieldsDifference, fitsDifference, presentFieldDifference } from "../src/report/summary/claim-line.js";
 
 // Responsibility: the judging rules of a claim (docs/spec.md "Claims") as
 // properties over drawn values: each compare against its negation, a
@@ -171,6 +171,7 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "has-item",
   "has-same-items",
   "has-fields",
+  "lacks-field",
   "fits-text",
   "is-a",
   "matches",
@@ -613,7 +614,7 @@ describe("compares", () => {
       const actual = tc.draw(jsonValues);
       const expected = tc.draw(jsonValues);
       tc.assume(jsonType(actual) !== jsonType(expected));
-      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a")));
+      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a" && entry !== "lacks-field")));
       const result = await compare(name, actual, expected);
       expect(result).toHaveProperty("reason");
       const reason = (result as { reason: string }).reason;
@@ -635,7 +636,7 @@ describe("compares", () => {
       const actual = tc.draw(jsonValues);
       const want = tc.draw(jsonValues);
       tc.assume(jsonType(actual) !== jsonType(want));
-      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a")));
+      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a" && entry !== "lacks-field")));
       const record = await judgeOne({ actual: "value", compare: name, expected: "want" }, { want }, { value: actual });
       expect(record.outcome).toBe("broken");
     }));
@@ -1086,6 +1087,113 @@ describe("count", () => {
   });
 });
 
+describe("lacks-field", () => {
+  /** An object whose keys and a field name come from one small alphabet,
+   * so the name is often one of its keys, and its values include null. */
+  const objectAndField = gs.composite((tc) => {
+    const object: Record<string, unknown> = {};
+    const count = tc.draw(gs.integers({ minValue: 0, maxValue: 3 }));
+    for (let i = 0; i < count; i += 1) object[tc.draw(gs.text({ alphabet: "ab", minSize: 1, maxSize: 2 }))] = tc.draw(jsonValues);
+    return { object, field: tc.draw(gs.text({ alphabet: "ab", minSize: 1, maxSize: 2 })) };
+  });
+
+  it("holds exactly when the object has no own key of that name, whatever the key holds, null included", () =>
+    hegel.testAsync(async (tc) => {
+      const { object, field } = tc.draw(objectAndField);
+      expect(holds(await compare("lacks-field", object, field))).toBe(!Object.hasOwn(object, field));
+    }));
+
+  it("never judges an absent field and a field set to null the same, and the broken line names the field and what it holds", () =>
+    hegel.testAsync(async (tc) => {
+      const { object, field } = tc.draw(objectAndField);
+      const { [field]: _dropped, ...without } = object;
+      const claim: Claim = { actual: "body", compare: "lacks-field", expected: "field" };
+      const absent = await judgeOne(claim, { field }, { body: without });
+      const present = await judgeOne(claim, { field }, { body: { ...without, [field]: null } });
+      expect(absent).toMatchObject({ actual: without, outcome: "held" });
+      expect(present).toMatchObject({ actual: { ...without, [field]: null }, outcome: "broken" });
+      expect(present).not.toHaveProperty("reason");
+      expect(claimLine(present as ClaimComparisonRecord)).toMatch(new RegExp(`broken; field ${JSON.stringify(field)} is present and holds null$`));
+      expect(presentFieldDifference(without, field)).toBeNull();
+    }));
+
+  it("breaks on an actual value that is not an object, naming its type, and on a field name that is not a text", () =>
+    hegel.testAsync(async (tc) => {
+      const value = tc.draw(jsonValues);
+      tc.assume(jsonType(value) !== "object");
+      expect(await compare("lacks-field", value, "password")).toEqual({ reason: `lacks-field reads an object, and the actual value is ${article(jsonType(value))}` });
+      const name = tc.draw(jsonValues);
+      tc.assume(typeof name !== "string");
+      expect(await compare("lacks-field", { password: 1 }, name)).toEqual({ reason: `lacks-field reads the name of a field as a string, and the expected value is ${article(jsonType(name))}` });
+    }));
+
+  it("breaks on a blank field name, which almost every object lacks", async () => {
+    for (const blank of ["", " ", "\t\n"]) expect(await compare("lacks-field", { password: 1 }, blank)).toEqual({ reason: "lacks-field has a blank field name, which almost every object lacks" });
+  });
+
+  it("takes a key set to undefined as absent, as the snapshot leaves it out, and breaks when the parent object is missing instead of holding", async () => {
+    const claim: Claim = { actual: "body.user", compare: "lacks-field", expected: { literal: "password" } };
+    expect(await judgeOne(claim, {}, { body: { user: { name: "aki", password: undefined } } })).toMatchObject({ actual: { name: "aki" }, outcome: "held" });
+    const missing = await judgeOne(claim, {}, { body: {} });
+    expect(missing).toMatchObject({ actual_from: "observe:body.user", outcome: "broken" });
+    expect(missing).not.toHaveProperty("actual");
+  });
+
+  it("reads the object that view json and at reach, and names the claim in nuka steps", async () => {
+    const claim: Claim = { actual: "stdout", view: "json", at: "user", compare: "lacks-field", expected: { literal: "password" } };
+    expect(await judgeOne(claim, {}, { stdout: '{"user":{"name":"aki"}}\n' })).toMatchObject({ actual_from: "observe:stdout as json at user", outcome: "held" });
+    expect(await judgeOne(claim, {}, { stdout: '{"user":{"name":"aki","password":"x"}}\n' })).toMatchObject({ outcome: "broken" });
+    expect(describeClaim(claim)).toBe('stdout as json at user lacks-field "password"');
+  });
+
+  describe("refused at import, where the run would judge it one way on every line", () => {
+    const shape = { ...literalShape("the response has no password field, not one, none of {field:word}"), argsKeys: new Set(["field", "result"]), requiredArgsKeys: new Set(["field", "result"]), stringArgs: new Set(["field"]) };
+    const problem = (claim: Record<string, unknown>) => claimsProblem([{ actual: "result", ...claim } as Claim], shape);
+
+    it("takes a field the pattern names or the line captures, and refuses a literal that is no field name", () => {
+      expect(problem({ compare: "lacks-field", expected: { literal: "password" } })).toBeNull();
+      expect(problem({ compare: "lacks-field", expected: "field" })).toBeNull();
+      expect(problem({ compare: "lacks-field", expected: { literal: 1 } })).toBe(
+        "claims[0].expected is the literal 1, which is never the name of a field, and lacks-field names the field its actual object lacks, so the claim always breaks. State the field's name in the pattern's fixed words",
+      );
+    });
+
+    it("refuses an expected_view that makes a list, and an actual view that never makes an object", () => {
+      for (const view of ["lines", "comma-list"]) {
+        expect(problem({ compare: "lacks-field", expected: "field", expected_view: view })).toBe(
+          `claims[0].expected reads args.field through expected_view ${view}, which makes an array and never the name of a field, so lacks-field always breaks. Name one field, and leave expected_view out`,
+        );
+      }
+      expect(problem({ compare: "lacks-field", expected: "field", expected_view: "json" })).toBeNull();
+      for (const [view, made] of [["text", "a string"], ["lines", "an array"], ["comma-list", "an array"]]) {
+        expect(problem({ view, compare: "lacks-field", expected: "field" })).toBe(
+          `claims[0] reads its actual value through view ${view}, which always makes ${made} and never an object, so lacks-field always breaks. Read the text with view json, or claim a value that is an object`,
+        );
+        expect(problem({ view, at: "0", compare: "lacks-field", expected: "field" })).toBeNull();
+      }
+      expect(problem({ view: "json", compare: "lacks-field", expected: "field" })).toBeNull();
+      expect(problem({ count: true, compare: "lacks-field", expected: "field" })).toContain("and lacks-field does not compare two numbers");
+    });
+
+    it("lets a where clause select the items that lack a field the pattern names, and judge another field of theirs", () => {
+      const where = { compare: "lacks-field", expected: { literal: "password" } };
+      const each = (claims: readonly Record<string, unknown>[], selector: Record<string, unknown> = where) => problem({ each: { where: [selector], claims } });
+      expect(each([{ actual: "name", compare: "equal", expected: "field" }])).toBeNull();
+      expect(each([{ actual: "password", compare: "equal", expected: "field" }])).toBe(
+        'claims[0].each.where[0] selects by the item at password with lacks-field, and claims[0].each.claims[0] reads the item at password, the same place, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where',
+      );
+      expect(each([{ compare: "lacks-field", expected: { literal: "password" } }])).toContain("selects by the item at password with lacks-field, and claims[0].each.claims[0] reads the item at password, the same place");
+      expect(each([{ compare: "lacks-field", expected: { literal: "none" } }])).toBeNull();
+      expect(each([{ compare: "has-fields", expected: "field", expected_view: "json" }])).toContain("reads the item itself, a place that holds it");
+      // A field the line fills is not known before it binds, so the where
+      // clause reads its whole item.
+      expect(each([{ actual: "name", compare: "equal", expected: "field" }], { compare: "lacks-field", expected: "field" })).toContain(
+        "selects by the item itself with lacks-field, and claims[0].each.claims[0] reads the item at name, a place inside it",
+      );
+    });
+  });
+});
+
 function literalShape(pattern: string): ClaimStepShape {
   return {
     patterns: [pattern],
@@ -1250,20 +1358,22 @@ describe("where", () => {
     const split = tc.draw(gs.integers({ minValue: 0, maxValue: segments.length }));
     const actual = segments.slice(0, split).join(".");
     const at = segments.slice(split).join(".");
-    const view = tc.draw(gs.sampledFrom([undefined, "text", "json"] as const));
+    // defineStep refuses lacks-field on a text with no at after it, which is
+    // never an object.
+    const view = tc.draw(gs.sampledFrom(compare === "lacks-field" && at === "" ? ([undefined, "json"] as const) : ([undefined, "text", "json"] as const)));
     // defineStep refuses has-fields on a sentence key it does not read as JSON.
     const read = compare === "has-fields" ? { expected_view: "json" as const } : {};
     return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected, ...read };
   }
 
-  const decides = ["equal", "has-same-items", "has-fields", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
+  const decides = ["equal", "has-same-items", "has-fields", "lacks-field", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
   const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
 
   it("sorts every compare into one that a where clause may not use on an overlapping place, or one the run judges", () => {
     expect([...decides, ...leaves].sort()).toEqual([...CLAIM_COMPARES].sort());
   });
 
-  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, fits-text, is-a, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
+  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, lacks-field, fits-text, is-a, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
     hegel.test((tc) => {
       const wherePath = tc.draw(segmentsGen);
       const itemPath = tc.draw(gs.booleans()) ? [...wherePath, ...tc.draw(segmentsGen)].slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: 4 }))) : tc.draw(segmentsGen);

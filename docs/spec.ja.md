@@ -1541,7 +1541,7 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 
 #### 比較
 
-`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`is-a`(実際の値が、期待するテキストが名指す種類である)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`lacks-field`(実際のオブジェクトに期待する名前のフィールドがない)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`is-a`(実際の値が、期待するテキストが名指す種類である)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
 そのため、2 つのオブジェクトへの `equal` は、それぞれのフィールドちょうどを述べ、ほかのフィールドを許しません。
@@ -1569,6 +1569,25 @@ claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_v
 期待値が literal である `has-fields` の claim と、`expected_view: "json"` なしで文のキーを読む `has-fields` の claim は、`defineStep` が拒否します。
 literal は語か数値で、行がキーを埋めるのは capture の値、docstring のテキスト、表のセルです。
 どちらもオブジェクトにはならないので、claim はどの行でも成り立たなくなるからです。
+
+`lacks-field` は、フィールドがないことを文が述べられるようにします(「the response has no password field」)。
+期待値はフィールドの名前なので、pattern 自身の語を literal にでき(`expected: { literal: "password" }`)、`{field:word}` のような capture で埋めることもできます。
+実際のオブジェクトがその名前の自身のキーを持たないとき、claim は成り立ちます。
+`null` を入れたフィールドはあるので、`{ "password": null }` では claim は成り立たず、成り立たない行はそのフィールドと値を名指しします。
+行に収まるように切った値には、それが見えないことがあるからです。
+値が `undefined` のキーは、JSON が書かないのと同じくスナップショットに入らないので、ないものとします(「claim が判定する値」を参照)。
+オブジェクトでない実際の値では、claim は成り立たず、その型を名指しします。
+実際の値がないときは、`undefined` の実際の値と同じく成り立ちません。
+そのため user のない body に対する `actual: "body.user"` は、何も探していないフィールドについて成り立つことはありません。
+文字列でない期待値と、ほとんどどのオブジェクトにもない空白の名前でも、claim は成り立ちません。
+
+```ts
+claims: [{ actual: "body", compare: "lacks-field", expected: { literal: "password" } }],
+```
+
+literal が文字列でない `lacks-field` の claim、リストを作る `expected_view: "lines"` か `"comma-list"` で期待値を読む claim、オブジェクトを作らない `view: "text"`、`"lines"`、`"comma-list"` で `at` なしに実際の値を読む claim は、`defineStep` が拒否します。
+どれも、どの行でも成り立たなくなるからです。
+`where` の claim は、あるフィールドのない要素を選び、その要素の別のフィールドについての claim をデータに任せられます(「each」を参照)。
 
 `fits-text` は 2 つのテキストを比べ、実行のたびに時刻、大きさ、パスが変わるプログラムの出力を、変わる部分ごとに claim を分けずに docstring で述べられるようにします。
 両方のテキストを `\n` か `\r\n` ごとに行に分け、それぞれの側で最後の空行を 1 つだけ除きます。
@@ -1613,7 +1632,7 @@ Then the build prints
 空白も、C0 と C1 の制御文字も、ゼロ幅スペースのような書式文字も含みません。
 読む人には見えないからです。
 文字列でない期待値や、どの種類でもない名前では、claim は成り立たず、理由が種類を並べます。
-`is-a` は、2 つの辺の JSON の型が意図して違う唯一の比較なので、そのことでは成り立たなくなりません。
+`is-a` と `lacks-field` は、2 つの辺の JSON の型が意図して違う 2 つの比較なので、そのことでは成り立たなくなりません。
 
 literal が種類を名指す文字列でない `is-a` の claim は、どの行でも成り立たないので、`defineStep` が拒否します。
 `at` がなく、`view` がいつも作る種類を literal が名指す claim も拒否します。
@@ -1628,7 +1647,7 @@ capture の値は行でしかわからないので、`{word}`、`{string}`、無
 
 JSON の型が違う 2 つの値の比較では、claim は成り立たず、両方の型を名指しします。
 文字列が数値と等しくなることは、claim が述べる理由ではありえないからです。
-期待する側が種類を名指す `is-a` は例外です。
+期待する側が種類を名指す `is-a` と、フィールドを名指す `lacks-field` は例外です。
 ほとんどどの文字列も満たす期待するテキストでは、それがどこから来たかにかかわらず claim は成り立ちません。
 `contains-text`、`starts-with-text`、`ends-with-text` では空白だけか空のテキスト、`matches` では空文字列に一致する pattern です。
 `has-fields` では、フィールドを持たない期待するオブジェクトも、最上位でもどの深さでも、どのオブジェクトも持つので同じように成り立ちません。
@@ -1660,7 +1679,10 @@ pattern には残り時間を与え、残りが無いときに与えることは
 読むパスは `actual` に `at` を続けたものです。
 したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読みます。
 どちらかの側の `view` や `count` は、同じ値を別の形で読むだけなので、2 つを分けません。
-要素の claim と重なり、`equal`、`has-same-items`、`has-fields`、`fits-text`、`is-a`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
+フィールドが literal である `lacks-field` の claim は、そのパスの下のそのフィールドを読みます。
+そのため `deleted_at` フィールドのない要素を選ぶ `where` の claim(`{ compare: "lacks-field", expected: { literal: "deleted_at" } }`)は、`deleted_at` や要素そのものについての claim とは重なり、`status` についての claim とは重なりません。
+行が埋めるフィールドは、行が結び付くまでわからないので、そのような claim の場所はそのパスだけです。
+要素の claim と重なり、`equal`、`has-same-items`、`has-fields`、`lacks-field`、`fits-text`、`is-a`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
 要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
 
 重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。
@@ -1863,6 +1885,7 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 その場所は、テキストなら行か文字、配列やオブジェクトの中ならキーと番号のパスで、それぞれの側がそこに持つものも続きます。
 成り立たない `has-fields` の行も同じように、合わない最初の期待するフィールドで終わります。
 そのパスと、それぞれの側がそこに持つものが続き、実際のオブジェクトにないフィールドは `nothing`、長さの違う配列は両方の長さです(`; first field that does not fit at tags: actual 2 items, expected 1 item`)。
+成り立たない `lacks-field` の行は、オブジェクトが持つフィールドとその値で終わります(`; field "password" is present and holds null`)。
 成り立たない `fits-text` の行は、期待するテキストがどこまで合ったかと、そのあとで何にも合わない最初の期待する行で終わり、止まった場所の実際の行が続きます。
 実際のテキストの終わりを越えたときは `nothing` です。
 期待する行がすべて合ったときは、余った最初の実際の行を名指しします(`; expected lines 1 to 2 fit, and expected line 3 fits nothing from actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`)。

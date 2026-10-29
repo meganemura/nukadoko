@@ -189,12 +189,22 @@ export function fitsDifference(actual: unknown, expected: unknown): string | nul
   return `${fitted}expected line ${fit.fitted + 1} fits nothing from actual line ${fit.at}: actual ${sideText(fit.actual)}, expected ${valueText(fit.expected)}`;
 }
 
+/** The field a broken `lacks-field` claim's actual object holds, with its
+ * value, since an object too long for the line may not show it, and a
+ * field set to `null` reads as absent to a reader who expects it gone;
+ * `null` when the object lacks it. Pure. */
+export function presentFieldDifference(actual: unknown, expected: unknown): string | null {
+  if (!isPlainObject(actual) || typeof expected !== "string" || !Object.hasOwn(actual, expected)) return null;
+  return `field ${JSON.stringify(expected)} is present and holds ${valueText(actual[expected])}`;
+}
+
 /** What a broken claim's line adds after its outcome, by compare: where
  * the two values part. A compare with no row adds nothing, since the two
  * values in the line already show why it broke. */
 const DIFFERENCES: Partial<Record<ClaimCompare, (actual: unknown, expected: unknown) => string | null>> = {
   equal: equalDifference,
   "has-fields": fieldsDifference,
+  "lacks-field": presentFieldDifference,
   "fits-text": fitsDifference,
 };
 

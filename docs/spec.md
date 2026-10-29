@@ -1887,6 +1887,7 @@ and 256 keeps a margin of six times; the reason names the limit
 expected text), `has-item` (the array has an item equal to the expected value),
 `has-same-items` (two arrays hold the same items in any order),
 `has-fields` (the actual object holds every field of the expected one),
+`lacks-field` (the actual object has no field of the expected name),
 `fits-text` (the actual text fits the expected one line by line, with
 stand-ins for the parts that change), `is-a` (the actual value is of the
 kind the expected text names),
@@ -1924,6 +1925,34 @@ literal, or a sentence key read without `expected_view: "json"`. A
 literal is a word or a number, and a line fills a key with a capture's
 value, the docstring's text, or the table's cells, so neither is ever
 an object and the claim would break on every line.
+
+`lacks-field` lets a sentence state that a field is not there: "the
+response has no password field". The expected value is the field's
+name, so the pattern's own word can be the literal (`expected: {
+literal: "password" }`), or a capture such as `{field:word}` can fill
+it, and the claim holds when the actual object has no own key of that
+name. A field set to `null` is there, so `{ "password": null }` breaks
+the claim, and the broken line names the field and what it holds,
+which a value cut to fit the line may not show. A key whose value is
+`undefined` is not in the snapshot, as JSON would not write it, so it
+is absent (see "The value a claim judges"). An actual value that is
+not an object breaks the claim and names its type. A missing one breaks
+it as any undefined actual value does, so `actual: "body.user"` on a
+body with no user does not hold for a field nothing looked for. An
+expected value that is not a string breaks the claim, and so does a
+blank name, which almost every object lacks.
+
+```ts
+claims: [{ actual: "body", compare: "lacks-field", expected: { literal: "password" } }],
+```
+
+`defineStep` refuses a `lacks-field` claim whose literal is not a
+string, one that reads its expected value through `expected_view:
+"lines"` or `"comma-list"`, which make a list, and one that reads its
+actual value through `view: "text"`, `"lines"`, or `"comma-list"` with
+no `at`, which never make an object: each would break on every line. A
+`where` claim can select the items that lack a field and leave a claim
+on another of their fields to the data (see "Each").
 
 `fits-text` compares two texts, and lets a docstring state a program's
 output whose times, sizes, and paths change on each run without each
@@ -1980,8 +2009,9 @@ URL parser accepts, written with `//` after the scheme, and with no
 whitespace, no C0 or C1 control character, and no format character such
 as a zero-width space, which a reader cannot see). An expected value
 that is not a string, or a name that is no kind, breaks the claim, and
-the reason lists the kinds. `is-a` is the one compare whose two sides
-are of different JSON types by design, so it does not break for that.
+the reason lists the kinds. `is-a` and `lacks-field` are the two
+compares whose sides are of different JSON types by design, so neither
+breaks for that.
 
 `defineStep` refuses an `is-a` claim whose literal is not a string
 that names a kind, since it would break on every line, and one whose
@@ -2008,7 +2038,8 @@ nothing is known about the criterion.
 
 A comparison across two JSON types breaks and names both types, because a
 string is never equal to a number for the reason the claim states
-(`is-a` aside, whose expected side names a kind). An
+(`is-a` and `lacks-field` aside, whose expected side names a kind or a
+field). An
 expected text that nearly every string holds breaks, wherever it came
 from: under `contains-text`, `starts-with-text`, or `ends-with-text`, a
 text of only whitespace or nothing; under
@@ -2050,9 +2081,15 @@ A `where` claim and an item claim overlap when the path one reads is
 the start of the path the other reads. The path read is `actual`
 followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
 and `{ at: "a.b" }` read one path, and a `view` or a `count` on either
-side does not separate them: it reads the same value another way. A `where` claim
+side does not separate them: it reads the same value another way. A
+`lacks-field` claim whose field is a literal reads that field under its
+path, so a `where` claim that selects the items with no `deleted_at`
+field (`{ compare: "lacks-field", expected: { literal: "deleted_at" }
+}`) overlaps a claim on `deleted_at` or on the item itself, and not one
+on `status`. A field the line fills is not known before the line binds,
+so the place of such a claim is its path alone. A `where` claim
 that overlaps an item claim and compares with `equal`,
-`has-same-items`, `has-fields`, `fits-text`, `is-a`, `contains-text`,
+`has-same-items`, `has-fields`, `lacks-field`, `fits-text`, `is-a`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `matches`, or `has-item` is refused at import. It selects the items by
 the value the item claim then judges, or by a part of it the claim cannot
 be told apart from, so "every item" would read as "every item that
@@ -2357,7 +2394,9 @@ there. A broken `has-fields` ends the same way with the first expected
 field that does not fit: its path, and what each side holds there,
 `nothing` for a field the actual object lacks, or both lengths for an
 array of another length (`; first field that does not fit at tags:
-actual 2 items, expected 1 item`). A broken `fits-text` ends with how
+actual 2 items, expected 1 item`). A broken `lacks-field` ends with the
+field the object holds and its value (`; field "password" is present and
+holds null`). A broken `fits-text` ends with how
 far the expected text fit and the first expected line that fits nothing
 after that, with the actual line where it stopped, or `nothing` past the
 end; when every expected line fits, it names the first actual line left

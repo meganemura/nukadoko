@@ -2314,6 +2314,82 @@ export default defineStep({
   });
 });
 
+describe("an absent field through a run", () => {
+  it("tells a field the response leaves out from one it sets to null, names the field and its value when it is there, and breaks when the parent is missing", async () => {
+    const server = createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(request.url === "/users/2" ? '{"id":2,"name":"kei","password":null}' : '{"id":1,"name":"aki"}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const claimStep = (pattern: string, args: string, claim: string) => `import { defineStep, z } from "nukadoko";
+import fetched from "./user-is-fetched.ts";
+export default defineStep({
+  pattern: "${pattern}",
+  args: z.object({ ${args}${args === "" ? "" : ", "}body: fetched.returns.shape.body }),
+  from: { body: [fetched, "body"] },
+  claims: [${claim}],
+});
+`;
+      const rootDir = await project({
+        "nukadoko.program.ts": `import { defineProgram } from "nukadoko";\nexport default defineProgram({ url: "http://127.0.0.1:${port}" });\n`,
+        "features/steps/user-is-fetched.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "GET /users/<id>",
+  pattern: "user {id:int} is fetched",
+  args: z.object({ id: z.number() }),
+  returns: z.object({ body: z.unknown() }),
+  mutates: false,
+  async run({ request }, { id }) {
+    const response = await request.get(\`/users/\${id}\`);
+    return { body: await response.json() };
+  },
+});
+`,
+        "features/steps/the-user-has-no-password-field.ts": claimStep("the user has no password field", "", `{ actual: "body", compare: "lacks-field", expected: { literal: "password" } }`),
+        "features/steps/the-user-carries-no-field.ts": claimStep("the user carries no {field:word} field", "field: z.string()", `{ actual: "body", compare: "lacks-field", expected: "field" }`),
+        "features/steps/the-profile-has-no-password-field.ts": claimStep("the profile has no password field", "", `{ actual: "body.profile", compare: "lacks-field", expected: { literal: "password" } }`),
+        "features/t.feature": [
+          "Feature: absent fields",
+          "  Scenario: left out",
+          "    When user 1 is fetched",
+          "    Then the user has no password field",
+          "    Then the user carries no token field",
+          "  Scenario: set to null",
+          "    When user 2 is fetched",
+          "    Then the user has no password field",
+          "  Scenario: named",
+          "    When user 2 is fetched",
+          "    Then the user carries no name field",
+          "  Scenario: no profile",
+          "    When user 1 is fetched",
+          "    Then the profile has no password field",
+          "",
+        ].join("\n"),
+      });
+      const checked = await cli(rootDir, ["check", "features/t.feature"]);
+      expect(checked.stdout).not.toContain("error\t");
+      const result = await cli(rootDir, ["run", "features/t.feature"]);
+      expect(result.exitCode).toBe(1);
+      const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+      const lines = summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: "));
+      expect(lines.map((line) => line.replace(/ of step-[0-9a-z-]+$/, " of <the fetch>"))).toEqual([
+        `  - {"id":1,"name":"aki"} (from:user-is-fetched@3.body) lacks-field "password" (literal:password) held; measured: http.jsonl[0].response_body of <the fetch>`,
+        `  - {"id":1,"name":"aki"} (from:user-is-fetched@3.body) lacks-field "token" (sentence:field) held; measured: http.jsonl[0].response_body of <the fetch>`,
+        `  - {"id":2,"name":"kei","password":null} (from:user-is-fetched@7.body) lacks-field "password" (literal:password) broken; field "password" is present and holds null; measured: http.jsonl[0].response_body of <the fetch>`,
+        `  - {"id":2,"name":"kei","password":null} (from:user-is-fetched@10.body) lacks-field "name" (sentence:field) broken; field "name" is present and holds "kei"; measured: http.jsonl[0].response_body of <the fetch>`,
+        "  - from:user-is-fetched@13.body.profile lacks-field \"password\" (literal:password) broken: from:user-is-fetched@13.body.profile is undefined; measured: none",
+      ]);
+      const [fetch, lacks] = latestRunJson(rootDir).scenarios[1].steps;
+      expect(lacks.claims[0]).toMatchObject({ actual: { id: 2, name: "kei", password: null }, compare: "lacks-field", expected: "password", outcome: "broken" });
+      expect(lacks.claims[0].measured).toEqual({ step_record_id: fetch.step_record_id, channel: "http.jsonl[0].response_body" });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
 describe("a claim its compare could never judge as the sentence means it, refused at import", () => {
   /** A claim step that observes a body and an output, and reads a key of
    * the step that answers, so a claim can name either side. */
@@ -2390,6 +2466,16 @@ export default defineStep({
       "a count with a literal that is no number",
       step("no item is left", "said: z.string()", `{ actual: "body", count: true, compare: "equal", expected: { literal: [] } }`),
       "claims[0] counts the items of its actual value, which makes a number, and its expected value is the literal [], which is never a number, so the claim always breaks. State the number in the pattern, as digits or a number word, and write it as a number literal",
+    ],
+    [
+      "lacks-field with a literal that is no field name",
+      step("the body has no field 3", "said: z.string()", `{ actual: "body", compare: "lacks-field", expected: { literal: 3 } }`),
+      "claims[0].expected is the literal 3, which is never the name of a field, and lacks-field names the field its actual object lacks, so the claim always breaks. State the field's name in the pattern's fixed words",
+    ],
+    [
+      "lacks-field on a value read as text",
+      step("the output has no password field", "said: z.string()", `{ actual: "printed", view: "text", compare: "lacks-field", expected: { literal: "password" } }`),
+      "claims[0] reads its actual value through view text, which always makes a string and never an object, so lacks-field always breaks. Read the text with view json, or claim a value that is an object",
     ],
   ])("refuses %s", async (_name, source, message) => {
     const rootDir = await project({
