@@ -53,6 +53,7 @@ const ENDS: readonly WalkEnd[] = [
   { how: "finished", exit_code: 0, findings: [] },
   { how: "finished", exit_code: 1, findings: [], stopped: { after_step: 2, line: 5 } },
   { how: "not-run", exit_code: 2, findings: [] },
+  { how: "error", exit_code: 1, findings: [{ severity: "error", code: "unexpected-error", message: "the sink broke" }] },
   { how: "interrupted", exit_code: 130, signal: "SIGINT" },
 ];
 
@@ -304,6 +305,8 @@ describe("stepReport", () => {
         });
       }
       if (seen.state === "gone") expect(report.findings.map((finding) => [finding.code, finding.do])).toEqual([["walk-gone", `nuka run ${START.target} --step`]]);
+      // An end carries what the run printed, an unexpected error included.
+      if (seen.state === "ended" && seen.end.how !== "interrupted") expect(report.findings).toEqual(seen.end.findings);
       // A walk that has not begun its scenario runs no step yet.
       expect(report.fields["walk"]).toBe(seen.state);
     }));

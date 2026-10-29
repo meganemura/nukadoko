@@ -3721,6 +3721,9 @@ messages の stream では、中止の後の step が `SKIPPED` になります�
 どんな制限を設けても、考えている途中の誰かを断ち切ってしまうからです。
 シグナルは、どの run とも同じく scenario とその fixture を片付け、walk は `interrupted` として、シグナルと終了コードとともに終わります。
 `run.json` は書かれません。
+scenario が走る前に止まる run(拒否、または `nothing-selected`)は、walk を `not-run` として、表示した finding とともに終わらせます。
+例外を投げた run は、walk を `error` として、その `unexpected-error` とともに終わらせます。
+どちらの場合も `walk.lock` は消されます。
 kill されたりクラッシュしたりした run は、pid の死んだ walk を残します。
 `nuka step` はそれを `walk-gone` として報告し、walk を始め直す `nuka run <file>:<line> --step` を添えます。
 

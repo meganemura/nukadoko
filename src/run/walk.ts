@@ -73,10 +73,13 @@ export interface WalkRun {
 /** How a walk ended. `finished`: run.json was written, and `findings` are
  * the run's. `not-run`: the run stopped before its scenario ran (a
  * refusal, or nothing selected), with the findings it printed.
- * `interrupted`: a signal ended the run, which writes no run.json. */
+ * `interrupted`: a signal ended the run, which writes no run.json.
+ * `error`: the run threw, before or after its scenario began, and
+ * `findings` hold the unexpected-error it printed. */
 export type WalkEnd =
   | { readonly how: "finished"; readonly exit_code: number; readonly findings: readonly Finding[]; readonly stopped?: ScenarioStop }
   | { readonly how: "not-run"; readonly exit_code: number; readonly findings: readonly Finding[] }
+  | { readonly how: "error"; readonly exit_code: number; readonly findings: readonly Finding[] }
   | { readonly how: "interrupted"; readonly exit_code: number; readonly signal: string };
 
 export type WalkState =
@@ -218,6 +221,7 @@ export function walkStanding(seen: WalkFound): string {
 function howEnded(end: WalkEnd): string {
   if (end.how === "interrupted") return `: interrupted by ${end.signal}, exit ${end.exit_code}`;
   if (end.how === "not-run") return ` before its scenario ran, exit ${end.exit_code}`;
+  if (end.how === "error") return ` on an unexpected error, exit ${end.exit_code}`;
   if (end.stopped !== undefined) {
     return `: stopped after step ${end.stopped.after_step}${end.stopped.line === null ? "" : ` (line ${end.stopped.line})`}, exit ${end.exit_code}`;
   }

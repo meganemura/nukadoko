@@ -834,8 +834,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // fix first, and precedes the env files, the probes, and the worlds:
     // nothing runs, so there is no evidence to write.
     if (flatPickles.length === 0) {
-      return writeStopped(
-        { json: options.json, stdout: options.stdout, stderr, command: "run" },
+      return stopRun(
         [
           ...notices,
           nothingSelectedFinding(
@@ -2084,6 +2083,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     } finally {
       restoreAllureRuntime();
     }
+  } catch (error) {
+    // runCli turns the throw into an unexpected-error, exit 1
+    // (`failInShape`). The walk ends with that same finding first, so it
+    // releases its lock and a `nuka step` waiting on it reports the error
+    // instead of a walk that looks alive until the process is gone.
+    walk?.end({ how: "error", exit_code: FAILED_EXIT_CODE, findings: [{ ...refusalOf(error, "unexpected-error", "run"), severity: "error" }] });
+    throw error;
   } finally {
     await prepared?.cleanup();
     processSignal?.stop();

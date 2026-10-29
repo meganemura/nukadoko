@@ -556,6 +556,59 @@ describe("nuka run --step and nuka step", () => {
   );
 
   it(
+    "ends the walk of a run that selects nothing, so it holds no lock and nuka step reports why",
+    async () => {
+      await writeUrlProgram(rootDir, "http://127.0.0.1:9", 'environments: { "count-off": { conditions: { item_count: false } }, "count-on": { conditions: { item_count: true } } }');
+      await writeFile(path.join(rootDir, "features", "counted.feature"), "Feature: A counted cart\n\n  @with:item_count\n  Scenario: the cart is counted\n    Given a cart with 2 items\n");
+      const run = nukaRun(rootDir, ["features/counted.feature:4", "--env", "count-off", "--step"]);
+      expect((await run.closed).code).toBe(1);
+      expect(run.stderr()).toContain("nothing-selected");
+      expect(walkState(rootDir)).toMatchObject({ state: "ended", number: 1, end: { how: "not-run", exit_code: 1 } });
+
+      const wait = await nukaStep(rootDir, "wait", "--timeout", "5");
+      expect(wait.code).toBe(1);
+      expect(wait.stdout).toBe("walk 1 ended before its scenario ran, exit 1\n");
+      expect(wait.stderr).toContain("nothing-selected");
+      // The lock went with the walk, so the next walk starts.
+      const next = nukaRun(rootDir, ["features/order.feature:3", "--env", "count-on", "--step"]);
+      expect((await nukaStep(rootDir, "wait", ...FIRST_WAIT)).stdout).toMatch(/^walk 2 paused after step 1\/3/);
+      await nukaStep(rootDir, "stop", "1", "--walk", "2");
+      await next.closed;
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "ends the walk of a run that throws, with the unexpected error it printed",
+    async () => {
+      // A sink that throws once, at the line the run writes as its scenario
+      // begins: a throw from inside the run, after the walk opened.
+      const captured = createCaptureSink();
+      let thrown = false;
+      const stderr = {
+        write(chunk: string): boolean {
+          if (!thrown && chunk.startsWith("scenario 1/1")) {
+            thrown = true;
+            throw new Error("the progress sink broke");
+          }
+          return captured.write(chunk);
+        },
+      };
+      const code = await runCli(["run", "features/order.feature:3", "--step"], { rootDir, stdout: createCaptureSink(), stderr });
+      expect(code).toBe(1);
+      expect(captured.text()).toContain("unexpected-error");
+      expect(walkState(rootDir)).toMatchObject({ state: "ended", number: 1, end: { how: "error", exit_code: 1 } });
+      expect(existsSync(path.join(rootDir, ".nukadoko", "walk.lock"))).toBe(false);
+
+      const wait = await nukaStep(rootDir, "wait", "--timeout", "5");
+      expect(wait.code).toBe(1);
+      expect(wait.stdout).toBe("walk 1 ended on an unexpected error, exit 1\n");
+      expect(wait.stderr).toContain("the progress sink broke");
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it(
     "reports a walk that ended before the wait started, once, and then waits for the next walk",
     async () => {
       const run = nukaRun(rootDir, ["features/order.feature", "--step"]);

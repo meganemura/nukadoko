@@ -4703,9 +4703,13 @@ Nothing but a signal ends a pause nobody answers, since any limit would
 cut some person off in the middle of a thought. A signal tears the
 scenario and its fixtures down as in any run, and the walk ends as
 `interrupted`, with the signal and the exit code; no `run.json` is
-written. A run that was killed or crashed leaves a walk whose pid is
-dead, which `nuka step` reports as `walk-gone`, with the `nuka run
-<file>:<line> --step` that starts it again.
+written. A run that stops before its scenario runs (a refusal, or
+`nothing-selected`) ends the walk as `not-run` with the findings it
+printed, and a run that throws ends it as `error` with its
+`unexpected-error`; either way `walk.lock` is removed. A run that was
+killed or crashed leaves a walk whose pid is dead, which `nuka step`
+reports as `walk-gone`, with the `nuka run <file>:<line> --step` that
+starts it again.
 
 `run.json`'s `walk`, present only under `--step`, lists each pause: its
 step record, when it paused and when it was answered, the answer, its
