@@ -87,6 +87,21 @@ describe("nuka check", () => {
     expect(exitCode).toBe(1);
   });
 
+  it("points features-dir-missing at the directory, not a config file, when there is no config file", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-check-no-config-"));
+    try {
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
+      const report = bySeverity(stdout.text());
+      expect(report.errors.filter((issue: { code: string }) => issue.code === "features-dir-missing").map((issue: { file: string; fix: string }) => [issue.file, issue.fix])).toEqual([
+        ["features", "Create features/steps for the step files, or run nuka init to write a config file that names featuresDir."],
+      ]);
+      expect(exitCode).toBe(1);
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
   it("names a featuresDir or additionalFeatureDirs path with a space in its fix", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-check-spaced-dirs-"));
     try {

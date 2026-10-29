@@ -108,11 +108,17 @@ export async function checkConfig(
 
   const featuresRoot = path.join(rootDir, config.featuresDir);
   if (!existsSync(featuresRoot)) {
+    // With no config file, featuresDir is the default, and a finding that
+    // pointed at a config file would send the reader to a file that is not there.
+    const hasConfigFile = existsSync(path.join(rootDir, configFile));
+    const steps = path.posix.join(config.featuresDir, "steps");
     errors.push({
       code: "features-dir-missing",
       message: `featuresDir "${config.featuresDir}" does not exist`,
-      file: configFile,
-      fix: `Create ${path.posix.join(config.featuresDir, "steps")} for the step files, or correct featuresDir in ${configFile}.`,
+      file: hasConfigFile ? configFile : config.featuresDir,
+      fix: hasConfigFile
+        ? `Create ${steps} for the step files, or correct featuresDir in ${configFile}.`
+        : `Create ${steps} for the step files, or run nuka init to write a config file that names featuresDir.`,
     });
   }
 

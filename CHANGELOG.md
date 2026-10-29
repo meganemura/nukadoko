@@ -70,6 +70,11 @@ just until 0.1.
   row says why. A `moved` or `unproven` reason now names every
   environment whose cell came to the same thing, where it named the
   first one alone.
+- **`features-dir-missing` no longer names a config file that is not
+  there.** In a directory with no config file, the finding pointed at
+  `nukadoko.config.ts` and asked to correct `featuresDir` in it. It now
+  points at the missing directory and says to create it or to run
+  `nuka init`.
 
 ## 0.22.0 — 2026-10-28
 

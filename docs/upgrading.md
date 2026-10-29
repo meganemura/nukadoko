@@ -69,6 +69,9 @@ This part does not change release to release.
   than needed it, the line says how many it ran; a reason names every
   environment whose cell came to the same thing. No verdict or exit code
   changes. Update a script that matched the old text.
+- **`features-dir-missing` in a directory with no config file names the
+  directory as its file,** where it named `nukadoko.config.ts`, and its
+  fix says to run `nuka init`. The exit code is the same.
 
 ## 0.21.0 to 0.22.0
 
