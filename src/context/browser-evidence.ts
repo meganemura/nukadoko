@@ -10,12 +10,14 @@ import type {
   Request as PlaywrightRequest,
   WebError,
 } from "playwright";
+import type { PageView } from "../record/run-result.js";
 import type { ScreenshotEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 import { instrumentApiRequestContext } from "./http-log.js";
 import { type PageStamp, stampPageRequests } from "./browser-trace.js";
+import { contextFileName } from "./context-name.js";
 import { loadPlaywright } from "./load-playwright.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
@@ -132,6 +134,15 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // context therefore records into the same collectors, its own trace chunks,
 // and its own final screenshot. `as` is the context's name on every entry
 // it writes, absent for the default context.
+//
+// `viewPages` is what `nuka run --step` shows at a pause: a screenshot and
+// an ARIA snapshot of each page the context has open, taken while the run
+// waits, outside any trace chunk. Both calls leave the page as they found
+// it. Playwright's default screenshot hides the caret by setting the
+// focused element's style, and leaves `style=""` behind on it, so the
+// screenshot asks for `caret: "initial"`. A pause gives no other way in:
+// a CDP port would let any local process drive the page the next step
+// reads, with the fixtures' sign-in and no authentication.
 export type BrowserEngineName = "chromium" | "firefox" | "webkit";
 
 export interface LaunchBrowserOptions {
@@ -229,6 +240,13 @@ export interface TracedContextHandle {
   /** Waits for every page-issued http.jsonl append this context has kicked
    * off *so far* to settle (page-http-log.ts's `PageHttpLogHandle.flush`). */
   flushPageHttpLog(): Promise<void>;
+  /** Writes a screenshot and an ARIA snapshot of each page this context
+   * has open into `dir` (`page.png` and `page.aria.yml` for the first page,
+   * `page-<n>.*` for the others, with the context's name before the
+   * extension as `final.png` has it), and returns each page's view with
+   * those names under `recordedAs`. A capture that fails is `null` in its
+   * view: a page that closed or crashed is no reason to lose the pause. */
+  viewPages(dir: string, recordedAs: string): Promise<PageView[]>;
   /** Captures the final screenshot as `fileName` in `evidenceDir` and
    * closes the context. Returns the screenshot actually written, at most
    * one (best effort: a screenshot failure here must never mask the step's
@@ -364,6 +382,28 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       },
       async flushPageHttpLog(): Promise<void> {
         await pageHttpLog.flush();
+      },
+      async viewPages(dir: string, recordedAs: string): Promise<PageView[]> {
+        const views: PageView[] = [];
+        for (const [index, open] of context.pages().entries()) {
+          const stem = contextFileName(index === 0 ? "page" : `page-${index + 1}`, as);
+          const screenshotName = `${stem}.png`;
+          const ariaName = `${stem}.aria.yml`;
+          const recorded = (name: string): string => path.posix.join(recordedAs, name);
+          const screenshot = await open
+            .screenshot({ caret: "initial", path: path.join(dir, screenshotName) })
+            .then(() => recorded(screenshotName), () => null);
+          const aria = await open
+            .ariaSnapshot({ mode: "ai" })
+            .then(async (text) => {
+              await writeFile(path.join(dir, ariaName), text.endsWith("\n") ? text : `${text}\n`);
+              return recorded(ariaName);
+            })
+            .catch(() => null);
+          const title = await open.title().catch(() => "");
+          views.push({ as: as ?? null, page: index + 1, url: open.url(), title, screenshot, aria });
+        }
+        return views;
       },
       async finalize(fileName: string): Promise<ScreenshotEntry[]> {
         const screenshots: ScreenshotEntry[] = [];

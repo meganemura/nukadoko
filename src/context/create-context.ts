@@ -18,6 +18,7 @@ import type {
   SectionEntry,
   UsedEntryWithResult,
 } from "../record/types.js";
+import type { PageView } from "../record/run-result.js";
 import type { SecretSet } from "../secrets/types.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import { fixtureSourceOf, type RunStep, type Step } from "../step/define-step.js";
@@ -437,6 +438,14 @@ export interface StepContextHandle {
    * in the order they opened. The executor reads each one's chunk file
    * beside the default `trace.zip` after `endStep()`. */
   namedContexts(): string[];
+  /** Executor-only: writes a view of every page each browser context of
+   * this ctx has open into `dir`, the default context first and then each
+   * `pageAs` context in the order it opened, as `dispose` takes the final
+   * screenshots, and returns the views with their files named under
+   * `recordedAs` (browser-evidence.ts's `viewPages`). `[]` when no
+   * browser was launched. `nuka run --step` calls it at a pause, between
+   * two steps. Never exposed on `ctx`. */
+  viewOpenPages(dir: string, recordedAs: string): Promise<PageView[]>;
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
    * even for a call that went on to throw `MissingEnvError`. Never exposed on `ctx` — same rule as
@@ -1354,6 +1363,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return [...contexts.keys()].filter((as): as is string => as !== undefined);
   }
 
+  async function viewOpenPages(dir: string, recordedAs: string): Promise<PageView[]> {
+    const views: PageView[] = [];
+    for (const opened of [...contexts.values()].sort((a, b) => Number(a.as !== undefined) - Number(b.as !== undefined))) {
+      views.push(...(await opened.handle.viewPages(dir, recordedAs)));
+    }
+    return views;
+  }
+
   function envReadsSnapshot(): string[] {
     return envReads.snapshot();
   }
@@ -1419,6 +1436,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     recordingProcesses: <T>(fn: () => T): T => withProcessRecording(observed.openRun(scratch.allDirs()), fn),
     pollsSnapshot,
     namedContexts,
+    viewOpenPages,
     envReadsSnapshot,
     pageEventsSnapshot,
     httpOmittedSnapshot,
