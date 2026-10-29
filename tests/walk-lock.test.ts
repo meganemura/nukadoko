@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { openWalk } from "../src/run/walk-files.js";
 import { repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 // The walk lock is shared by processes, so it is tested with processes: a
@@ -92,4 +93,22 @@ describe("the walk lock", () => {
     },
     120_000,
   );
+
+  it("gives way to a live holder below a dead one, as a run that took a number from an old reading leaves it", async () => {
+    // A run that read the lock before walk 2 was taken, and its number
+    // after walk 2 was recorded, took 3 and was killed before it looked
+    // again: the live run of walk 2 sits under it.
+    const project = path.join(rootDir, "stale");
+    const lockDir = path.join(project, ".nukadoko", "walk.lock");
+    await mkdir(lockDir, { recursive: true });
+    const holder = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+    try {
+      await writeFile(path.join(lockDir, "2"), `${holder.pid}\n`);
+      await writeFile(path.join(lockDir, "3"), "999999\n");
+      const walk = openWalk({ rootDir: project, stateDir: ".nukadoko", target: "features/a.feature:3" });
+      expect("refused" in walk ? walk.message : "opened").toContain(`pid ${holder.pid}`);
+    } finally {
+      holder.kill("SIGKILL");
+    }
+  });
 });

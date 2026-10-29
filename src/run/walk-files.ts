@@ -246,6 +246,24 @@ function removeQuietly(filePath: string): void {
   }
 }
 
+// The pid of a live process, not this one, that holds a lock file below
+// `walk`, or `null`.
+function liveHolderBelow(lockDir: string, walk: number): number | null {
+  for (const lower of numberedNames(lockDir)) {
+    if (lower >= walk) continue;
+    let text: string;
+    try {
+      text = readFileSync(path.join(lockDir, String(lower)), "utf8").trim();
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") continue;
+      throw error;
+    }
+    const pid = Number(text);
+    if (Number.isInteger(pid) && pid > 0 && pid !== process.pid && processIsAlive(pid)) return pid;
+  }
+  return null;
+}
+
 type LockTake = { readonly taken: number } | { readonly holder: number } | { readonly raced: true };
 
 // The lock is a directory with one file per walk that took it, named by
@@ -275,6 +293,14 @@ function takeLock(dir: string): LockTake {
     if (lockTop(lockDir)?.walk !== walk) {
       removeQuietly(file);
       continue;
+    }
+    // The number came from a reading that can be old: a run that took the
+    // lock after it and already recorded its walk makes this number skip
+    // past that run's file. A live holder below gives this run way.
+    const alive = liveHolderBelow(lockDir, walk);
+    if (alive !== null) {
+      removeQuietly(file);
+      return { holder: alive };
     }
     for (const lower of numberedNames(lockDir)) if (lower < walk) removeQuietly(path.join(lockDir, String(lower)));
     return { taken: walk };
