@@ -1948,9 +1948,14 @@ The record keeps the declared `where` claims and item claims with their
 expected values, the number of items, the number selected, and at most 20
 item results, the broken ones first. Each item result says whether
 `where` selected the item (`selected`), with the `where` claim records
-that decided it, and a selected item carries its item claim records. The
-run summary line names the `where` claims and the item claims with their
-compares and expected values.
+that decided it, and a selected item carries its item claim records. A
+broken item that is an object carries `identity` too: the first of its
+`id`, `name`, and `key` fields that holds a string or a number, as
+`{ "field", "value" }`. The run summary line names the `where` claims
+and the item claims with their compares and expected values, and for a
+broken `each` it ends with the first broken item and what it held:
+`; item 1 (name "caller"): "#2" (observe:calls.1.counter) equal "#1"
+(sentence:counter)`.
 
 #### Observe
 
@@ -2210,7 +2215,8 @@ message names the claim:
 claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
 ```
 
-One line per broken claim, with the first item that broke under an `each`.
+One line per broken claim, with the first item that broke under an `each`
+on the line below it, named by its index and its `identity` when it has one.
 A claim nukadoko could not judge fails the step with `claim_unjudged`
 instead, and its line starts `claim unjudged:`. The run summary lists
 every claim of every Then under "Claims", one line each, in the same

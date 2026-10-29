@@ -72,6 +72,10 @@ This part does not change release to release.
 - **`features-dir-missing` in a directory with no config file names the
   directory as its file,** where it named `nukadoko.config.ts`, and its
   fix says to run `nuka init`. The exit code is the same.
+- **A broken `each` claim's summary line ends with the first broken
+  item,** and the item lines of its failure message name the item's
+  `id`, `name`, or `key` when it has one. A broken item result in the
+  step record may carry `identity`. No step file changes.
 
 ## 0.21.0 to 0.22.0
 

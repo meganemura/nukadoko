@@ -3,6 +3,7 @@ import type {
   ClaimComparisonRecord,
   ClaimEachRecord,
   ClaimItemDeclaration,
+  ClaimItemIdentity,
   ClaimItemRecord,
   ClaimReading,
   ClaimReadingValue,
@@ -685,6 +686,22 @@ function itemSide(item: unknown, itemPlace: ClaimPlace, claim: ItemClaim): Side 
   return sideOf(readAt(item, segments), itemPlace, segments, 0);
 }
 
+/** The fields that name an item, in the order a failure looks for them. */
+export const IDENTITY_FIELDS = ["id", "name", "key"] as const;
+
+/** The first of `IDENTITY_FIELDS` an object item holds as a string or a
+ * number, or `undefined`: an index alone does not tell a reader which
+ * row of a report, or which file, broke. Pure. */
+export function itemIdentity(item: unknown): ClaimItemIdentity | undefined {
+  if (item === null || typeof item !== "object" || Array.isArray(item)) return undefined;
+  for (const field of IDENTITY_FIELDS) {
+    if (!Object.hasOwn(item, field)) continue;
+    const value = (item as Record<string, unknown>)[field];
+    if (typeof value === "string" || (typeof value === "number" && Number.isFinite(value))) return { field, value };
+  }
+  return undefined;
+}
+
 function itemOutcome(records: readonly ClaimComparisonRecord[]): "held" | "broken" | "unjudged" {
   if (records.some((record) => record.outcome === "broken")) return "broken";
   return records.some((record) => record.outcome === "unjudged") ? "unjudged" : "held";
@@ -760,12 +777,15 @@ async function judgeEach(claim: EachClaim, rawActual: Side, readSegments: readon
     for (const entry of claim.each.claims) {
       claims.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), null, inputs));
     }
+    const outcome = itemOutcome(claims);
+    const identity = outcome === "broken" ? itemIdentity(items[index]) : undefined;
     judged.push({
       index,
       selected: true,
       ...(whereRecords.length === 0 ? {} : { where: whereRecords }),
-      outcome: itemOutcome(claims),
+      outcome,
       claims,
+      ...(identity === undefined ? {} : { identity }),
     });
   }
   if (inputs.budget.left() <= 0 && judged.some((entry) => entry.selected && entry.outcome === "unjudged")) return stopped(items.length);

@@ -1583,7 +1583,10 @@ pattern には残り時間を与え、残りが無いときに与えることは
 record は、宣言された `where` の claim と要素の claim を期待値とともに残し、要素の数、選ばれた数、最大 20 件の要素の結果を残します。
 結果は成り立たなかった要素を先に並べます。
 各要素の結果は、`where` がその要素を選んだかどうか(`selected`)を、それを決めた `where` の claim の record とともに述べ、選ばれた要素は要素の claim の record を持ちます。
+成り立たなかった要素がオブジェクトなら、`identity` も持ちます。
+これは `id`、`name`、`key` のフィールドのうち、文字列か数値を持つ最初のもので、形は `{ "field", "value" }` です。
 run サマリの行は、`where` の claim と要素の claim を、比較と期待値とともに名指しします。
+成り立たなかった `each` では、行の最後に最初に成り立たなかった要素とその値が続きます(`; item 1 (name "caller"): "#2" (observe:calls.1.counter) equal "#1" (sentence:counter)`)。
 
 #### observe
 
@@ -1762,6 +1765,7 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 ```
 
 成り立たない claim ごとに 1 行で、`each` では最初に成り立たなかった要素がその下に続きます。
+その要素は、番号と、あれば `identity` で名指しされます。
 nukadoko が判定できなかった claim は、代わりに `claim_unjudged` で step を落とし、その行は `claim unjudged:` で始まります。
 run サマリは、すべての Then のすべての claim を「Claims」の下に 1 行ずつ、同じ言葉に成否を続けて並べます。
 

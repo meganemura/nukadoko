@@ -75,6 +75,7 @@ const eachClaim = z.looseObject({
           selected: z.literal(true),
           outcome: z.enum(["held", "broken", "unjudged"]),
           claims: z.array(comparisonClaim),
+          identity: z.object({ field: z.string(), value: z.union([z.string(), z.number()]) }).optional(),
         }),
         z.looseObject({ index: z.number().int(), selected: z.literal(false), where: z.array(comparisonClaim) }),
       ]),

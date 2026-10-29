@@ -759,12 +759,22 @@ export type ClaimItemRecord =
       readonly where?: readonly ClaimComparisonRecord[];
       readonly outcome: "held" | "broken" | "unjudged";
       readonly claims: readonly ClaimComparisonRecord[];
+      /** On a broken item that is an object: the first of its `id`,
+       * `name`, and `key` fields that holds a string or a number, so a
+       * failure names the item by more than its index. */
+      readonly identity?: ClaimItemIdentity;
     }
   | {
       readonly index: number;
       readonly selected: false;
       readonly where: readonly ClaimComparisonRecord[];
     };
+
+/** The field that names an item, and its value. */
+export interface ClaimItemIdentity {
+  readonly field: string;
+  readonly value: string | number;
+}
 
 /** A claim over every item of an array, or every item `where` selects.
  * `where` and `claims` are the item claims as declared. `items` is the

@@ -963,7 +963,31 @@ export default defineStep({
     expect(claim.each.results[1].where[0]).toMatchObject({ actual: "rent", actual_from: "observe:rows.1.kind", outcome: "broken" });
     const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary).toContain(
-      '  - each of observe:rows (3 items, 2 selected) where kind equal "food" (sentence:kind): total at-most 10 (sentence:limit) broken',
+      '  - each of observe:rows (3 items, 2 selected) where kind equal "food" (sentence:kind): total at-most 10 (sentence:limit) broken; item 2: 12 (observe:rows.2.total) at-most 10 (sentence:limit)',
+    );
+  });
+
+  it("names the broken item by its index and its name field, with the value it held, in the summary and the failure", async () => {
+    const rootDir = await project({
+      "features/steps/every-call-is-the-first.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "every call has the counter {counter:string}",
+  args: z.object({ counter: z.string() }),
+  observe() { return { calls: [{ name: "helper", counter: "#1" }, { name: "caller", counter: "#2" }] }; },
+  claims: [{ actual: "calls", each: { claims: [{ actual: "counter", compare: "equal", expected: "counter" }] } }],
+});
+`,
+      "features/t.feature": feature('Then every call has the counter "#1"'),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const claim = lastClaimStep(rootDir).claims[0];
+    expect(claim.each.results[0]).not.toHaveProperty("identity");
+    expect(claim.each.results[1]).toMatchObject({ index: 1, outcome: "broken", identity: { field: "name", value: "caller" } });
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain('; item 1 (name "caller"): "#2" (observe:calls.1.counter) equal "#1" (sentence:counter)');
+    expect(lastClaimStep(rootDir).error.message).toBe(
+      'claim broken: each of observe:calls (2 items): counter equal "#1" (sentence:counter)\n  item 1 (name "caller"): "#2" (observe:calls.1.counter) equal "#1" (sentence:counter) broken',
     );
   });
 });

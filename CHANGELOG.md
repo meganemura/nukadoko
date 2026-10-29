@@ -75,6 +75,15 @@ just until 0.1.
   `nukadoko.config.ts` and asked to correct `featuresDir` in it. It now
   points at the missing directory and says to create it or to run
   `nuka init`.
+- **A broken `each` claim names the item that broke and what it held.**
+  The run summary's line, and the Allure step named by it, stated only
+  the declaration (`counter equal "#1"`), not the `#2` the item held.
+  The line now ends with the first broken item and its comparison, and
+  an item that is an object is also named by the first of its `id`,
+  `name`, and `key` fields that holds a string or a number, recorded as
+  `identity` on the item result: `item 1 (name "caller"): "#2"
+  (observe:calls.1.counter) equal "#1" (sentence:counter)`. The step's
+  failure message names the item the same way.
 
 ## 0.22.0 — 2026-10-28
 

@@ -30,6 +30,8 @@ import {
   POLL_INTERVAL_MS,
   readerNow,
   sameItems,
+  itemIdentity,
+  IDENTITY_FIELDS,
   whereImplies,
   type ClaimInputs,
   type PatternTester,
@@ -272,6 +274,17 @@ describe("compares", () => {
       const sameCounts = other.length === items.length && [...items, ...other].every((item) => counts(items, item) === counts(other, item));
       expect(holds(await compare("has-same-items", items, other))).toBe(sameCounts);
       expect(sameItems(items, other)).toBe(sameItems(other, items));
+    }));
+
+  it("names an item by the first identity field that holds a string or a number, and an item that is no object by nothing", () =>
+    hegel.test((tc) => {
+      const fields = tc.draw(gs.arrays(gs.sampledFrom(["id", "name", "key", "kind", "total"]), { maxSize: 5 }));
+      const item = Object.fromEntries(fields.map((field) => [field, tc.draw(jsonValues)]));
+      const identity = itemIdentity(item);
+      const naming = IDENTITY_FIELDS.find((field) => typeof item[field] === "string" || (typeof item[field] === "number" && Number.isFinite(item[field])));
+      expect(identity).toEqual(naming === undefined ? undefined : { field: naming, value: item[naming] });
+      expect(itemIdentity([item])).toBeUndefined();
+      expect(itemIdentity(tc.draw(gs.oneOf<unknown>(gs.just(null), gs.text(), gs.integers())))).toBeUndefined();
     }));
 
   it("has-same-items does not hold when one side repeats an item the other holds once", () =>
