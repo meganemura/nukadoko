@@ -59,6 +59,16 @@ just until 0.1.
   splits a text at each comma and trims each item, so "the namespaces
   "CFP, Schedule, Registration"" claims a drawing that lists them in
   another order without the sentence or the reading being sorted.
+- **A broken `equal` names where its two values first differ.** On a
+  text with more than one line or too long to show whole, the line
+  printed both values and left a reader to compare them, or cut both at
+  120 characters before the difference. The claim line now ends with the
+  line or character where the texts first differ and what each side
+  holds there (`first difference at line 2: actual "rent: 100", expected
+  "rent: 101"`), and for two arrays or two objects the path of keys and
+  indexes (`first difference at 1.name: actual "lamp", expected
+  "desk"`). A short one-line text or a number shows the difference in
+  its values already, and gets no addition.
 
 ### Fixed
 

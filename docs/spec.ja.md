@@ -1761,9 +1761,11 @@ run サマリはそれを `measured` のあとに `expected measured: none` ま�
 成り立たない claim は、`error.kind` が `claim_broken` の失敗として step を落とし、メッセージがその claim を名指しします。
 
 ```text
-claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected); first difference at line 2: actual "rent: 100", expected "rent: 101"
 ```
 
+複数行のテキストか長すぎて全体を示せないテキスト、または 2 つの配列か 2 つのオブジェクトに対する `equal` が成り立たないとき、行は 2 つの値が最初に異なる場所で終わります。
+その場所は、テキストなら行か文字、配列やオブジェクトの中ならキーと番号のパスで、それぞれの側がそこに持つものも続きます。
 成り立たない claim ごとに 1 行で、`each` では最初に成り立たなかった要素がその下に続きます。
 その要素は、番号と、あれば `identity` で名指しされます。
 nukadoko が判定できなかった claim は、代わりに `claim_unjudged` で step を落とし、その行は `claim unjudged:` で始まります。

@@ -188,7 +188,7 @@ first line of the message carries both values and where each came from:
 
 ```
   step 4/4  failed  0.0s  the output is
-      claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+      claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected); first difference at line 2: actual "rent: 100", expected "rent: 101"
       record  .nukadoko/runs/run-20261024-091044-63n9/steps/step-20261024-091044-kjjx
 ```
 

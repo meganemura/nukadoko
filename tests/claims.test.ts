@@ -38,6 +38,7 @@ import {
   type Reading,
 } from "../src/step/evaluate-claims.js";
 import { readAt, snapshot } from "../src/step/snapshot.js";
+import { equalDifference } from "../src/report/summary/claim-line.js";
 
 // Responsibility: the judging rules of a claim (docs/spec.md "Claims") as
 // properties over drawn values: each compare against its negation, a
@@ -1424,5 +1425,41 @@ describe("the record of a claim", () => {
     expect(each.results).toHaveLength(20);
     expect(each.results_truncated).toBe(25);
     expect(each.results.filter((entry) => entry.outcome === "broken")).toHaveLength(20);
+  });
+});
+
+describe("a broken equal names where its two values first differ", () => {
+  it("names nothing for two values that are the same", () =>
+    hegel.test((tc) => {
+      const value = tc.draw(jsonValues);
+      expect(equalDifference(value, structuredClone(value))).toBeNull();
+    }));
+
+  it("names the path of the one value changed inside an object", () =>
+    hegel.test((tc) => {
+      const { root, path } = tc.draw(rootWithPath);
+      const changed = structuredClone(root);
+      const segments = path.split(".");
+      let parent: any = changed;
+      for (const segment of segments.slice(0, -1)) parent = parent[segment];
+      parent[segments.at(-1)!] = "\u00a7 changed";
+      expect(equalDifference(changed, root)).toMatch(new RegExp(`^first difference at ${path.replaceAll(".", "\\.")}[:,]`));
+    }));
+
+  it("names the character where a long text first differs, and shows both sides around it", () =>
+    hegel.test((tc) => {
+      const text = tc.draw(gs.text({ alphabet: "ab", minSize: 130, maxSize: 200 }));
+      const at = tc.draw(gs.integers({ minValue: 0, maxValue: text.length - 1 }));
+      const changed = `${text.slice(0, at)}c${text.slice(at + 1)}`;
+      const difference = equalDifference(changed, text)!;
+      expect(difference).toMatch(new RegExp(`^first difference at character ${at + 1}: actual "[.]*[ab]*c`));
+    }));
+
+  it("names the line where two texts first differ, and leaves a short one-line text to the values the line shows", () => {
+    expect(equalDifference("food: 5.5\nrent: 100", "food: 5.5\nrent: 101")).toBe('first difference at line 2: actual "rent: 100", expected "rent: 101"');
+    expect(equalDifference({ rows: [{ note: "x\ny" }] }, { rows: [{ note: "x\nz" }] })).toBe('first difference at rows.0.note, line 2: actual "y", expected "z"');
+    expect(equalDifference([1, 2], [1, 2, 3])).toBe("first difference at 2: actual nothing, expected 3");
+    expect(equalDifference("short", "shirt")).toBeNull();
+    expect(equalDifference(1, 2)).toBeNull();
   });
 });

@@ -242,10 +242,10 @@ read items an earlier scenario created (S8):
 
 ```
   step 4/4  failed  0.0s  the response body is
-      claim broken: {"id":2,"name":"lamp"} (from:get-item@22.body) equal {"id":1,"name":"lamp"} (sentence:expected)
+      claim broken: {"id":2,"name":"lamp"} (from:get-item@22.body) equal {"id":1,"name":"lamp"} (sentence:expected); first difference at id: actual 2, expected 1
 ...
   step 5/5  failed  0.0s  the response body is
-      claim broken: [{"id":1,"name":"lamp"},{"id":2,"name":"lamp"},{"id":3,"name":"lamp"},{"id":4,"name":"desk"}] (from:list-items@57.body) equal [{"id":1,"name":"lamp"},{"id":2,"name":"desk"}] (sentence:expected)
+      claim broken: [{"id":1,"name":"lamp"},{"id":2,"name":"lamp"},{"id":3,"name":"lamp"},{"id":4,"name":"desk"}] (from:list-items@57.body) equal [{"id":1,"name":"lamp"},{"id":2,"name":"desk"}] (sentence:expected); first difference at 1.name: actual "lamp", expected "desk"
 ...
 7 scenarios: 5 passed, 2 failed  (1s)
 ```

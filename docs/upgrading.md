@@ -76,6 +76,10 @@ This part does not change release to release.
   item,** and the item lines of its failure message name the item's
   `id`, `name`, or `key` when it has one. A broken item result in the
   step record may carry `identity`. No step file changes.
+- **A broken `equal` line on a long or multi-line text, or on two arrays
+  or two objects, ends with `; first difference at ...`.** It appears in
+  the failure message, the run summary, and the Allure step name. No
+  step file changes.
 
 ## 0.21.0 to 0.22.0
 

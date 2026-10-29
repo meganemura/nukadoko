@@ -158,6 +158,28 @@ export default defineStep({
       },
     ]);
   });
+
+  it("names where a broken equal on a multi-line text first differs, in the failure and the summary", async () => {
+    const rootDir = await project({
+      "features/steps/the-report-reads.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the report reads",
+  args: z.object({ expected: z.string() }),
+  observe() { return { report: "food: 5.5\\nrent: 100" }; },
+  claims: [{ actual: "report", compare: "equal", expected: "expected" }],
+});
+`,
+      "features/t.feature": feature("Then the report reads", '  """', "  food: 5.5", "  rent: 101", '  """'),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const message: string = lastClaimStep(rootDir).error.message;
+    expect(message.split("\n")[0]).toBe(
+      'claim broken: "food: 5.5\\nrent: 100" (observe:report) equal "food: 5.5\\nrent: 101" (sentence:expected); first difference at line 2: actual "rent: 100", expected "rent: 101"',
+    );
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain('(sentence:expected) broken; first difference at line 2: actual "rent: 100", expected "rent: 101"; measured: none');
+  });
 });
 
 describe("a value that is not plain JSON leaves the claim unjudged, and the record says which part", () => {

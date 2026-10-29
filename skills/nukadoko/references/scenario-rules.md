@@ -116,7 +116,8 @@ rest is in the step record. A Then gets this from its claims: a broken
 claim's line names both values and where each came from. Measured in
 `examples/cli.md`: `claim broken: "food: 5.5\nrent: 100"
 (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101"
-(sentence:expected)`.
+(sentence:expected); first difference at line 2: actual "rent: 100",
+expected "rent: 101"`.
 Bad: a Given or a When that throws `new Error("setup failed")`, which
 prints nothing it saw.
 Good: a message that names what it saw, such as the exit code and the

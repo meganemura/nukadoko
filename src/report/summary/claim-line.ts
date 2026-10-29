@@ -58,8 +58,99 @@ export function claimText(record: ClaimComparisonRecord | ClaimEachRecord): stri
   return isEach(record) ? eachText(record) : comparisonText(record);
 }
 
+/** Characters shown on each side of a text's first difference. */
+const DIFFERENCE_CONTEXT = 20;
+
+/** Where two JSON values first differ: a path of keys and indexes, and
+ * what each side holds there, `undefined` for a side that has nothing. */
+interface Difference {
+  readonly path: readonly string[];
+  readonly actual: unknown;
+  readonly expected: unknown;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b) && typeof a === typeof b;
+}
+
+function differenceIn(actual: unknown, expected: unknown, path: readonly string[]): Difference | null {
+  if (Array.isArray(actual) && Array.isArray(expected)) {
+    for (let index = 0; index < Math.max(actual.length, expected.length); index += 1) {
+      const found = differenceIn(actual[index], expected[index], [...path, String(index)]);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (isPlainObject(actual) && isPlainObject(expected)) {
+    const keys = [...Object.keys(actual), ...Object.keys(expected).filter((key) => !Object.hasOwn(actual, key))];
+    for (const key of keys) {
+      const found = differenceIn(
+        Object.hasOwn(actual, key) ? actual[key] : undefined,
+        Object.hasOwn(expected, key) ? expected[key] : undefined,
+        [...path, key],
+      );
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  return sameJson(actual, expected) ? null : { path, actual, expected };
+}
+
+function sideText(value: unknown): string {
+  return value === undefined ? "nothing" : valueText(value);
+}
+
+/** Where two texts first differ: by line when either has more than one,
+ * by character otherwise, with a little of each side around it. */
+function textDifference(actual: string, expected: string): string {
+  if (actual.includes("\n") || expected.includes("\n")) {
+    const actualLines = actual.split("\n");
+    const expectedLines = expected.split("\n");
+    let line = 0;
+    while (actualLines[line] === expectedLines[line]) line += 1;
+    return `line ${line + 1}: actual ${sideText(actualLines[line])}, expected ${sideText(expectedLines[line])}`;
+  }
+  let at = 0;
+  while (at < actual.length && actual[at] === expected[at]) at += 1;
+  const start = Math.max(0, at - DIFFERENCE_CONTEXT);
+  const around = (text: string): string => `${start > 0 ? "..." : ""}${text.slice(start, at + DIFFERENCE_CONTEXT)}${text.length > at + DIFFERENCE_CONTEXT ? "..." : ""}`;
+  return `character ${at + 1}: actual ${JSON.stringify(around(actual))}, expected ${JSON.stringify(around(expected))}`;
+}
+
+/** Where a broken `equal` claim's two values first differ, for a text
+ * too long to read whole in the line or with more than one line, and for
+ * two arrays or two objects; `null` otherwise, when both values in the
+ * line already show the difference. Pure. */
+export function equalDifference(actual: unknown, expected: unknown): string | null {
+  if (typeof actual === "string" && typeof expected === "string") {
+    if (actual === expected) return null;
+    const long = JSON.stringify(actual).length > VALUE_TEXT_LIMIT || JSON.stringify(expected).length > VALUE_TEXT_LIMIT;
+    return long || actual.includes("\n") || expected.includes("\n") ? `first difference at ${textDifference(actual, expected)}` : null;
+  }
+  const containers = (Array.isArray(actual) && Array.isArray(expected)) || (isPlainObject(actual) && isPlainObject(expected));
+  if (!containers) return null;
+  const found = differenceIn(actual, expected, []);
+  if (found === null) return null;
+  const { actual: there, expected: wanted } = found;
+  if (typeof there === "string" && typeof wanted === "string" && equalDifference(there, wanted) !== null) {
+    return `first difference at ${found.path.join(".")}, ${textDifference(there, wanted)}`;
+  }
+  return `first difference at ${found.path.join(".")}: actual ${sideText(found.actual)}, expected ${sideText(found.expected)}`;
+}
+
+function differenceText(record: ClaimComparisonRecord | ClaimEachRecord): string {
+  if (isEach(record) || record.compare !== "equal" || record.outcome !== "broken" || record.reason !== undefined) return "";
+  if (!hasKey(record, "actual") || !hasKey(record, "expected")) return "";
+  const difference = equalDifference(record.actual, record.expected);
+  return difference === null ? "" : `; ${difference}`;
+}
+
 function reasonText(record: ClaimComparisonRecord | ClaimEachRecord): string {
-  return record.reason === undefined ? "" : `: ${record.reason}`;
+  return record.reason === undefined ? differenceText(record) : `: ${record.reason}`;
 }
 
 /** The first selected item of a broken `each` whose claims did not hold. */

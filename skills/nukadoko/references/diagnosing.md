@@ -70,7 +70,7 @@ need more than a glance.
 ## Reading a broken claim
 
 ```text
-claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected); first difference at line 2: actual "rent: 100", expected "rent: 101"
 ```
 
 The actual value and its source, the compare, the expected value and its

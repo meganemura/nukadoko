@@ -2212,10 +2212,14 @@ A broken claim fails the step with `error.kind` `claim_broken`, and the
 message names the claim:
 
 ```text
-claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected); first difference at line 2: actual "rent: 100", expected "rent: 101"
 ```
 
-One line per broken claim, with the first item that broke under an `each`
+A broken `equal` on a text that has more than one line or is too long
+to show whole, or on two arrays or two objects, ends with where the two
+values first differ: the line or the character of a text, the path of
+keys and indexes inside an array or an object, and what each side holds
+there. One line per broken claim, with the first item that broke under an `each`
 on the line below it, named by its index and its `identity` when it has one.
 A claim nukadoko could not judge fails the step with `claim_unjudged`
 instead, and its line starts `claim unjudged:`. The run summary lists
