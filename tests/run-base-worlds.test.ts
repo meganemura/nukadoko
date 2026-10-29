@@ -336,6 +336,10 @@ describe("the old world's environments", () => {
     expect(row!.reason).toBe(
       "passes in a, but the mapping changed since the base, and it did not run in the old world in b: the base's mapping requires this environment, and head's program file no longer has it",
     );
+    const document = latestRunJson(project.root) as { run_dir: string };
+    expect(readFileSync(path.join(project.root, document.run_dir, "summary.md"), "utf8")).toContain(
+      "), so each unchanged criterion needed the old world, but it ran none of them; each moved row says why.",
+    );
   }, 60_000);
 
   it("name every environment the old world did not run, and say it ran none, when the base's config does not load", async () => {

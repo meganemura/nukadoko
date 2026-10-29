@@ -348,9 +348,13 @@ function renderBase(document: RunDocument): string[] {
   const unseen = mapping?.unseen ?? [];
   // The old world can fail to start (a base config that does not load, a
   // program the base lacks), so the line says how many it ran rather than
-  // that it ran each one. A row that failed at head needs no old world.
+  // that it ran each one. A row that failed at head needs no old world,
+  // and a row counts as run only when every old cell it needed ran.
   const unchanged = rows.filter((row) => row.change === "unchanged" && row.verdict !== "failed");
-  const ranOld = unchanged.filter((row) => row.cells.some((cell) => cell.world === "old" && cell.outcome !== "not-run")).length;
+  const ranOld = unchanged.filter((row) => {
+    const old = row.cells.filter((cell) => cell.world === "old");
+    return old.length > 0 && old.every((cell) => cell.outcome !== "not-run");
+  }).length;
   const oldRan =
     ranOld === unchanged.length
       ? "so the old world ran each unchanged criterion under the base's steps."

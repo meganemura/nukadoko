@@ -87,8 +87,8 @@ just until 0.1.
   not.** Under a changed mapping it said "the old world ran each
   unchanged criterion" even when the old world started for none of them,
   as when the base's config does not load. It now says how many it ran
-  ("it ran none of them", or "only 3 of the 16") and that each moved
-  row says why. A `moved` or `unproven` reason now names every
+  in every environment each one needed ("it ran none of them", or "only
+  3 of the 16") and that each moved row says why. A `moved` or `unproven` reason now names every
   environment whose cell came to the same thing, where it named the
   first one alone.
 - **`features-dir-missing` no longer names a config file that is not
