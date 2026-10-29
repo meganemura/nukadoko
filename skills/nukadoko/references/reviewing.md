@@ -60,13 +60,14 @@ For each pause, before you say anything about the step:
 What each part of `observed` says (a `null` channel means nothing was
 measured there, not that nothing happened):
 
-- `processes` lists each `runCommand`, with its command, `cwd`,
-  `exit_code`, `files` (what it added, changed, or removed under its
-  working directory), `stdout` and `stderr` (the files in the record's
-  directory that hold what it printed), `stdin` (the file that holds what
-  it was given), and `env` (how its environment differed from the
-  runner's: each name, with a value only when it is an existing absolute
-  path, a decimal integer, or a boolean, else its `hidden_bytes`).
+- `processes` lists each `runCommand`, with its command, `cwd`, `exit_code`,
+  `group` (`running` if a process it started still ran in its group), `files`
+  (what it added, changed, or removed under its working directory), `stdout` and
+  `stderr` (the files in the record's directory that hold what it printed),
+  `stdin` (the file that holds what it was given), and `env` (how its
+  environment differed from the runner's: each name, with a value only when it
+  is an existing absolute path, a decimal integer, or a boolean, else its
+  `hidden_bytes`).
 - `http` counts the requests the step sent. Each is a line in
   `http.jsonl` with its method, URL, status, request body, and response
   body. A line marked `after_step_end` started after the record was
@@ -136,12 +137,11 @@ measured: <channel>` or `expected measured: none`, and `none` there is
 what a When step that returns the value its Then compares with looks like.
 A scenario under "Scenarios with no claim" ran with no claim on a Then
 line judged, and a run with `check: skipped` started past `nuka check`. A
-Then whose `observe` reads a file and claims on it often comes back as
-cannot tell, with `measured: null`: the record keeps what a process
-printed and the files it changed, and nothing of a file the step read
-itself. That is a gap in the evidence, not a wrong step. Have `observe`
-attach what it read with `evidence.attach` (`evidence.md`), run again, and
-the next walk can show it.
+Then whose `observe` reads a file and claims on it often comes back as cannot
+tell, with `measured: null`: the record keeps what a process printed and the
+files it changed, and nothing of a file the step read itself. That is a gap in
+the evidence, not a wrong step. Have `observe` attach what it read with
+`evidence.attach` (`evidence.md`), run again, and the next walk can show it.
 
 ## 4. Show one step, then wait
 

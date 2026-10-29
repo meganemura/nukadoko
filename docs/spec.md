@@ -1066,6 +1066,7 @@ SIGINT, SIGTERM, or SIGHUP during `nuka run` or `nuka do` does not make fixture 
 The process that built the fixtures tears down the scenario-scope cache, disposes the context, tears down the process-scope cache, and exits with 128 plus the signal number.
 `use()` receives `"failed"`, because that invocation did not finish.
 A second signal exits at once.
+A `runCommand` process that a step still runs gets each signal at once, before the teardown starts: on POSIX it runs in a process group of its own, which a terminal's signal does not reach (see "Records").
 Under `nuka run --concurrency <n>` the parent forwards each signal to every worker.
 On the first, each worker tears its fixtures down and exits, no further worker starts, and the parent prints the summary of what was written and exits with 128 plus the signal number.
 On the second, each worker and the parent exit at once.
@@ -3631,7 +3632,11 @@ answered; each step that stamped a request takes at least those 30 ms.
 Only the step's own lines count, so a log that other work keeps busy, a
 hook's or another worker's requests or a background job, does not hold
 the step for the whole 300 ms.
-A step that stamped nothing does not wait.
+A step that gave a `runCommand` process its trace context, as above,
+waits the same way: the program writes the line of a request whose
+client went away once it notices, which can be after the process has
+closed.
+A step that did neither does not wait.
 Under `--concurrency` the parent writes the log, and each worker reads
 it for its own steps.
 
@@ -3857,23 +3862,30 @@ value is still JSON and the file shows exactly what was read.
   program's log"), at most 1000, and `process_requests` counts the
   `request` lines that carry one of them: the requests a process sent to
   the world with the value it got.
-  They are the step's lines, and `whole` waits for none of them, since a
-  process may send nothing.
-- `whole` is `true` when the step stamped at least one request and
-  ran no `runCommand` process, every request it stamped has its
-  `request` line, matched by the span id the step sent (a line with a
-  bare trace id counts for one request), every job enqueued in the trace
-  has at least as many `perform` lines as `enqueue` lines, no line of
-  the trace was unreadable, the step's lines fit its file, and the file
-  was not replaced.
+  They are the step's lines.
+  `whole` matches none of them to a request, since a process may send
+  any number of requests or none: what bounds them is the end of the
+  process (`processes-unbounded`, below).
+- `whole` is `true` when the step stamped at least one request or ran
+  a `runCommand` process, every process it ran closed with no process
+  of its group left (`"group": "ended"`, see "Records"), every request
+  it stamped has its `request` line, matched by the span id the step
+  sent (a line with a bare trace id counts for one request), every job
+  enqueued in the trace has at least as many `perform` lines as
+  `enqueue` lines, no line of the trace was unreadable, the step's lines
+  fit its file, and the file was not replaced.
 - `open` names each reason `whole` is `false`, one gap word each, in
   this order:
   - `no-requests`: the step sent the world no request with a
     `traceparent` and ran no `runCommand` process, so it caused no
     work a line could report the end of, and no line can say that it
     caused none (a Then that only reads the page is the usual one);
-  - `processes-unbounded`: the step ran a `runCommand` process; a
-    program may send the world any number of requests or none, so no
+  - `processes-unbounded`: a `runCommand` process the step ran may
+    still send the world requests: it still ran when the step's record
+    was built, it left a process of its group running
+    (`"group": "running"`), or it ran on Windows, where nukadoko sees
+    no process group.
+    A program may send the world any number of requests or none, so no
     count says that all of them reported, whether or not the step also
     stamped requests of its own;
   - `no-lines`: the step stamped requests, and no line carries its trace
@@ -3890,9 +3902,18 @@ value is still JSON and the file shows exactly what was read.
 
 `whole: false` never says that nothing more happened: the program's work
 may still be going on, or a line may be lost, and `open` says which.
-A step that sent nothing to the world is never whole, since no line can
-say that it caused no work, and neither is a step that ran a
-`runCommand` process.
+A step that sent nothing to the world and ran no `runCommand` process
+is never whole, since no line can say that it caused no work.
+A step that ran one is whole once each process it ran has closed and no
+process of its group is left: nothing it started can send another
+request, and the step's slice has waited for the lines of the requests
+it sent as it waits for a stamped request's (see "Trace context and the
+program's log").
+A process that leaves its group, as a daemon does with `setsid`, is not
+seen.
+A line its later work writes in the step's trace reaches the step's
+`events-late.jsonl`, and a claim that counted the step's lines before
+it arrived is found when the world stops (`after_world_stop`, below).
 
 A line of a step that arrives after its record was written is still
 that step's: a request line the program writes after a streamed body,
@@ -4495,10 +4516,16 @@ claim adds `after the world stopped, <reason>, and the cell is broke`.
 
 What this does not reach, in one list:
 
-- A step that sent the world no request, or ran a `runCommand` process,
-  never has whole events (`no-requests`, `processes-unbounded`), so a
+- A step that sent the world no request and ran no `runCommand`
+  process never has whole events (`no-requests`), and neither has one
+  whose process still ran when its record was built, left a process of
+  its group running, or ran on Windows (`processes-unbounded`), so a
   claim on its count holds only where every count from the lower bound
   up would hold it, such as `at-least`.
+- A process that leaves its process group, as a daemon does with
+  `setsid`, is not seen: the step reads as whole once the rest of the
+  group has ended, and a line the daemon causes after a claim was judged
+  is found only by the world's stop.
 - A line no step owns may be the counted step's, so it widens the
   range: a program that writes lines without the request's trace leaves
   an absence unproven.
@@ -6310,7 +6337,11 @@ its scenario record's id, so either record leads to the other.
   `runCommand`) lists each child process that `runCommand` started during the execution,
   in call order: `{ "command", "cwd", "exit_code", "duration_ms" }`, plus
   `"signal"` when a signal ended the process and `"timed_out": true` when
-  the `timeout` option stopped it. `command` is an array, the program
+  the `timeout` option stopped it. Inside a step on POSIX, each entry
+  also has `"group"`: `"ended"` when no process of the process's group
+  still ran as it closed, so nothing it started can send the world
+  another request, or `"running"` when one did (see "Execution events").
+  `command` is an array, the program
   followed by its arguments, and the record redacts it like every other
   field. Inside a step, each entry also has `"files"`: the paths, relative
   to `cwd` with `/` separators and a trailing `/` for a directory, that
@@ -6365,7 +6396,13 @@ its scenario record's id, so either record leads to the other.
   is an import from `nukadoko`, not a fixture. It resolves to
   `{ exitCode, signal, stdout, stderr, files }` for every exit, nonzero
   included, and rejects only when the program could not start or
-  `timeout` stopped it. `files` is the same value as the entry's
+  `timeout` stopped it. Inside a step on POSIX the process starts in a
+  process group and a session of its own, so it has no controlling
+  terminal, and a terminal's Ctrl-C does not reach it: the process that
+  runs the step passes each SIGINT, SIGTERM, or SIGHUP it gets on to the
+  group of every such process still running, and `timeout` sends SIGTERM
+  to every process of the group. A call anywhere else keeps the caller's
+  group. `files` is the same value as the entry's
   `"files"`, so a step whose claim is "the command writes nothing" returns
   the measurement instead of walking the directory itself. It is present
   inside a step, and outside one only with `files: true`. On Windows, a bare program name such as `npm` is looked up through

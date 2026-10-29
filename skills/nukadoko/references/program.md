@@ -2,11 +2,10 @@
 
 ## The program file
 
-The config holds the criteria. `nukadoko.program.ts`, beside it, holds
-how a run gets the program the scenarios talk to: how to build it,
-prepare its state, start it, and the env its processes get. `nuka init`
-does not write it; write it from what the project's README or CI script
-already runs.
+The config holds the criteria. `nukadoko.program.ts`, beside it, holds how a run
+gets the program the scenarios talk to: how to build it, prepare its state,
+start it, and the env its processes get. `nuka init` does not write it; write it
+from what the project's README or CI script already runs.
 
 ```ts
 import { defineProgram } from "nukadoko";
@@ -142,20 +141,21 @@ every process it starts, gets the rest of `env`, so no step writes a
 line that would read as the program's. Read it to see what the program did inside a
 step: which tables it read and wrote, which jobs it enqueued and ran.
 
-`whole: true` says every request the step stamped has its `request` line and
-every job it enqueued performed. `whole: false` never says nothing more
-happened: `open` names why, one word each: `no-requests` (the step sent the
-world no stamped request and ran no `runCommand` process, such as a Then that
-only reads the page), `processes-unbounded` (the step ran a `runCommand`
-process, whose requests nukadoko cannot count), `no-lines` (no writer, or a
-wrong variable), `request-unreported`, `jobs-pending` (with `job_ids`),
-`unreadable` (a line spliced or cut), `truncated`, `file-replaced`. A line that
-arrived later is in `events-late.jsonl`, and the run summary names it. The
-whole file, redacted, is in `worlds/<environment>/events.jsonl`; a world at a
-`url` has none, and `observed.events` is `null` there. run.json's step gets
-`path`, what its trace did, late lines included (writes, jobs, requests,
-flags; no reads); its flags and requests make run.json's `flags` and `routes`,
-and `lists` (docs/spec.md "Lists") names those no step reached (`references/verdicts.md`).
+`whole: true` says every request the step stamped has its `request` line, every
+job it enqueued performed, and each `runCommand` process it ran ended with its
+process group. `whole: false` never says nothing more happened: `open` names
+why, one word each: `no-requests` (the step sent the world no stamped request
+and ran no `runCommand` process, such as a Then that only reads the page),
+`processes-unbounded` (a process it ran still runs, left its group running, or
+ran on Windows), `no-lines` (no writer, or a wrong variable),
+`request-unreported`, `jobs-pending` (with `job_ids`), `unreadable` (a line
+spliced or cut), `truncated`, `file-replaced`. A line that arrived later is in
+`events-late.jsonl`, and the run summary names it. The whole file, redacted, is
+in `worlds/<environment>/events.jsonl`; a world at a `url` has none, and
+`observed.events` is `null` there. run.json's step gets `path`, what its trace
+did, late lines included (writes, jobs, requests, flags; no reads); its flags
+and requests make run.json's `flags` and `routes`, and `lists` (docs/spec.md
+"Lists") names those no step reached (`references/verdicts.md`).
 
 ## Claiming what the program did
 

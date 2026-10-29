@@ -404,6 +404,37 @@ just until 0.1.
 
 ### Changed
 
+- **A step that ran a command-line tool can have whole events.** A step
+  that ran a `runCommand` process was never whole (`processes-unbounded`),
+  so a count claim after a step that runs a CLI stayed unjudged, and a
+  path compare left such a step open on both sides. Once each process
+  the step ran has closed with no process of its group left, nothing it
+  started can send the world another request, and the gap is no longer
+  open: `whole` can be `true`, and a count claim after the step can
+  hold or break. A process still running when the step's record is
+  built, one that left a process of its group running, and one on
+  Windows, where nukadoko sees no group, keep the gap. A process that
+  leaves its group, as a daemon does with `setsid`, is not seen: a line
+  it causes after a claim was judged is still found when the world
+  stops (`claim-judged-early`). The program writes the line of a
+  request whose client went away once it notices, which can be after the
+  process closed: measured on a fixture whose tool leaves a streamed
+  response early, under load, 3 of 210 such lines reached the file
+  after the step's slice read it. A step that gave a process its trace
+  context now waits for its lines as a step that stamped a request does
+  (30 ms of quiet after the step ends, 300 ms at most), and none of 210
+  came late. A step that ran a process is never `no-requests`.
+- **Inside a step on POSIX, a `runCommand` process runs in a process
+  group and a session of its own.** Its entry in `observed.processes`
+  gains `group`: `"ended"` when no process of its group still ran as it
+  closed, `"running"` when one did. It has no controlling terminal, and
+  a terminal's Ctrl-C no longer reaches it directly: the process that
+  runs the steps passes each SIGINT, SIGTERM, or SIGHUP on to every such
+  group still running, before its teardown, so a `kill` of nukadoko's
+  pid now reaches the command too. `timeout` sends SIGTERM to the whole
+  group, so a helper that holds the output open no longer keeps
+  `runCommand` from settling. A call outside a step keeps the caller's
+  group, and Windows is unchanged.
 - **A broken `equal` line on two lists with an item inserted or removed
   names the items the two do not share in order.** It named the first
   difference by place, and once an item is inserted every item after it

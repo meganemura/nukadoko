@@ -70,6 +70,19 @@ This part does not change release to release.
   items in another order starts its first difference with `the same
   items in another order, `. No verdict or exit code changes, and no
   step file changes. Update a script that matched the old text.
+- **A count claim on the events of a step that ran a command-line tool
+  is judged where it was `unjudged`,** once each `runCommand` process
+  the step ran has closed with no process of its group left. Such a
+  claim now holds or breaks: read the reason of one that breaks, since
+  it counts what the tool's requests did. A step whose tool leaves a
+  helper running in its process group keeps `processes-unbounded`, as
+  before: stop the helper before the step ends, or start it from a
+  fixture, when the step's events should be whole.
+- **Inside a step on POSIX, a `runCommand` process has no controlling
+  terminal,** since it runs in a process group and a session of its own.
+  A tool that prompts on the terminal fails there: give it the answer
+  through `input` or `env`. A reader that compares the entries of
+  `observed.processes` whole adds the key `group`.
 
 ## 0.23.0 to 0.24.0
 

@@ -100,7 +100,10 @@ there instead, with its state under `{dir}`.
 A library function that starts a program calls `runCommand` from
 `nukadoko`. Inside a step the process lands on the step record
 (`observed.processes`); called from the CLI it runs the same way,
-unrecorded. A program the library starts through `node:child_process`
+unrecorded. Inside a step on POSIX it also runs in a process group and a
+session of its own, so a tool that prompts on the terminal has none there,
+and the step's events are whole only once nothing of its group still runs.
+A program the library starts through `node:child_process`
 instead is only named in the step's `observed.unmeasured`, by its
 program and argument count, with nothing of what it printed or changed. `runCommand` records the full argv, and
 only values loaded from env files or named in `redact` are redacted, so
