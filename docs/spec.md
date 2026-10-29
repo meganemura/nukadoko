@@ -1620,8 +1620,8 @@ export default defineStep({
 });
 ```
 
-A claim is `{ actual, view?, at?, compare, expected, expected_view? }`,
-or `{ actual, view?, at?, each }` (below). `claims: []` is refused at
+A claim is `{ actual, view?, at?, count?, compare, expected,
+expected_view? }`, or `{ actual, view?, at?, each }` (below). `claims: []` is refused at
 import: a claim step with no claim passes without judging anything.
 `description` is optional on a claim step, because `nuka steps` and
 `nuka describe` print the claims, and the claims say exactly what the
@@ -1750,8 +1750,8 @@ step with `observe` may take such a value as an input instead.
 A boolean literal is refused when the actual value comes from `observe`,
 and an expected value `{ observe }` reads that is a boolean breaks the
 claim at run. A boolean that `observe` computed is a judgment made in
-code: `observe` returns the thing it measured (a count, a text, a list),
-and the claim judges it.
+code: `observe` returns the thing it measured (a text, a number, a list,
+which a claim with `count: true` counts), and the claim judges it.
 
 Every claim record keeps `expected_text`: the text the line states the
 expected value as (a capture's text, the docstring, or the table), the
@@ -1782,13 +1782,30 @@ reads the from value and never what observe returned`. Then, in order:
 - `at` takes a path inside the viewed value (`actual: "result.stdout",
   view: "json", at: "sections.git.0.dirty_count"`), so parsing is declared
   data, not code. A path segment on an array is a decimal index.
+- `count: true` replaces the array that `view` and `at` leave with the
+  number of its items, so a sentence that counts ("the list shows 3
+  orders", "at least one row came back", "no item is left") is judged
+  on the list itself and not on a length that step code worked out:
+  `{ actual: "orders", count: true, compare: "at-least", expected: {
+  literal: 1 } }`. A value that is not an array breaks the claim and
+  names its type (`count reads an array, and the value is an object`):
+  an object with a `length` key, or a text, is never counted. A count is
+  compared with `equal`, `not-equal`, `greater-than`, `at-least`,
+  `less-than`, or `at-most`, and its expected value is the sentence's
+  number: a capture such as `{n:int}`, or a literal from the rule in
+  "Where the expected value comes from". Any other compare is refused
+  at import, and so is a count of a value read through `view: "text"`
+  with no `at` (always a string), a literal that is not a number, and an
+  `expected_view` that makes a string or an array: each claim would
+  break, or hold, on every line.
 
 A path walks own data properties only: a segment that names an inherited
 member, such as `constructor`, or a getter finds nothing. The args schema
 of a `from` key a claim measures must not rewrite the value, for the same
 reason as an expected key's. The record's label names the whole place,
-`view` and `at` included: `from:run-tally@16.stdout as json at
-sections.git.0.dirty_count`.
+`view`, `at`, and `count` included: `from:run-tally@16.stdout as json at
+sections.git.0.dirty_count`, and `count of from:list-orders@3.orders`
+for a claim that counts.
 
 An actual value that resolves to `undefined` always breaks, and the record
 names the place. `nuka check` reads each `from` path against the producing
@@ -2032,8 +2049,8 @@ to. When the array is empty, or `where` selects nothing, the claim breaks:
 A `where` claim and an item claim overlap when the path one reads is
 the start of the path the other reads. The path read is `actual`
 followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
-and `{ at: "a.b" }` read one path, and a `view` on either side does not
-separate them: it reads the same value another way. A `where` claim
+and `{ at: "a.b" }` read one path, and a `view` or a `count` on either
+side does not separate them: it reads the same value another way. A `where` claim
 that overlaps an item claim and compares with `equal`,
 `has-same-items`, `has-fields`, `fits-text`, `is-a`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `matches`, or `has-item` is refused at import. It selects the items by
@@ -2044,7 +2061,8 @@ holds".
 An overlapping `where` claim that compares with `greater-than`,
 `at-least`, `less-than`, `at-most`, or `not-equal` is judged at run
 time, from the expected values in hand. When the two read one value (one
-path and one view) and the `where` claim implies the item claim, the
+path, one view, and a count on both or neither) and the `where` claim
+implies the item claim, the
 claim breaks and names both: the same order direction with a bound at
 least as strict, or `not-equal` against the same value. "Every item
 over 10 costs more than 5" breaks with `each.where[0] selects the items
@@ -2182,8 +2200,8 @@ settles is a choice the step file has to make visibly.
 
 `nuka check` resolves where each side of a bound claim comes from: the
 sentence key, the producing line and path, or the `observe` path. A place
-is that origin and the full path, with `view` and `at` counted as steps
-of it and an array index as a path segment like any key, so `actual:
+is that origin and the full path, with `view`, `at`, and `count` counted
+as steps of it and an array index as a path segment like any key, so `actual:
 "r", at: "count"` and `expected: { from: "r.count" }` read one place. An
 item claim under `each` reads a place inside any item of the array. The
 check reports a claim whose two sides are certainly the same place
@@ -2247,9 +2265,9 @@ its claims.
 A claim step's record has these fields of its own (see "Records"):
 
 - `claims`: each claim in the order the step declares it. A comparison
-  carries `actual` (after `view` and `at`; absent when the place held
-  nothing or a value no snapshot could copy), `actual_from`, `view` and
-  `at` when the claim names them, `compare`, `expected` (absent on the
+  carries `actual` (after `view`, `at`, and `count`; absent when the
+  place held nothing or a value no snapshot could copy), `actual_from`,
+  `view`, `at`, and `count` when the claim names them, `compare`, `expected` (absent on the
   same terms), `expected_from`, `expected_view` when the claim names it,
   `expected_text`, `outcome` (`held`, `broken`, `unobserved`, or
   `unjudged`), a `reason` when it broke for something other than the
@@ -2278,7 +2296,8 @@ A claim step's record has these fields of its own (see "Records"):
 
 `measured` names the recorded channel whose content equals the raw actual
 value, the place `actual` reads before a `view` and the `at` after it
-(an `at` with no `view` is part of the place): `{ "step_record_id",
+(an `at` with no `view` is part of the place), and before a `count`, so
+a count names the channel that held the list: `{ "step_record_id",
 "channel" }`, where the
 channel is a path inside that step record: a process's
 `observed.processes[0].stdout`, `.stderr`, or `.exit_code`, a response's

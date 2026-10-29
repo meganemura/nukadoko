@@ -229,11 +229,12 @@ function placeOf(
   };
 }
 
-/** `place` read through `view` and then `at`, the way the run walks it. */
-function shapedPlace(place: CheckPlace, view: ClaimView | undefined, at: string | undefined): CheckPlace {
+/** `place` read through `view`, then `at`, then counted, the way the
+ * run walks it: a count is another value than the array it counts. */
+function shapedPlace(place: CheckPlace, view: ClaimView | undefined, at: string | undefined, count: boolean | undefined): CheckPlace {
   const viewed = view === undefined ? place : { origin: place.origin, segments: [...place.segments, `#${view}`], text: `${place.text} as ${view}` };
-  if (at === undefined || at === "") return viewed;
-  return { origin: viewed.origin, segments: [...viewed.segments, ...at.split(".")], text: `${viewed.text} at ${at}` };
+  const walked = at === undefined || at === "" ? viewed : { origin: viewed.origin, segments: [...viewed.segments, ...at.split(".")], text: `${viewed.text} at ${at}` };
+  return count === true ? { origin: walked.origin, segments: [...walked.segments, "#count"], text: `the count of ${walked.text}` } : walked;
 }
 
 /** `place` walked further by `path`. */
@@ -345,7 +346,7 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       const actualSchema = checkFromPath(`${label}.actual`, claim.actual);
       const actualSource = fromKeys.has(pathSegments(claim.actual)?.[0] ?? "") ? "from" : "observe";
       const top = placeOf(actualSource, claim.actual, producerOf, lineOf);
-      const actual = top === null ? null : shapedPlace(top, claim.view, claim.at);
+      const actual = top === null ? null : shapedPlace(top, claim.view, claim.at, claim.count);
       if (isEachClaim(claim)) {
         if (actualSchema !== null && claim.view === undefined && claim.at === undefined) {
           checkItemPaths(stepName, label, claim, actualSchema, report);
@@ -366,6 +367,7 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
             placeUnder(actual, [ANY_INDEX, ...itemSegments], `${item.actual ?? "item"} of each item of ${actual.text}`),
             item.view,
             item.at,
+            item.count,
           );
           noteActualFrom(itemLabel, item.expected, itemPlace, actualSource);
           comparesItself(itemLabel, itemPlace, expectedPlace(item.expected, producerOf, lineOf));

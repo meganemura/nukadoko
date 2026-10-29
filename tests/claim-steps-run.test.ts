@@ -1249,9 +1249,9 @@ export default defineStep({
   });
 
   it.each([
-    ["att", `{ actual: "cart", att: "count", compare: "equal", expected: { literal: 1 } }`, 'claims[0] has the key "att", which a claim does not have. It has actual, view, at, compare, expected, expected_view'],
+    ["att", `{ actual: "cart", att: "count", compare: "equal", expected: { literal: 1 } }`, 'claims[0] has the key "att", which a claim does not have. It has actual, view, at, count, compare, expected, expected_view'],
     ["wher", `{ actual: "cart.items", each: { wher: [], claims: [{ actual: "paid", compare: "equal", expected: { literal: true } }] } }`, 'claims[0].each has the key "wher", which each does not have. It has where, claims'],
-    ["expect", `{ actual: "cart.items", each: { claims: [{ actual: "paid", compare: "equal", expected: { literal: true }, expect: 1 }] } }`, 'claims[0].each.claims[0] has the key "expect", which a claim on one item does not have. It has actual, view, at, compare, expected, expected_view'],
+    ["expect", `{ actual: "cart.items", each: { claims: [{ actual: "paid", compare: "equal", expected: { literal: true }, expect: 1 }] } }`, 'claims[0].each.claims[0] has the key "expect", which a claim on one item does not have. It has actual, view, at, count, compare, expected, expected_view'],
   ])("refuses a claim with the unknown key %s and names it", async (_key, claim, message) => {
     const rootDir = await project({
       "features/steps/the-cart-counts.ts": `import { defineStep, z } from "nukadoko";
@@ -2262,6 +2262,58 @@ export default defineStep({
   });
 });
 
+describe("count through a run", () => {
+  /** A claim step that reads one key of the step that answers. */
+  const step = (pattern: string, key: string, args: string, claim: string) => `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "${pattern}",
+  args: z.object({ ${args}${args === "" ? "" : ", "}${key}: answer.returns.shape.${key} }),
+  from: { ${key}: [answer, "${key}"] },
+  claims: [${claim}],
+});
+`;
+
+  it("counts a list a step returned, read at a path or as lines, by a capture or a number word, and breaks on a text, naming what it counted", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-holds-items.ts": step("the cart holds {n:int} items", "cart", "n: z.number()", `{ actual: "cart", at: "items", count: true, compare: "equal", expected: "n" }`),
+      "features/steps/the-cart-holds-one.ts": step("the cart holds at least one item", "cart", "", `{ actual: "cart", at: "items", count: true, compare: "at-least", expected: { literal: 1 } }`),
+      "features/steps/the-output-has-lines.ts": step("the output has {n:int} line", "out", "n: z.number()", `{ actual: "out", view: "lines", count: true, compare: "equal", expected: "n" }`),
+      "features/steps/no-tag-is-left.ts": step("no tag is left", "body", "", `{ actual: "body", at: "tags", count: true, compare: "equal", expected: { literal: 0 } }`),
+      "features/steps/the-output-holds-items.ts": step("the output holds {n:int} items", "out", "n: z.number()", `{ actual: "out", count: true, compare: "equal", expected: "n" }`),
+      "features/t.feature": [
+        "Feature: counts",
+        "  Scenario: holds",
+        "    When the app answers",
+        "    Then the cart holds 2 items",
+        "    Then the cart holds at least one item",
+        "    Then the output has 1 line",
+        "  Scenario: breaks",
+        "    When the app answers",
+        "    Then no tag is left",
+        "  Scenario: not a list",
+        "    When the app answers",
+        "    Then the output holds 3 items",
+        "",
+      ].join("\n"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.stdout).not.toContain("error\t");
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: "))).toEqual([
+      "  - 2 (count of from:the-app-answers@3.cart.items) equal 2 (sentence:n) held; measured: none",
+      "  - 2 (count of from:the-app-answers@3.cart.items) at-least 1 (literal:one) held; measured: none",
+      "  - 1 (count of from:the-app-answers@3.out as lines) equal 1 (sentence:n) held; measured: none",
+      "  - 1 (count of from:the-app-answers@8.body.tags) equal 0 (literal:no) broken; measured: none",
+      "  - count of from:the-app-answers@11.out equal 3 (sentence:n) broken: count reads an array, and the value is a string; measured: none",
+    ]);
+    const claim = latestRunJson(rootDir).scenarios[0].steps[1].claims[0];
+    expect(claim).toMatchObject({ actual: 2, actual_from: "count of from:the-app-answers@3.cart.items", at: "items", count: true, outcome: "held" });
+  });
+});
+
 describe("a claim its compare could never judge as the sentence means it, refused at import", () => {
   /** A claim step that observes a body and an output, and reads a key of
    * the step that answers, so a claim can name either side. */
@@ -2328,6 +2380,16 @@ export default defineStep({
       "is-a array on a value read as a comma list",
       step("the output is an array", "said: z.string()", `{ actual: "printed", view: "comma-list", compare: "is-a", expected: { literal: "array" } }`),
       'claims[0] reads its actual value through view comma-list, which always makes an array, so is-a "array" holds whenever the view applies and states nothing. Claim what its items are with each, or claim the value itself',
+    ],
+    [
+      "a count with a compare that does not compare two numbers",
+      step("the body has items", "said: z.string()", `{ actual: "body", count: true, compare: "has-item", expected: { observe: "printed" } }`),
+      "claims[0] counts the items of its actual value, which makes a number, and has-item does not compare two numbers, so the claim would break on every line or hold on every line. Compare the count with equal, not-equal, greater-than, at-least, less-than, at-most",
+    ],
+    [
+      "a count with a literal that is no number",
+      step("no item is left", "said: z.string()", `{ actual: "body", count: true, compare: "equal", expected: { literal: [] } }`),
+      "claims[0] counts the items of its actual value, which makes a number, and its expected value is the literal [], which is never a number, so the claim always breaks. State the number in the pattern, as digits or a number word, and write it as a number literal",
     ],
   ])("refuses %s", async (_name, source, message) => {
     const rootDir = await project({

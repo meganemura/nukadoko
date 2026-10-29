@@ -4,13 +4,15 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
-import type { ClaimCompare } from "../src/record/types.js";
+import type { ClaimCompare, ClaimEachRecord } from "../src/record/types.js";
 import { repoRoot } from "./helpers/fixtures.js";
 import {
   ANY_INDEX,
   CLAIM_COMPARES,
   claimArgKeysRead,
   claimsProblem,
+  COUNT_COMPARES,
+  describeClaim,
   LITERAL_WORDS,
   literalStatedBy,
   literalStatement,
@@ -961,6 +963,127 @@ describe("view and at", () => {
       const view = tc.draw(gs.sampledFrom(["text", "lines", "json"] as const));
       expect(applyView(view, value)).toEqual({ reason: `view ${view} reads a string, and the value is ${article(jsonType(value))}` });
     }));
+});
+
+describe("count", () => {
+  /** A list, and one way a claim reaches it: the value itself, the lines
+   * of a text, the items of a comma list, a path inside its JSON text, or
+   * a path with no view, with the label its count is recorded under. */
+  const listRead = gs.composite((tc) => {
+    const items = tc.draw(gs.arrays(gs.text({ alphabet: "ab", minSize: 1, maxSize: 3 }), { maxSize: 6 }));
+    const reads = [
+      { claim: { actual: "list" }, observation: { list: items }, label: "count of observe:list" },
+      { claim: { actual: "out", view: "lines" }, observation: { out: `${items.join("\n")}\n` }, label: "count of observe:out as lines" },
+      { claim: { actual: "out", view: "comma-list" }, observation: { out: items.join(", ") }, label: "count of observe:out as comma-list" },
+      { claim: { actual: "out", view: "json", at: "body.list" }, observation: { out: JSON.stringify({ body: { list: items } }) }, label: "count of observe:out as json at body.list" },
+      { claim: { actual: "out", at: "body.list" }, observation: { out: { body: { list: items } } }, label: "count of observe:out.body.list" },
+    ] as const;
+    return { items, read: tc.draw(gs.sampledFrom(reads)) };
+  });
+
+  it("is the length of the list, read as it is, as lines, as a comma list, or at a path, and the record names what was counted", () =>
+    hegel.testAsync(async (tc) => {
+      const { items, read } = tc.draw(listRead);
+      const claim = { ...read.claim, count: true, compare: "equal", expected: "n" } as Claim;
+      const held = await judgeOne(claim, { n: items.length }, read.observation);
+      expect(held).toMatchObject({ actual: items.length, actual_from: read.label, count: true, outcome: "held" });
+      const off = tc.draw(gs.integers({ minValue: 1, maxValue: 3 }));
+      const broken = await judgeOne(claim, { n: items.length + off }, read.observation);
+      expect(broken).toMatchObject({ actual: items.length, outcome: "broken" });
+      expect(broken).not.toHaveProperty("reason");
+    }));
+
+  it("judges with each number compare exactly as that compare judges the length", () =>
+    hegel.testAsync(async (tc) => {
+      const { items, read } = tc.draw(listRead);
+      const name = tc.draw(gs.sampledFrom(COUNT_COMPARES));
+      const bound = tc.draw(gs.integers({ minValue: -2, maxValue: 8 }));
+      const record = await judgeOne({ ...read.claim, count: true, compare: name, expected: "n" } as Claim, { n: bound }, read.observation);
+      expect(record.outcome).toBe(holds(await compare(name, items.length, bound)) ? "held" : "broken");
+    }));
+
+  it("breaks on a value that is not an array, naming its type, under every number compare", () =>
+    hegel.testAsync(async (tc) => {
+      const value = tc.draw(jsonValues);
+      tc.assume(!Array.isArray(value));
+      const name = tc.draw(gs.sampledFrom(COUNT_COMPARES));
+      const record = await judgeOne({ actual: "v", count: true, compare: name, expected: "n" }, { n: tc.draw(gs.integers({ minValue: 0, maxValue: 3 })) }, { v: value });
+      expect(record).toMatchObject({ actual_from: "count of observe:v", outcome: "broken", reason: `count reads an array, and the value is ${article(jsonType(value))}` });
+      expect(record).not.toHaveProperty("actual");
+    }));
+
+  it("of a list compared with the list itself is another value, so it breaks on the two types and never as a self-comparison", async () => {
+    const record = await judgeOne({ actual: "result", count: true, compare: "equal", expected: { from: "result" } }, { result: ["a", "b"] }, undefined, ["result"]);
+    expect(record).toMatchObject({ actual: 2, actual_from: "count of from:produce@3.result", expected: ["a", "b"], outcome: "broken", reason: "equal compares a number with an array" });
+  });
+
+  it("names the count before the place in nuka steps and on each item an each declares", () => {
+    expect(describeClaim({ actual: "stdout", view: "json", at: "orders", count: true, compare: "at-least", expected: { literal: 1 } })).toBe("count of stdout as json at orders at-least 1");
+    expect(describeClaim({ actual: "orders", each: { claims: [{ actual: "tags", count: true, compare: "at-least", expected: { literal: 1 } }] } })).toBe("each of orders: count of tags at-least 1");
+  });
+
+  it("counts inside each item, and a where clause on the same count that implies the claim breaks it", async () => {
+    const orders = { orders: [{ tags: ["a"] }, { tags: [] }, { tags: ["a", "b"] }] };
+    const every = await judgeOne({ actual: "orders", each: { claims: [{ actual: "tags", count: true, compare: "at-least", expected: "least" }] } }, { least: 1 }, orders);
+    expect(every).toMatchObject({ outcome: "broken", each: { items: 3, selected: 3 } });
+    expect((every as ClaimEachRecord).each.results.map((item) => (item.selected ? [item.outcome, item.claims[0]!.actual, item.claims[0]!.actual_from] : null))).toEqual([
+      ["held", 1, "count of observe:orders.0.tags"],
+      ["broken", 0, "count of observe:orders.1.tags"],
+      ["held", 2, "count of observe:orders.2.tags"],
+    ]);
+    const implied = await judgeOne(
+      { actual: "orders", each: { where: [{ actual: "tags", count: true, compare: "at-least", expected: "least" }], claims: [{ actual: "tags", count: true, compare: "greater-than", expected: "limit" }] } },
+      { least: 2, limit: 1 },
+      orders,
+    );
+    expect(implied).toMatchObject({
+      outcome: "broken",
+      reason: "each.where[0] selects the items whose count of tags is at-least 2, and every such item holds each.claims[0], greater-than 1, whatever the data, so the claim measures nothing",
+    });
+    const another = await judgeOne(
+      { actual: "orders", each: { where: [{ actual: "tags", count: true, compare: "at-least", expected: "least" }], claims: [{ actual: "tags", compare: "not-equal", expected: "limit" }] } },
+      { least: 1, limit: 1 },
+      orders,
+    );
+    expect(another.reason).toBeUndefined();
+  });
+
+  describe("refused at import, where the run would judge it one way on every line", () => {
+    const shape = { ...literalShape("no order is left, or three, or at least {least:int}"), argsKeys: new Set(["least", "result"]), requiredArgsKeys: new Set(["least", "result"]), stringArgs: new Set(["least"]) };
+    const problem = (claim: Record<string, unknown>) => claimsProblem([{ actual: "result", ...claim } as Claim], shape);
+
+    it("takes every number compare, and refuses every other compare, naming the ones it takes", () => {
+      for (const name of CLAIM_COMPARES) {
+        const found = problem({ count: true, compare: name, expected: "least" });
+        if ((COUNT_COMPARES as readonly string[]).includes(name)) expect(found).toBeNull();
+        else
+          expect(found).toBe(
+            `claims[0] counts the items of its actual value, which makes a number, and ${name} does not compare two numbers, so the claim would break on every line or hold on every line. Compare the count with equal, not-equal, greater-than, at-least, less-than, at-most`,
+          );
+      }
+    });
+
+    it("refuses a count that is not true, a literal that is no number, an expected_view that makes no number, and a count of a text", () => {
+      expect(problem({ count: false, compare: "equal", expected: "least" })).toBe("claims[0].count must be true, or left out; got false");
+      expect(problem({ count: true, compare: "equal", expected: { literal: 3 } })).toBeNull();
+      expect(problem({ count: true, compare: "equal", expected: { literal: 0 } })).toBeNull();
+      expect(problem({ count: true, compare: "equal", expected: { literal: "three" } })).toBe(
+        'claims[0] counts the items of its actual value, which makes a number, and its expected value is the literal "three", which is never a number, so the claim always breaks. State the number in the pattern, as digits or a number word, and write it as a number literal',
+      );
+      expect(problem({ count: true, compare: "equal", expected: { literal: [] } })).toContain("its expected value is the literal [], which is never a number");
+      expect(problem({ count: true, compare: "equal", expected: "least", expected_view: "lines" })).toBe(
+        "claims[0] counts the items of its actual value, which makes a number, and its expected value is read through expected_view lines, which makes an array and never a number, so the claim always breaks. Capture the number with {int}, or leave expected_view out",
+      );
+      expect(problem({ count: true, compare: "equal", expected: "least", expected_view: "json" })).toBeNull();
+      expect(problem({ view: "text", count: true, compare: "equal", expected: "least" })).toBe(
+        "claims[0] counts the items of a value read through view text, which always makes a string and never an array, so the claim always breaks. Read the text with view lines to count its lines",
+      );
+      expect(problem({ view: "text", at: "0", count: true, compare: "equal", expected: "least" })).toBeNull();
+      expect(problem({ each: { claims: [{ compare: "equal", expected: "least" }] }, count: true })).toBe(
+        'claims[0] has the key "count", which a claim with each does not have. It has actual, view, at, each',
+      );
+    });
+  });
 });
 
 function literalShape(pattern: string): ClaimStepShape {

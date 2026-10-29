@@ -1351,7 +1351,7 @@ export default defineStep({
 });
 ```
 
-claim は `{ actual, view?, at?, compare, expected, expected_view? }` か、`{ actual, view?, at?, each }`(後述)です。
+claim は `{ actual, view?, at?, count?, compare, expected, expected_view? }` か、`{ actual, view?, at?, each }`(後述)です。
 `claims: []` は import の時点で拒否されます。
 claim を持たない claim step は、何も判定せずに通るからです。
 claim step では `description` は省略できます。
@@ -1444,7 +1444,8 @@ docstring や表がキーを埋めるかどうかは行ごとにしかわから�
 実際の値が `observe` から来るとき、真偽値のリテラルは拒否されます。
 また、`{ observe }` が読む期待値が真偽値なら、実行時に claim は成り立ちません。
 `observe` が計算した真偽値は、コードで下した判定だからです。
-`observe` は計測したもの(件数、テキスト、リスト)を返し、claim がそれを判定します。
+`observe` は計測したもの(テキスト、数、リスト)を返し、claim がそれを判定します。
+リストの要素の数は、`count: true` の claim が数えます。
 
 どの claim の record も `expected_text` を残します。
 これは行が期待値を述べたテキスト(キャプチャのテキスト、docstring、table)か、リテラルを述べる pattern の語で、前の step や `observe` から来た値では `null` です。
@@ -1470,11 +1471,20 @@ claim の actual が `from` から読むキーを `observe` が返したとき�
 - `at` は view を通した値の中のパスを取ります(`actual: "result.stdout", view: "json", at: "sections.git.0.dirty_count"`)。
   そのためパースは、コードではなく宣言されたデータです。
   配列に対するパスの要素は 10 進のインデックスです。
+- `count: true` は、`view` と `at` が残した配列を、その要素の数に置き換えます。
+  そのため数を述べる文(「一覧に注文が 3 件ある」、「少なくとも 1 行返った」、「要素がひとつも残っていない」)は、step のコードが求めた長さではなく、リストそのものについて判定されます(`{ actual: "orders", count: true, compare: "at-least", expected: { literal: 1 } }`)。
+  配列でない値では claim は成り立たず、その型を名指しします(`count reads an array, and the value is an object`)。
+  `length` キーを持つオブジェクトも、テキストも、数えません。
+  数は `equal`、`not-equal`、`greater-than`、`at-least`、`less-than`、`at-most` で比べ、期待値は文が述べる数です。
+  つまり `{n:int}` のようなキャプチャか、「期待値の出所」の規則に従うリテラルです。
+  それ以外の比較は import の時点で拒否されます。
+  `at` のない `view: "text"` で読んだ値(常に文字列です)を数える claim、数でないリテラル、文字列か配列を作る `expected_view` も拒否されます。
+  どれも、どの行でも成り立たないか、どの行でも成り立つからです。
 
 パスがたどるのは、自分のデータプロパティだけです。
 `constructor` のような継承したメンバーを名指しする要素や、getter は何も見つけません。
 claim が計測する `from` のキーの args スキーマも、期待値のキーと同じ理由で、値を書き換えてはいけません。
-record のラベルは、`view` と `at` を含めて、場所全体を名指しします(`from:run-tally@16.stdout as json at sections.git.0.dirty_count`)。
+record のラベルは、`view`、`at`、`count` を含めて、場所全体を名指しします(`from:run-tally@16.stdout as json at sections.git.0.dirty_count`、数える claim では `count of from:list-orders@3.orders`)。
 
 `undefined` に解決される実際の値では、claim は必ず成り立たず、record はその場所を名指しします。
 `nuka check` は、各 `from` のパスを値を返す step の `returns` スキーマと照らし合わせ、スキーマが宣言していないパスを報告します(`claim-path-unknown`)。
@@ -1649,12 +1659,12 @@ pattern には残り時間を与え、残りが無いときに与えることは
 `where` の claim と要素の claim は、一方が読むパスが、もう一方が読むパスの始まりであるときに重なります。
 読むパスは `actual` に `at` を続けたものです。
 したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読みます。
-どちらかの側の `view` は、同じ値を別の形で読むだけなので、2 つを分けません。
+どちらかの側の `view` や `count` は、同じ値を別の形で読むだけなので、2 つを分けません。
 要素の claim と重なり、`equal`、`has-same-items`、`has-fields`、`fits-text`、`is-a`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
 要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
 
 重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。
-2 つが 1 つの値(1 つのパスと 1 つの view)を読み、`where` の claim が要素の claim を含意するときは、claim は成り立たず、その 2 つを名指しします。
+2 つが 1 つの値(1 つのパスと 1 つの view で、両方が数えるか、どちらも数えない)を読み、`where` の claim が要素の claim を含意するときは、claim は成り立たず、その 2 つを名指しします。
 含意するとは、同じ大小の向きで、境界が同じかより厳しいとき、または同じ値に対する `not-equal` のときです。
 「10 を超える要素はどれも 5 より高い」は、`each.where[0] selects the items whose price is greater-than 10, and every such item holds each.claims[0], greater-than 5, whatever the data, so the claim measures nothing` で成り立ちません。
 それ以外の組はデータのとおりに判定します。
@@ -1749,7 +1759,7 @@ JSON にして 1024 バイトより長い値は、その先頭とバイト数で
 #### 自分自身との比較
 
 `nuka check` は、結び付いた claim の両辺がどこから来るか(文のキー、値を返した行とパス、`observe` のパス)を解決します。
-場所とは、その出所と完全なパスで、`view` と `at` もパスの一部として数え、配列のインデックスも他のキーと同じパスの要素とします。
+場所とは、その出所と完全なパスで、`view`、`at`、`count` もパスの一部として数え、配列のインデックスも他のキーと同じパスの要素とします。
 そのため `actual: "r", at: "count"` と `expected: { from: "r.count" }` は 1 つの場所を読みます。
 `each` の下の要素の claim は、配列のどの要素の中の場所も読みます。
 両辺が確かに同じ場所である claim は報告されます(`claim-compares-itself`)。
@@ -1799,7 +1809,7 @@ compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)�
 claim step の record には、次の固有のフィールドがあります(「Records」を参照)。
 
 - `claims`: step が宣言した順の、各 claim です。
-  比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
+  比較は、`actual`(`view`、`at`、`count` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view`、`at`、`count`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
   `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値、parameter type の transformer が書き換えた値、読み取りの途中で過ぎた step の締め切り)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
@@ -1810,7 +1820,8 @@ claim step の record には、次の固有のフィールドがあります(「
   すべては残さなかったときは `readings_left_out` もあります。
 
 `measured` は、生の実際の値と内容が等しい、記録されたチャネルを名指しします。
-生の実際の値とは、`actual` が読む場所の値で、`view` とそのあとの `at` を通す前のものです(`view` のない `at` は場所の一部です)。
+生の実際の値とは、`actual` が読む場所の値で、`view` とそのあとの `at` を通す前、そして `count` の前のものです(`view` のない `at` は場所の一部です)。
+そのため数える claim は、リストを持っていたチャネルを名指しします。
 形は `{ "step_record_id", "channel" }` で、チャネルはその step record の中のパスです。
 プロセスの `observed.processes[0].stdout`、`.stderr`、`.exit_code`、レスポンスの `http.jsonl[1].response_body`、`.status`、変わったファイルの `observed.files[0].content` があります。
 終了コードとステータスは数値とだけ一致し、ステータス 0(レスポンスのない request)はチャネルになりません。

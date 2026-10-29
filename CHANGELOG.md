@@ -70,6 +70,26 @@ just until 0.1.
   a docstring read as JSON that states a whole response is claimed with
   `equal`, and one that states some of its fields with `has-fields`. A
   property test now holds the compare to it.
+- **A claim can count.** `count: true` replaces the array that `view` and
+  `at` leave with the number of its items, so "the list shows 3 orders",
+  "at least one row came back", and "no item is left" are judged on the
+  list itself, not on a length that step code worked out and returned:
+  `{ actual: "orders", count: true, compare: "at-least", expected: {
+  literal: 1 } }`. The expected number comes from the sentence, as a
+  capture or a number word, and the count takes `equal`, `not-equal`,
+  `greater-than`, `at-least`, `less-than`, or `at-most`. A value that is
+  not an array breaks the claim and names its type, so an object with a
+  `length` key, or a text, is never counted. The record keeps `count:
+  true`, the label and the run summary line say `count of` before the
+  place (`2 (count of from:list-orders@3.orders) equal 2 (sentence:n)
+  held`), and `measured` still names the channel that held the list.
+  `defineStep` refuses a count with any other compare, a count of a value
+  read through `view: "text"` with no `at`, a literal that is no number,
+  and an `expected_view` that makes a string or an array, since each
+  claim would end one way on every line. A count and the list it counts
+  are two places, so `nuka check` does not report them as one
+  (`claim-compares-itself`), and an `each` judges a `where` claim and an
+  item claim as one value only when both count or neither does.
 
 - **Each step record holds what the program did inside the step.** A
   program file that names the new `{events}` placeholder

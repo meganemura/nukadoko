@@ -15,6 +15,7 @@ import {
   literalStatedByAll,
   pathSegments,
   placeAt,
+  placeCounted,
   placesOverlap,
   placeViewed,
   samePlace,
@@ -800,6 +801,18 @@ function shaped(side: Side, view: ClaimView | undefined, at: string | undefined,
   return { place, broken: `${viewedPlace.label} has nothing at ${at}` };
 }
 
+/** A side counted, when the claim counts: the number of items of the
+ * array the side holds, at a place that says it was counted, or why
+ * there is none. A value that is not an array breaks the claim rather
+ * than count as one item or none, since either would be a guess. */
+function counted(side: Side, count: boolean | undefined): Side {
+  if (count !== true) return side;
+  const place = placeCounted(side.place, count);
+  if (!("value" in side)) return "broken" in side ? { place, broken: side.broken } : { place, unjudged: side.unjudged };
+  if (!Array.isArray(side.value)) return { place, broken: `count reads an array, and the value is ${article(jsonType(side.value))}` };
+  return { place, value: side.value.length };
+}
+
 /** An expected value, its place, and the text the sentence states it as. */
 type ExpectedSide = Side & { readonly text: string | null; readonly fromObserve: boolean; readonly segments: readonly string[] | null };
 
@@ -898,6 +911,7 @@ function declarationOf(claim: ItemClaim, expected: ExpectedSide | null): ClaimIt
     ...(claim.actual === undefined ? {} : { actual: claim.actual }),
     ...(claim.view === undefined ? {} : { view: claim.view }),
     ...(claim.at === undefined ? {} : { at: claim.at }),
+    ...(claim.count === undefined ? {} : { count: claim.count }),
     compare: claim.compare,
     ...(expected !== null && "value" in expected ? { expected: expected.value } : {}),
     expected_from: place.label,
@@ -914,7 +928,7 @@ async function judgeComparison(
   atRead = false,
 ): Promise<ClaimComparisonRecord> {
   const expected = expectedSide(claim, inputs);
-  const actual = shaped(rawActual, claim.view, claim.at, atRead);
+  const actual = counted(shaped(rawActual, claim.view, claim.at, atRead), claim.count);
   // Field order is the order a reader reads a claim in: what was measured,
   // how, and what it was compared with.
   const base = {
@@ -922,6 +936,7 @@ async function judgeComparison(
     actual_from: actual.place.label,
     ...(claim.view === undefined ? {} : { view: claim.view }),
     ...(claim.at === undefined ? {} : { at: claim.at }),
+    ...(claim.count === undefined ? {} : { count: claim.count }),
     compare: claim.compare,
     ...("value" in expected ? { expected: expected.value } : {}),
     expected_from: expected.place.label,
@@ -1115,11 +1130,11 @@ function whereImplication(claim: EachClaim, inputs: ClaimInputs): string | null 
     const place = itemSegments(where);
     for (const [claimIndex, entry] of claim.each.claims.entries()) {
       const other = itemSegments(entry);
-      if (where.view !== entry.view || other.length !== place.length || !other.every((segment, index) => segment === place[index])) continue;
+      if (where.view !== entry.view || where.count !== entry.count || other.length !== place.length || !other.every((segment, index) => segment === place[index])) continue;
       const whereValue = expectedValue(where);
       const claimValue = expectedValue(entry);
       if (whereValue === null || claimValue === null || !whereImplies(where.compare, whereValue.value, entry.compare, claimValue.value)) continue;
-      const what = `${place.length === 0 ? "value" : place.join(".")}${where.view === undefined ? "" : ` as ${where.view}`}`;
+      const what = `${where.count === true ? "count of " : ""}${place.length === 0 ? "value" : place.join(".")}${where.view === undefined ? "" : ` as ${where.view}`}`;
       return (
         `each.where[${whereIndex}] selects the items whose ${what} is ${where.compare} ${JSON.stringify(whereValue.value)}, ` +
         `and every such item holds each.claims[${claimIndex}], ${entry.compare} ${JSON.stringify(claimValue.value)}, whatever the data, so the claim measures nothing`
@@ -1168,7 +1183,7 @@ function keptItems(judged: readonly ClaimItemRecord[]): ClaimItemRecord[] {
 function actualPlace(claim: Claim, inputs: ClaimInputs): ClaimPlace {
   const segments = pathSegments(claim.actual) ?? [claim.actual];
   const base = inputs.fromKeys.has(segments[0]!) ? placeAt(argPlace(segments[0]!, inputs), segments.slice(1).join(".")) : placeAt(OBSERVE_PLACE, claim.actual);
-  return placeAt(placeViewed(base, claim.view), claim.at);
+  return placeCounted(placeAt(placeViewed(base, claim.view), claim.at), isEachClaim(claim) ? undefined : claim.count);
 }
 
 function expectedPlace(claim: ItemClaim, inputs: ClaimInputs | null): ClaimPlace {
@@ -1225,6 +1240,7 @@ function notJudged(claim: Claim, inputs: ClaimInputs, outcome: "unobserved" | "u
   }
   return {
     ...base,
+    ...(claim.count === undefined ? {} : { count: claim.count }),
     compare: claim.compare,
     expected_from: expectedPlace(claim, inputs).label,
     ...(claim.expected_view === undefined ? {} : { expected_view: claim.expected_view }),

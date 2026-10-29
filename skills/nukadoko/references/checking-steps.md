@@ -26,7 +26,7 @@ export default defineStep({
 });
 ```
 
-A claim is `{ actual, view?, at?, compare, expected, expected_view? }`.
+A claim is `{ actual, view?, at?, count?, compare, expected, expected_view? }`.
 `nuka scaffold --then --from <step>.<key>` writes this shape when the
 line states one value (for a word such as `empty`, the literal of the
 chained key's type); `examples/` has a finished Then for a CLI, an API,
@@ -73,10 +73,9 @@ export default defineStep({
   args: z.object({ before: countItems.returns.shape.count }),
   from: { before: [countItems, "count"] },
   async observe({ request }) {
-    const res = await request.get("/items");
-    return { count: ((await res.json()) as unknown[]).length };
+    return { items: await (await request.get("/items")).json() };
   },
-  claims: [{ actual: "count", compare: "equal", expected: { from: "before" } }],
+  claims: [{ actual: "items", count: true, compare: "equal", expected: { from: "before" } }],
 });
 ```
 
@@ -110,13 +109,15 @@ trims the end (the newline a program prints last), `"lines"` also splits it
 into lines, `"json"` parses it, and `"comma-list"` splits it at commas; `at`
 then takes a path inside the viewed value, so parsing is data: `{ actual:
 "stdout", view: "json", at: "sections.git.0.dirty_count", compare: "equal",
-expected: "count" }`. `{ actual, each: { where?, claims } }` applies item
-claims to every item of an array (paths inside are relative to the item), and
-breaks when the array, or what `where` selects, is empty. A `where` claim whose
-path starts an item claim's, or the reverse, is refused with `equal`,
-`has-same-items`, `has-fields`, `fits-text`, `is-a`, `has-item`, `matches`,
-`contains-text`, `starts-with-text`, or `ends-with-text`, and breaks the claim
-where it implies it.
+expected: "count" }`. `count: true` then compares the number of items of the
+array there, with a number compare only (`at-least` the literal `1` for "at
+least one row"), and breaks on a value that is not an array. `{ actual, each: {
+where?, claims } }` applies item claims to every item of an array (paths inside
+are relative to the item), and breaks when the array, or what `where` selects,
+is empty. A `where` claim whose path starts an item claim's, or the reverse, is
+refused with `equal`, `has-same-items`, `has-fields`, `fits-text`, `is-a`,
+`has-item`, `matches`, `contains-text`, `starts-with-text`, or
+`ends-with-text`, and breaks the claim where it implies it.
 
 The compares: `equal` (structural), `not-equal`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `has-item`, `has-same-items` (in any
@@ -148,14 +149,15 @@ value. It gets every args key but the ones a claim compares with, or the
 calling `resultOf`, throws: an earlier step's value reaches a claim through
 `from` alone. A throw records `unobserved`.
 
-Return what you measured, never a verdict: a count, a text, a list. A
-boolean literal is refused when the actual value comes from `observe`,
-since `{ visible: true }` is the judgment made in code. For a yes or no in
-the sentence, return the word it uses (`outcome: "accepted" | "refused"`,
-`examples/workflow.md`), or the measurement behind it. Give every `args`
-and `returns` field of a step you write or rewrite a `.describe()`, so
-`nuka describe` connects a criterion's wording to the field that answers
-it; a note on a step you are not changing is a report.
+Return what you measured, never a verdict: a text, a number, a list (a claim
+with `count: true` counts it, so return the list, not its length). A boolean
+literal is refused when the actual value comes from `observe`, since
+`{ visible: true }` is the judgment made in code. For a yes or no in the
+sentence, return the word it uses (`outcome: "accepted" | "refused"`,
+`examples/workflow.md`), or the measurement behind it. Give every `args` and
+`returns` field of a step you write or rewrite a `.describe()`, so
+`nuka describe` connects a criterion's wording to the field that answers it; a
+note on a step you are not changing is a report.
 
 `poll: { timeout_ms }` runs `observe` again every 100 ms until every claim
 holds on two readings in a row, then judges the last reading once (a poll
@@ -170,15 +172,16 @@ so it is one step; "is in trial" and "is not in trial" are two steps.
 
 ## `expect` in a step that runs
 
-A When may still wait with Playwright's `expect` before it acts. A step
-runs outside `playwright test`, so measured against Playwright 1.61.1:
-`toBeVisible`, `toHaveText`, the other locator and plain-value matchers,
-and `expect.poll` work as in a Playwright test; a failing `expect.soft`
-throws at once, since no runner collects it; `toMatchAriaSnapshot`,
-`toHaveScreenshot`, and `toMatchSnapshot` throw `"<name>() must be called
-during the test"`, because a step has no current test to key a snapshot
-file to. In place of a snapshot, a Then observes the one property the
-scenario cares about and claims it against the docstring:
+A When may still wait with Playwright's `expect` before it acts. A step runs
+outside `playwright test`, so measured against Playwright 1.61.1: the locator
+and plain-value matchers and `expect.poll` work as in a Playwright test; a
+failing `expect.soft` throws at once, since no runner collects it;
+`toMatchAriaSnapshot`, `toHaveScreenshot`, and `toMatchSnapshot` throw
+`"<name>() must be called during the test"`, because a step has no current test
+to key a snapshot file to. In place of a snapshot, a Then observes the one
+property the scenario cares about and claims it against the docstring, which
+binds to the one required `args` key that no capture or `from` fills (here
+`expected`; see "Typed steps" in `docs/spec.md`):
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -195,6 +198,3 @@ export default defineStep({
   claims: [{ actual: "titles", compare: "equal", expected: "expected", expected_view: "lines" }],
 });
 ```
-
-With no capture, the docstring binds to `expected`, the one required `args` key
-that no capture or `from` fills (see "Typed steps" in `docs/spec.md`).

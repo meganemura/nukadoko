@@ -76,6 +76,10 @@ export interface ComparisonClaim {
   readonly actual: string;
   readonly view?: ClaimView;
   readonly at?: string;
+  /** Compares the number of items of the array that `view` and `at`
+   * leave, so "the list shows 3 orders" is judged on the list itself and
+   * not on a length step code worked out. */
+  readonly count?: true;
   readonly compare: ClaimCompare;
   readonly expected: ClaimExpected;
   /** For an expected value the sentence fills: how nukadoko reads the text
@@ -91,6 +95,7 @@ export interface ItemClaim {
   readonly actual?: string;
   readonly view?: ClaimView;
   readonly at?: string;
+  readonly count?: true;
   readonly compare: ClaimCompare;
   readonly expected: ClaimExpected;
   readonly expected_view?: ClaimView;
@@ -106,6 +111,7 @@ export interface EachClaim {
     readonly where?: readonly ItemClaim[];
     readonly claims: readonly ItemClaim[];
   };
+  readonly count?: never;
   readonly compare?: never;
   readonly expected?: never;
   readonly expected_view?: never;
@@ -164,6 +170,13 @@ export function placeAt(place: ClaimPlace, path: string | undefined): ClaimPlace
 export function placeViewed(place: ClaimPlace, view: ClaimView | undefined): ClaimPlace {
   if (view === undefined) return place;
   return { origin: place.origin, segments: [...place.segments, `#${view}`], label: `${place.label} as ${view}`, open: true };
+}
+
+/** `place` counted, when `count` is true: a count is the last step a claim
+ * takes, so the label names it first and no path walks on from it. Pure. */
+export function placeCounted(place: ClaimPlace, count: boolean | undefined): ClaimPlace {
+  if (count !== true) return place;
+  return { origin: place.origin, segments: [...place.segments, "#count"], label: `count of ${place.label}`, open: false };
 }
 
 function sameSegment(a: string, b: string): boolean {
@@ -459,7 +472,7 @@ function checkPath(label: string, path: unknown, optional: boolean): void {
 // The keys each kind of declaration has. A key outside its list is refused,
 // naming it: a misspelled `at` would otherwise be ignored, and the claim
 // would read another place than the one its author wrote.
-const COMPARISON_KEYS = ["actual", "view", "at", "compare", "expected", "expected_view"] as const;
+const COMPARISON_KEYS = ["actual", "view", "at", "count", "compare", "expected", "expected_view"] as const;
 const EACH_CLAIM_KEYS = ["actual", "view", "at", "each"] as const;
 const EACH_KEYS = ["where", "claims"] as const;
 
@@ -681,6 +694,41 @@ function article(word: string): string {
   return /^[aeiou]/.test(word) ? `an ${word}` : `a ${word}`;
 }
 
+/** The compares a count can take. A count is a number, so any other
+ * compare on it breaks on every line, or, for is-a, holds on every one. */
+export const COUNT_COMPARES: readonly ClaimCompare[] = ["equal", "not-equal", "greater-than", "at-least", "less-than", "at-most"];
+
+/** Refuses a `count` the run would judge one way on every line: a count
+ * makes a number, so a compare that reads anything else, an expected
+ * literal or `expected_view` that is never a number, and a view that
+ * always makes a string with no `at` after it leave nothing to measure. */
+function checkCount(label: string, claim: Record<string, unknown>): void {
+  if (claim.count === undefined) return;
+  if (claim.count !== true) throw new InvalidClaimError(`${label}.count must be true, or left out; got ${describe(claim.count)}`);
+  const makes = `${label} counts the items of its actual value, which makes a number`;
+  if (!(COUNT_COMPARES as readonly unknown[]).includes(claim.compare)) {
+    throw new InvalidClaimError(
+      `${makes}, and ${String(claim.compare)} does not compare two numbers, so the claim would break on every line or hold on every line. Compare the count with ${COUNT_COMPARES.join(", ")}`,
+    );
+  }
+  if (claim.view === "text" && claim.at === undefined) {
+    throw new InvalidClaimError(`${label} counts the items of a value read through view text, which always makes a string and never an array, so the claim always breaks. Read the text with view lines to count its lines`);
+  }
+  const literal = literalOf(claim.expected);
+  if (literal !== null && typeof literal.literal !== "number") {
+    throw new InvalidClaimError(
+      `${makes}, and its expected value is the literal ${describe(literal.literal)}, which is never a number, so the claim always breaks. State the number in the pattern, as digits or a number word, and write it as a number literal`,
+    );
+  }
+  const view = claim.expected_view as (typeof CLAIM_VIEWS)[number] | undefined;
+  const viewMakes = view === undefined ? null : VIEW_MAKES[view];
+  if (viewMakes !== null) {
+    throw new InvalidClaimError(
+      `${makes}, and its expected value is read through expected_view ${view!}, which makes ${article(viewMakes)} and never a number, so the claim always breaks. Capture the number with {int}, or leave expected_view out`,
+    );
+  }
+}
+
 function checkComparison(label: string, claim: Record<string, unknown>, shape: ClaimStepShape, where: Where, actualFromObserve: boolean): void {
   if (claim.each !== undefined) {
     throw new InvalidClaimError(`${label} has each, which a claim inside each cannot have`);
@@ -693,6 +741,7 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   }
   checkExpected(label, claim.expected, claim.compare, shape, actualFromObserve);
   checkExpectedView(label, claim, shape);
+  checkCount(label, claim);
   COMPARE_SIDES[claim.compare as ClaimCompare]?.(label, claim);
 }
 
@@ -961,11 +1010,13 @@ function describeComparison(claim: ItemClaim, actual: string): string {
   const view = claim.view === undefined ? "" : ` as ${claim.view}`;
   const at = claim.at === undefined ? "" : ` at ${claim.at}`;
   const expectedView = claim.expected_view === undefined ? "" : ` as ${claim.expected_view}`;
-  return `${actual}${view}${at} ${claim.compare} ${describeExpected(claim.expected)}${expectedView}`;
+  const count = claim.count === true ? "count of " : "";
+  return `${count}${actual}${view}${at} ${claim.compare} ${describeExpected(claim.expected)}${expectedView}`;
 }
 
 /** A declared claim as one line: `result.exit_code equal code`, with a
- * `from`, `observe`, or JSON literal expected value named as such. Pure. */
+ * `from`, `observe`, or JSON literal expected value named as such, and
+ * `count of orders equal n` for a claim that counts. Pure. */
 export function describeClaim(claim: Claim): string {
   if (!isEachClaim(claim)) return describeComparison(claim, claim.actual);
   const view = claim.view === undefined ? "" : ` as ${claim.view}`;

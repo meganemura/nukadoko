@@ -748,10 +748,11 @@ export interface MeasuredChannel {
 }
 
 /** One comparison as the step judged it. `actual` is the value after
- * `view` and `at`, absent when that path held nothing (then `reason` says
- * which). `*_from` names where each side came from, `view` and `at`
- * included: `sentence:<key>`, `from:<step>@<line or step record id>.<path>`,
- * `literal:<the pattern words that state it>`, or `observe:<path>`.
+ * `view`, `at`, and `count`, absent when that path held nothing (then
+ * `reason` says which). `*_from` names where each side came from, `view`
+ * and `at` included: `sentence:<key>`, `from:<step>@<line or step record id>.<path>`,
+ * `literal:<the pattern words that state it>`, or `observe:<path>`, with
+ * `count of ` before it for a claim that counts.
  * `expected_text` is the text the sentence states the expected value as:
  * a capture's text, the docstring, the table, or the pattern words of a
  * literal, and `null` for a value from an earlier step or from `observe`.
@@ -768,6 +769,9 @@ export interface ClaimComparisonRecord {
   readonly actual_from: string;
   readonly view?: ClaimView;
   readonly at?: string;
+  /** When the claim counts: `actual` is then the number of items of the
+   * array that `view` and `at` left. */
+  readonly count?: true;
   readonly compare: ClaimCompare;
   readonly expected?: unknown;
   readonly expected_from: string;
@@ -785,6 +789,7 @@ export interface ClaimItemDeclaration {
   readonly actual?: string;
   readonly view?: ClaimView;
   readonly at?: string;
+  readonly count?: true;
   readonly compare: ClaimCompare;
   readonly expected?: unknown;
   readonly expected_from: string;

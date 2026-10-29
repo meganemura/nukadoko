@@ -678,6 +678,11 @@
     {
       "en": ["lower bound", "upper bound"],
       "ja": "下限 / 上限"
+    },
+    {
+      "en": ["count (a claim that counts)", "counts", "the count of"],
+      "ja": "数える / 要素の数",
+      "note": "claim の `count: true` で、`view` と `at` が残した配列をその要素の数に置き換えること。数えた値は「要素の数」と書く。ラベルの `count of` はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

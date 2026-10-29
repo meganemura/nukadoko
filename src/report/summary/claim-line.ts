@@ -40,10 +40,10 @@ function comparisonText(record: ClaimComparisonRecord): string {
   return `${actual} ${record.compare} ${expectedText(record)}`;
 }
 
-/** An item claim as declared: the path inside the item, the compare, and
- * the expected value with its source. */
+/** An item claim as declared: the path inside the item (counted, when the
+ * claim counts), the compare, and the expected value with its source. */
 function itemDeclarationText(entry: ClaimItemDeclaration): string {
-  const actual = `${entry.actual ?? "item"}${entry.view === undefined ? "" : ` as ${entry.view}`}${entry.at === undefined ? "" : ` at ${entry.at}`}`;
+  const actual = `${entry.count === true ? "count of " : ""}${entry.actual ?? "item"}${entry.view === undefined ? "" : ` as ${entry.view}`}${entry.at === undefined ? "" : ` at ${entry.at}`}`;
   return `${actual} ${entry.compare} ${expectedText(entry)}`;
 }
 
