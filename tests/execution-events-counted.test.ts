@@ -1,13 +1,15 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import { createLineGroups, describeCounted, GROUP_FIELDS, type CountedGroup } from "../src/execution-events/counted.js";
+import { createLineGroups, describeCounted, GROUP_FIELDS, groupsAdded, type CountedGroup } from "../src/execution-events/counted.js";
 import { DB_OPS, EVENT_KINDS, type EventKindName, type JsonObject } from "../src/execution-events/format.js";
 
 // Responsibility: what the lines a count counted were
 // (src/execution-events/counted.ts): the lines grouped by their kind's
-// group fields, and the words a claim's line names them in. Grouping
-// keeps every line in one group whatever order the lines come in.
+// group fields, the groups a later count holds more lines of, and the
+// words a claim's line names them in. Grouping keeps every line in one
+// group whatever order the lines come in, and what a later count adds
+// is exactly the lines it was given past the earlier one's.
 
 const TABLES = ["scores", "events", "rankings", "audit log"];
 
@@ -18,6 +20,8 @@ function groupsOf(objects: readonly JsonObject[], kind: EventKindName = "db"): C
   for (const object of objects) groups.add(object);
   return groups.groups();
 }
+
+const byFields = (groups: readonly CountedGroup[]): CountedGroup[] => [...groups].sort((left, right) => JSON.stringify(left.fields).localeCompare(JSON.stringify(right.fields)));
 
 describe("createLineGroups", () => {
   it("puts every line in the one group its fields name, most lines first, whatever order the lines come in", () =>
@@ -57,6 +61,20 @@ describe("createLineGroups", () => {
   });
 });
 
+describe("groupsAdded", () => {
+  it("names, as added, exactly the lines a later count was given past an earlier one", () =>
+    hegel.test((tc) => {
+      const earlier = tc.draw(gs.arrays(dbLine, { maxSize: 12 }));
+      const later = tc.draw(gs.arrays(dbLine, { maxSize: 12 }));
+      expect(byFields(groupsAdded(groupsOf(earlier), groupsOf([...earlier, ...later])))).toEqual(byFields(groupsOf(later)));
+    }));
+
+  it("names no group a later count holds fewer lines of", () => {
+    const scores = { kind: "db" as const, fields: { op: "insert", table: "scores" } };
+    expect(groupsAdded([{ ...scores, lines: 2 }], [{ ...scores, lines: 1 }])).toEqual([]);
+  });
+});
+
 describe("describeCounted", () => {
   const insert = (table: string): JsonObject => ({ kind: "db", op: "insert", table });
 
@@ -69,6 +87,7 @@ describe("describeCounted", () => {
     );
     const many = [...Array.from({ length: 4 }, () => insert("scores")), insert("events"), insert("events"), insert("rankings"), insert("audit log"), insert("audits")];
     expect(describeCounted(groupsOf(many))).toBe('9 lines: 4 db insert into scores, 2 db insert into events, 1 db insert into "audit log", and 2 more lines in 2 groups');
+    expect(describeCounted(groupsOf([insert("scores")]), true)).toBe("1 more line: db insert into scores");
   });
 
   it("names each kind's line by the work it reports", () => {

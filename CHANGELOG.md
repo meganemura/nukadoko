@@ -235,8 +235,9 @@ just until 0.1.
   `after_world_stop` in run.json and makes its cell `broke`, since it was
   judged on lines still on their way: `nuka run` reports it as the
   finding `claim-judged-early`, since its scenario may have passed, and
-  the summary's claim line says what the whole count came to. A claim
-  line shows a count that is a range as its range, and, under every
+  the summary's claim line says what the whole count came to, naming
+  the lines it counted that the claim did not. A claim line shows a count
+  that is a range as its range, and, under every
   outcome, the lines the count counted, grouped by what each one reports
   (the table and the statement, the route and the status, the job, the
   flag and its side), at most three groups and then how many lines the

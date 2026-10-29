@@ -3303,8 +3303,10 @@ world が止まると、nukadoko は各読みを trace のすべての行で数�
 数え直した数が、claim の判定と違う判定をするとき、その claim は `run.json` で `after_world_stop` を持ちます:
 
 ```json
-"after_world_stop": { "lines": 2, "range": { "at_least": 1, "at_most": 1 }, "outcome": "broken", "reason": "1 line of the trace of step \"open-room\" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 1, so the claim breaks" }
+"after_world_stop": { "lines": 2, "range": { "at_least": 1, "at_most": 1 }, "outcome": "broken", "reason": "1 line of the trace of step \"open-room\" arrived after this claim was judged on 1 line, and the stop counted 1 more line: db insert into events; over all 2 lines, the count is exactly 1, so the claim breaks" }
 ```
+
+reason は、数え直した数が数え、claim の数が数えなかった行を、claim の行と同じ言葉で名指します。
 
 step record は書き直しません。
 その実行のセルは `broke` で、reason は `a claim at line 6 was judged before every execution event it counts had arrived` です(「断定」を参照)。

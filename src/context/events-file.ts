@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { flagOf, ownerOf, parseEventLine, type FlagEvaluation, type ParsedLine } from "../execution-events/format.js";
+import type { CountedGroup } from "../execution-events/counted.js";
 import type { EventSelection } from "../execution-events/selection.js";
 import { createKindsSeen, createTraceTally, readingGaps, type EventsGap, type KindsSeen, type SelectionCount, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
 import type { EventsSlice } from "../record/types.js";
@@ -327,7 +328,10 @@ export function collectWorldEvents(
   const recounted = recounts.map((recount, index): Recounted => {
     // Nothing is kept, so nothing is cut.
     const reading = tallies[index]!.reading({ truncated: false, replaced: recount.replaced });
-    return { lines: reading.lines, unreadable: reading.unreadable, count: reading.counts[0]!, open: readingGaps(reading.open, recount.selection.kind, kinds) };
+    // The groups name what lines hold, so they are redacted as the
+    // reading's record is, and the two compare alike.
+    const count = { ...reading.counts[0]!, counted: redact(reading.counts[0]!.counted, secrets) as CountedGroup[] };
+    return { lines: reading.lines, unreadable: reading.unreadable, count, open: readingGaps(reading.open, recount.selection.kind, kinds) };
   });
   return { copied, lines, owned, unowned, unreadable, undefinedKinds: Object.fromEntries(undefinedKinds), late, flags: evaluated, recounted };
 }

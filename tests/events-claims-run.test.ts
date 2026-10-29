@@ -190,7 +190,8 @@ describe("a claim on a count of execution events, under nuka run", () => {
     expect(exitCode).toBe(1);
     const run = latestRunJson(rootDir);
     const [scenario] = run.scenarios as { status: string; steps: StepFacts[] }[];
-    const late = '1 line of the trace of step "get" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 1, so the claim breaks';
+    const late =
+      '1 line of the trace of step "get" arrived after this claim was judged on 1 line, and the stop counted 1 more line: db insert into scores; over all 2 lines, the count is exactly 1, so the claim breaks';
     // The scenario passed, so the finding is what says why the run is red.
     expect(stderr).toContain(
       `failed\tclaim-judged-early\tfeatures/events.feature:6\ta slow writer: a claim at line 6 held before every execution event it counts had arrived, so its cell is broke: ${late}\n  do: nuka run features/events.feature:3\n`,

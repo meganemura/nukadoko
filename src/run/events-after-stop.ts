@@ -1,6 +1,7 @@
 import type { Recount, Recounted } from "../context/events-file.js";
 import { tallyInputsOfSlice } from "../context/events-read.js";
 import { COUNT_COMPARES, describeRange, judgeCount, rangeOf, type CountCompare } from "../execution-events/count.js";
+import { describeCounted, groupsAdded } from "../execution-events/counted.js";
 import type { Finding } from "../finding/finding.js";
 import type { RunAfterWorldStop, RunClaim, RunScenario, RunStep } from "../record/run-result.js";
 import type { EventsReadRecord, EventsSlice } from "../record/types.js";
@@ -77,7 +78,8 @@ function isCountCompare(compare: string): compare is CountCompare {
 /** `claim`, judged on `read`, judged again on `recounted`, the same
  * selection counted over every line of the producer's trace: `undefined`
  * when the claim is not one on a count, judged nothing, or no line of the
- * trace arrived after it was judged. Pure. */
+ * trace arrived after it was judged. The reason names what the whole
+ * count counted that the claim's did not. Pure. */
 export function afterWorldStop(claim: RunClaim, read: EventsReadRecord, recounted: Recounted): RunAfterWorldStop | undefined {
   if ("each" in claim || claim.outcome === "unobserved") return undefined;
   if (!isCountCompare(claim.compare) || typeof claim.expected !== "number") return undefined;
@@ -92,7 +94,10 @@ export function afterWorldStop(claim: RunClaim, read: EventsReadRecord, recounte
   const judgment = judgeCount({ range, whole, open: recounted.open, maybe }, claim.compare, claim.expected);
   // The numbers are of lines, named so: "judged 1" would read as the
   // count the claim judged.
-  const late = `${lines(all - judged)} of the trace of step "${read.of?.step ?? "unknown"}" arrived after this claim was judged on ${lines(judged)}`;
+  const added = describeCounted(groupsAdded(read.counted, recounted.count.counted), true);
+  const late =
+    `${lines(all - judged)} of the trace of step "${read.of?.step ?? "unknown"}" arrived after this claim was judged on ${lines(judged)}` +
+    (added === "" ? "" : `, and the stop counted ${added}`);
   const reason =
     judgment.outcome === "unjudged"
       ? `${late}; ${judgment.reason}`

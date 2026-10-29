@@ -120,7 +120,8 @@ describe("the world's stop counts a reading again", () => {
           lines: 3,
           range: { at_least: 2, at_most: 2 },
           outcome: "broken",
-          reason: '1 line of the trace of step "place-score" arrived after this claim was judged on 2 lines; over all 3 lines, the count is exactly 2, so the claim breaks',
+          reason:
+            '1 line of the trace of step "place-score" arrived after this claim was judged on 2 lines, and the stop counted 1 more line: db insert into scores; over all 3 lines, the count is exactly 2, so the claim breaks',
         },
       },
       // Measured on another channel: no reading of it to count again.
@@ -204,6 +205,16 @@ describe("afterWorldStop", () => {
     });
     const pending = recountedOf(1, 3, { open: [{ gap: "jobs-pending", job_ids: ["3f2a9c41"] }] });
     expect(afterWorldStop(claimOn("writes", { compare: "at-least", expected: 1 }), readRecord({ lines: 1 }), pending)).toMatchObject({ range: { at_least: 1, at_most: null }, outcome: "held" });
+  });
+
+  it("names what the whole count counted that the claim's did not, and nothing when it counted no more", () => {
+    const rankings = { kind: "db" as const, fields: { op: "update", table: "rankings" }, lines: 1 };
+    const more = afterWorldStop(claimOn("writes", { compare: "equal", expected: 1 }), readRecord({ lines: 1 }), recountedOf(3, 4, { count: { yes: 3, maybe: NO_MAYBE, counted: [scores(2), rankings] } }));
+    expect(more?.reason).toBe(
+      '3 lines of the trace of step "place-score" arrived after this claim was judged on 1 line, and the stop counted 2 more lines: 1 db insert into scores, 1 db update rankings; over all 4 lines, the count is exactly 3, so the claim breaks',
+    );
+    const fewer = afterWorldStop(claimOn("writes", { compare: "equal", expected: 1 }), readRecord({ lines: 1 }), recountedOf(0, 2));
+    expect(fewer?.reason).toBe('1 line of the trace of step "place-score" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 0, so the claim breaks');
   });
 
   it("judges again no claim that is not on a count, and none that observed nothing", () => {

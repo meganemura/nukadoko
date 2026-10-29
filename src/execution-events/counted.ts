@@ -3,7 +3,8 @@ import { valueText } from "./selection.js";
 
 // Responsibility: what the lines a count counted were, as a record and
 // as words: the lines grouped by the fields that tell one line of the
-// selected kind from another, with how many lines each group holds.
+// selected kind from another, with how many lines each group holds, and
+// the groups a later count of the same selection holds more lines of.
 // Pure. Boundary: which lines a count counts is selection.ts's and
 // tally.ts's; this module groups the lines they say match.
 //
@@ -84,6 +85,18 @@ export function createLineGroups(kind: EventKindName): LineGroups {
   };
 }
 
+/** The groups `after` holds more lines of than `before`, each with how
+ * many more: what a later count of the same selection counted that an
+ * earlier one did not. A group `after` holds fewer lines of is not one.
+ * Pure. */
+export function groupsAdded(before: readonly CountedGroup[], after: readonly CountedGroup[]): CountedGroup[] {
+  const earlier = new Map(before.map((group) => [`${group.kind}${valuesOf(group.kind, group.fields)}`, group.lines]));
+  return after.flatMap((group) => {
+    const more = group.lines - (earlier.get(`${group.kind}${valuesOf(group.kind, group.fields)}`) ?? 0);
+    return more > 0 ? [{ ...group, lines: more }] : [];
+  });
+}
+
 type GroupWords = (fields: CountedGroup["fields"]) => string;
 
 const OP_WORDS: Readonly<Record<(typeof DB_OPS)[number], string>> = {
@@ -120,9 +133,9 @@ function totalOf(groups: readonly CountedGroup[]): number {
 /** The groups in words, the first GROUPS_NAMED of them, each with its
  * lines when there are several: `1 line: db insert into events`,
  * `3 lines: 2 db insert into scores, 1 db update rankings`, and past
- * GROUPS_NAMED `..., and 4 more lines in 2 groups`. Empty for no group.
- * Pure. */
-export function describeCounted(groups: readonly CountedGroup[]): string {
+ * GROUPS_NAMED `..., and 4 more lines in 2 groups`. With `more`, the count
+ * reads `1 more line`. Empty for no group. Pure. */
+export function describeCounted(groups: readonly CountedGroup[], more = false): string {
   if (groups.length === 0) return "";
   const named = groups.slice(0, GROUPS_NAMED).map((group) => {
     const words = GROUP_WORDS[group.kind](group.fields);
@@ -130,5 +143,5 @@ export function describeCounted(groups: readonly CountedGroup[]): string {
   });
   const rest = groups.slice(GROUPS_NAMED);
   const tail = rest.length === 0 ? [] : [`and ${linesText(totalOf(rest), true)} in ${rest.length} ${rest.length === 1 ? "group" : "groups"}`];
-  return `${linesText(totalOf(groups), false)}: ${[...named, ...tail].join(", ")}`;
+  return `${linesText(totalOf(groups), more)}: ${[...named, ...tail].join(", ")}`;
 }

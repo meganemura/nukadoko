@@ -4210,8 +4210,11 @@ A claim on a count that the whole count judges otherwise than the claim
 was judged gets `after_world_stop` in `run.json`:
 
 ```json
-"after_world_stop": { "lines": 2, "range": { "at_least": 1, "at_most": 1 }, "outcome": "broken", "reason": "1 line of the trace of step \"open-room\" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 1, so the claim breaks" }
+"after_world_stop": { "lines": 2, "range": { "at_least": 1, "at_most": 1 }, "outcome": "broken", "reason": "1 line of the trace of step \"open-room\" arrived after this claim was judged on 1 line, and the stop counted 1 more line: db insert into events; over all 2 lines, the count is exactly 1, so the claim breaks" }
 ```
+
+The reason names the lines the whole count counted that the claim's
+count did not, in the words of the claim's line.
 
 The step record is not rewritten.
 The execution's cell is `broke`, with the reason `a claim at line 6 was
