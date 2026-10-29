@@ -21,16 +21,20 @@ beforeEach(async () => {
   opener = path.join(rootDir, "open.mjs");
   const walkFiles = pathToFileURL(path.join(repoRoot, "src", "run", "walk-files.ts")).href;
   // Every opener waits for the same moment, takes the walk, and stays alive
-  // long enough that each of the others meets it as a live holder.
+  // until the test says every opener has decided, so none of them meets a
+  // holder that ended: on a loaded machine one can start seconds late, and
+  // a holder gone by then is one it may take over.
   await writeFile(
     opener,
     [
+      'import { existsSync } from "node:fs";',
+      'import path from "node:path";',
       `import { openWalk } from ${JSON.stringify(walkFiles)};`,
-      "const [project, at, hold] = process.argv.slice(2);",
+      "const [project, at] = process.argv.slice(2);",
       "while (Date.now() < Number(at)) {}",
       'const walk = openWalk({ rootDir: project, stateDir: ".nukadoko", target: "features/a.feature:3" });',
       'process.stdout.write("refused" in walk ? "refused\\n" : `opened ${walk.number}\\n`);',
-      "setTimeout(() => {}, Number(hold));",
+      'setInterval(() => { if (existsSync(path.join(project, "decided"))) process.exit(0); }, 20);',
       "",
     ].join("\n"),
   );
@@ -40,17 +44,24 @@ afterEach(async () => {
   await rm(rootDir, { recursive: true, force: true });
 });
 
-function open(project: string, at: number, holdMs: number): Promise<string> {
-  const child = spawn(process.execPath, [...sourceNodeArgs, opener, project, String(at), String(holdMs)], { stdio: ["ignore", "pipe", "inherit"] });
-  let text = "";
-  child.stdout.on("data", (chunk: Buffer) => {
-    text += chunk.toString("utf8");
-  });
-  return new Promise<string>((resolve) => child.once("close", () => resolve(text)));
+interface Opener {
+  /** What it printed once it decided. */
+  readonly decided: Promise<string>;
+  readonly closed: Promise<void>;
+  readonly kill: () => void;
 }
 
-async function untilPrinted(output: () => string): Promise<void> {
-  while (output() === "") await new Promise((resolve) => setTimeout(resolve, 20));
+function open(project: string, at: number): Opener {
+  const child = spawn(process.execPath, [...sourceNodeArgs, opener, project, String(at)], { stdio: ["ignore", "pipe", "inherit"] });
+  let text = "";
+  const decided = new Promise<string>((resolve) => {
+    child.stdout.on("data", (chunk: Buffer) => {
+      text += chunk.toString("utf8");
+      if (text.endsWith("\n")) resolve(text);
+    });
+  });
+  const closed = new Promise<void>((resolve) => child.once("close", () => resolve()));
+  return { decided, closed, kill: () => child.kill("SIGKILL") };
 }
 
 describe("the walk lock", () => {
@@ -61,21 +72,18 @@ describe("the walk lock", () => {
         const project = path.join(rootDir, `p${round}`);
         // A run that took the walk and was killed: its pid is dead, and
         // its lock is left as it was.
-        let killedText = "";
-        const killed = spawn(process.execPath, [...sourceNodeArgs, opener, project, "0", "600000"], { stdio: ["ignore", "pipe", "inherit"] });
-        killed.stdout.on("data", (chunk: Buffer) => {
-          killedText += chunk.toString("utf8");
-        });
-        await untilPrinted(() => killedText);
-        expect(killedText).toBe("opened 1\n");
-        const gone = new Promise((resolve) => killed.once("close", resolve));
-        killed.kill("SIGKILL");
-        await gone;
+        const killed = open(project, 0);
+        expect(await killed.decided).toBe("opened 1\n");
+        killed.kill();
+        await killed.closed;
 
         // Every process starts first and then waits for one moment, so
         // the takeovers overlap instead of following the spawn order.
         const at = Date.now() + 1000;
-        const outputs = await Promise.all(Array.from({ length: PROCESSES }, () => open(project, at, 1200)));
+        const openers = Array.from({ length: PROCESSES }, () => open(project, at));
+        const outputs = await Promise.all(openers.map((each) => each.decided));
+        await writeFile(path.join(project, "decided"), "");
+        await Promise.all(openers.map((each) => each.closed));
         const opened = outputs.filter((output) => output.startsWith("opened"));
         expect(opened, `round ${round}: ${outputs.join("")}`).toEqual(["opened 2\n"]);
         const walk = JSON.parse(await readFile(path.join(project, ".nukadoko", "walk.json"), "utf8")) as { number: number };
