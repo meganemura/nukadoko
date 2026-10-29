@@ -735,6 +735,17 @@ describe("judgeRow under --base", () => {
       verdict: "moved",
       reason: "passes in default, but the mapping changed since the base, and it did not run in the old world in default: its step files did not load",
     });
+    const onIn = (environment: string): RunTableCell => ({ ...head, environment });
+    const notRunIn = (environment: string, reason: string): RunTableCell => at("old", "not-run", { environment, runs: 0, reason });
+    expect(
+      judgeRow([onIn("on"), onIn("off"), notRunIn("on", "the config file did not load"), notRunIn("off", "the config file did not load")], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false }),
+    ).toEqual({
+      verdict: "moved",
+      reason: "passes in on, off, but the mapping changed since the base, and it did not run in the old world in on, off: the config file did not load",
+    });
+    expect(
+      judgeRow([onIn("on"), onIn("off"), notRunIn("on", "the config file did not load"), notRunIn("off", "its step files did not load")], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false }).reason,
+    ).toBe("passes in on, off, but the mapping changed since the base, and it did not run in the old world in on: the config file did not load");
     expect(judgeRow([head, at("old", "fail", { line: 6, runs: 1, claim: 0, actuals: [] })], 2, { change: "unchanged", held: false, mappingChanged: false, retagged: true, renamed: false })).toEqual({
       verdict: "moved",
       reason: "passes in default, but its tags changed since the base, and a claim broke at line 6 of the base's feature file in the old world in default",

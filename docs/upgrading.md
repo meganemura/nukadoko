@@ -64,6 +64,11 @@ This part does not change release to release.
   name one of those channels, which may not have been the source. No
   step file changes; a reader that relied on the named channel reads the
   value from the step record itself.
+- **The `--base` summary line and the `moved` and `unproven` reasons
+  read differently.** When the old world ran fewer unchanged criteria
+  than needed it, the line says how many it ran; a reason names every
+  environment whose cell came to the same thing. No verdict or exit code
+  changes. Update a script that matched the old text.
 
 ## 0.21.0 to 0.22.0
 

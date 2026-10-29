@@ -337,6 +337,29 @@ describe("the old world's environments", () => {
       "passes in a, but the mapping changed since the base, and it did not run in the old world in b: the base's mapping requires this environment, and head's program file no longer has it",
     );
   }, 60_000);
+
+  it("name every environment the old world did not run, and say it ran none, when the base's config does not load", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }),
+      "nukadoko.config.ts": `import { defineConfig } from "nukadoko";\nexport default defineConfig({ removedOption: true } as never);\n`,
+      "features/cart.feature": feature(scenario("three items", 3, 6)),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    project.write({ "nukadoko.config.ts": `import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n` });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(1);
+    const [row] = rows(project.root);
+    expect(row!.verdict).toBe("moved");
+    expect(cellsOf(row!)).toEqual(["head:a:required:pass", "head:b:required:pass", "old:a:required:not-run", "old:b:required:not-run"]);
+    expect(row!.reason).toMatch(/^passes in a, b, but the mapping changed since the base, and it did not run in the old world in a, b: the config file did not load/);
+    const document = latestRunJson(project.root) as { run_dir: string };
+    expect(readFileSync(path.join(project.root, document.run_dir, "summary.md"), "utf8")).toContain(
+      "), so each unchanged criterion needed the old world, but it ran none of them; each moved row says why.",
+    );
+  }, 60_000);
 });
 
 describe("a shape --base cannot build a world for", () => {

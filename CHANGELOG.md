@@ -60,6 +60,17 @@ just until 0.1.
   "CFP, Schedule, Registration"" claims a drawing that lists them in
   another order without the sentence or the reading being sorted.
 
+### Fixed
+
+- **The `--base` summary no longer says the old world ran what it did
+  not.** Under a changed mapping it said "the old world ran each
+  unchanged criterion" even when the old world started for none of them,
+  as when the base's config does not load. It now says how many it ran
+  ("it ran none of them", or "only 3 of the 16") and that each moved
+  row says why. A `moved` or `unproven` reason now names every
+  environment whose cell came to the same thing, where it named the
+  first one alone.
+
 ## 0.22.0 — 2026-10-28
 
 ### Changed

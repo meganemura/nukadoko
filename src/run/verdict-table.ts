@@ -258,6 +258,17 @@ function worldCellClause(cell: RunTableCell, proofRuns: number): string {
     : `a claim broke at ${line} ${where}`;
 }
 
+// The clause for the first cell that did not pass, naming every other
+// environment whose cell came to the same thing, so a reason does not read
+// as if one environment alone fell short when several did.
+function worldCellsClause(cells: readonly RunTableCell[], proofRuns: number): string {
+  const placeholder = "\u0000";
+  const template = (cell: RunTableCell): string => worldCellClause({ ...cell, environment: placeholder }, proofRuns);
+  const first = template(cells[0]!);
+  const environments = cells.filter((cell) => template(cell) === first).map((cell) => cell.environment);
+  return first.replace(placeholder, environments.join(", "));
+}
+
 function controlProofReason(passedIn: string, proof: RunTableCell): string {
   return `passes in ${passedIn}, and a claim broke at line ${proof.line} in ${proof.environment}, where its conditions do not hold, in each of ${runsText(proof.runs)}`;
 }
@@ -298,12 +309,12 @@ export function judgeRow(
     const changed = underneathChange(context);
     if (changed !== null) {
       const old = cells.filter((cell) => cell.world === "old");
-      const moved = old.find((cell) => cell.outcome !== "pass");
+      const moved = old.filter((cell) => cell.outcome !== "pass");
       if (old.length === 0) {
         return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed} and the old world did not run it` };
       }
-      if (moved !== undefined) {
-        return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed}, and ${worldCellClause(moved, proofRuns)}` };
+      if (moved.length > 0) {
+        return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed}, and ${worldCellsClause(moved, proofRuns)}` };
       }
     }
     // The base answers whether an unchanged row's meaning moved, not
@@ -328,8 +339,8 @@ export function judgeRow(
     if (base.length > 0 && base.every((cell) => cell.outcome === "pass")) {
       return { verdict: "held", reason: `passes in ${passedIn} and at the base, as @held says` };
     }
-    const short = base.find((cell) => cell.outcome !== "pass");
-    const clause = short === undefined ? "it did not run at the base" : worldCellClause(short, proofRuns);
+    const short = base.filter((cell) => cell.outcome !== "pass");
+    const clause = short.length === 0 ? "it did not run at the base" : worldCellsClause(short, proofRuns);
     return { verdict: "unproven", reason: `passes in ${passedIn}, and @held says the base has this behaviour, but ${clause}` };
   }
   const absent = [

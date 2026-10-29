@@ -346,11 +346,20 @@ function renderBase(document: RunDocument): string[] {
         ...(mapping.default_environments ? ["defaultEnvironments"] : []),
       ];
   const unseen = mapping?.unseen ?? [];
+  // The old world can fail to start (a base config that does not load, a
+  // program the base lacks), so the line says how many it ran rather than
+  // that it ran each one. A row that failed at head needs no old world.
+  const unchanged = rows.filter((row) => row.change === "unchanged" && row.verdict !== "failed");
+  const ranOld = unchanged.filter((row) => row.cells.some((cell) => cell.world === "old" && cell.outcome !== "not-run")).length;
+  const oldRan =
+    ranOld === unchanged.length
+      ? "so the old world ran each unchanged criterion under the base's steps."
+      : `so each unchanged criterion needed the old world, but it ran ${ranOld === 0 ? "none of them" : `only ${ranOld} of the ${unchanged.length}`}; each moved row says why.`;
   const mappingLine =
     unseen.length > 0
       ? `The mapping could not be compared whole (${unseen.join("; ")}), so it counts as changed, and each unchanged criterion needs the old world.`
       : document.table.mapping_changed === true
-        ? `The mapping changed (${parts.length === 0 ? "the base's could not be read" : parts.join("; ")}), so the old world ran each unchanged criterion under the base's steps.`
+        ? `The mapping changed (${parts.length === 0 ? "the base's could not be read" : parts.join("; ")}), ${oldRan}`
         : "The mapping did not change, so no unchanged criterion needed the old world.";
   // A ref that is itself an abbreviated hash would only repeat.
   const compared = base.commit.startsWith(base.ref) ? cellCode(base.ref) : `${cellCode(base.ref)} (\`${base.commit.slice(0, 7)}\`)`;
