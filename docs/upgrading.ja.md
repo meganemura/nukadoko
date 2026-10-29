@@ -197,6 +197,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `observe` が受け取る `from` の値を期待値の `{ from }` も読んでいる claim step も、期待値が `{ observe }` のときに実際の値が読む `from` の値を `observe` が受け取る claim step も、`nuka check` が拒否します(`claim-compares-itself`)。
   2 つのうち 1 つを別の step から取ってください。
 
+- **後の Then に値を返していた Then は、その値を実行する step に渡します。**
+  claim step は `returns` を持たないので、それぞれが前の Then を読む Then の連なりは、その形を保てません。
+  最初の Then が測っていたものを、コマンドを実行した When(または Given)に移し、そこで返し、後の各 Then の `from` をその step に向けてください。
+  `from` は名指しした step の最も新しい結果を読みます。
+  そのため、1 つの step ファイルが 2 つの行を受け持ち、後の Then がその結果を区別する(最初の検査と、もう一度走らせた検査)ときは、行ごとに 1 つの step ファイルに分け、各 Then が指すものを名指ししてください。
+
+- **古い Then が確かめていた、文が述べない事実は、When の前提条件に置きます。**
+  claim は自分の行が述べるものとだけ比べるので、どちらも述べない文のもとの終了コード 0 やステータス 200 を運ぶ claim はありません。
+  コマンドを実行した、あるいはリクエストを送った When でそれを確かめ、成り立たなければ throw してください。
+  step は自分の行で失敗し、scenario が意図した状態に一度もならなかった world でどの Then も判定されません。
+
 - **transformer を持つ parameter type は、claim の期待値を埋められません。**
   `nuka check` はそのような pattern を `claim-expected-transformed` として報告し、それが報告されている間は `nuka run` が始まりません。
   `--no-check` の下では、そのようなキーと比べる claim は `unjudged` になります。
@@ -402,6 +413,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   どちらも追加なので、既存の読み方は変わりません。
   `nuka run` の前にアプリを起動していた CI の step は、`serve` が起動するようになれば取り除けます。
 
+  git が無視する build の出力(`dist/`)を step が実行するコマンドラインツールにも、`--base` のためにプログラムのファイルが要ります。
+  基点と old の tree は git が無視するものを持たないので、各 tree でその出力を作る `build` をファイルに書いてください(`export default defineProgram({ build: ["npm run build"] })`)。
+  step ファイルがその出力を import するときは、`nuka run` の前に head でも build してください。
+  `nukadoko.config.ts` を名指しするツールの設定(`tsconfig.json` の `include`、lint やモジュール境界の検査ツールの除外の一覧など)は、その隣に `nukadoko.program.ts` も名指しします。
+
 - **world へのリクエストは `traceparent` を運び、run に world の URL があるとき `observed` は `program_log` を持ちます。**
   step が world のオリジンへ送るリクエストは、W3C の `traceparent` ヘッダを運ぶようになりました。
   自分で設定したリクエストは、それを保ちます。
@@ -471,6 +487,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   その `do:` の行も同じ結果を出し、head をどう直しても通りません。
   その commit は `--base` を付けない `nuka run` でゲートします。
   次の変更は、新しい step を持つ基点と比べます。
+
+  アップグレードで文を言い直した scenario は `unchanged` ではないので、これは当てはまりません。
+  その行は `changed` で、基点のコードに対して走り、そこで通れば `unproven` になります。
+  変更なしで Then が失敗することを示すものがないからで、`moved` にはなりません。
+  言い回しだけを変え、基点がすでにその振る舞いを持つときは、scenario に `@held` を付けてください。
+  その行は、基点で通れば `held` になります。
 
 - **run.json は `since` を持たず、scenario のエントリは `criteria` を持ちません。**
   `criteria.changed_since` を読んでいた読み手は、`table.rows` の行の `change`(`unchanged`、`changed`、`new`、`removed`、そして名前を変えたか移した受け入れ基準の `renamed_from`)を読みます。

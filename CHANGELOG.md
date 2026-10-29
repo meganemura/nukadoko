@@ -103,6 +103,15 @@ just until 0.1.
 - **`docs/upgrading.md` names 0.19.0 and 0.20.0 as releases that need
   no action.** Neither had a section, and the list of such releases did
   not name them, so a reader could not tell "no action" from "missing".
+- **"0.21.0 to 0.22.0" in `docs/upgrading.md` covers four more moves.**
+  A reworded sentence makes its row `changed` and `unproven`, not
+  `moved`, and `@held` is the tag for a base that already has the
+  behaviour; a Then that returned a value for a later Then hands it to a
+  step that runs; a fact an old Then checked that no sentence states (an
+  exit code, a status of 200) goes in the When as a precondition; and a
+  command-line tool that runs ignored build output needs a program file
+  with `build` for `--base`, named wherever a tool's configuration names
+  `nukadoko.config.ts`.
 
 ## 0.22.0 — 2026-10-28
 

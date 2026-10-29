@@ -222,6 +222,24 @@ This part does not change release to release.
   value is `{ observe }` (`claim-compares-itself`): take one of the two
   from another step.
 
+- **A Then that returned a value for a later Then hands that value to a
+  step that runs.** A claim step has no `returns`, so a chain of Thens
+  where each read the one before cannot keep its shape. Move what the
+  first Then measured into the When (or a Given) that ran the command,
+  return it there, and point each later Then's `from` at that step.
+  `from` reads the most recent result of the step it names, so when one
+  step file served two lines whose results later Thens tell apart (a
+  first check and a check run again), split it into two step files, one
+  per line, and name the one each Then means.
+
+- **A fact an old Then checked that its sentence does not state goes in
+  the When, as a precondition.** A claim compares only with what its line
+  states, so an exit code of 0 or a status of 200 under a sentence that
+  names neither has no claim to carry it. Check it in the When that ran
+  the command or sent the request, and throw when it does not hold: the
+  step fails at its own line, and no Then is judged on a world that was
+  never in the state the scenario meant.
+
 - **A parameter type with a transformer cannot fill a claim's expected
   value.** `nuka check` reports such a pattern as
   `claim-expected-transformed`, and `nuka run` refuses to start while it
@@ -460,6 +478,15 @@ This part does not change release to release.
   `world_name`; both are additive. A CI step that started the app before
   `nuka run` can go, once `serve` starts it.
 
+  A command-line tool whose steps run build output git ignores (`dist/`)
+  needs a program file too, for `--base`: the base and old trees hold
+  nothing git ignores, so give the file a `build` that makes the output
+  in each tree (`export default defineProgram({ build: ["npm run build"]
+  })`), and build at head before `nuka run` when a step file imports
+  it. Any tool configuration that names `nukadoko.config.ts`, such as a
+  `tsconfig.json` `include` or a lint or module-boundary checker's
+  exclude list, names `nukadoko.program.ts` beside it.
+
 - **Requests to the world carry a `traceparent`, and `observed` has
   `program_log` when the run has a world URL.** A step's requests to the
   world's origin now carry a W3C `traceparent` header; a request that
@@ -556,6 +583,13 @@ This part does not change release to release.
   no edit at head can make it pass. Gate that commit with `nuka run`
   without `--base`. The next change compares with a base that has the
   new steps.
+
+  A scenario whose sentence the upgrade rewords is not `unchanged`, so
+  this does not apply to it: its row is `changed`, runs against the
+  base's code, and reads `unproven` when it passes there, never
+  `moved`, since nothing shows its Then failing without a change. When
+  only the wording changed and the base already has the behaviour, tag the
+  scenario `@held`; its row then reads `held` when it passes at the base.
 
 - **run.json has no `since`, and a scenario entry has no `criteria`.**
   A reader of `criteria.changed_since` reads the row's `change` in
