@@ -17,12 +17,14 @@ import {
   literalStatedBy,
   literalStatement,
   NUMBER_WORDS,
+  numberOfWord,
   itemPathsOverlap,
   placeAt,
   placesOverlap,
   placeViewed,
   samePlace,
   tableValuesOf,
+  TIMES_WORDS,
   type Claim,
   type ClaimPlace,
   type ClaimStepShape,
@@ -1304,6 +1306,32 @@ describe("the literal rule, exactly", () => {
       expect(literalStatedBy(pattern, other)).toBeNull();
       expect(literalStatedBy(pattern, String(value))).toBeNull();
     }));
+
+  it("a fixed times word states its number under any compare, and states no other number", () =>
+    hegel.test((tc) => {
+      const words = tc.draw(patternWords);
+      const [word, value] = tc.draw(gs.sampledFrom(Object.entries(TIMES_WORDS)));
+      const spelled = tc.draw(gs.sampledFrom([word, word.toUpperCase(), `${word}.`]));
+      const at = tc.draw(gs.integers({ minValue: 0, maxValue: words.length }));
+      const pattern = [...words.slice(0, at), spelled, ...words.slice(at)].join(" ");
+      const compare = tc.draw(gs.sampledFrom(COUNT_COMPARES));
+      expect(numberOfWord(spelled.replace(/\.$/, ""))).toBe(value);
+      expect(claimsProblem([{ actual: "result", compare, expected: { literal: value } }], literalShape(pattern))).toBeNull();
+      expect(literalStatedBy(pattern, value)?.toLowerCase()).toBe(word);
+      const other = tc.draw(gs.integers({ minValue: -3, maxValue: 20 }));
+      tc.assume(other !== value);
+      expect(literalStatedBy(pattern, other)).toBeNull();
+    }));
+
+  it("never fixes 0 with equal alone, and once and twice state the counts a Then about writes says", () => {
+    expect(claimsProblem([{ actual: "result", compare: "equal", expected: { literal: 0 } }], literalShape("the job never ran"))).toBeNull();
+    expect(claimsProblem([{ actual: "result", compare: "at-most", expected: { literal: 0 } }], literalShape("the job never ran"))).not.toBeNull();
+    expect(literalStatedBy("the job never ran", "")).toBeNull();
+    expect(literalStatedBy("the score row was inserted once", 1)).toBe("once");
+    expect(literalStatedBy("the score row was inserted twice", 2)).toBe("twice");
+    expect(claimsProblem([{ actual: "result", compare: "at-least", expected: { literal: 2 } }], literalShape("the job ran at least twice"))).toBeNull();
+    expect(literalStatedBy("the score row was inserted {once}", 1)).toBeNull();
+  });
 
   it("a number word inside a capture, an optional group, or an alternation states nothing", () => {
     for (const pattern of ["at least {three} points", "at least (three) points", "at least two/three points"]) {

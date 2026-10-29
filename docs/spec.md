@@ -1699,13 +1699,16 @@ ones nothing validated.
   A whole number from zero to twelve is also stated by the fixed word that
   spells it, under any compare, as its digits would be: `at least three
   routed points` may claim `3` with `at-least`, and `one relation line`
-  may claim `1`. Only a fixed word counts. A capture's text reaches a
+  may claim `1`. The fixed words `once` and `twice` state `1` and `2`
+  the same way, so "the score row was inserted once" may claim `1`.
+  Only a fixed word counts. A capture's text reaches a
   claim through its parameter type, and `{int}` reads digits alone, so a
   number word in a line is a fixed word or nothing.
   Only the pattern's words lose their edge punctuation, so a literal with
   other spacing or punctuation is a text the sentence does not state. Or
   it is the fixed value of a word in a short table: `no`, `none`,
-  `nothing`, and `neither` fix `0`, `""`, and `[]`; `empty` fixes `""` and `[]`. A
+  `nothing`, and `neither` fix `0`, `""`, and `[]`; `never` fixes `0`;
+  `empty` fixes `""` and `[]`. A
   value from the table is compared with `equal` alone: "no item is
   unpaid" read as `at-least 0`, or "the cart is empty" read as
   `not-equal []`, holds for nearly anything, and the word does not show
@@ -7435,15 +7438,16 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               claim on what observe returns against the
                               first stated value. A line that states no
                               value but holds a word that fixes one (no,
-                              none, nothing, neither, empty) needs exactly one
-                              --from
+                              none, nothing, neither, never, empty) needs
+                              exactly one --from
                               whose returns schema is a bare z.string(),
                               z.number(), or z.array(): its claim compares
                               that value with the word's literal of the same
                               JSON type ("", 0, or []), with equal, or with
                               not-equal right after the word "not",
                               "neither", or "nor". A number word from zero
-                              to twelve does the same with a z.number()
+                              to twelve, once, or twice does the same with a
+                              z.number()
                               --from, written with equal, which the step may
                               change to the compare the line says. With no
                               --from, several, one of another type, or one

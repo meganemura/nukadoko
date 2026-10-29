@@ -222,8 +222,8 @@ class InvalidClaimError extends Error {}
 // criterion again ("the command succeeds" claiming 0). It is allowed only
 // when the sentence itself states it: its text is exactly a run of the
 // pattern's fixed words, joined by one space, a whole number from zero to
-// twelve that a fixed word spells, or it is the fixed value of a fixed
-// word in the table below. A word inside a capture, an optional
+// twelve that a fixed word spells (or `once` and `twice`, which state 1
+// and 2), or it is the fixed value of a fixed word in the table below. A word inside a capture, an optional
 // group, or an alternation is not fixed, because the sentence a line binds
 // may not say it. Only the pattern side is normalized (edge punctuation
 // taken off its words): a literal with other spacing or punctuation is a
@@ -250,6 +250,7 @@ export const LITERAL_WORDS: Readonly<Record<string, readonly ClaimLiteral[]>> = 
   none: [0, "", []],
   nothing: [0, "", []],
   neither: [0, "", []],
+  never: [0],
   empty: ["", []],
 };
 
@@ -281,6 +282,20 @@ export const NUMBER_WORDS: readonly string[] = [
   "eleven",
   "twelve",
 ];
+
+/** The words that state how many times something happened, by value: "the
+ * row was inserted once" states 1, under any compare, as a number word
+ * does. */
+export const TIMES_WORDS: Readonly<Record<string, number>> = { once: 1, twice: 2 };
+
+/** The whole number a fixed word states as its digits would, a number word
+ * or a times word, compared case-insensitively, or `null`. Pure. */
+export function numberOfWord(word: string): number | null {
+  const lower = word.toLowerCase();
+  const spelled = NUMBER_WORDS.indexOf(lower);
+  if (spelled !== -1) return spelled;
+  return Object.hasOwn(TIMES_WORDS, lower) ? TIMES_WORDS[lower]! : null;
+}
 
 const EDGE_PUNCTUATION = /^[.,;:!?"'`]+|[.,;:!?"'`]+$/g;
 
@@ -397,8 +412,7 @@ export function literalStatement(pattern: string, literal: unknown): LiteralStat
   const words = all.filter((word) => word.fixed).map((word) => word.text);
   const text = literalText(literal);
   if (text !== null && text.length > 0 && isRunOf(words, text)) return { words: text, byTable: false, compare: null };
-  const numberWord = typeof literal === "number" ? NUMBER_WORDS[literal] : undefined;
-  const spelled = numberWord === undefined ? undefined : words.find((word) => word.toLowerCase() === numberWord);
+  const spelled = typeof literal === "number" ? words.find((word) => numberOfWord(word) === literal) : undefined;
   if (spelled !== undefined) return { words: spelled, byTable: false, compare: null };
   for (const [index, word] of all.entries()) {
     if (!word.fixed) continue;

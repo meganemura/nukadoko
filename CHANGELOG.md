@@ -200,6 +200,13 @@ just until 0.1.
   The run summary gives each row one line under "Flags", with its
   counts and the gates its lines named. The field is additive, so no
   `schema_version` changes.
+- **A line can state a count with `once`, `twice`, or `never`.** The
+  literal rule reads the fixed words `once` and `twice` as `1` and `2`,
+  under any compare, as a number word, so "the score row was inserted
+  once" claims `{ literal: 1 }`. `never` joins the word table and fixes
+  `0`, compared with `equal` alone (or `not-equal` alone right after
+  `not`), as `no` does. `nuka scaffold --then` writes a literal for each
+  of the three words.
 
 ### Fixed
 

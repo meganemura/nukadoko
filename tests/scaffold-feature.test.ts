@@ -105,7 +105,7 @@ describe("nuka scaffold --feature", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe(["features/steps/i-open-the-page.ts", ""].join("\n"));
     expect(result.stderr).toContain(
-      "note: features/banner.feature:4: a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty, or a number word from zero to twelve), so no stub was written; state the value this line checks in the line, such as a number or a quoted text, and scaffold again\n",
+      "note: features/banner.feature:4: a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, never, empty, once, twice, or a number word from zero to twelve), so no stub was written; state the value this line checks in the line, such as a number or a quoted text, and scaffold again\n",
     );
     expect(result.stderr).toContain(
       'note: features/banner.feature:5: the line states its value only with the word "empty", which fixes "" or [], and no --from names the value it is compared with, so that value\'s JSON type is unknown; a literal of another JSON type would never hold, so no stub was written; scaffold it alone with --then --from <step>.<key>, naming a value its step\'s returns declares as z.string(), z.number(), or z.array()\n',

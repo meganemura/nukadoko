@@ -1407,10 +1407,11 @@ discovery は、`defineStep` が返したオブジェクトそのものである
   そのテキストが、pattern の固定の語の並びを 1 つの空白でつないだものとちょうど等しいか(pattern `the command exits 0` は `0` を claim できます)、短い表にある語の固定の値であることが条件です。
   0 から 12 までの整数は、それを綴る固定の語でも述べられ、数字で書いたときと同じくどの比較でも使えます。
   `at least three routed points` は `3` を `at-least` で、`one relation line` は `1` を claim できます。
+  固定の語 `once` と `twice` も同じように `1` と `2` を述べるので、"the score row was inserted once" は `1` を claim できます。
   数えるのは固定の語だけです。
   capture のテキストは parameter type を通って claim に届き、`{int}` は数字だけを読むので、行の中の数を表す語は固定の語として述べるしかありません。
   端の句読点を取るのは pattern の語の側だけなので、空白や句読点の違うリテラルは、文が述べていないテキストです。
-  表では、`no`、`none`、`nothing`、`neither` が `0`、`""`、`[]` を、`empty` が `""` と `[]` を固定します。
+  表では、`no`、`none`、`nothing`、`neither` が `0`、`""`、`[]` を、`never` が `0` を、`empty` が `""` と `[]` を固定します。
   表の値と比べられるのは `equal` だけです。
   "no item is unpaid" を `at-least 0` と読むことや、"the cart is empty" を `not-equal []` と読むことは、ほとんど何に対しても成り立ち、語はそれを示しません。
   ただ 1 つの例外は、表の語のすぐ前にある固定の語 `not` です。
@@ -5924,15 +5925,16 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               claim on what observe returns against the
                               first stated value. A line that states no
                               value but holds a word that fixes one (no,
-                              none, nothing, neither, empty) needs exactly one
-                              --from
+                              none, nothing, neither, never, empty) needs
+                              exactly one --from
                               whose returns schema is a bare z.string(),
                               z.number(), or z.array(): its claim compares
                               that value with the word's literal of the same
                               JSON type ("", 0, or []), with equal, or with
                               not-equal right after the word "not",
                               "neither", or "nor". A number word from zero
-                              to twelve does the same with a z.number()
+                              to twelve, once, or twice does the same with a
+                              z.number()
                               --from, written with equal, which the step may
                               change to the compare the line says. With no
                               --from, several, one of another type, or one

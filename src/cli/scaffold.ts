@@ -22,7 +22,7 @@ import { DESCRIPTION_TODO_PREFIX } from "../check/description-todo.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
-import { fixedWords, literalStatement, NUMBER_WORDS, tableValuesOf, type ClaimLiteral } from "../step/claims.js";
+import { fixedWords, literalStatement, numberOfWord, tableValuesOf, type ClaimLiteral } from "../step/claims.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
 
@@ -560,17 +560,17 @@ const OUTPUT_STREAMS: ReadonlySet<string> = new Set(["stdout", "stderr"]);
  * by `nuka scaffold --then`, which refuses, and `--feature`, which writes
  * no stub for such a line and says so. */
 export const THEN_STATES_NO_VALUE =
-  "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty, or a number word from zero to twelve)";
+  "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, never, empty, once, twice, or a number word from zero to twelve)";
 
 /** Every fixed word of `pattern` that states a literal (`LITERAL_WORDS`,
- * or a number word from `zero` to `twelve`), in order, with the values it
+ * or a word `numberOfWord` reads), in order, with the values it
  * states there: the claim rule decides, so a `neither` that a `nor`
  * follows states nothing here either. Pure. */
 function literalWords(pattern: string | null): readonly { readonly word: string; readonly values: readonly ClaimLiteral[] }[] {
   if (pattern === null) return [];
   return fixedWords(pattern).flatMap((word) => {
-    const number = NUMBER_WORDS.indexOf(word.toLowerCase());
-    const candidates: readonly ClaimLiteral[] = number === -1 ? tableValuesOf(word) : [number];
+    const number = numberOfWord(word);
+    const candidates: readonly ClaimLiteral[] = number === null ? tableValuesOf(word) : [number];
     const values = candidates.filter((value) => literalStatement(pattern, value)?.words === word);
     return values.length === 0 ? [] : [{ word, values }];
   });
@@ -743,7 +743,7 @@ function wordThenLines(pattern: string | null, chained: readonly Field[]): strin
   if (actual === undefined || stated === null) throw new Error("internal: the caller should have refused this Then (thenLiteralRefusal)");
   const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string";
   return [
-    NUMBER_WORDS.includes(stated.word.toLowerCase())
+    numberOfWord(stated.word) !== null
       ? `  // "${stated.word}" states ${JSON.stringify(stated.literal)}. A number word takes any compare: change equal to the one the line says ("at least three" is at-least).`
       : `  // "${stated.word}" states ${JSON.stringify(stated.literal)} for the type ${actual.key} holds. A word's literal is compared with ${stated.compare} alone.`,
     ...(text ? ["  // The program ends its output with a newline that the feature line does not show."] : []),

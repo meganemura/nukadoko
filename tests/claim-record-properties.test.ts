@@ -7,7 +7,7 @@ import { certainlySamePlace, closedObjectKeys, closedObjectKeysAt } from "../src
 import { type ChainedJsonType, wordLiteral } from "../src/cli/scaffold.js";
 import type { ClaimReading, StepRecord } from "../src/record/types.js";
 import { judgedBy, scenarioClaims } from "../src/run/run-document.js";
-import { ANY_INDEX, claimsProblem, literalStatedBy, NUMBER_WORDS, tableValuesOf } from "../src/step/claims.js";
+import { ANY_INDEX, claimsProblem, literalStatedBy, numberOfWord, tableValuesOf } from "../src/step/claims.js";
 import {
   CLAIM_READING_MAX_BYTES,
   CLAIM_READINGS_CAP,
@@ -338,7 +338,7 @@ describe("the literal nuka scaffold --then writes for a word", () => {
 
   it("is of the chained value's JSON type, one the literal rule accepts with the compare it writes, and there exactly when a word fixes a value of that type", () =>
     hegel.testAsync(async (tc) => {
-      const words = tc.draw(gs.arrays(gs.sampledFrom(["the", "list", "is", "not", "shows", "{count:int}", "NO", "none", "nothing", "empty", "neither", "nor", "three", "Zero", "constructor", "toString"]), { minSize: 1, maxSize: 5 }));
+      const words = tc.draw(gs.arrays(gs.sampledFrom(["the", "list", "is", "not", "shows", "{count:int}", "NO", "none", "nothing", "empty", "neither", "nor", "three", "Zero", "once", "Twice", "never", "constructor", "toString"]), { minSize: 1, maxSize: 5 }));
       const pattern = words.join(" ");
       const jsonType = tc.draw(gs.sampledFrom<ChainedJsonType>(["string", "number", "array", null]));
       const chosen = wordLiteral(pattern, jsonType);
@@ -346,7 +346,10 @@ describe("the literal nuka scaffold --then writes for a word", () => {
       // A word fixes a value of the type when the claim rule accepts that
       // value under one of the two compares a word allows.
       const accepted = (value: unknown) => (["equal", "not-equal"] as const).some((compare) => claimsProblem([{ actual: "got", compare, expected: { literal: value as never } }], shape) === null);
-      const valuesOf = (word: string): readonly unknown[] => NUMBER_WORDS.includes(word.toLowerCase()) ? [NUMBER_WORDS.indexOf(word.toLowerCase())] : tableValuesOf(word);
+      const valuesOf = (word: string): readonly unknown[] => {
+        const number = numberOfWord(word);
+        return number === null ? tableValuesOf(word) : [number];
+      };
       const fixesOne = words.some((word) => valuesOf(word).some((value) => jsonTypeOf(value) === jsonType && accepted(value)));
       expect(chosen !== null).toBe(jsonType !== null && fixesOne);
       if (chosen === null) return;
