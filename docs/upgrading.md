@@ -46,7 +46,7 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
-## 0.22.0 to the next release
+## 0.22.0 to 0.23.0
 
 - **`nuka scaffold --then` writes a claim for a line that states its value
   with a number word,** given one `z.number()` `--from`, where it refused.
