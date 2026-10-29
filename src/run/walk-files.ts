@@ -408,10 +408,15 @@ export function openWalk(options: {
       return answer.answer;
     },
     record() {
+      // run.json names only files that are there when it is written: a
+      // view or a request log removed during the walk is `null` or absent,
+      // never a path to nothing.
+      const there = (file: string | null): string | null => (file !== null && runDir !== null && existsSync(path.join(rootDir, runDir, file)) ? file : null);
       return {
         pauses: pauses.map((entry) => {
-          const http = `pauses/${entry.pause}/http.jsonl`;
-          return runDir !== null && existsSync(path.join(rootDir, runDir, http)) ? { ...entry, http } : entry;
+          const views = entry.views.map((view) => ({ ...view, screenshot: there(view.screenshot), aria: there(view.aria) }));
+          const http = there(`pauses/${entry.pause}/http.jsonl`);
+          return http === null ? { ...entry, views } : { ...entry, views, http };
         }),
       };
     },
@@ -425,6 +430,28 @@ export function openWalk(options: {
       }
     },
   };
+}
+
+/** The run directory of the walk that is live now, relative to the
+ * project root: a walk running or paused whose pid is alive, `null` for
+ * none. A walk still starting has no run directory in walk.json yet, so
+ * for it `starting` is returned: its run may have made its directory
+ * already. `nuka clean` keeps what this names, since the run still
+ * writes there and `nuka step` answers through it. */
+export function liveWalkRun(rootDir: string, stateDir: string): { readonly walk: number; readonly runDir: string | "starting" } | null {
+  const statePath = path.join(stateDirOf(rootDir, stateDir), STATE_FILE);
+  let read = readWalkState(statePath);
+  // A read can meet the file mid-rename on Windows; a walk read as none
+  // here would lose its run directory, so read through it for a moment.
+  for (let attempt = 0; "unreadable" in read && attempt < 20; attempt += 1) {
+    pauseSync(50);
+    read = readWalkState(statePath);
+  }
+  if ("unreadable" in read) throw new Error(`${statePath} could not be read: ${read.unreadable}`);
+  const seen = seeWalk(read.state, processIsAlive);
+  if (seen.state === "starting") return { walk: seen.number, runDir: "starting" };
+  if (seen.state === "running" || seen.state === "paused") return { walk: seen.number, runDir: seen.run_dir };
+  return null;
 }
 
 /** What one `nuka step` call came to: a report on the walk, or a refusal

@@ -114,7 +114,8 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/runs/<run_id>/`, one directory per `nuka run` (`run.json`, the run's result; `summary.md`, its Markdown summary; `steps/<id>/`, each step record with its evidence; `scenarios/<id>/`, a scenario's own evidence, when it wrote any; `sources.json`, the feature text the run parsed; `exports`, which export files `nuka report` wrote of that run), and `.nukadoko/do/<id>/` (a `nuka do` step record) | the tool | no | the newest `retention.runs` runs; a `nuka do` record or an unfinished run, `retention.adHocDays` days | a person reviewing the run (its summary), `nuka report`, `nuka do --use` |
+| Measurement | `.nukadoko/runs/<run_id>/`, one directory per `nuka run` (`run.json`, the run's result; `summary.md`, its Markdown summary; `steps/<id>/`, each step record with its evidence; `scenarios/<id>/`, a scenario's own evidence, when it wrote any; `sources.json`, the feature text the run parsed; `exports`, which export files `nuka report` wrote of that run; under `--step`, `pauses/<n>/`, each pause's views and what its pages sent while it waited, and `answers/<n>.json`, each answer `nuka step` wrote), and `.nukadoko/do/<id>/` (a `nuka do` step record) | the tool | no | the newest `retention.runs` runs; a `nuka do` record or an unfinished run, `retention.adHocDays` days | a person reviewing the run (its summary), `nuka report`, `nuka do --use` |
+| Walk | `.nukadoko/walk.json`, the state of the newest walk; `.nukadoko/walk.lock/<n>`, which run holds the walk; `.nukadoko/walks-reported/<n>`, a walk's end that `nuka step` printed | the tool: `nuka run --step`, and `nuka step` for `walks-reported/` | no | until the next walk replaces it; `nuka clean` keeps it, since it numbers the walks | `nuka step`, the next `nuka run --step` |
 | Export | `.nukadoko/export/allure-results/`, and any other file `nuka report --out` writes under `.nukadoko/export/` | the tool | no | with the run it renders | other tools |
 
 The table names files. The distinctions between its columns answer two
@@ -5943,9 +5944,18 @@ kinds, measurement and export (see "Artifacts"):
     per line. It is what lets a run's export output leave with the run, and
     what a second render of the same run replaces. It carries no status or
     timing: `run.json` does
+  - under `nuka run --step`, `pauses/<n>/`: pause n's views of the open
+    pages and `http.jsonl`, what they sent while the walk waited; and
+    `answers/<n>.json`, the answer `nuka step` wrote to pause n (see "A
+    walk with a person")
 - `do/<id>/`: one directory per `nuka do` step record, the same shape as a
   run's `steps/<id>/`. A `nuka do` call belongs to no run, so its record
   sits apart from every run directory
+- `walk.json`, `walk.lock/<n>`, and `walks-reported/<n>`: the state of the
+  newest walk, which run holds the walk, and each walk whose end a `nuka
+  step` call printed (see "A walk with a person"). They are neither
+  measurement nor export: the next walk replaces them, and together they
+  number the walks
 - `export/allure-results/`: where `nuka report --format allure` writes
   by default, holding at most the runs `runs/` holds, since a run's files
   leave with the run (see "Artifacts"), and safe to delete whenever a fresh
@@ -5959,6 +5969,12 @@ of every run (see "Artifacts").
 `nuka clean [--dry-run] [--json]` deletes both kinds at once: every
 run directory, every `do/` record, every file under `export/` that a run's
 exports manifest names, and the contents of `export/allure-results/`.
+It keeps the run directory of a walk that is live, since its run still
+writes there and `nuka step` answers through it, and says so with the
+note `walk-run-kept` (`kept` in its `--json` plan); while a walk is
+starting, it keeps every run directory with no `run.json`, since that
+walk's run may have made one before walk.json names it. It never removes
+`walk.json`, `walk.lock/`, or `walks-reported/`.
 Every other entry of `export/` stays, such as the Allure history file, an
 `allure generate` report, or a file a person put there: nukadoko removes
 only what it wrote. It is also the operation for an `allure-results/`
@@ -7036,7 +7052,8 @@ nuka clean [--dry-run] [--json]
                               only the files a run's manifest names and
                               the contents of allure-results/; the cache/
                               and records/ directories earlier releases
-                              left go too
+                              left go too; the run directory of a walk
+                              that is live stays (walk-run-kept)
 nuka init [--allure]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
@@ -7192,7 +7209,7 @@ reading either stream.
 | `nuka do` | the step record, also for a failed step | warning findings |
 | `nuka check` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and the `fail-on` lines |
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |
-| `nuka clean` | one line per path, or with `--json` the envelope | nothing, except a refusal without `--json` |
+| `nuka clean` | one line per path, or with `--json` the envelope | nothing, except a refusal or a `walk-run-kept` note without `--json` |
 
 A refusal under `--json` replaces the report: the envelope holds the
 refusal finding and none of the command's own fields. A step record's

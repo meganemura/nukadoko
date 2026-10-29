@@ -1,6 +1,7 @@
 // Responsibility: every finding code `nuka run` (and `nuka report`,
 // `nuka steps`, and `nuka describe`, which read what a run or a step file
-// holds) prints that `nuka check` does not, each with its severity, the description `nuka check --codes`
+// holds, `nuka step`, which reads a walk, and `nuka clean`, which keeps a
+// walk's run) prints that `nuka check` does not, each with its severity, the description `nuka check --codes`
 // prints, and the edit that gets past it. Boundary: data only; the run
 // raises them, and a check code it reuses (a pattern that did not build)
 // stays in src/check/codes.ts.
@@ -160,6 +161,12 @@ const RUN_CODES = {
     description:
       "nuka step found the walk paused after a step that failed, or after a step whose AfterStep hook failed: the scenario is failed, and the pause names which of them failed and its message. The walk still waits for its answer, and nothing is left to stop.",
     fix: "Show the person the failure and the pause's views, answer next when they have seen it, and read the step record for the cause.",
+  },
+  "walk-run-kept": {
+    severity: "note",
+    description:
+      "nuka clean kept a run directory because a walk (nuka run --step) that is live writes there, and nuka step answers its pauses through it. While a walk is starting, every run directory with no run.json is kept, since its run may have made one already.",
+    fix: "Run nuka clean again once the walk ended; nuka step wait --walk <n> reports when it does.",
   },
   "walk-stopped": {
     severity: "failed",

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -505,6 +505,8 @@ describe("nuka run --step and nuka step", () => {
       expect(existsSync(path.join(rootDir, runDir, "pauses", "1", "page.png"))).toBe(true);
       expect(readFileSync(path.join(rootDir, runDir, "pauses", "1", "page.aria.yml"), "utf8")).toContain('heading "Cart"');
 
+      // A view removed during the walk is no path in run.json.
+      unlinkSync(path.join(rootDir, runDir, "pauses", "1", "page.png"));
       await nukaStep(rootDir, "next", "1", "--walk", "1");
       const focused = readFileSync(path.join(rootDir, runDir, "pauses", "2", "page.aria.yml"), "utf8");
       expect(focused).toMatch(/textbox "Coupon" \[active\]/);
@@ -517,6 +519,7 @@ describe("nuka run --step and nuka step", () => {
       expect((await run.closed).code).toBe(0);
 
       const document = runJson(rootDir, runDir);
+      expect(document["walk"]["pauses"][0]["views"]).toMatchObject([{ screenshot: null, aria: "pauses/1/page.aria.yml" }]);
       expect(document["walk"]["pauses"][1]["views"]).toEqual([
         { as: null, page: 1, url: "about:blank", title: "Cart", screenshot: "pauses/2/page.png", aria: "pauses/2/page.aria.yml" },
       ]);
@@ -741,6 +744,35 @@ describe("nuka run --step and nuka step", () => {
       expect(wait.code).toBe(1);
       expect(wait.stdout).toBe("walk 1 ended on an unexpected error, exit 1\n");
       expect(wait.stderr).toContain("the progress sink broke");
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "keeps a live walk's run directory from nuka clean, and removes it once the walk ended",
+    async () => {
+      const run = nukaRun(rootDir, ["features/order.feature:3", "--step"]);
+      await nukaStep(rootDir, "wait", ...FIRST_WAIT);
+      const runDir = walkState(rootDir)["run_dir"] as string;
+
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      expect(await runCli(["clean"], { rootDir, stdout, stderr })).toBe(0);
+      expect(stdout.text()).not.toContain(runDir);
+      expect(stderr.text()).toBe(`note\twalk-run-kept\t-\tkept ${runDir}: walk 1 is live and its run writes there\n  do: nuka step wait --walk 1\n`);
+      expect(existsSync(path.join(rootDir, runDir, "steps"))).toBe(true);
+
+      // The walk goes on through the directory clean kept.
+      expect((await nukaStep(rootDir, "next", "1", "--walk", "1")).stdout).toMatch(/^walk 1 paused after step 2\/3/);
+      await nukaStep(rootDir, "next", "2", "--walk", "1");
+      expect((await nukaStep(rootDir, "next", "3", "--walk", "1")).code).toBe(0);
+      expect((await run.closed).code).toBe(0);
+      expect(existsSync(path.join(rootDir, runDir, "run.json"))).toBe(true);
+
+      const after = createCaptureSink();
+      expect(await runCli(["clean", "--json"], { rootDir, stdout: after, stderr: createCaptureSink() })).toBe(0);
+      expect(JSON.parse(after.text())).toMatchObject({ records: [runDir], kept: [] });
+      expect(existsSync(path.join(rootDir, runDir))).toBe(false);
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );

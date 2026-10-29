@@ -1,11 +1,13 @@
+import { existsSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { readOwnedExports } from "../record/run-exports.js";
 import { removeStaleTreeRegistrations } from "../run/base-run.js";
 import { allureResultsRelativeDir, doRelativeDir, isInsideDir, runsRelativeDir } from "../record/state-layout.js";
-import type { Finding } from "../finding/finding.js";
-import { formatEnvelope, refuse } from "./refusal.js";
+import { formatFinding, type Finding } from "../finding/finding.js";
+import { liveWalkRun } from "../run/walk-files.js";
+import { formatEnvelope, refuse, withHint } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka clean`'s actual work — delete the disposable half
@@ -54,6 +56,8 @@ interface CleanPlan {
   records: string[];
   export: string[];
   legacy: string[];
+  /** Run directories kept because a walk that is live writes there. */
+  kept: string[];
 }
 
 /** Directories an earlier release wrote under the state directory and
@@ -82,7 +86,7 @@ async function buildLegacyPlan(rootDir: string, stateDir: string): Promise<strin
  * which is the granularity a preview of "what five `nuka run`s left
  * behind" needs, and the unit retention removes too. Missing directories (nothing ever recorded)
  * are silently zero entries, not an error: empty is a valid answer. */
-async function buildRecordsPlan(rootDir: string, stateDir: string): Promise<string[]> {
+async function buildRecordsPlan(rootDir: string, stateDir: string, keep: (relativePath: string) => boolean): Promise<string[]> {
   const paths: string[] = [];
   for (const relativeDir of [runsRelativeDir(stateDir), doRelativeDir(stateDir)]) {
     const dir = path.join(rootDir, relativeDir);
@@ -97,7 +101,8 @@ async function buildRecordsPlan(rootDir: string, stateDir: string): Promise<stri
       .map((entry) => entry.name)
       .sort((a, b) => a.localeCompare(b));
     for (const name of names) {
-      paths.push(path.join(relativeDir, name));
+      const relativePath = path.join(relativeDir, name);
+      if (!keep(relativePath)) paths.push(relativePath);
     }
   }
   return paths;
@@ -162,10 +167,12 @@ function writePlan(
   json: boolean,
   dryRun: boolean,
   stdout: WritableSink,
+  stderr: WritableSink,
   notices: readonly Finding[],
+  walkNotes: readonly Finding[],
 ): void {
   if (json) {
-    stdout.write(formatEnvelope("clean", 0, notices, { ...plan, dry_run: dryRun }));
+    stdout.write(formatEnvelope("clean", 0, [...notices, ...walkNotes], { ...plan, dry_run: dryRun }));
     return;
   }
   for (const relativePath of [...plan.records, ...plan.export, ...plan.legacy]) {
@@ -174,6 +181,7 @@ function writePlan(
   if (plan.records.length === 0 && plan.export.length === 0 && plan.legacy.length === 0) {
     stdout.write("ok: nothing to clean\n");
   }
+  for (const note of walkNotes) stderr.write(formatFinding(withHint(note)));
 }
 
 export async function runClean(options: RunCleanOptions): Promise<number> {
@@ -188,17 +196,45 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
     return refuse(sinks, error, "unexpected-error", undefined, notices);
   }
 
+  // A walk that is live still writes into its run directory, and `nuka
+  // step` answers it there: removing it would leave the walk paused on
+  // answers it can no longer read. A walk still starting may have made its
+  // directory without naming it yet, so every run with no run.json stays
+  // while it starts.
+  let live: ReturnType<typeof liveWalkRun>;
+  try {
+    live = liveWalkRun(rootDir, config.stateDir);
+  } catch (error) {
+    return refuse(sinks, error, "unexpected-error", undefined, notices);
+  }
+  const runsDir = runsRelativeDir(config.stateDir);
+  const kept: string[] = [];
+  const keep = (relativePath: string): boolean => {
+    const walked =
+      live !== null &&
+      path.dirname(relativePath) === runsDir &&
+      (live.runDir === "starting" ? !existsSync(path.join(rootDir, relativePath, "run.json")) : path.join(live.runDir) === relativePath);
+    if (walked) kept.push(relativePath);
+    return walked;
+  };
   const exportPlan = await buildExportPlan(rootDir, config.stateDir);
   const plan: CleanPlan = {
-    records: await buildRecordsPlan(rootDir, config.stateDir),
+    records: await buildRecordsPlan(rootDir, config.stateDir, keep),
     export: exportPlan.paths,
     legacy: await buildLegacyPlan(rootDir, config.stateDir),
+    kept,
   };
+  const walkNotes: Finding[] = kept.map((relativePath) => ({
+    severity: "note",
+    code: "walk-run-kept",
+    message: `kept ${relativePath.split(path.sep).join("/")}: walk ${live?.walk ?? 0} is live and its run writes there`,
+    do: `nuka step wait --walk ${live?.walk ?? 0}`,
+  }));
 
   // The plan printed here is exactly what the execution phase below acts
   // on — one code path decides what gets deleted, this function only
   // decides whether it also deletes it.
-  writePlan(plan, json, dryRun, stdout, notices);
+  writePlan(plan, json, dryRun, stdout, stderr, notices, walkNotes);
 
   if (dryRun) {
     return 0;

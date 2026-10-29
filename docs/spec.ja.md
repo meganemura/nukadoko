@@ -114,7 +114,8 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
 | 目的 | 成果物 | 書く | コミット | 寿命 | 読む |
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
-| Measurement | `.nukadoko/runs/<run_id>/`、`nuka run` 1 回につき 1 つのディレクトリ(run の結果である `run.json`、その Markdown のサマリである `summary.md`、evidence を含む各 step record である `steps/<id>/`、scenario 自身の evidence を書いたときだけの `scenarios/<id>/`、run が parse した feature の本文である `sources.json`、`nuka report` がその run について書いた export ファイルの一覧である `exports`)と、`.nukadoko/do/<id>/`(`nuka do` の step record) | ツール | しない | 最新 `retention.runs` 回分の run。`nuka do` の record と終わっていない run は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、`nuka report`、`nuka do --use` |
+| Measurement | `.nukadoko/runs/<run_id>/`、`nuka run` 1 回につき 1 つのディレクトリ(run の結果である `run.json`、その Markdown のサマリである `summary.md`、evidence を含む各 step record である `steps/<id>/`、scenario 自身の evidence を書いたときだけの `scenarios/<id>/`、run が parse した feature の本文である `sources.json`、`nuka report` がその run について書いた export ファイルの一覧である `exports`、`--step` のときは、各一時停止のビューと待つ間にページが送ったものである `pauses/<n>/` と、`nuka step` が書いた各答えである `answers/<n>.json`)と、`.nukadoko/do/<id>/`(`nuka do` の step record) | ツール | しない | 最新 `retention.runs` 回分の run。`nuka do` の record と終わっていない run は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、`nuka report`、`nuka do --use` |
+| Walk | 最新の walk の状態である `.nukadoko/walk.json`、どの run が walk を持つかを示す `.nukadoko/walk.lock/<n>`、`nuka step` が表示した walk の終わりである `.nukadoko/walks-reported/<n>` | ツール: `nuka run --step`、`walks-reported/` は `nuka step` | しない | 次の walk が置き換えるまで。walk の番号を決めるので、`nuka clean` は残します | `nuka step`、次の `nuka run --step` |
 | Export | `.nukadoko/export/allure-results/`、および `nuka report --out` が `.nukadoko/export/` の下に書くほかのファイル | ツール | しない | 描き出した run と同じ | 他のツール |
 
 この表が名指しているのはファイルです。
@@ -4632,8 +4633,15 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
     これがあるので、run の export 出力は run と一緒に消え、同じ run を描き直すときに置き換えられます。
     状態や時刻は持ちません。
     それは `run.json` が持ちます。
+  - `nuka run --step` のときは `pauses/<n>/` と `answers/<n>.json`。
+    `pauses/<n>/` は一時停止 n での開いているページのビューと、walk が待つ間にページが送ったものである `http.jsonl` を持ちます。
+    `answers/<n>.json` は、`nuka step` が一時停止 n に書いた答えです(「人と一緒の walk」を参照)
 - `do/<id>/`(`nuka do` の step record ごとに 1 つの、run の `steps/<id>/` と同じ形のディレクトリ)。
   `nuka do` の呼び出しはどの run にも属さないので、その record はどの run ディレクトリからも離れて置かれます。
+- `walk.json`、`walk.lock/<n>`、`walks-reported/<n>`。
+  最新の walk の状態、どの run が walk を持つか、そして `nuka step` の呼び出しが終わりを表示した各 walk です(「人と一緒の walk」を参照)。
+  これらは measurement でも export でもありません。
+  次の walk がこれらを置き換え、合わせて walk の番号を決めます
 - `export/allure-results/`(`nuka report --format allure` の既定の書き込み先。
   持つのは多くても `runs/` が持つ run までです。
   run のファイルは run と一緒に消えるからです(「成果物」を参照)。
@@ -4645,6 +4653,12 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 日常の削除は retention で、`nuka run` 自身が毎回の run の終わりに適用します(「成果物」を参照)。
 `nuka clean [--dry-run] [--json]` は、2 種類を一度に消すコマンドです。
 すべての run ディレクトリ、すべての `do/` の record、run の exports manifest が名指す `export/` の下のファイル、そして `export/allure-results/` の中身を消します。
+生きている walk の run ディレクトリは残します。
+その run がまだそこに書き、`nuka step` がそこを通して答えるからです。
+残したことは note の `walk-run-kept`(`--json` の計画では `kept`)で伝えます。
+walk が始まりつつある間は、`run.json` のない run ディレクトリをすべて残します。
+その walk の run が、walk.json に名前が載る前にディレクトリを作っているかもしれないからです。
+`walk.json`、`walk.lock/`、`walks-reported/` は決して消しません。
 `export/` のそれ以外の entry は残ります。
 Allure の history ファイル、`allure generate` のレポート、人が置いたファイルなどです。
 nukadoko が消すのは、自分が書いたものだけです。
@@ -5719,7 +5733,8 @@ nuka clean [--dry-run] [--json]
                               only the files a run's manifest names and
                               the contents of allure-results/; the cache/
                               and records/ directories earlier releases
-                              left go too
+                              left go too; the run directory of a walk
+                              that is live stays (walk-run-kept)
 nuka init [--allure]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
@@ -5861,7 +5876,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | `nuka do` | step record(失敗した step でも) | 警告の所見 |
 | `nuka check` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`fail-on` の行を除く) |
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |
-| `nuka clean` | パスごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
+| `nuka clean` | パスごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否と `walk-run-kept` の note を除く) |
 
 `--json` のときの拒否は報告の代わりになります。
 envelope は拒否の所見を持ち、コマンド自身のフィールドは持ちません。
