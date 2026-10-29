@@ -33,6 +33,8 @@ interface EventsFacts {
   readonly stamped: number;
   readonly unreadable: number;
   readonly unowned: number;
+  readonly process_spans: readonly string[];
+  readonly process_requests: number;
   readonly whole: boolean;
   readonly open: readonly { readonly gap: string; readonly [key: string]: unknown }[];
 }
@@ -102,6 +104,8 @@ function reading(step: StepFacts, rest: Partial<EventsFacts>): EventsFacts {
     stamped: 1,
     unreadable: 0,
     unowned: 0,
+    process_spans: [],
+    process_requests: 0,
     whole: true,
     open: [],
     ...rest,
@@ -224,6 +228,59 @@ describe("the program's execution events", () => {
       `note\tevents-late\t-\tworld default: 1 line(s) of the program's execution events carry the step's trace id and arrived after the step ended; see ${late}`,
     );
     expect(linesIn(path.join(rootDir, late)).map((line) => line.route)).toEqual(["/late"]);
+  });
+
+  it("gives a runCommand process the step's TRACEPARENT in place of an inherited one, and owns the lines of the request the process sent with it", async () => {
+    const own = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    await writeFile(
+      path.join(rootDir, "features", "events.feature"),
+      ["Feature: f", "", "  Scenario: s", '    When the tool gets "/rooms/7"', '    And the tool gets "/rooms/8" under a trace of its own', ""].join("\n"),
+    );
+    // nukadoko itself runs under a traced CI runner's TRACEPARENT, which
+    // a step that spreads process.env passes on without choosing it.
+    const inherited = process.env.TRACEPARENT;
+    process.env.TRACEPARENT = "00-11111111111111111111111111111111-2222222222222222-01";
+    let exitCode: number;
+    try {
+      ({ exitCode } = await cli(rootDir, ["run"]));
+    } finally {
+      if (inherited === undefined) delete process.env.TRACEPARENT;
+      else process.env.TRACEPARENT = inherited;
+    }
+
+    expect(exitCode).toBe(0);
+    const [steps] = scenarioSteps(rootDir);
+    interface ToolRecord {
+      readonly result: { readonly traceparent: string };
+      readonly observed: { readonly processes: readonly { readonly traceparent?: string }[] };
+    }
+    const toolRecord = (step: StepFacts): ToolRecord => recordOf(rootDir, step) as unknown as ToolRecord;
+
+    const tool = steps!.get('the tool gets "/rooms/7"')!;
+    const given = toolRecord(tool).observed.processes[0]!.traceparent!;
+    const span = new RegExp(`^00-${tool.observed.events!.trace_id}-([0-9a-f]{16})-01$`).exec(given)?.[1];
+    expect(span).toBeDefined();
+    expect(toolRecord(tool).result.traceparent).toBe(given);
+    expect(tool.observed.events).toEqual(
+      reading(tool, {
+        lines: 2,
+        file: "events.jsonl",
+        kinds: { db: 1, request: 1 },
+        stamped: 0,
+        process_spans: [span!],
+        process_requests: 1,
+        whole: false,
+        open: [{ gap: "processes-unbounded" }],
+      }),
+    );
+    expect(sliceOf(rootDir, tool).find((line) => line.kind === "request")!.trace).toBe(given);
+
+    // A TRACEPARENT the step chose is kept, so the lines of the tool's
+    // request are no step's.
+    const chosen = steps!.get('the tool gets "/rooms/8" under a trace of its own')!;
+    expect(toolRecord(chosen).result.traceparent).toBe(own);
+    expect(toolRecord(chosen).observed.processes[0]).not.toHaveProperty("traceparent");
+    expect(chosen.observed.events).toEqual(reading(chosen, { stamped: 0, unowned: 2, whole: false, open: [{ gap: "processes-unbounded" }] }));
   });
 
   it("makes no file and sets no variable for a world whose program file does not name {events}", async () => {

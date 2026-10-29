@@ -19,7 +19,9 @@ import type { ReadableLine } from "./format.js";
 // the counts per job are compared, never their order. A `runCommand`
 // process the step ran is work no count bounds: the program it runs may
 // send the world any number of requests, so a trace whose step ran one is
-// never whole.
+// never whole. Its `TRACEPARENT` names a span of its own, so a request
+// line that carries one is the process's request, told apart from the
+// step's and never waited for: the process may send nothing.
 //
 // Not whole is never read as "nothing more happened": each reason is one
 // gap word, from one closed list, so a reader branches on the word.
@@ -63,6 +65,8 @@ export interface TraceReading {
   readonly kinds: Readonly<Record<string, number>>;
   /** Lines whose text carries the trace id and that did not read. */
   readonly unreadable: number;
+  /** Request lines that name a span the step's processes got. */
+  readonly processRequests: number;
   readonly whole: boolean;
   readonly open: readonly EventsGap[];
 }
@@ -85,11 +89,15 @@ export interface TallyInputs {
   readonly spansNotKept: number;
   /** Whether the step ran a `runCommand` process. */
   readonly ranProcesses: boolean;
+  /** The span ids of the `TRACEPARENT` values its processes got. */
+  readonly processSpans: readonly string[];
 }
 
 export function createTraceTally(inputs: TallyInputs): TraceTally {
   const stamped = new Set(inputs.spans);
   const reported = new Set<string>();
+  const processSpans = new Set(inputs.processSpans);
+  let processRequests = 0;
   let bare = 0;
   let lines = 0;
   let unreadable = 0;
@@ -103,6 +111,7 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
       if (line.kind === "request") {
         if (line.trace.span === null) bare += 1;
         else if (stamped.has(line.trace.span)) reported.add(line.trace.span);
+        else if (processSpans.has(line.trace.span)) processRequests += 1;
       } else if (line.kind === "job") {
         // The parser read both as the format requires, or the line would
         // not be an event.
@@ -131,7 +140,7 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
         ...(file.truncated ? [{ gap: "truncated" as const }] : []),
         ...(file.replaced ? [{ gap: "file-replaced" as const }] : []),
       ];
-      return { lines, kinds: Object.fromEntries(kinds), unreadable, whole: open.length === 0, open };
+      return { lines, kinds: Object.fromEntries(kinds), unreadable, processRequests, whole: open.length === 0, open };
     },
   };
 }

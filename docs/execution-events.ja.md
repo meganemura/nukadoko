@@ -87,6 +87,9 @@ nukadoko がこの行をどう読むかは、[docs/spec.ja.md](spec.ja.md) の�
   trace を持つ操作が積んだのでないジョブ(スケジュール、コンソール)は、新しい trace を作ります。
 - 外へ出す HTTP 呼び出しは、同じ trace id と、`http` の行の `id` を親の id とする `traceparent` を送るべきです。
   そうすれば、呼ばれたサービスが同じ trace の行を書けます。
+- プログラムを呼ぶコマンドラインツールは、空でない環境変数 `TRACEPARENT` の値を、リクエストの `traceparent` ヘッダとして送るべきです。
+  これは trace context を環境変数で運ぶ OpenTelemetry の慣例です。
+  そうすれば、そのリクエストについてのプログラムの行は、ツールを走らせたものの trace に属します。
 - 書き手は小文字で書くべきです。
   読み手は trace id を、大文字と小文字を区別せずに比べます。
   すべて 0 の trace id、すべて 0 の親の id、版 `ff` は正しくありません。

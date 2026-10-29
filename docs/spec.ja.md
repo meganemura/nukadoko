@@ -2699,6 +2699,14 @@ Before、AfterStep、After の hook のリクエストは、step のものと同
 BeforeAll と AfterAll はどの scenario の外でも、どの step や hook の境界の中でもないところで実行されるので、そのリクエストは `traceparent` を運びません。
 
 - ヘッダは、`fetch`、`node:http`、`node:https`、`request` fixture、`page.request`、`context.request` を通るリクエストと、Chromium の page のドキュメント、`fetch` の呼び出し、XMLHttpRequest、EventSource に付きます。
+- `runCommand` が始めるプロセスは、step の trace context を環境変数 `TRACEPARENT` として受け取ります。
+  これは trace context を環境変数で運ぶ OpenTelemetry の慣例で、値は `00-<step の trace id>-<プロセスのために作った span id>-01` です。
+  それを world へのリクエストの `traceparent` ヘッダに写すコマンドラインツールは、そのリクエストについてのプログラムの行を step のものにします(「実行イベント」を参照)。
+  これを設定するのは run に world があるときで、step が渡す `env` が `TRACEPARENT` を持たないか、nukadoko 自身のプロセスが持つものを持つときだけです。
+  `process.env` を `env` に展開する step は、それを選ばずに渡します。
+  それ自体がトレースされる CI のランナーは、1 つ設定します。
+  step が自分で設定した `TRACEPARENT` は保ちます。
+  `observed.processes` のプロセスのエントリは、nukadoko が設定した値を `traceparent` として名指します。
 - 付くのは、world のオリジン、つまり URL のスキーム、ホスト、ポートへのリクエストだけです。
   ほかのオリジンへのリクエストは CDN や決済事業者のような第三者のもので、予期しないヘッダはその振る舞いを変えうるからです。
   `localhost` の world では、同じポートの `localhost` の下の名前も world のものです。
@@ -2937,6 +2945,8 @@ step は、プログラムのログと同じようにファイルを読みます
   "stamped": 1,
   "unreadable": 0,
   "unowned": 0,
+  "process_spans": [],
+  "process_requests": 0,
   "whole": true,
   "open": []
 }
@@ -2950,6 +2960,11 @@ step は、プログラムのログと同じようにファイルを読みます
 - `unreadable` は、テキストがその trace id を持ち、読めなかった行の数です。
 - `unowned` は、step が読む途中で通り過ぎた読める行のうち、trace がどの step のものでもない行の数です。
   `ready` の確認や BeforeAll の hook のリクエストのように nukadoko が `traceparent` を付けなかったリクエストや、プログラムが自分で作った trace です。
+- `process_spans` は、step の `runCommand` のプロセスが受け取った `TRACEPARENT` の値の span id で(「trace context とプログラムのログ」を参照)、多くて 1000 個です。
+  `process_requests` は、そのどれかを持つ `request` の行の数です。
+  プロセスが、受け取った値を付けて world へ送ったリクエストです。
+  それらは step の行で、`whole` はそのどれも待ちません。
+  プロセスは何も送らないこともあるからです。
 - `whole` は、step が `traceparent` を付けたリクエストを少なくとも 1 つ送り、`runCommand` のプロセスを走らせず、そのリクエストのそれぞれが自分の `request` の行を持ち(step が送った span id で対応させ、trace id だけの行は 1 つのリクエストとして数えます)、trace の中で積んだジョブのそれぞれが `enqueue` の行と少なくとも同じ数の `perform` の行を持ち、trace の行に読めないものが無く、step の行がファイルに収まり、ファイルが置き換えられなかったとき `true` です。
 - `open` は、`whole` が `false` である理由を、欠けを示す語 1 つずつで、この順に挙げます:
   - `no-requests`: step が world へ `traceparent` を付けたリクエストを 1 つも送らず、`runCommand` のプロセスも 1 つも走らせませんでした。
@@ -4243,6 +4258,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   base64 は `/` で始まることがあるので、トークンがパスに見えることがあります。
   しかし、トークンはどのファイルも指しません。
   その結果、プログラムに作るよう伝えたのに作られなかったパスは隠されます。
+  `"traceparent"` は、nukadoko がプロセスの環境変数に入れた `TRACEPARENT` です(「trace context とプログラムのログ」を参照)。
+  run に world が無いとき、または step が自分で設定したときは、ありません。
+  `env` は step が選んだものなので、その値を示しません。
   `n` は実行の中のプロセスを 1 から数えます。
   1 つの scenario の hook が同じ directory を共有するときは、空いている次の番号に進みます。
   step を確かめる人には、プログラムが出力したものが必要です。

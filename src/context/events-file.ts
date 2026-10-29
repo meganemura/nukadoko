@@ -102,7 +102,7 @@ export function createEventsReader(filePath: string, prefix: string, secrets: Se
   });
   return {
     async slice(dir, trace) {
-      const tally = createTraceTally({ spans: trace.spans, spansNotKept: trace.spansNotKept, ranProcesses: trace.processes > 0 });
+      const tally = createTraceTally({ spans: trace.spans, spansNotKept: trace.spansNotKept, ranProcesses: trace.processes > 0, processSpans: trace.processSpans });
       const kept = new StepLines();
       let unowned = 0;
       await reader.readStep(trace.lastStampAt, (text) => {
@@ -129,6 +129,8 @@ export function createEventsReader(filePath: string, prefix: string, secrets: Se
         stamped: trace.stamped,
         unreadable: reading.unreadable,
         unowned,
+        process_spans: trace.processSpans,
+        process_requests: reading.processRequests,
         whole: reading.whole,
         open: reading.open,
       };

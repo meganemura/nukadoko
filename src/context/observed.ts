@@ -101,6 +101,9 @@ export interface StampedBoundaryTrace extends BoundaryTrace {
   readonly spansNotKept: number;
   /** How many `runCommand` processes the boundary started. */
   readonly processes: number;
+  /** The span ids of the `TRACEPARENT` values the boundary gave its
+   * processes, at most MAX_KEPT_SPANS of them. */
+  readonly processSpans: readonly string[];
 }
 
 /** How many span ids a boundary keeps: a step that sends more requests
@@ -173,6 +176,7 @@ interface Boundary {
   lastStampAt: number | undefined;
   readonly spans: string[];
   spansNotKept: number;
+  readonly processSpans: string[];
 }
 
 function newBoundary(dir: string | undefined, traceId: string | undefined): Boundary {
@@ -183,6 +187,7 @@ function newBoundary(dir: string | undefined, traceId: string | undefined): Boun
     lastStampAt: undefined,
     spans: [],
     spansNotKept: 0,
+    processSpans: [],
     closed: false,
     afterEnd: { requests: 0, processes: 0 },
     processes: null,
@@ -357,6 +362,15 @@ export function createObservedCollector(
         const state = current();
         if (!state.sockets.has(use)) state.sockets.set(use, how);
       },
+      processTraceparent(): string | undefined {
+        const state = current();
+        if (trace === undefined || state.traceId === undefined) return undefined;
+        const span = newSpanId();
+        // A process's span is never waited for (tally.ts), so one past the
+        // cap is only not recognized.
+        if (state.processSpans.length < MAX_KEPT_SPANS) state.processSpans.push(span);
+        return traceparentOf(state.traceId, span);
+      },
       traceparentFor(url: string, base?: string): string | undefined {
         const draft = draftTraceparent(url, base);
         draft?.sent();
@@ -460,6 +474,7 @@ export function createObservedCollector(
         spans: [...state.spans],
         spansNotKept: state.spansNotKept,
         processes: state.processes?.length ?? 0,
+        processSpans: [...state.processSpans],
       };
     },
   };

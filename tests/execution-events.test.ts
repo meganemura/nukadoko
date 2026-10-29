@@ -24,7 +24,7 @@ async function sliceOf(dir: string, texts: readonly string[], spans: readonly st
   const reader = createEventsReader(file, PREFIX, []);
   appendFileSync(file, texts.map((text) => `${text}\n`).join(""));
   const stepDir = path.join(dir, "step");
-  const { unowned: _unowned, ...slice } = await reader.slice(stepDir, { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: 0 });
+  const { unowned: _unowned, ...slice } = await reader.slice(stepDir, { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: 0, processSpans: [] });
   const kept = path.join(stepDir, "events.jsonl");
   return { slice, kept: existsSync(kept) ? readFileSync(kept, "utf8") : null };
 }
@@ -65,7 +65,7 @@ describe("createTraceTally", () => {
   };
 
   function fold(texts: readonly string[], spans: readonly string[]) {
-    const tally = createTraceTally({ spans, spansNotKept: 0, ranProcesses: false });
+    const tally = createTraceTally({ spans, spansNotKept: 0, ranProcesses: false, processSpans: [] });
     for (const text of texts) {
       const line = readable(text);
       if (line === undefined) tally.damaged();
@@ -117,7 +117,7 @@ describe("createTraceTally", () => {
       render(["request", 0], T, U, ""),
       render(["damaged"], T, U, ""),
     ];
-    const tally = createTraceTally({ spans: SPANS, spansNotKept: 2, ranProcesses: false });
+    const tally = createTraceTally({ spans: SPANS, spansNotKept: 2, ranProcesses: false, processSpans: [] });
     for (const text of lines) {
       const line = readable(text);
       if (line === undefined) tally.damaged();
@@ -127,6 +127,7 @@ describe("createTraceTally", () => {
       lines: 4,
       kinds: { job: 3, request: 1 },
       unreadable: 1,
+      processRequests: 0,
       whole: false,
       open: [
         { gap: "request-unreported", requests: 4 },
@@ -136,11 +137,12 @@ describe("createTraceTally", () => {
         { gap: "file-replaced" },
       ],
     });
-    expect(createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: false }).reading({ truncated: false, replaced: false }).open).toEqual([{ gap: "no-lines" }]);
-    expect(createTraceTally({ spans: [], spansNotKept: 0, ranProcesses: false }).reading({ truncated: false, replaced: false })).toEqual({
+    expect(createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: false, processSpans: [] }).reading({ truncated: false, replaced: false }).open).toEqual([{ gap: "no-lines" }]);
+    expect(createTraceTally({ spans: [], spansNotKept: 0, ranProcesses: false, processSpans: [] }).reading({ truncated: false, replaced: false })).toEqual({
       lines: 0,
       kinds: {},
       unreadable: 0,
+      processRequests: 0,
       whole: false,
       open: [{ gap: "no-requests" }],
     });
@@ -148,12 +150,12 @@ describe("createTraceTally", () => {
 
   it("is never whole for a step that ran a process, whose requests to the world nukadoko cannot count", () => {
     const reported = render(["request", 0], T, U, "");
-    const ranOnly = createTraceTally({ spans: [], spansNotKept: 0, ranProcesses: true });
+    const ranOnly = createTraceTally({ spans: [], spansNotKept: 0, ranProcesses: true, processSpans: [] });
     expect(ranOnly.reading({ truncated: false, replaced: false })).toMatchObject({ whole: false, open: [{ gap: "processes-unbounded" }] });
-    const ranAndStamped = createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: true });
+    const ranAndStamped = createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: true, processSpans: [] });
     ranAndStamped.owned(readable(reported)!);
     expect(ranAndStamped.reading({ truncated: false, replaced: false })).toMatchObject({ whole: false, open: [{ gap: "processes-unbounded" }] });
-    const stampedOnly = createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: false });
+    const stampedOnly = createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: false, processSpans: [] });
     stampedOnly.owned(readable(reported)!);
     expect(stampedOnly.reading({ truncated: false, replaced: false })).toMatchObject({ whole: true, open: [] });
   });

@@ -72,11 +72,27 @@ import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.j
 //
 // The spawn runs outside the channel patches' recording (channels.ts): the
 // process is measured here, so it is not also an unmeasured one.
+//
+// When the run has a world, the child gets `TRACEPARENT` in its
+// environment, the OpenTelemetry convention for trace context carried
+// through the environment: the step's trace id and a span id made for the
+// process. A command-line tool that copies it into the `traceparent` of
+// its requests to the world makes the program's log lines and execution
+// events for those requests the step's. The step's own TRACEPARENT is
+// kept, and so is none: a value the env holds that is the runner's own
+// `process.env.TRACEPARENT` (a CI runner that is itself traced, or a
+// step that spreads `process.env` into `env`) is inherited, not the
+// step's choice, and is replaced. The entry's `env` is the step's choice,
+// so the value nukadoko set is its `traceparent`.
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
 export interface ProcessRecorder {
   startProcess(): (entry: ProcessEntry, output?: ProcessOutput) => void;
+  /** The `TRACEPARENT` for a process started now, kept by the boundary
+   * as one of its processes' spans, or `undefined` when the run has no
+   * world. Optional, so an older copy's recorder still fits. */
+  processTraceparent?(): string | undefined;
   /** Absolute directories the executor writes to while a step runs, left
    * out of the file snapshot. Optional, so an older copy's recorder still
    * fits. */
@@ -166,7 +182,9 @@ export async function runCommand(
   const before = finish === undefined && options.files !== true ? undefined : takeSnapshot(cwd, unwatched);
   const startedAt = performance.now();
 
-  const env = options.env ?? process.env;
+  const chosen = options.env ?? process.env;
+  const traceparent = chosen.TRACEPARENT === undefined || chosen.TRACEPARENT === process.env.TRACEPARENT ? recorder?.processTraceparent?.() : undefined;
+  const env = traceparent === undefined ? chosen : { ...chosen, TRACEPARENT: traceparent };
   const plan =
     process.platform === "win32"
       ? windowsSpawnPlan(command, args, env)
@@ -239,6 +257,7 @@ export async function runCommand(
         duration_ms: durationMs,
         ...(files === undefined ? {} : { files }),
         env: recordedEnv(envDifference(process.env, options.env), secrets),
+        ...(traceparent === undefined ? {} : { traceparent }),
       }, {
         stdout: redactString(out, secrets),
         stderr: redactString(err, secrets),

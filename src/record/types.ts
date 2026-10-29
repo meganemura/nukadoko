@@ -304,6 +304,12 @@ export interface EventsSlice {
    * on its own. They may be the step's, and are only in the world's copy
    * of the file. */
   readonly unowned: number;
+  /** The span ids of the `TRACEPARENT` values the step's `runCommand`
+   * processes got, at most 1000 (`observed.processes[].traceparent`). */
+  readonly process_spans: readonly string[];
+  /** Request lines that carry one of `process_spans`: requests a
+   * process sent to the world with the TRACEPARENT it got. */
+  readonly process_requests: number;
   /** Whether the lines say all of the step's work had reported its end
    * when the record was written: `open` is empty. */
   readonly whole: boolean;
@@ -453,8 +459,14 @@ export interface ProcessEntry {
   /** The same, for the `input` the step wrote to the process's stdin. */
   readonly stdin?: string;
   /** The environment the process got, against the runner's. Present for
-   * every process this release's `runCommand` ran. */
+   * every process this release's `runCommand` ran. It is the step's
+   * choice: the `TRACEPARENT` nukadoko set is `traceparent`. */
   readonly env?: ProcessEnv;
+  /** The `TRACEPARENT` nukadoko put in the process's environment:
+   * `00-<the step's trace id>-<a span id of the process's own>-01`.
+   * Absent when the run has no world, and when the step set a
+   * TRACEPARENT of its own. */
+  readonly traceparent?: string;
 }
 
 /** What a process wrote, decoded as UTF-8, handed to the collector beside

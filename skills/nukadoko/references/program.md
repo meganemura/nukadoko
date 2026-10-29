@@ -134,7 +134,10 @@ the file `{events}` names, in the format of docs/execution-events.md:
 process the program runs reach the step that caused them. Each step record
 gets its lines, redacted, in `events.jsonl` beside it, counted in
 `observed.events` (`{ trace_id, lines, file, kinds, stamped, unreadable,
-unowned, whole, open }`). Read it to see what the program did inside a
+unowned, process_spans, process_requests, whole, open }`). A
+`runCommand` process gets the step's trace context as `TRACEPARENT`;
+a command-line tool that copies it into its requests' `traceparent`
+header makes their lines the step's (`process_requests` counts them). Read it to see what the program did inside a
 step: which tables it read and wrote, which jobs it enqueued and ran.
 
 `whole: true` says every request the step stamped has its `request`

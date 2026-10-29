@@ -106,7 +106,11 @@ program and argument count, with nothing of what it printed or changed. `runComm
 only values loaded from env files or named in `redact` are redacted, so
 pass a token through `env`, never as an argument. The record names every
 variable in `env` but shows a value only when it is an absolute path that
-exists, a decimal integer, or `true` or `false`.
+exists, a decimal integer, or `true` or `false`. When the run has a
+world, the process also gets `TRACEPARENT`, the step's trace context
+(its entry's `traceparent`), unless the step set its own: a tool that
+copies it into the `traceparent` header of its requests makes the
+program's log lines and execution events for them the step's.
 
 ## 4. Doctor and readiness
 

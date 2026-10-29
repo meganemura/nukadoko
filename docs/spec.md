@@ -3389,6 +3389,20 @@ hook's boundary, so their requests go without a `traceparent`.
   `node:https`, the `request` fixture, `page.request`, and
   `context.request`, and on a Chromium page's documents, `fetch` calls,
   XMLHttpRequests, and EventSources.
+- A process `runCommand` starts gets the step's trace context in its
+  environment, as `TRACEPARENT`, the OpenTelemetry convention for
+  carrying it through the environment: `00-<the step's trace id>-<a span
+  id made for the process>-01`.
+  A command-line tool that copies it into the `traceparent` header of
+  its requests to the world makes the program's lines for those requests
+  the step's (see "Execution events").
+  It is set when the run has a world, and only when the env the step
+  passes holds no `TRACEPARENT`, or the one nukadoko's own process
+  holds: a step that spreads `process.env` into `env` passes that one
+  on without choosing it, and a CI runner that is itself traced sets one.
+  A `TRACEPARENT` the step set itself is kept.
+  The process's entry in `observed.processes` names the value nukadoko
+  set, as `traceparent`.
 - Only a request to the world's origin, the scheme, host, and port of its
   URL, gets one.
   A request to another origin is a third party's, a CDN or a payment
@@ -3716,6 +3730,8 @@ value is still JSON and the file shows exactly what was read.
   "stamped": 1,
   "unreadable": 0,
   "unowned": 0,
+  "process_spans": [],
+  "process_requests": 0,
   "whole": true,
   "open": []
 }
@@ -3733,6 +3749,13 @@ value is still JSON and the file shows exactly what was read.
 - `unowned` is how many readable lines the step's read passed whose trace
   is no step's: a request nukadoko did not stamp, such as the `ready`
   check or a BeforeAll hook's, or a trace the program made itself.
+- `process_spans` are the span ids of the `TRACEPARENT` values the
+  step's `runCommand` processes got (see "Trace context and the
+  program's log"), at most 1000, and `process_requests` counts the
+  `request` lines that carry one of them: the requests a process sent to
+  the world with the value it got.
+  They are the step's lines, and `whole` waits for none of them, since a
+  process may send nothing.
 - `whole` is `true` when the step stamped at least one request and
   ran no `runCommand` process, every request it stamped has its
   `request` line, matched by the span id the step sent (a line with a
@@ -5418,7 +5441,11 @@ its scenario record's id, so either record leads to the other.
   empty one. The path must exist because its shape alone proves nothing:
   base64 can start with `/`, so a token can look like a path, but it
   names no file. A path the program was told to create and did not is
-  hidden as a result. `n` counts the processes of the
+  hidden as a result. `"traceparent"` is the `TRACEPARENT` nukadoko
+  put in the process's environment (see "Trace context and the
+  program's log"), absent when the run has no world or the step set its
+  own; `env` is what the step chose, so it does not show that value.
+  `n` counts the processes of the
   execution from 1, and moves to the next free number when hooks of one
   scenario share a directory. A person reviewing a step needs what the
   program printed, and the step's result keeps only what the step chose

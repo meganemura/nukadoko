@@ -146,6 +146,19 @@ just until 0.1.
   directory of its own outside the run directory and is removed when the
   world stops. A world at a `url` refuses `{events}` by name, and its
   steps' `observed.events` is `null`. No claim reads the lines yet.
+- **A `runCommand` process carries the step's trace context.** When the
+  run has a world, the process gets `TRACEPARENT`, the OpenTelemetry
+  convention for trace context in the environment: the step's trace id
+  and a span id made for the process. A command-line tool that copies it
+  into the `traceparent` header of its requests makes the program's log
+  lines and execution events for those requests the step's. A
+  TRACEPARENT the step set itself is kept; one that is the runner's own,
+  which a step that spreads `process.env` passes on, is replaced. The
+  process's entry names the value as `traceparent`, `observed.events`
+  lists the processes' spans in `process_spans` and counts the request
+  lines that carry one in `process_requests`, and docs/execution-events.md
+  asks a command-line tool to send the variable on. A process's requests
+  are never waited for, so its step stays `processes-unbounded`.
 
 ### Fixed
 

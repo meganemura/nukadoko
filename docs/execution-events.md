@@ -121,6 +121,12 @@ trace id of 32 hexadecimal characters.
 - An outgoing HTTP call should send a `traceparent` with the same trace
   id and the `http` line's `id` as the parent id, so the service it calls
   can write lines in the same trace.
+- A command-line tool that calls the program should send the value of a
+  non-empty `TRACEPARENT` environment variable, the OpenTelemetry
+  convention for trace context carried through the environment, as the
+  `traceparent` header of its requests.
+  The program's lines for those requests then belong to the trace of
+  whatever ran the tool.
 - Writers should write lowercase.
   Readers compare trace ids without regard to case.
   A trace id of all zeros, a parent id of all zeros, and the version

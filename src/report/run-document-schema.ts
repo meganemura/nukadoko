@@ -96,6 +96,7 @@ const process = z.looseObject({
   signal: z.string().optional(),
   timed_out: z.literal(true).optional(),
   duration_ms: z.number(),
+  traceparent: z.string().optional(),
   stdout: z.string().optional(),
   stderr: z.string().optional(),
   files: z
@@ -131,6 +132,8 @@ const observed = z.looseObject({
       stamped: z.number().int(),
       unreadable: z.number().int(),
       unowned: z.number().int(),
+      process_spans: z.array(z.string()).optional(),
+      process_requests: z.number().int().optional(),
       whole: z.boolean(),
       open: z.array(z.looseObject({ gap: z.enum(GAP_WORDS) })),
     })
