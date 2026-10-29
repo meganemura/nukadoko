@@ -590,6 +590,26 @@
       "en": ["workspace package"],
       "ja": "ワークスペースのパッケージ",
       "note": "node_modules にあり、リポジトリの中のディレクトリを指すシンボリックリンクのパッケージ。npm や pnpm の workspaces が入れる形。--base はまだ扱わず、base の world を作らない"
+    },
+    {
+      "en": ["pause", "paused", "pauses after each step"],
+      "ja": "一時停止",
+      "note": "walk が step の後で止まり、nuka step の答えを待っている所。動詞は 一時停止する。`pauses/<n>/`、`pause` フィールド、状態の `paused` は英語のまま"
+    },
+    {
+      "en": ["answer (to a pause)", "answers the pause"],
+      "ja": "答え",
+      "note": "nuka step next または nuka step stop が一時停止に返すもの。動詞は 答える"
+    },
+    {
+      "en": ["stop (a walk)", "stopped (a walk)", "a stop"],
+      "ja": "中止",
+      "note": "nuka step stop で walk を一時停止の所で終え、その後の step を走らせないこと。動詞は 中止する。scenario の status `stopped` とセルの `stopped@<line>` は英語のまま。シグナルで止まる 停止 とは別の語"
+    },
+    {
+      "en": ["view (of a page at a pause)", "views"],
+      "ja": "ビュー",
+      "note": "一時停止のときに開いている各ページについて取るスクリーンショットと ARIA スナップショットの組。ARIA スナップショットは Playwright の ariaSnapshot のことで、claim の スナップショット とは別のもの"
     }
   ],
   "keep_english": [
@@ -742,6 +762,10 @@
     {
       "term": "tree",
       "why": "world が build するコードの置き場所。run.json の `worlds[].tree` の値 `head`、`base`、`old` と、run ディレクトリの `trees/base`、`trees/old` と直接対応する。小文字の tree と書く。プロセスのツリーやディレクトリのツリーの ツリー とは別の語"
+    },
+    {
+      "term": "walk",
+      "why": "nuka run --step が 1 つの scenario を step ごとに一時停止しながら、人の答えを待って進める実行。run.json の `walk`、state ディレクトリの `walk.json` と `walk.lock`、finding の `walk-stopped` と `walk-gone` と直接対応する。小文字の walk と書く。ファイルを歩く discovery の 歩く とは別の語"
     }
   ],
   "identifiers": {

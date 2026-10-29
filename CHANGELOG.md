@@ -21,6 +21,35 @@ just until 0.1.
   uses the scenario's browser and launches it when no step has. A browser
   that cannot start costs the trace, never the step: the run warns once
   with the new `show-requests-failed` code. Default `false`.
+- **`nuka run --step` walks one scenario with a person, one step at a
+  time.** After each step the run pauses with the world, the browser,
+  and the fixtures still open, writes a screenshot and an ARIA snapshot
+  of each open page under `runs/<run_id>/pauses/<n>/`, and waits.
+  `nuka step wait`, `nuka step next <pause>`, and `nuka step stop
+  <pause>` answer it from another shell, so an agent can explain each
+  step record and go on only once the person has answered. An answer
+  names its pause, so a repeated call is safe: the same answer reports
+  what followed it, and another answer to that pause is refused
+  (`pause-answered`). A stop skips the steps after the pause, runs the
+  After hooks and the teardown, and records the scenario as `stopped`
+  with the `walk-stopped` finding, not as failed. What a page sends
+  while the run waits goes to the pause's `http.jsonl`, not to the
+  step's. The run refuses more than one execution
+  (`step-needs-one-scenario`) and a second walk in the project
+  (`walk-in-progress`); `nuka step` reports a walk a signal ended as
+  interrupted, and one whose run was killed as gone (`walk-gone`).
+  `run.json`'s `walk` lists the pauses and their answers, and the run
+  summary says the run was walked, which is not the run a reviewer
+  approves. The nukadoko skill's `references/reviewing.md` walks a real
+  paused run now, in place of reading a finished run's records in order.
+
+### Changed
+
+- **`run.json`'s `counts` always has `stopped`,** 0 outside a walk. Under
+  `--step`, a scenario's `status` and a cell's `outcome` can be
+  `stopped`, and an After hook's `result.status` can be `SKIPPED`, which
+  the compat `HookParameter` type now allows. `schema_version` does not
+  move: the fields and the values are added.
 
 ## 0.23.0 — 2026-10-29
 

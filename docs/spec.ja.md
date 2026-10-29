@@ -3036,7 +3036,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
-  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "not_run": 0, "controls": 0, "controls_not_run": 0 },
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "stopped": 0, "not_run": 0, "controls": 0, "controls_not_run": 0 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
@@ -3190,11 +3190,11 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並び、そのあとに消えた受け入れ基準ごとに 1 行が続きます。
   行は `feature`、`line`、`name`、`change`(`--base` が無ければ `null`、あれば `unchanged`、`changed`、`new`、`removed`)、基点が別の同一性のもとで持つ変わっていない行の `renamed_from`(基点での `{ feature, name }`)、tag が基点と違う変わっていない行の `retagged`(`true`)、持っている condition の tag と `@held` を並べた `conditions`、走った world と environment ごとに 1 つのセル、`verdict`(`held`、`proven`、`removed`、`failed`、`unproven`、`moved`)、1 文の `reason` を持ちます。
   消えた行はセルを持たず、その `line` は基点のもので、`lines` が基点での文を持ちます。
-  セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、head の environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、`fail` のときはすべての実行が成り立たなかった `claim`(step の claim の中の位置で、0 から数えます)と、各実行で見た実際の値を実行の順に並べた `actuals`(`{ value }`、run.json が切り詰めた値には `{ json_start, json_bytes }`、値が無ければ `{ reason }`)、そして `not-run` のときと、証明の回が終わらなかったために `broke` になった対照のときは `reason` を持ちます。
+  セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、head の environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`stopped`、`flaky`、`not-run`)、`pass` と `not-run` 以外が名指す `line`、持っている実行の数 `runs`、`fail` のときはすべての実行が成り立たなかった `claim`(step の claim の中の位置で、0 から数えます)と、各実行で見た実際の値を実行の順に並べた `actuals`(`{ value }`、run.json が切り詰めた値には `{ json_start, json_bytes }`、値が無ければ `{ reason }`)、そして `not-run` のときと、証明の回が終わらなかったために `broke` になった対照のときは `reason` を持ちます。
   `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
   `proof_runs` は `--proof-runs` で、対照と base のセルの `runs` はこれと比べて読みます。
   run サマリが描く表はこれです。
-- `counts` は、必須の head のセルの実行を数える `scenarios`、`passed`、`failed` と、`not-run` の必須の head のセルを数える `not_run` と、証明の実行を含めて head の対照の実行を数える `controls` と、`not-run` の head の対照のセルを数える `controls_not_run` を持ちます。
+- `counts` は、必須の head のセルの実行を数える `scenarios`、`passed`、`failed`、`stopped`(walk が中止したもので、`--step` の外では 0)と、`not-run` の必須の head のセルを数える `not_run` と、証明の実行を含めて head の対照の実行を数える `controls` と、`not-run` の head の対照のセルを数える `controls_not_run` を持ちます。
   対照はゲートするテストではなく証拠なので、別に数えます。
   base と old の実行は、表が読むものです。
 - BeforeAll や AfterAll の失敗は、その environment を名指す `hook-failed` の所見になり、その `do` は同じ対象をその environment で走らせます。
@@ -3454,6 +3454,7 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 | `pass` | すべて通った |
 | `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
 | `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim。または scenario の行で、すべての実行で同じ hook が失敗した。その hook と走った時を `reason` が言います。After hook は claim が判定された後で失敗するからです |
+| `stopped@<line>` | 人がその行で walk(`nuka run --step`)を中止したので、その後の step は走らなかった。受け入れ基準が成り立つことを示すものが何もないので、行は `failed` |
 | `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も、2 つの hook が失敗した 2 回も食い違いです)。行は通らなかった最初の実行のもの |
 | `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、BeforeAll が失敗した、tree のファイルが読み込めなかった、または `--base` がその world を作らなかった(後述)) |
 
@@ -3637,6 +3638,86 @@ step record も `run.json` も書きません。
 だから探索からそのサマリへの道は、誰かが書いた feature と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
 30 回の呼び出しを経た世界は、誰にも再現できません。
 だからこそ、探索から出てくるのは、それをもとに書かれ、`nuka check` で確かめられ、ゼロからもう一度実行される scenario です。
+
+### 人と一緒の walk
+
+```sh
+nuka run features/checkout.feature:12 --step      # バックグラウンドで
+nuka step wait
+nuka step next 1
+nuka step stop 2
+```
+
+agent を隣にして scenario をレビューする人は、各 step を、その world がまだそこにあるうちに見たいものです。
+step が残したページ、step が話しかけたプログラム、step が用意した fixture です。
+`nuka run --step` は 1 つの scenario を実行し、各 step の後で、AfterStep hook が走って step record が書かれた時点で一時停止します。
+world、ブラウザ、fixture は開いたままで、一時停止は答えが来るまで続きます。
+答えるのは別のコマンドです。
+`nuka step next <n>` は次の step を実行し、`nuka step stop <n>` は walk をそこで中止します。
+walk が受け取る入力はこの答えだけで、それも feature が名指す 2 つの step の間だけです。
+そのため前の節はそのまま成り立ちます。
+scenario の外から nukadoko を通して world を動かすものは何もなく、walk には socket もアイドルタイムアウトもありません。
+
+walk は 1 つの scenario の 1 回の実行です。
+1 つの `<file>:<line>`、または scenario を 1 つだけ持つファイルを、1 つの environment で、`--repeat` を 1 より大きくせず、`--base` も付けずに実行します。
+それより広い選択は `step-needs-one-scenario` で拒否されます。
+中止の意味を 1 つにし、一時停止の番号を step の番号と同じにするためです。
+1 つのプロジェクトで同時に走る walk は 1 つだけで、2 つ目の `nuka run --step` は `walk-in-progress` で拒否されます。
+
+2 つのコマンドは state ディレクトリのファイルを通して出会い、各ファイルの書き手は 1 つだけです。
+`walk.lock` は run の pid を持ち、存在しないときにだけ作られます。
+pid が死んでいる lock は引き継がれます。
+`walk.json` は walk の状態(`starting`、`running`、`paused`、`ended`)を持ち、run だけがそれを丸ごと書いて、所定の場所へ rename します。
+答えは `<run_dir>/answers/<n>.json` です。
+`nuka step` はこれを存在しないときにだけ作って書き直さず、run は 100 ms ごとにこれを探します。
+ファイル名が一時停止の番号なので、答えが動かせるのは、その人に見せた一時停止だけです。
+同じ呼び出しを 2 回しても、2 回目は何も書きません。
+同じ答えをもう一度送ると、その後に起きたことを表示します。
+同じ一時停止への別の答えは `pause-answered` で、walk がいない一時停止への答えは `pause-not-current` で拒否されます。
+`nuka step wait` は walk が一時停止するか終わるまで待ち、何も答えません。
+前の walk が終わっているのを見つけた wait は次の walk を待ちます。
+1 つも始まらなければ、前の walk を名指して `walk-not-found` で拒否されます。
+`nuka step` の各呼び出しが待つのは最長で `--timeout` 秒です(既定は 90 で、ホストがフォアグラウンドのコマンドに与える 2 分より短くしてあります)。
+それを過ぎると、walk を `running` として表示し、同じ呼び出しを `do` に載せます。
+
+各一時停止で、run は `<run_dir>/pauses/<n>/` の下に、scenario が起動した各ブラウザコンテキストの開いている各ページについて、スクリーンショットと ARIA スナップショットを書きます(`page.png` と `page.aria.yml`、2 つ目のページは `page-2.*`、`pageAs` のコンテキストは `page.<name>.*`)。
+fixture が自分で起動したブラウザは写しません。
+このビューは step の record が書かれた後に取るので、record の中には決して入りません。
+スクリーンショットはキャレットを残します(`caret: "initial"`)。
+Playwright の既定はフォーカスのあるフィールドの style を書き換えてキャレットを隠し、次の step はその style を読んでしまうからです。
+その人自身のブラウザに Chrome DevTools Protocol の口を開く案は、計測したうえで退けました。
+その口に 2 つ目のクライアントがつながると、run が次に読むページを、fixture のサインインのまま、認証なしでクリックできてしまいます。
+しかもその口を持つのは Chromium だけです。
+walk が待っている間にページが送るもの(ポーリングするページや EventSource)は、一時停止した step の仕事ではありません。
+そのため `pauses/<n>/http.jsonl` に書き、step の `http.jsonl` にも `after_step_end` にも数えません。
+
+中止すると、一時停止の後の step は飛ばされますが、After hook と teardown は走ります。
+After hook には cucumber の `SKIPPED` が渡ります。
+これは、step が全部は走らなかったテストケースを指す cucumber の語です。
+fixture の `use()` には `"failed"` が渡ります。
+scenario が終わっていないからです。
+scenario のエントリは `status: "stopped"` と `stopped: { after_step, line }` を持ち、中止の後の step は `skipped` です。
+セルは `stopped@<line>` で、行は `failed` です。
+受け入れ基準が成り立つことを示すものが何もないからです。
+`counts.stopped` はこれを `failed` とは別に数え、finding は `scenario-failed` ではなく `walk-stopped` です。
+Allure の結果は `skipped` で、中止のことは status details に書かれます。
+messages の stream では、中止の後の step が `SKIPPED` になります。
+最後の step の後や、失敗した step の後(失敗の後の step はどのみち飛ばされます)には、中止するものが残っていません。
+その一時停止の `remaining` は 0 で、`do` は `next` だけを名指します。
+そこでの `stop` は答えとして残り、scenario の status は走ったとおりのままです。
+
+誰も答えない一時停止を終わらせるのはシグナルだけです。
+どんな制限を設けても、考えている途中の誰かを断ち切ってしまうからです。
+シグナルは、どの run とも同じく scenario とその fixture を片付け、walk は `interrupted` として、シグナルと終了コードとともに終わります。
+`run.json` は書かれません。
+kill されたりクラッシュしたりした run は、pid の死んだ walk を残します。
+`nuka step` はそれを `walk-gone` として報告し、walk を始め直す `nuka run <file>:<line> --step` を添えます。
+
+`run.json` の `walk` は `--step` のもとでだけあり、各一時停止を並べます。
+並ぶのは、その step record、一時停止した時刻と答えが来た時刻、答え、ビュー、そしてその間にページが何かを送ったときの `http` です。
+run サマリは、その run が walk だったこと、一時停止の数と最長のもの、そしてそれがレビュアーの承認する run ではないことを述べます。
+step の間、world とブラウザは何に対しても開いていたからです。
+すべての step を走った walk は計測した断定をそのまま持ち、読み手や CI のジョブは `walk` でそれを見分けます。
 
 ## Records
 
@@ -4187,13 +4268,15 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   断定は終了コードのものです。
   そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗が走ったどの scenario の外で起きたかを述べる 1 文が付きます。
   その文は、プログラムが起動しなかった world をそのログとともに名指します。
+- `--step` のもとでは 1 文。
+  run が walk だったことを一時停止の数と最長のものとともに述べ、それがレビュアーの承認する run ではないことを述べます(「人と一緒の walk」を参照)。
 - `--base` のもとでは 1 行。
   ref とその短いコミットを名指し、`unchanged`、`changed`、`new`、`removed` の受け入れ基準を数え、対応づけが変わったかどうかを、変わったもの(変わった各ファイル、config の対応づけの部分、condition が変わった environment、`defaultEnvironments`)を名指して述べます。
 - 断定の表(「断定」を参照)。
   受け入れ基準ごとに 1 行を feature のパスと行の順に並べ、そのあとに消えたものを並べて、その断定、場所、名前、condition の tag を載せます。
   `--base` のもとでは `change` の列があり、名前が変わった行には `renamed from` と基点での場所が付きます。
   world と environment ごとに 1 列で、列名は `head <environment>`、`base <environment>`、`old <environment>` です。
-  セルは `pass`、`fail@<line>`、`broke@<line>`、`flaky@<line>`、`·` と読め、対照には `(control)` が、2 回以上走ったときは実行の数が付きます。
+  セルは `pass`、`fail@<line>`、`broke@<line>`、`stopped@<line>`、`flaky@<line>`、`·` と読め、対照には `(control)` が、2 回以上走ったときは実行の数が付きます。
 - 赤い行ごとに 1 行。
   その場所、名前、行の理由を載せます。
   その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せ、base か old の world のセルではその前に `base:` か `old:` を付けます。

@@ -1385,6 +1385,16 @@ an approval recorded anywhere (a pull request review, a change ticket, an
 audit log) can point at the run it approved, and nukadoko writes no
 approval record of its own (see [Review](docs/spec.md#review)).
 
+A person who wants to see each step for themselves can walk one scenario
+with an agent beside them. `nuka run <file>:<line> --step` pauses after
+each step with the world, the browser, and the fixtures still open; the
+agent reads the step record and the views of the open pages to the
+person, and the run goes on only when the person's answer comes back as
+`nuka step next <n>` or `nuka step stop <n>`. A walked run says so in its
+summary, since between steps the program was open to anything: it is a
+way to understand a scenario, not the run that approves it (see
+[A walk with a person](docs/spec.md#a-walk-with-a-person)).
+
 ## Design
 
 The full design (problem statement, typed steps, keyword semantics,

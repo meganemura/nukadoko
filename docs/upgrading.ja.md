@@ -38,6 +38,18 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   たとえば 0.13.0、0.13.1、0.14.0 のプロジェクトは、「0.14.0 から 0.14.1 へ」から読み始めます。
   0.18.0、0.19.0、0.20.0 のプロジェクトは、「0.20.0 から 0.21.0 へ」から読み始めます。
 
+## 0.23.0 から次のリリースへ
+
+- **`run.json` の `counts` は常に `stopped` を持ちます。**
+  walk(`nuka run --step`)以外のすべての run では 0 です。
+  `counts` を丸ごと比べる読み手は、このキーを加えます。
+  walk の外では、`failed` が数えるものは前と同じです。
+- **walk は scenario の status、セルの outcome、hook の status を 1 つずつ加えますが、それは `--step` のもとでだけです。**
+  人が中止した scenario は `status: "stopped"` で、そのセルは `stopped` です。
+  そこでの After hook は `result.status` に `SKIPPED` を受け取り、compat の `HookParameter` 型はいまそれを許します。
+  `--step` の付かない run は、そのどれも書きません。
+  コードを変えるのは、知らない status を拒否する switch で `run.json` を読んでいる所か、After hook が `result.status` を `PASSED` か `FAILED` に絞っている所だけです。
+
 ## 0.22.0 から 0.23.0 へ
 
 - **`nuka scaffold --then` は、数を表す語で値を述べる行に、`z.number()` の `--from` が 1 つあれば claim を書きます。**

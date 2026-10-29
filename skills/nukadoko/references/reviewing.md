@@ -1,4 +1,4 @@
-# Walking a person through a run, one step at a time
+# Walking a person through a scenario, one step at a time
 
 Use this when the person wants to check that each step does what its
 sentence says, with you beside them, instead of reading the run summary
@@ -6,37 +6,56 @@ alone. The raw output of a step (a JSON result, a list of files, an HTTP
 log) is rarely enough for a person to judge. Your job in the walk is to
 read that output for them, say what it means, and show where you read it.
 
-## Why it is a walk over one run
-
-Run the scenario once, then walk its step records in order. Each step
-record already holds what that step received, what it returned, and what
-nukadoko measured it doing, in the one world the scenario gave all of its
-steps. A run that paused between steps would show nothing more: the world
-is torn down when the run ends either way, and a record you read after
-the run is the same record you would have read mid-run. Only a real run
-from nothing is evidence, so the walk adds no state of its own.
-
-## 1. Run it once
+## 1. Start the walk
 
 ```sh
-npx nuka run features/checkout.feature:12 --json
+npx nuka check features/checkout.feature
+npx nuka run features/checkout.feature:12 --step    # in the background
+npx nuka step wait
 ```
 
-`--json` prints `run.json`. Take the scenario's `steps` in order: each has
-its `line`, its `text`, the `step` it matched, its `status`, and `record`,
-the step record's directory under `run_dir`. A `:line` target makes `selection` partial, which is
-fine for a walk and is not the run a reviewer approves.
+`--step` runs one scenario in one environment, and after each step it
+pauses with the world, the browser, and the fixtures still open until a
+`nuka step` call answers. Start it in the host's background mode (in
+Claude Code, `run_in_background`), since it does not return until the
+walk ends. `nuka step wait` waits up to `--timeout` seconds (default 90)
+and prints where the walk stands:
+
+```
+walk 1 paused after step 1/4 (passed): the shopper opens the cart
+  scenario: features/checkout.feature:12 Pay for a cart (default)
+  record: .nukadoko/runs/<run_id>/steps/<id>/record.json
+  view: page 1 http://127.0.0.1:41233/cart "Cart": <run_dir>/pauses/1/page.png <run_dir>/pauses/1/page.aria.yml
+  world: http://127.0.0.1:41233
+  do: nuka step next 1   (or: nuka step stop 1)
+```
+
+`--json` gives the same as fields: `pause` (`pause`, `of`, `line`,
+`text`, `step`, `status`, `record`, `error`, `remaining`, `views`),
+`run_dir`, `scenario`, `world`, and `do`. A wait that prints `running`
+ran out before the walk paused: run it again. A run that refused (it
+selected more than one scenario, say) never pauses: its own output
+names the refusal, and a wait shows the walk ended before its scenario
+ran, or ends in `walk-not-found` when the wait started after that end.
 
 ## 2. Gather one step
 
-For each step, before you say anything about it:
+For each pause, before you say anything about the step:
 
-- The sentence: the step's `text` in `run.json`.
+- The sentence: the pause's `text`, with its `line`.
 - The contract: `npx nuka describe <step>` gives its `description`,
   `mutates`, `from`, `args`, `returns`, and `file`, the step file to read.
 - The record: `<run_dir>/<record>/record.json`. Read `args`,
   `args_origin`, `result` (or `error` when it failed), `mutates`,
   `observed`, `used`, `calls`, and `evidence`.
+- The views: each open page as the step left it, `page.png` for the
+  person to open and `page.aria.yml`, its accessibility tree, for you to
+  read (`page-2.*` for a second page, `page.<name>.*` for a `pageAs`
+  context). They were taken after the step ended, so they are not in its
+  record. What a page sent while the walk waited is in
+  `pauses/<n>/http.jsonl`, not in the step's own `http.jsonl`.
+- The world, when there is one: its URL is live, so you can read it, but
+  anything you change there is what the next step finds.
 
 What each part of `observed` says:
 
@@ -138,22 +157,44 @@ Tell the person, in their language and in plain words:
    When `used` is present, say what the step took from which earlier step:
    "it ran in the `project` that installing solarsql returned".
 3. The verdict from step 3 and the field it rests on.
-4. What to open to confirm it: a screenshot, a line of `http.jsonl`, a
-   file the process wrote.
+4. What to open to confirm it: the pause's `page.png`, a line of
+   `http.jsonl`, a file the process wrote.
 
-Then stop and wait for the person before the next step. Do not batch
-steps to save turns: the point is that they judge each one while it is in
-front of them. A failed step ends the walk there: show its `error` (its
-`kind` and message) the same way, and go to `diagnosing.md` once the
-person has seen it.
+Then stop and wait for the person. Never answer a pause they have not
+answered: the run waits exactly so that they judge each step while its
+world is still there. Answer with the pause number they saw:
+
+- To go on: `npx nuka step next <n>`. It runs the next step and prints
+  the next pause, or the end after the last step.
+- To stop: `npx nuka step stop <n>`. The steps after it do not run, After
+  hooks and teardown do, and the record says the scenario was `stopped`
+  at that step, not that it failed (`walk-stopped`).
+
+A call whose output you lost, or that printed `running`, is safe to run
+again as it was: an answer is written once, and the same answer again
+prints what followed it. `pause-answered` means another answer reached
+that pause first; `pause-not-current` means the walk is elsewhere, and
+`nuka step wait` shows where. A failed step pauses with only `next`
+offered, since nothing is left to stop: show its `error` (its `kind` and
+message) the same way, answer `next` when the person has seen it, and go
+to `diagnosing.md`. A walk that a signal ended (the host's background
+limit, Ctrl-C) prints `interrupted`; one whose run was killed prints
+`walk-gone`, and its `do:` starts the walk again.
+
+A walked run is not the run a reviewer approves: between steps the world
+and the browser were open to anything, and its summary says so. When the
+walk is done, run the scenario once more without `--step` for the
+evidence.
 
 ## 5. When the person disagrees
 
-The fix goes in the step file or the feature, never in the record: a hand
-edit turns a measurement back into a claim. To show a variation of one
-step without rerunning the whole scenario, `nuka do <step> --use
-<step_record_id>` runs it alone on the same upstream values; that is a
-working record, not evidence. After the fix, run the scenario again from
-nothing and resume the walk at the first step whose file or sentence
-changed. A Then the person rejects is fixed in the implementation or by
-their word, not by weakening the Then.
+Stop the walk at that pause (`nuka step stop <n>`) before you change
+anything. The fix goes in the step file or the feature, never in the
+record: a hand edit turns a measurement back into a claim. To show a
+variation of one step without rerunning the whole scenario, `nuka do
+<step> --use <step_record_id>` runs it alone on the same upstream values;
+that is a working record, not evidence. After the fix, start a new walk;
+with the person's word, answer `next` through the steps they already
+accepted, up to the first step whose file or sentence changed. A Then
+the person rejects is fixed in the implementation or by their word, not
+by weakening the Then.

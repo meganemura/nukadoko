@@ -46,6 +46,20 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
+## 0.23.0 to the next release
+
+- **`run.json`'s `counts` always has `stopped`,** 0 for every run but a
+  walk (`nuka run --step`). A reader that compares `counts` whole adds
+  the key. Outside a walk, `failed` counts what it counted before.
+- **A walk adds a scenario status, a cell outcome, and a hook status,
+  under `--step` only.** A scenario a person stopped is `status:
+  "stopped"` with its cell `stopped`, and an After hook there gets
+  `result.status` `SKIPPED`, which the compat `HookParameter` type now
+  allows. A run without `--step` writes none of them. Change code only
+  where it reads `run.json` with a switch that refuses a status it does
+  not know, or where an After hook narrows `result.status` to `PASSED`
+  or `FAILED`.
+
 ## 0.22.0 to 0.23.0
 
 - **`nuka scaffold --then` writes a claim for a line that states its value

@@ -3798,7 +3798,7 @@ to act on the run without opening another file:
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
-  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "not_run": 0, "controls": 0, "controls_not_run": 0 },
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "stopped": 0, "not_run": 0, "controls": 0, "controls_not_run": 0 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
@@ -3992,7 +3992,8 @@ to act on the run without opening another file:
   `environment`, `role`, the `conditions` its role came from (each
   condition its row's tags name, with the value head's environment
   declares, `null` where it declares none), `outcome` (`pass`, `fail`,
-  `broke`, `flaky`, or `not-run`), the `line` the last three name,
+  `broke`, `stopped`, `flaky`, or `not-run`), the `line` each but `pass`
+  and `not-run` names,
   `runs`, the executions it holds, for `fail` the `claim` every run
   broke (its position among its step's claims, from 0) and `actuals`,
   the actual value it saw in each run, in run order (`{ value }`,
@@ -4003,7 +4004,8 @@ to act on the run without opening another file:
   environment that meets their conditions, 0 without `--env`.
   `proof_runs` is `--proof-runs`, what the `runs` of a control and of a
   base cell are measured against. It is the table the run summary draws.
-- `counts` holds `scenarios`, `passed`, and `failed`, which count the
+- `counts` holds `scenarios`, `passed`, `failed`, and `stopped` (the ones
+  a walk stopped, 0 outside `--step`), which count the
   executions of required head cells, and `not_run`, which counts the
   required head cells that are `not-run`; `controls` counts the
   executions of head controls, proof runs included, and
@@ -4351,6 +4353,7 @@ head passed:
 | `pass` | every one passed |
 | `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
 | `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, or a claim nukadoko could not judge; or, at the scenario's line, the same hook failed in every one, and `reason` names it and when it ran, since an After hook fails after the claims were judged |
+| `stopped@<line>` | a person stopped the walk (`nuka run --step`) at that line, so the steps after it did not run; the row is `failed`, since nothing shows the criterion holds |
 | `flaky@<line>` | they disagree (two that broke two claims of one line disagree too, as do two that two hooks failed); the line is the first one's that did not pass |
 | `·` | none ran, and `reason` says why: the program did not start for its world, a BeforeAll failed, a tree's files did not load, or `--base` did not build the world (below) |
 
@@ -4601,6 +4604,101 @@ summary runs through a feature someone wrote and a real `nuka run`, or it
 does not exist. A world thirty calls deep is not reproducible, by anyone,
 which is why what comes out of an exploration is a scenario written from
 it, checked with `nuka check`, and run again from nothing.
+
+### A walk with a person
+
+```sh
+nuka run features/checkout.feature:12 --step      # in the background
+nuka step wait
+nuka step next 1
+nuka step stop 2
+```
+
+A person who reviews a scenario with an agent beside them wants to see
+each step while its world is still there: the page it left, the program
+it talked to, the fixtures it set up. `nuka run --step` runs one scenario
+and pauses after each step, once its AfterStep hooks ran and its step
+record was written, with the world, the browser, and the fixtures still
+open, until the pause is answered. Another command answers it: `nuka step
+next <n>` runs the next step, and `nuka step stop <n>` ends the walk
+there. That answer is the only input a walk takes, and only between two
+steps the feature names, so the previous section still holds: nothing
+outside the scenario drives the world through nukadoko, and a walk has no
+socket and no idle timeout.
+
+A walk is one execution of one scenario: one `<file>:<line>`, or a file
+that holds one scenario, in one environment, with no `--repeat` above 1
+and no `--base`. A wider selection is refused with
+`step-needs-one-scenario`, so that a stop has one meaning and the pause
+number is the step number. One walk runs at a time in a project; a second
+`nuka run --step` is refused with `walk-in-progress`.
+
+The two commands meet through files in the state directory, each with
+one writer. `walk.lock` holds the run's pid and is created only when it
+does not exist; a lock whose pid is dead is taken over. `walk.json` holds
+the walk's state (`starting`, `running`, `paused`, or `ended`), and only
+the run writes it, whole, renamed into place. An answer is
+`<run_dir>/answers/<n>.json`, which `nuka step` creates only when it does
+not exist and never rewrites, and which the run looks for every 100 ms.
+Because the file name is the pause, an answer can only move the pause the
+person was shown. A call made twice writes nothing the second time: the
+same answer again prints what followed it, another answer to that pause
+is refused with `pause-answered`, and an answer to a pause the walk is
+not at with `pause-not-current`. `nuka step wait` waits until the walk
+pauses or ends, and answers nothing. A wait that finds the last walk
+ended waits for the next one, and is refused with `walk-not-found`,
+naming the last walk, when none starts. Each `nuka step` call waits at
+most `--timeout` seconds (default 90, under the two minutes a host gives
+a foreground command); after that it prints the walk as `running`, with
+the same call as its `do`.
+
+At each pause the run writes, under `<run_dir>/pauses/<n>/`, a screenshot
+and an ARIA snapshot of each open page of each browser context the
+scenario launched (`page.png` and `page.aria.yml`, `page-2.*` for a
+second page, `page.<name>.*` for a `pageAs` context); a browser a fixture
+launched itself is not viewed. The views are taken after the step's
+record was written, so they are never in it. The screenshot keeps the
+caret (`caret: "initial"`): Playwright's default hides it by setting the
+focused field's style, which the next step would then read. A Chrome
+DevTools Protocol endpoint for the person's own browser was measured and
+refused: a second client on it could click in the page the run reads
+next, with the fixtures' sign-in and no authentication, and only
+Chromium has one. What a page sends while the walk waits (a page that
+polls, an EventSource) is not the paused step's work, so it is written to
+`pauses/<n>/http.jsonl`, and neither the step's `http.jsonl` nor its
+`after_step_end` counts it.
+
+A stop skips the steps after the pause; After hooks and teardown still
+run. After hooks see cucumber's `SKIPPED`, its word for a test case whose
+steps did not all run, and a fixture's `use()` sees `"failed"`, since the
+scenario did not finish. The scenario's entry says `status: "stopped"`
+with `stopped: { after_step, line }`, and its steps after the stop are
+`skipped`. Its cell is `stopped@<line>` and its row is `failed`, since
+nothing shows the criterion holds; `counts.stopped` counts it apart from
+`failed`, and its finding is `walk-stopped` in place of
+`scenario-failed`. Its Allure result is `skipped`, with the stop in the
+status details, and the messages stream has its steps after the stop as
+`SKIPPED`. After the last step, or after a step that failed (the steps
+after a failure are skipped either way), nothing is left to stop: the
+pause's `remaining` is 0, its `do` names only `next`, and a `stop` there
+is kept as the answer and leaves the scenario's status as it ran.
+
+Nothing but a signal ends a pause nobody answers, since any limit would
+cut some person off in the middle of a thought. A signal tears the
+scenario and its fixtures down as in any run, and the walk ends as
+`interrupted`, with the signal and the exit code; no `run.json` is
+written. A run that was killed or crashed leaves a walk whose pid is
+dead, which `nuka step` reports as `walk-gone`, with the `nuka run
+<file>:<line> --step` that starts it again.
+
+`run.json`'s `walk`, present only under `--step`, lists each pause: its
+step record, when it paused and when it was answered, the answer, its
+views, and `http` when a page sent something during it. The run summary
+says that the run was walked, how many pauses it had and the longest,
+and that it is not the run a reviewer approves: between steps the world
+and the browser were open to anything. A walk that ran every step keeps
+the verdicts it measured, and `walk` is how a reader or a CI job tells
+it apart.
 
 ## Records
 
@@ -5390,6 +5488,9 @@ holds:
   failure was outside every scenario that ran, which names each world whose
   program did not start, with its log), how many criteria, and how many
   rows have each word that some row has;
+- under `--step`, one sentence that the run was walked, with its pauses
+  and the longest, and that it is not the run a reviewer approves (see
+  "A walk with a person");
 - under `--base`, one line that names the ref and its short commit, counts
   the criteria `unchanged`, `changed`, `new`, and `removed`, and says
   whether the mapping changed, naming what did (each changed file, the
@@ -5401,7 +5502,7 @@ holds:
   from` and the ref's place for a renamed row), and a column per world and
   environment, named `head <environment>`, `base <environment>`, or `old
   <environment>`, whose cell reads `pass`, `fail@<line>`,
-  `broke@<line>`, `flaky@<line>`, or `·`, with `(control)` for a
+  `broke@<line>`, `stopped@<line>`, `flaky@<line>`, or `·`, with `(control)` for a
   control and the number of runs when there is more than one;
 - one line for each red row: its location, its name, and the row's
   reason, and under it, for a cell that ran, where its first execution
