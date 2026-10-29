@@ -6,13 +6,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { layerProgram, programSchema, type ProgramInput } from "../src/config/program-schema.js";
-import { groupAlive, parseProcStat } from "../src/program/process-group.js";
+import { groupAlive, parseProcStat } from "../src/process-group/process-group.js";
 import { createWorldStarter } from "../src/program/world.js";
 import { createCaptureSink, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 // Responsibility: stopping a world's process group gives the whole group
 // its grace period after SIGTERM (src/program/world.ts,
-// src/program/process-group.ts): a server a shell started still writes its
+// src/process-group/process-group.ts): a server a shell started still writes its
 // last lines after the shell exits, for `serve` and for a `build` or
 // `prepare` command stopped at its limit, and the stop ends as soon as the
 // group is gone, not after the whole grace period.

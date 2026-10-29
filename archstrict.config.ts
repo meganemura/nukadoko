@@ -56,13 +56,14 @@ export default {
   // Leaves and package doors that should not accumulate frozen debt.
   // A bypass here is fixed by extending that module's surface, not by
   // writing it into the todo file.
-  strict: ["binding", "check", "compat", "condition", "entry", "env", "execution-events", "feature", "finding", "issues", "matching", "shell", "sink", "stored-form", "timer", "version"],
+  strict: ["binding", "check", "compat", "condition", "entry", "env", "execution-events", "feature", "finding", "issues", "matching", "process-group", "shell", "sink", "stored-form", "timer", "version"],
   classify: [
     { glob: "src/condition/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/env/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/execution-events/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/finding/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/issues/**", tags: ["layer:leaf", "pkghost:library"] },
+    { glob: "src/process-group/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/shell/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/stored-form/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/timer/**", tags: ["layer:leaf", "pkghost:library"] },
@@ -130,6 +131,7 @@ export default {
     { name: "execution-events", glob: "src/execution-events/**", surface: ["count.ts", "counted.ts", "format.ts", "lists.ts", "path.ts", "selection.ts", "tally.ts"] },
     { name: "finding", glob: "src/finding/**", surface: ["finding.ts", "run-codes.ts"] },
     { name: "issues", glob: "src/issues/**", surface: ["format-issues.ts"] },
+    { name: "process-group", glob: "src/process-group/**", surface: ["process-group.ts"] },
     { name: "shell", glob: "src/shell/**", surface: ["shell-word.ts"] },
     { name: "stored-form", glob: "src/stored-form/**", surface: ["revive.ts", "stored-form.ts"] },
     { name: "timer", glob: "src/timer/**", surface: ["max-delay.ts"] },

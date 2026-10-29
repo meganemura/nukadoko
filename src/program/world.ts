@@ -21,7 +21,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 import { openEventsInlet, type EventsInlet } from "./events-inlet.js";
 import { captureOutput } from "./in-process-output.js";
 import { describePlaceholderGap, fillPlaceholders, namesPlaceholder, placeholderGaps, textNamesPlaceholder, type PlaceholderValues } from "./placeholders.js";
-import { groupAlive } from "./process-group.js";
+import { groupAlive } from "../process-group/process-group.js";
 import { openProgramLog, type ProgramLog } from "./program-log.js";
 import type { WorldView } from "./world-view.js";
 
@@ -47,7 +47,7 @@ import type { WorldView } from "./world-view.js";
 // that child holding the port. A group of its own also keeps a terminal's
 // Ctrl-C from reaching it before nukadoko stops it in order. Stopping a
 // group sends it SIGTERM and gives the whole group the grace period, until
-// no process of it is left (src/program/process-group.ts) or 5 seconds
+// no process of it is left (src/process-group/process-group.ts) or 5 seconds
 // pass, then SIGKILL to what is left: a server that a shell or `npm start`
 // started can still be writing its last lines after the leader exits. A
 // `build` or `prepare` command's group is killed once the command exits, so a child
