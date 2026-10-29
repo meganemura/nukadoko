@@ -220,6 +220,36 @@ describe.skipIf(!chromiumAvailable)("a page's requests to the world", () => {
       await handle.dispose();
     }
   });
+
+  it("names a page's requests it could not stamp when the DevTools session refuses Fetch, in each step that sent one", async () => {
+    const handle = createStepContext({ config: config(), baseURL: world.origin, evidenceDir, env: {}, stepTitle: "page step" });
+    try {
+      await handle.beginStep(path.join(evidenceDir, "one"), "one");
+      const page = await handle.ctx.page();
+      refuseFetchEnable(page.context(), () => "Internal error");
+      const opened = await page.context().newPage();
+      await opened.goto(`${other.origin}/`);
+      await opened.waitForFunction('document.title !== ""');
+      expect(hits.map((hit) => [hit.path, hit.traceparent])).toEqual([
+        ["other/", undefined],
+        ["/cross", undefined],
+      ]);
+      expect((await handle.observedSnapshot()).unmeasured).toEqual([
+        {
+          kind: "page_request",
+          detail: "requests a page sends to the world go without a traceparent: cdpSession.send: Protocol error (Fetch.enable): Internal error",
+        },
+      ]);
+      await handle.endStep();
+
+      // A step whose page sent nothing to the world has nothing to name.
+      await handle.beginStep(path.join(evidenceDir, "two"), "two");
+      expect((await handle.observedSnapshot()).unmeasured).toEqual([]);
+      await handle.endStep();
+    } finally {
+      await handle.dispose();
+    }
+  });
 });
 
 describe.skipIf(!chromiumAvailable)("a world at localhost", () => {
@@ -272,7 +302,7 @@ describe("stampPageRequests", () => {
       },
       pages: () => [],
     } as unknown as Parameters<typeof stampPageRequests>[0];
-    const stamping = stampPageRequests(context, "firefox", { origin: "http://localhost:1", traceparentFor: () => "x" });
+    const stamping = stampPageRequests(context, "firefox", { origin: "http://localhost:1", traceparentFor: () => "x", unstamped: () => undefined });
     await stamping.attach({} as Parameters<typeof stamping.attach>[0]);
     expect(subscribed).toBe(false);
   });

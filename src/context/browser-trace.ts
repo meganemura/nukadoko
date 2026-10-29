@@ -1,5 +1,5 @@
 import type { BrowserContext, CDPSession, Page } from "playwright";
-import { TRACEPARENT } from "./trace-context.js";
+import { stampsUrl, TRACEPARENT } from "./trace-context.js";
 
 // Responsibility: put a `traceparent` header on each request a Chromium
 // page sends to the world's origin (docs/spec.md "Trace context and the
@@ -40,6 +40,11 @@ import { TRACEPARENT } from "./trace-context.js";
 // filter: 'EventSource'"), which left every request of every page
 // unstamped.
 //
+// A session that cannot be opened or registered is not silent: each step
+// whose page then sends a request of those kinds to the world gets one
+// unmeasured `page_request` entry with the reason. A page that closed in
+// between sends nothing more, so it never gets one.
+//
 // Firefox and WebKit have no such protocol through Playwright, so their
 // page requests go without the header; the requests a step sends from its
 // own process are stamped on every engine. A request a page sends before
@@ -55,6 +60,9 @@ export interface PageStamp {
   /** The `traceparent` for a request to `url`, counted as sent, or
    * `undefined` when it is not the world's. */
   traceparentFor(url: string): string | undefined;
+  /** Records that a request a page sent to the world went without a
+   * `traceparent`, for the reason `detail` names. */
+  unstamped(detail: string): void;
 }
 
 /** CDP's Fetch.requestPaused event, the members read here. */
@@ -77,6 +85,9 @@ export function fetchPatternsOf(origin: string): string[] {
 /** The resource types the Fetch patterns name (this file's own header). */
 const STAMPED_TYPES = ["Document", "Fetch", "XHR"] as const;
 
+/** The same requests, by Playwright's `request.resourceType()`. */
+const STAMPED_KINDS: ReadonlySet<string> = new Set(["document", "fetch", "xhr", "eventsource"]);
+
 /** Starts stamping every page of `context`, the ones it has and the ones
  * it opens, and returns what attaches a page the caller opened, so the
  * caller can wait for it before the page's first request. Does nothing for
@@ -84,13 +95,29 @@ const STAMPED_TYPES = ["Document", "Fetch", "XHR"] as const;
 export function stampPageRequests(context: BrowserContext, engine: string, stamp: PageStamp): { attach(page: Page): Promise<void> } {
   if (engine !== "chromium") return { attach: async () => undefined };
   const attached = new WeakMap<Page, Promise<void>>();
+  // Why each page whose session failed sends its requests without a header.
+  const unstamped = new WeakMap<Page, string>();
   const attach = (page: Page): Promise<void> => {
     const known = attached.get(page);
     if (known !== undefined) return known;
-    const done = attachPage(context, page, stamp);
+    const done = attachPage(context, page, stamp).then((failure) => {
+      if (failure !== undefined) unstamped.set(page, `requests a page sends to the world go without a traceparent: ${failure}`);
+    });
     attached.set(page, done);
     return done;
   };
+  context.on("request", (request) => {
+    if (!STAMPED_KINDS.has(request.resourceType()) || !stampsUrl(stamp.origin, request.url())) return;
+    let page: Page;
+    try {
+      page = request.frame().page();
+    } catch {
+      // A service worker's request has no frame, and no page session sees it.
+      return;
+    }
+    const detail = unstamped.get(page);
+    if (detail !== undefined) stamp.unstamped(detail);
+  });
   context.on("page", (page) => {
     void attach(page);
   });
@@ -98,13 +125,14 @@ export function stampPageRequests(context: BrowserContext, engine: string, stamp
   return { attach };
 }
 
-async function attachPage(context: BrowserContext, page: Page, stamp: PageStamp): Promise<void> {
+/** Opens `page`'s session and registers its patterns; the error's message
+ * when either fails. */
+async function attachPage(context: BrowserContext, page: Page, stamp: PageStamp): Promise<string | undefined> {
   let session: CDPSession;
   try {
     session = await context.newCDPSession(page);
-  } catch {
-    // A page that closed before its session opened sends nothing more.
-    return;
+  } catch (error) {
+    return messageOf(error);
   }
   session.on("Fetch.requestPaused", (event: RequestPaused) => {
     let headers: { name: string; value: string }[] | undefined;
@@ -127,7 +155,12 @@ async function attachPage(context: BrowserContext, page: Page, stamp: PageStamp)
         STAMPED_TYPES.map((resourceType) => ({ urlPattern, resourceType, requestStage: "Request" as const })),
       ),
     });
-  } catch {
-    // The page closed in between.
+  } catch (error) {
+    return messageOf(error);
   }
+  return undefined;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -19,6 +19,12 @@ just until 0.1.
   Chromium pauses a page's `fetch` and its EventSource as an
   XMLHttpRequest (measured on 141 and 153), so an EventSource is still
   stamped.
+- **A page's session that cannot stamp is no longer silent.** When the
+  DevTools session of a page cannot be opened or its filter is refused,
+  each step whose page then sends a document, `fetch`, XMLHttpRequest,
+  or EventSource request to the world gets one `observed.unmeasured`
+  entry of the new kind `page_request`, whose `detail` holds the
+  browser's message, and the run summary names it on the step's line.
 
 ## 0.24.0 — 2026-10-29
 

@@ -3248,6 +3248,10 @@ hook's boundary, so their requests go without a `traceparent`.
   XMLHttpRequest, so the filter names no EventSource type: Chromium
   141 refuses a filter that names one, and the refusal would leave every
   request of the page without the header.
+  When a page's session cannot be opened or its filter is refused, each
+  step whose page then sends one of those requests to the world gets
+  one `page_request` entry in `observed.unmeasured` that names the
+  reason (see "Records").
 
 Playwright has two ways to add a header to a page's requests, and both
 were measured and refused.
@@ -3419,6 +3423,8 @@ What this does not reach, in one list:
   apart from any page.
 - A Firefox or WebKit page's requests go without one, and so do a
   Chromium popup's first requests (above).
+- A Chromium page whose DevTools session failed sends its requests
+  without one; the step names it in `observed.unmeasured` (above).
 - A BeforeAll or AfterAll hook's requests go without one: those hooks run
   in no boundary.
   So do the `fetch`, `node:http`, and `node:https` requests a fixture's
@@ -5144,7 +5150,13 @@ its scenario record's id, so either record leads to the other.
   `runCommand` writes, a server's accepted connections, and the IPC
   channel `--concurrency` workers use are never one. `files` is a scratch
   directory that could not be compared, a path the step wrote whose
-  identity could not be read, or a step past the path limit. The run summary gives each step with an
+  identity could not be read, or a step past the path limit.
+  `page_request` is a Chromium page's request to the world that went
+  without a `traceparent` because the page's DevTools session could not
+  be opened or refused its Fetch filter, once per step and reason, and
+  `detail` is that reason with the browser's own message, such as
+  `requests a page sends to the world go without a traceparent:
+  cdpSession.send: Protocol error (Fetch.enable): Internal error`. The run summary gives each step with an
   entry here one line (see the run summary, below), and adds nothing for
   a step without one.
 - `after_step_end`: a step's code can keep running after its record is

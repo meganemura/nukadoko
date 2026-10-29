@@ -2603,6 +2603,7 @@ BeforeAll と AfterAll はどの scenario の外でも、どの step や hook �
   DevTools のセッションが一時停止を求めるのは、ドキュメント、`fetch`、XMLHttpRequest です。
   Chromium は EventSource を XMLHttpRequest として一時停止するので、フィルタは EventSource の種類を名指しません。
   Chromium 141 はそれを名指すフィルタを拒み、拒まれると、その page のどのリクエストにもヘッダが付かなくなります。
+  page のセッションを開けないとき、またはフィルタを拒まれたときは、その page がそうしたリクエストを world へ送った step ごとに、理由を名指す `page_request` のエントリが `observed.unmeasured` に 1 つ入ります(「Records」を参照)。
 
 Playwright には page のリクエストにヘッダを足す方法が 2 つあり、どちらも計測したうえで退けました。
 計測には Chromium 149.0.7827.55 と Playwright 1.61.1 を使いました。
@@ -2731,6 +2732,8 @@ id が行のテキストにあれば、形は何でも構いません。
 - service worker のリクエストは `traceparent` を運びません。
   nukadoko が付けるのはページ自身のリクエストで、service worker はどのページとも別にリクエストを送るからです。
 - Firefox と WebKit のページのリクエストも運ばず、Chromium のポップアップの最初のリクエストも運びません(上記)。
+- DevTools のセッションが失敗した Chromium の page のリクエストも運びません。
+  step はそれを `observed.unmeasured` で名指します(上記)。
 - BeforeAll と AfterAll の hook のリクエストも運びません。
   これらの hook はどの境界の中でも実行されないからです。
   fixture の setup と teardown が `fetch`、`node:http`、`node:https` で送るリクエストも運びません。
@@ -4050,6 +4053,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   判定するのは `Socket#connect` を呼ぶ接続だけです。
   そのため、コンソールの出力、`process.stdout` と `process.stderr`、`runCommand` が書く stdin、サーバが受け入れた接続、`--concurrency` の worker プロセスが使う IPC のチャネルは、これに当たりません。
   `files` は、比べられなかった scratch のディレクトリ、step が書いたパスのうち同一性を読めなかったもの、またはパスの上限を超えた step です。
+  `page_request` は、page の DevTools のセッションを開けなかった、またはその Fetch のフィルタを拒まれたために、`traceparent` なしで world へ送られた Chromium の page のリクエストで、step と理由ごとに 1 回です。
+  `detail` はその理由とブラウザ自身のメッセージで、たとえば `requests a page sends to the world go without a traceparent: cdpSession.send: Protocol error (Fetch.enable): Internal error` です。
   run サマリは、ここにエントリがある step ごとに 1 行を載せ(下の run サマリを参照)、エントリがない step については何も加えません。
 - `after_step_end`: step のコードは、残したタイマーから、またはタイムアウトのあとに、record を書いたあとも動き続けることがあります。
   そのとき始めたリクエストや `runCommand` のプロセスは、その step のものであり、そのとき動いている step のものではありません。

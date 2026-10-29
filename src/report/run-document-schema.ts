@@ -114,7 +114,7 @@ const observed = z.looseObject({
   files: z
     .array(z.looseObject({ path: z.string(), change: z.enum(["added", "changed", "removed"]), bytes: z.number().int().optional() }))
     .nullable(),
-  unmeasured: z.array(z.looseObject({ kind: z.enum(["child_process", "worker_thread", "socket", "files"]), detail: z.string() })),
+  unmeasured: z.array(z.looseObject({ kind: z.enum(["child_process", "worker_thread", "socket", "files", "page_request"]), detail: z.string() })),
   program_log: z
     .looseObject({ trace_id: z.string(), lines: z.number().int(), file: z.string().nullable(), stamped: z.number().int(), truncated: z.literal(true).optional() })
     .nullable()

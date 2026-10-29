@@ -1151,7 +1151,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         secrets,
         httpOmitted,
         httpLogFailed,
-        ...(trace === undefined ? {} : { stamp: { origin: trace.origin, traceparentFor: (url: string) => observed.traceparentFor(url) } }),
+        ...(trace === undefined ? {} : {
+              stamp: {
+                origin: trace.origin,
+                traceparentFor: (url: string) => observed.traceparentFor(url),
+                unstamped: (detail: string) => observed.markUnmeasured({ kind: "page_request", detail }),
+              },
+            }),
       });
       const opened: OpenedContext = { as, handle, chunkOpen: false };
       contexts.set(as, opened);

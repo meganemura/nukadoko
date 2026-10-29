@@ -346,8 +346,11 @@ export interface UnmeasuredEntry {
    * step wrote to), or what an upgraded connection or a CONNECT tunnel
    * carried after its recorded handshake. `files`: a scratch directory
    * that could not be compared, a path the step wrote whose identity
-   * could not be read, or a step past the path limit. */
-  readonly kind: "child_process" | "worker_thread" | "socket" | "files";
+   * could not be read, or a step past the path limit. `page_request`: a
+   * request a Chromium page sent to the world without a `traceparent`,
+   * because the page's DevTools session refused its resource type or
+   * failed. */
+  readonly kind: "child_process" | "worker_thread" | "socket" | "files" | "page_request";
   /** One line that names it: the program and its argument count (never
    * its arguments), the script, the address or URL, or the directory and
    * why. */
