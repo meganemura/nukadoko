@@ -19,6 +19,7 @@ export const CLAIM_COMPARES = [
   "starts-with-text",
   "ends-with-text",
   "has-item",
+  "has-same-items",
   "matches",
   "greater-than",
   "at-least",
@@ -27,7 +28,7 @@ export const CLAIM_COMPARES = [
 ] as const satisfies readonly ClaimCompare[];
 
 /** Every view a claim may name. */
-export const CLAIM_VIEWS = ["text", "lines", "json"] as const satisfies readonly ClaimView[];
+export const CLAIM_VIEWS = ["text", "lines", "json", "comma-list"] as const satisfies readonly ClaimView[];
 
 // Fails to compile when the record's union gains a member this list lacks.
 type MissingCompare = Exclude<ClaimCompare, (typeof CLAIM_COMPARES)[number]>;
@@ -461,7 +462,7 @@ function checkNotRewritten(label: string, key: string, shape: ClaimStepShape, si
   if (rewrite === undefined) return;
   throw new InvalidClaimError(
     `${label} reads args.${key}, and its schema rewrites ${where} (${rewrite}), so step code would decide what the claim compares. Take the rewrite out of the schema` +
-      (side === "expected" ? ", or read the line's text with expected_view (text, lines, or json)" : ""),
+      (side === "expected" ? `, or read the line's text with expected_view (${CLAIM_VIEWS.join(", ")})` : ""),
   );
 }
 
@@ -672,7 +673,7 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
       });
     }
     // A where clause whose place overlaps an item claim's, and whose
-    // compare decides the value there (equal), or selects by a part of it
+    // compare decides the value there (equal, has-same-items), or selects by a part of it
     // no claim can be told apart from (contains-text, starts-with-text,
     // ends-with-text, matches, has-item),
     // selects the items by the value the claim then judges: "every item
@@ -744,7 +745,7 @@ export function claimArgKeysRead(claims: readonly Claim[]): ReadonlySet<string> 
 /** The compares a `where` clause may not use on a place that overlaps an
  * item claim's: each decides the value there, or selects by a part of it
  * that the claim cannot be told apart from. */
-const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"]);
+const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "has-same-items", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"]);
 
 /** Whether two places inside one item overlap: one path is the start of
  * the other, after `actual` and `at` are joined (`itemPath`). Pure. */

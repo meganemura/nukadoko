@@ -84,6 +84,20 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/** Whether two arrays hold the same items, each as many times, in any
+ * order: a duplicate on one side needs its own match on the other, so
+ * `["a", "a"]` is not `["a"]` in another order. Pure. */
+export function sameItems(a: readonly unknown[], b: readonly unknown[]): boolean {
+  if (a.length !== b.length) return false;
+  const unmatched = [...b];
+  for (const item of a) {
+    const index = unmatched.findIndex((other) => deepEqual(item, other));
+    if (index === -1) return false;
+    unmatched.splice(index, 1);
+  }
+  return true;
+}
+
 /** The value after `view`, or why the view could not apply. A view reads a
  * snapshot, and what it makes of one is a snapshot too: the JSON a text
  * parses to is held to the same depth limit. */
@@ -96,6 +110,10 @@ export function applyView(view: ClaimView | undefined, value: unknown): { readon
     case "lines": {
       const text = value.trimEnd();
       return { value: text === "" ? [] : text.split(/\r?\n/) };
+    }
+    case "comma-list": {
+      const text = value.trim();
+      return { value: text === "" ? [] : text.split(",").map((item) => item.trim()) };
     }
     case "json": {
       let parsed: unknown;
@@ -201,6 +219,12 @@ export async function compareValues(
         return { reason: `has-item looks for ${article(expectedType)}, and no item is one` };
       }
       return { holds: items.some((item) => deepEqual(item, expected)) };
+    }
+    case "has-same-items": {
+      if (actualType !== "array" || expectedType !== "array") {
+        return { reason: `has-same-items compares two arrays, and compares ${article(actualType)} with ${article(expectedType)}` };
+      }
+      return { holds: sameItems(actual as unknown[], expected as unknown[]) };
     }
     case "greater-than":
     case "at-least":

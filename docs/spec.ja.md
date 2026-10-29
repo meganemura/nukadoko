@@ -1396,7 +1396,7 @@ discovery は、`defineStep` が返したオブジェクトそのものである
   期待値のキーをそのような型で埋める pattern は `nuka check` が報告し(`claim-expected-transformed`、エラー)、それが報告されている間は `nuka run` が始まりません。
   `--no-check` の run は、各行が一致した pattern に同じ規則を当てはめます。
   そのようなキーと比べる claim は、check と同じ言葉の理由とともに `unjudged` になり、step のほかの claim は判定されます。
-  行のテキストを JSON や行として読む必要がある claim は、素の `z.string()` のキーに `expected_view`(`text`、`lines`、`json` で、`view` と同じように適用します)を名指しし、record は `sentence:<key> as <view>` と述べます。
+  行のテキストを JSON や行として読む必要がある claim は、素の `z.string()` のキーに `expected_view`(`text`、`lines`、`json`、`comma-list` で、`view` と同じように適用します)を名指しし、record は `sentence:<key> as <view>` と述べます。
 - **前の step の結果**: `{ from: "<key>.<path>" }` で、最初の要素はこの step の `from` のキーです(「凍結した件数が変わらない」など)。
   record は `from:<step>@<line>.<path>` と述べます。
   `<line>` は値を返した step の feature 行で、`nuka do` ではその step record の id です。
@@ -1455,6 +1455,8 @@ claim が計測する値は、行から来ることはありません。
 
 - `view` が値を正規化します。
   `text` は末尾を切り詰め、`lines` は末尾を切り詰めて行に分け(空のテキストには行がありません)、`json` はパースします。
+  `comma-list` は切り詰めてからコンマごとに分け、各要素を切り詰めます(空のテキストには要素がありません)。
+  そのため文が述べるテキスト `CFP, Schedule, Registration` は 3 つの名前として読めます。
   view は文字列にだけ適用され、それ以外の値では claim は成り立たず、その旨を述べます。
 - `at` は view を通した値の中のパスを取ります(`actual: "result.stdout", view: "json", at: "sections.git.0.dirty_count"`)。
   そのためパースは、コードではなく宣言されたデータです。
@@ -1520,9 +1522,11 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 
 #### 比較
 
-`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
+`has-same-items` は各要素を、もう一方の側の等しい要素 1 つと組にします。
+そのため重複も数え、`["a", "a"]` と `["a"]` では成り立ちません。
 大小の比較は、2 つの number を読みます。
 
 どの比較の前でも、両辺は素の JSON です。
@@ -1560,7 +1564,7 @@ pattern には残り時間を与え、残りが無いときに与えることは
 読むパスは `actual` に `at` を続けたものです。
 したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読みます。
 どちらかの側の `view` は、同じ値を別の形で読むだけなので、2 つを分けません。
-要素の claim と重なり、`equal`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
+要素の claim と重なり、`equal`、`has-same-items`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
 要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
 
 重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。

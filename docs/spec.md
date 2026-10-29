@@ -1680,8 +1680,9 @@ ones nothing validated.
   rule to the pattern each line matched: a claim that compares with such
   a key is `unjudged`, with the reason in the check's words, and the
   step's other claims are judged. A claim that needs the
-  line's text as JSON or as lines names
-  `expected_view` (`text`, `lines`, or `json`, applied as `view` is),
+  line's text as JSON, as lines, or as a list names
+  `expected_view` (`text`, `lines`, `json`, or `comma-list`, applied as
+  `view` is),
   on a plain `z.string()` key, and the record says `sentence:<key> as
   <view>`.
 - **An earlier step's result**: `{ from: "<key>.<path>" }`, where the
@@ -1759,8 +1760,10 @@ sentence fills is refused: the value a claim measures never comes from the
 line. Then, in order:
 
 - `view` normalizes the value: `text` trims its end, `lines` trims its end
-  and splits it into lines (an empty text has no lines), and `json` parses
-  it. A view applies to a string only; on any other value the claim breaks
+  and splits it into lines (an empty text has no lines), `json` parses
+  it, and `comma-list` trims it, splits it at each comma, and trims each
+  item (an empty text has no items), so the text `CFP, Schedule,
+  Registration` a sentence states reads as three names. A view applies to a string only; on any other value the claim breaks
   and says so.
 - `at` takes a path inside the viewed value (`actual: "result.stdout",
   view: "json", at: "sections.git.0.dirty_count"`), so parsing is declared
@@ -1850,10 +1853,14 @@ and 256 keeps a margin of six times; the reason names the limit
 
 `equal`, `not-equal`, `contains-text` (the expected text is a substring),
 `starts-with-text` and `ends-with-text` (the text starts or ends with the
-expected text), `has-item` (the array has an item equal to the expected value), `matches`
+expected text), `has-item` (the array has an item equal to the expected value),
+`has-same-items` (two arrays hold the same items in any order), `matches`
 (the expected text, as a regular expression, matches), `greater-than`,
 `at-least`, `less-than`, and `at-most`. Equality is structural over JSON
-values: object key order does not count, and `0` equals `-0`. The order
+values: object key order does not count, and `0` equals `-0`.
+`has-same-items` pairs each item with one equal item on the other
+side, so a duplicate counts: `["a", "a"]` against `["a"]` breaks, and a
+list that repeats a name the other lists once does not hold. The order
 compares read two numbers.
 
 Both sides are plain JSON before any compare runs: `null`, a boolean, a
@@ -1908,7 +1915,8 @@ the start of the path the other reads. The path read is `actual`
 followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
 and `{ at: "a.b" }` read one path, and a `view` on either side does not
 separate them: it reads the same value another way. A `where` claim
-that overlaps an item claim and compares with `equal`, `contains-text`,
+that overlaps an item claim and compares with `equal`,
+`has-same-items`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `matches`, or `has-item` is refused at import. It selects the items by
 the value the item claim then judges, or by a part of it the claim cannot
 be told apart from, so "every item" would read as "every item that

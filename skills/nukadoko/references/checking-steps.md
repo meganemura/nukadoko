@@ -44,11 +44,12 @@ Pick the source from the sentence; the record names it in `expected_from`.
   `expected: "code"`, the key itself, recorded as `sentence:code`. The key
   has to be required in `args`, with no default, and its schema must not
   rewrite the value (`z.coerce`, a transform, a pipe, `trim`, `catch`, a
-  default inside, or a refine on an object, an array, or the args object
-  is refused; a schema that still changes it leaves the claim `unjudged`).
-  Read it as JSON or lines with `expected_view` on a `z.string()` key.
-  With no `observe`, a claim reads each value the line states: an unread
-  capture is refused, an unread docstring or table `claim-sentence-unread`.
+  default inside, or a refine on an object, an array, or the args object is
+  refused; a schema that still changes it leaves the claim `unjudged`). Read
+  it as JSON, lines, or a comma list with `expected_view` on a `z.string()`
+  key. With no `observe`, a claim reads each value the line states: an
+  unread capture is refused, an unread docstring or table
+  `claim-sentence-unread`.
 - **An earlier step returned it** ("the item count is unchanged"):
   `expected: { from: "<from key>.<path>" }`, recorded as
   `from:<step>@<line>.<key>`.
@@ -103,31 +104,31 @@ export default defineStep({
 `actual` is a path whose first segment is a `from` key or a key `observe`
 returns, never a key the sentence fills; a path reads own properties only
 (not `constructor`, not a getter). `view: "text"` trims the end (the newline
-a program prints last), `"lines"` also splits it into lines, and `"json"`
-parses it; `at` then takes a path inside the viewed value, so parsing is
-data: `{ actual: "stdout", view: "json", at: "sections.git.0.dirty_count",
-compare: "equal", expected: "count" }`. `{ actual, each: { where?, claims }
-}` applies item claims to every item of an array (paths inside are relative
-to the item), and breaks when the array, or what `where` selects, is empty.
-A `where` claim whose path starts an item claim's, or the reverse, is
-refused with `equal`, `matches`, `has-item`, or a text compare, and breaks
-the claim where it implies it.
+a program prints last), `"lines"` also splits it into lines, `"json"` parses
+it, and `"comma-list"` splits it at commas; `at` then takes a path inside
+the viewed value, so parsing is data: `{ actual: "stdout", view: "json", at:
+"sections.git.0.dirty_count", compare: "equal", expected: "count" }`. `{
+actual, each: { where?, claims } }` applies item claims to every item of an
+array (paths inside are relative to the item), and breaks when the array, or
+what `where` selects, is empty. A `where` claim whose path starts an item
+claim's, or the reverse, is refused with `equal`, `matches`, `has-item`, or
+a text compare, and breaks the claim where it implies it.
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `starts-with-text`, `ends-with-text`, `has-item`,
-`matches`, `greater-than`, `at-least`, `less-than`, `at-most`. Two values of
-different JSON types break the claim, and so does an expected text every
-string holds (blank under a text compare, a pattern that matches `""` under
-`matches`). Each side is a plain JSON copy taken where the value comes from
-(when `observe` returns, when a producer returns), and `observe` gets a
-clone of its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a
-`Proxy`, or nesting past 256 levels leaves the claim `unjudged` (return an
-ISO string or a number). Judging has the step's deadline: each claim or item
-not judged by then, a running `matches` pattern included, is `unjudged`,
-with how many. `nuka check` reads each `from` path against the producer's
-`returns` (`claim-path-unknown`), reports a claim whose sides are one place
-(`claim-compares-itself`), and refuses a parameter type with a transformer
-on an expected key (`claim-expected-transformed`).
+`has-same-items` (in any order), `matches`, `greater-than`, `at-least`,
+`less-than`, `at-most`. Two values of different JSON types break the claim,
+and so does an expected text every string holds (blank under a text compare,
+a pattern that matches `""` under `matches`). Each side is a plain JSON copy
+taken where the value comes from (when `observe` returns, when a producer
+returns), and `observe` gets a clone of its inputs; a `Date`, a bigint,
+`NaN`, an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the
+claim `unjudged` (return an ISO string or a number). Judging has the step's
+deadline: each claim or item not judged by then, a running `matches` pattern
+included, is `unjudged`, with how many. `nuka check` reads each `from` path
+against the producer's `returns` (`claim-path-unknown`), reports a claim
+whose sides are one place (`claim-compares-itself`), and refuses a parameter
+type with a transformer on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 

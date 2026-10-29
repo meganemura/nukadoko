@@ -106,7 +106,7 @@ export default defineStep({
     const result = await cli(rootDir, ["check", "features/t.feature"]);
     expect(result.exitCode).not.toBe(0);
     expect(result.stdout + result.stderr).toContain(
-      `defineStep claims[0].expected reads args.code, and its schema rewrites the value the line states or an earlier step returned (${rewrite}), so step code would decide what the claim compares. Take the rewrite out of the schema, or read the line's text with expected_view (text, lines, or json).`,
+      `defineStep claims[0].expected reads args.code, and its schema rewrites the value the line states or an earlier step returned (${rewrite}), so step code would decide what the claim compares. Take the rewrite out of the schema, or read the line's text with expected_view (text, lines, json, comma-list).`,
     );
   });
 

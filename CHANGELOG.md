@@ -27,6 +27,13 @@ just until 0.1.
   line was drawn" may claim `1`. A word inside a capture, an optional
   group, or an alternation still states nothing, and `{int}` still reads
   digits alone.
+- **A claim can compare a list in any order with the list a sentence
+  states.** `has-same-items` holds when two arrays hold the same
+  items, each as many times, in any order, so `["a", "a"]` against
+  `["a"]` breaks. The view `comma-list` (on `view` or `expected_view`)
+  splits a text at each comma and trims each item, so "the namespaces
+  "CFP, Schedule, Registration"" claims a drawing that lists them in
+  another order without the sentence or the reading being sorted.
 
 ## 0.22.0 — 2026-10-28
 

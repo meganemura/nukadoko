@@ -675,6 +675,7 @@ export type ClaimCompare =
   | "starts-with-text"
   | "ends-with-text"
   | "has-item"
+  | "has-same-items"
   | "matches"
   | "greater-than"
   | "at-least"
@@ -682,7 +683,7 @@ export type ClaimCompare =
   | "at-most";
 
 /** How a claim normalizes its actual value before `at` and the compare. */
-export type ClaimView = "text" | "lines" | "json";
+export type ClaimView = "text" | "lines" | "json" | "comma-list";
 
 /** `held` and `broken` are the two outcomes of a comparison. `unobserved`
  * when the step read no values, so nothing was judged; `unjudged` when the

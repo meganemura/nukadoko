@@ -29,6 +29,7 @@ import {
   pollReadings,
   POLL_INTERVAL_MS,
   readerNow,
+  sameItems,
   whereImplies,
   type ClaimInputs,
   type PatternTester,
@@ -152,6 +153,7 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "starts-with-text",
   "ends-with-text",
   "has-item",
+  "has-same-items",
   "matches",
   "greater-than",
   "at-least",
@@ -257,6 +259,27 @@ describe("compares", () => {
       const without = items.filter((item) => item !== wanted);
       expect(holds(await compare("has-item", withIt, wanted))).toBe(true);
       expect(holds(await compare("has-item", without, wanted))).toBe(false);
+    }));
+
+  it("has-same-items holds for every reordering of an array, and only when each item appears as many times on both sides", () =>
+    hegel.testAsync(async (tc) => {
+      const items = tc.draw(gs.arrays(jsonValues, { maxSize: 5 }));
+      const order = tc.draw(gs.arrays(gs.floats({ allowNan: false, allowInfinity: false }), { minSize: items.length, maxSize: items.length }));
+      const shuffled = items.map((item, index) => ({ item, key: order[index]! })).sort((a, b) => a.key - b.key).map((entry) => entry.item);
+      expect(holds(await compare("has-same-items", items, shuffled))).toBe(true);
+      const other = tc.draw(gs.arrays(jsonValues, { maxSize: 5 }));
+      const counts = (list: readonly unknown[], item: unknown) => list.filter((entry) => deepEqual(entry, item)).length;
+      const sameCounts = other.length === items.length && [...items, ...other].every((item) => counts(items, item) === counts(other, item));
+      expect(holds(await compare("has-same-items", items, other))).toBe(sameCounts);
+      expect(sameItems(items, other)).toBe(sameItems(other, items));
+    }));
+
+  it("has-same-items does not hold when one side repeats an item the other holds once", () =>
+    hegel.testAsync(async (tc) => {
+      const items = tc.draw(gs.arrays(jsonValues, { minSize: 1, maxSize: 4 }));
+      const repeated = tc.draw(gs.sampledFrom(items));
+      expect(holds(await compare("has-same-items", [...items, repeated], items))).toBe(false);
+      expect(holds(await compare("has-same-items", items, [repeated, ...items]))).toBe(false);
     }));
 
   it("never holds across two JSON types, and names both types", () =>
@@ -558,6 +581,31 @@ describe("view and at", () => {
       const read = readAt(root, path.split("."));
       expect("value" in read && deepEqual(read.value, value)).toBe(true);
     }));
+
+  it("view comma-list reads back the items a sentence joined with commas, whatever the spacing around each", () =>
+    hegel.test((tc) => {
+      const items = tc.draw(gs.arrays(gs.text({ alphabet: "ab c", minSize: 1, maxSize: 4 }).filter((item) => item.trim() === item && item !== ""), { minSize: 1, maxSize: 5 }));
+      const separators = items.map(() => tc.draw(gs.sampledFrom([",", ", ", " , ", ",  "])));
+      const text = items.map((item, index) => (index === 0 ? item : `${separators[index]}${item}`)).join("");
+      expect(applyView("comma-list", `${tc.draw(gs.sampledFrom(["", " "]))}${text}${tc.draw(gs.sampledFrom(["", "\n"]))}`)).toEqual({ value: items });
+      expect(applyView("comma-list", tc.draw(gs.text({ alphabet: " \n", maxSize: 3 })))).toEqual({ value: [] });
+    }));
+
+  it("the namespaces a sentence lists in one order hold against a drawing in another, and the record says how the line was read", async () => {
+    const record = await judgeOne(
+      { actual: "outlined", compare: "has-same-items", expected: "names", expected_view: "comma-list" },
+      { names: "CFP, Schedule, Registration" },
+      { outlined: ["Registration", "CFP", "Schedule"] },
+    );
+    expect(record.outcome).toBe("held");
+    expect(record).toMatchObject({ expected: ["CFP", "Schedule", "Registration"], expected_from: "sentence:names as comma-list" });
+    const missing = await judgeOne(
+      { actual: "outlined", compare: "has-same-items", expected: "names", expected_view: "comma-list" },
+      { names: "CFP, Schedule, Registration, Program" },
+      { outlined: ["Registration", "CFP", "Schedule"] },
+    );
+    expect(missing.outcome).toBe("broken");
+  });
 
   it("view lines at an index reads that line, whatever the line ending", () =>
     hegel.testAsync(async (tc) => {
