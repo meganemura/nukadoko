@@ -2182,7 +2182,10 @@ number that another channel of the same record also holds, a second
 exit code or status of that value or the number written on its own in a
 text (`"line":1` in a JSON report beside an exit code of 1), names no
 channel: content cannot tell which of them the value came from, and
-`null` says less than a source that may be false. A
+`null` says less than a source that may be false. No value names a
+channel while a text channel of the same record was cut, is not text,
+or was not read, since what it held is unknown and it may be the
+source. A
 claim that reads a `from` value looks in the producing step's record
 alone; a claim that reads `observe` looks in the claim step's own alone.
 It is `null` when no channel holds that value. It is information about

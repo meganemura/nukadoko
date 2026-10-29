@@ -18,9 +18,10 @@ import { deepEqual, type ExpectedOrigin, type JudgedClaim } from "../step/evalua
 // number written in an output, such as a line number in a JSON report
 // beside an exit code of the same value) names no channel: content alone
 // cannot tell which one the value came from, and `null` says less than a
-// source that may be false. `measured` is
-// information for a reader of the record, never a condition of the claim,
-// so a channel that cannot be read is skipped without a word.
+// source that may be false. So does a value when a text channel of the
+// same record was cut, is not text, or was not read: what it held is
+// unknown, so it may be the source. `measured` is
+// information for a reader of the record, never a condition of the claim.
 //
 // An expected value an earlier step returned or `observe` read gets the
 // same search (`expected_measured`): a When step that returns a constant
@@ -33,11 +34,13 @@ import { deepEqual, type ExpectedOrigin, type JudgedClaim } from "../step/evalua
 // code of 0 beside a process that exited 0) is `null` as a constant
 // should be, and another channel with the same content is still found.
 
-/** One recorded channel and where it sits in its step record: a text, or
- * a number the record holds as a number. */
+/** One recorded channel and where it sits in its step record: a text, a
+ * number the record holds as a number, or a text the record holds only in
+ * part or not at all (cut, binary, or unread), whose content is unknown. */
 export type ChannelText =
   | { readonly channel: string; readonly text: string }
-  | { readonly channel: string; readonly number: number };
+  | { readonly channel: string; readonly number: number }
+  | { readonly channel: string; readonly unknown: true };
 
 /** What `recordedChannels` reads from a step record. */
 export interface ChannelSource {
@@ -60,15 +63,18 @@ function keptText(kept: KeptText | undefined): string | null {
   return kept?.text !== undefined && kept.truncated !== true && kept.incomplete !== true ? kept.text : null;
 }
 
-/** Every channel of one step record whose whole content is on disk, in
- * record order: processes, then HTTP responses, then files. */
+/** Every channel of one step record, in record order: processes, then
+ * HTTP responses, then files. A channel whose whole content is not on disk
+ * is kept as `unknown`, since it may hold the value a claim read. */
 export function recordedChannels(source: ChannelSource): readonly ChannelText[] {
   const channels: ChannelText[] = [];
   (source.observed.processes ?? []).forEach((entry, index) => {
     for (const stream of ["stdout", "stderr"] as const) {
       const file = entry[stream];
-      const text = file === undefined ? null : readText(path.join(source.dir, file));
-      if (text !== null) channels.push({ channel: `observed.processes[${index}].${stream}`, text });
+      if (file === undefined) continue;
+      const text = readText(path.join(source.dir, file));
+      const channel = `observed.processes[${index}].${stream}`;
+      channels.push(text === null ? { channel, unknown: true } : { channel, text });
     }
     // A process a signal ended has no exit code to have measured.
     if (typeof entry.exit_code === "number") channels.push({ channel: `observed.processes[${index}].exit_code`, number: entry.exit_code });
@@ -81,16 +87,21 @@ export function recordedChannels(source: ChannelSource): readonly ChannelText[] 
         // Status 0 is a request that got no response, not a status the
         // server answered with.
         if (typeof parsed.status === "number" && parsed.status !== 0) channels.push({ channel: `http.jsonl[${index}].status`, number: parsed.status });
-        const text = keptText(parsed.response_body);
-        if (text !== null) channels.push({ channel: `http.jsonl[${index}].response_body`, text });
+        if (parsed.response_body !== undefined) {
+          const text = keptText(parsed.response_body);
+          const channel = `http.jsonl[${index}].response_body`;
+          channels.push(text === null ? { channel, unknown: true } : { channel, text });
+        }
       } catch {
         // A line that does not parse holds no body to compare.
       }
     });
   }
   (source.observed.files ?? []).forEach((entry, index) => {
+    if (entry.content === undefined) return;
     const text = keptText(entry.content);
-    if (text !== null) channels.push({ channel: `observed.files[${index}].content`, text });
+    const channel = `observed.files[${index}].content`;
+    channels.push(text === null ? { channel, unknown: true } : { channel, text });
   });
   return channels;
 }
@@ -100,6 +111,7 @@ export function recordedChannels(source: ChannelSource): readonly ChannelText[] 
  * string, the JSON the text parses to; both sides are compared redacted,
  * since the record holds only redacted text. */
 function sameContent(raw: unknown, channel: ChannelText, secrets: SecretSet): boolean {
+  if ("unknown" in channel) return false;
   if ("number" in channel) return typeof raw === "number" && raw === channel.number;
   const text = channel.text;
   if (typeof raw === "string") return redactString(raw, secrets) === text;
@@ -115,6 +127,7 @@ function sameContent(raw: unknown, channel: ChannelText, secrets: SecretSet): bo
  * or a text with `n` written as a number of its own (`"line":1`, `1 file`),
  * not as part of another (`12`, `1.5`, `v1`). Pure. */
 export function holdsNumber(channel: ChannelText, n: number): boolean {
+  if ("unknown" in channel) return false;
   if ("number" in channel) return channel.number === n;
   const written = String(n).replace(/[.+-]/g, (char) => `\\${char}`);
   return new RegExp(`(?<![\\w.-])${written}(?![\\w.])`).test(channel.text);
@@ -151,6 +164,9 @@ export function withMeasured(judged: readonly JudgedClaim[], context: MeasuredCo
     if (recordId === null) return null;
     const skipped = (channel: ChannelText): boolean => skip !== null && skip.step_record_id === recordId && skip.channel === channel.channel;
     const channels = channelsOf(recordId).filter((channel) => !skipped(channel));
+    // A channel whose content is unknown may be where the value came
+    // from, so no other channel can be named as its source.
+    if (channels.some((channel) => "unknown" in channel)) return null;
     const match = channels.find((channel) => sameContent(raw, channel, context.secrets));
     if (match === undefined) return null;
     if (typeof raw === "number" && channels.some((channel) => channel !== match && holdsNumber(channel, raw))) return null;

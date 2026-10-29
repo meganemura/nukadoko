@@ -73,8 +73,10 @@ This part does not change release to release.
   shape passes now, when `observe` reads no other key that holds the
   actual value.
 - **`measured` is `null` for a number another channel of the record
-  also holds.** The run summary prints `measured: none` where it used to
-  name one of those channels, which may not have been the source. No
+  also holds, and for any value while a text channel of the record was
+  cut, is not text, or was not read.** The run summary prints
+  `measured: none` where it used to name a channel that may not have
+  been the source. No
   step file changes; a reader that relied on the named channel reads the
   value from the step record itself.
 - **The `--base` summary line and the `moved` and `unproven` reasons

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration } from "../src/record/types.js";
-import { holdsNumber, withMeasured, type ChannelText, type MeasuredContext } from "../src/run/measured.js";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { holdsNumber, recordedChannels, withMeasured, type ChannelText, type MeasuredContext } from "../src/run/measured.js";
 import { expectedOriginOf, type ExpectedOrigin, type JudgedClaim } from "../src/step/evaluate-claims.js";
 
 // Responsibility: which recorded channel holds each side of a claim
@@ -38,6 +41,36 @@ function comparison(expected: unknown, outcome: ClaimComparisonRecord["outcome"]
 function judged(record: ClaimComparisonRecord | ClaimEachRecord, rawActual: unknown, fromKey: string | null, expectedOrigins: readonly ExpectedOrigin[]): JudgedClaim {
   return { record, rawActual, fromKey, expectedOrigins };
 }
+
+describe("a record with a channel whose content is unknown", () => {
+  it("names no channel for a value read out of a body the record cut, though the status holds the same number", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-measured-"));
+    try {
+      const line = { status: 200, response_body: { text: '{"code":200,"pad":"ppp', bytes: 60020, truncated: true } };
+      writeFileSync(path.join(dir, "http.jsonl"), `${JSON.stringify(line)}\n`);
+      const recorded = recordedChannels({ observed: {} as never, dir, http: "http.jsonl" });
+      expect(recorded).toEqual([
+        { channel: "http.jsonl[0].status", number: 200 },
+        { channel: "http.jsonl[0].response_body", unknown: true },
+      ]);
+      const [claim] = withMeasured([judged(comparison(200), 200, "code", [])], { ...context, channelsOf: () => recorded });
+      expect(claim).toMatchObject({ measured: null });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("names no channel for any value while one channel of the record is unknown", () =>
+    hegel.test((tc) => {
+      const value = tc.draw(gs.oneOf<unknown>(gs.integers({ minValue: -5, maxValue: 5 }), gs.text({ maxSize: 4 })));
+      const known: ChannelText[] = [typeof value === "number" ? { channel: "observed.processes[0].exit_code", number: value } : { channel: "observed.processes[0].stdout", text: value as string }];
+      const unknown: ChannelText = { channel: tc.draw(gs.sampledFrom(["observed.processes[0].stderr", "http.jsonl[0].response_body", "observed.files[0].content"])), unknown: true };
+      const [claim] = withMeasured([judged(comparison(value), value, "got", [])], { ...context, channelsOf: () => [...known, unknown] });
+      expect(claim).toMatchObject({ measured: null });
+      const [alone] = withMeasured([judged(comparison(value), value, "got", [])], { ...context, channelsOf: () => known });
+      expect(alone).toMatchObject({ measured: { channel: known[0]!.channel } });
+    }));
+});
 
 describe("a number more than one channel holds", () => {
   const exitedOne = (stdout: string): MeasuredContext => ({

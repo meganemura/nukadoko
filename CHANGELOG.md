@@ -30,7 +30,12 @@ just until 0.1.
   named `observed.processes[0].exit_code` because the program exited 1.
   A number that another channel of the same record also holds (a second
   exit code or status, or the number written on its own in an output)
-  now gives `measured: null`, the run summary's `measured: none`.
+  now gives `measured: null`, the run summary's `measured: none`. So
+  does any value while a text channel of that record (an output, a
+  response body, a file's content) was cut, is not text, or was not
+  read, since what it held is unknown: a code read out of a cut response
+  body named `http.jsonl[0].status` because the status was the same
+  number.
 
 ### Added
 
