@@ -4658,8 +4658,9 @@ ended, when none starts. `nuka step` keeps that fact as
 once and only it writes. With `--walk <n>`, a wait reports walk n
 whatever was reported before. Each `nuka step` call waits at
 most `--timeout` seconds (default 90, under the two minutes a host gives
-a foreground command); after that it prints the walk as `running`, with
-the same call as its `do`.
+a foreground command); after that it prints the walk as `starting`, when
+its run has not begun the scenario, or `running`, with the same call as
+its `do`.
 
 At each pause the run writes, under `<run_dir>/pauses/<n>/`, a screenshot
 and an ARIA snapshot of each open page of each browser context the
@@ -6670,9 +6671,11 @@ nuka step stop <pause> --walk <n> [--timeout <s>] [--json]
                               teardown do, and the scenario is stopped.
                               For all three, --timeout (default 90
                               seconds) bounds the wait, and on expiry the
-                              walk prints as running with the same
-                              command as do. Exit 0 for a walk paused,
-                              running, or ended green; 1 for one ended
+                              walk prints as starting (its run has not
+                              begun the scenario) or running, with the
+                              same command as do. Exit 0 for a walk
+                              paused, starting, running, or ended green;
+                              1 for one ended
                               red, interrupted, or gone (walk-gone); 2
                               for a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:

@@ -301,6 +301,8 @@ describe("stepReport", () => {
         });
       }
       if (seen.state === "gone") expect(report.findings.map((finding) => [finding.code, finding.do])).toEqual([["walk-gone", `nuka run ${START.target} --step`]]);
+      // A walk that has not begun its scenario runs no step yet.
+      expect(report.fields["walk"]).toBe(seen.state);
     }));
 });
 

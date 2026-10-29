@@ -3685,7 +3685,7 @@ pid が死んでいる lock は引き継がれます。
 これは `nuka step` だけが 1 回だけ作る空のファイルです。
 `--walk <n>` を付けた wait は、前に何が報告されていても walk n を報告します。
 `nuka step` の各呼び出しが待つのは最長で `--timeout` 秒です(既定は 90 で、ホストがフォアグラウンドのコマンドに与える 2 分より短くしてあります)。
-それを過ぎると、walk を `running` として表示し、同じ呼び出しを `do` に載せます。
+それを過ぎると、walk を、run がまだ scenario を始めていなければ `starting`、そうでなければ `running` として表示し、同じ呼び出しを `do` に載せます。
 
 各一時停止で、run は `<run_dir>/pauses/<n>/` の下に、scenario が起動した各ブラウザコンテキストの開いている各ページについて、スクリーンショットと ARIA スナップショットを書きます(`page.png` と `page.aria.yml`、2 つ目のページは `page-2.*`、`pageAs` のコンテキストは `page.<name>.*`)。
 fixture が自分で起動したブラウザは写しません。
@@ -5360,9 +5360,11 @@ nuka step stop <pause> --walk <n> [--timeout <s>] [--json]
                               teardown do, and the scenario is stopped.
                               For all three, --timeout (default 90
                               seconds) bounds the wait, and on expiry the
-                              walk prints as running with the same
-                              command as do. Exit 0 for a walk paused,
-                              running, or ended green; 1 for one ended
+                              walk prints as starting (its run has not
+                              begun the scenario) or running, with the
+                              same command as do. Exit 0 for a walk
+                              paused, starting, running, or ended green;
+                              1 for one ended
                               red, interrupted, or gone (walk-gone); 2
                               for a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:

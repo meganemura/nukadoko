@@ -32,8 +32,8 @@ walk 1 paused after step 1/4 (passed): the shopper opens the cart
 
 `--json` gives the same as fields: `pause` (`pause`, `of`, `line`,
 `text`, `step`, `status`, `record`, `error`, `remaining`, `views`),
-`run_dir`, `scenario`, `world`, and `do`. A wait that prints `running`
-ran out before the walk paused: run it again. A run that refused (it
+`run_dir`, `scenario`, `world`, and `do`. A wait that prints `starting`
+or `running` ran out before the walk paused: run it again. A run that refused (it
 selected more than one scenario, say) never pauses: its own output
 names the refusal, and a wait shows the walk ended before its scenario
 ran. A wait reports each end once; after that it waits for the next
@@ -172,7 +172,7 @@ number it printed (`walk 1 paused ...`), as the `do` line spells it:
   hooks and teardown do, and the record says the scenario was `stopped`
   at that step, not that it failed (`walk-stopped`).
 
-A call whose output you lost, or that printed `running`, is safe to run
+A call whose output you lost, or that printed `starting` or `running`, is safe to run
 again as it was: an answer is written once, and the same answer again
 prints what followed it. `pause-answered` means another answer reached
 that pause first; `pause-not-current` means the walk is elsewhere, and

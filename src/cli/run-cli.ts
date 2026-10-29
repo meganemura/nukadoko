@@ -1065,8 +1065,8 @@ export async function runCli(
         type: "number",
         default: 90,
         describe:
-          "seconds to wait for the walk to reach a pause or its end (default 90). A walk still running then is " +
-          "reported as running, and the same command waits again",
+          "seconds to wait for the walk to reach a pause or its end (default 90). A walk still on its way then is " +
+          "reported as starting or running, and the same command waits again",
       })
       .option("json", {
         type: "boolean",

@@ -57,8 +57,8 @@ function walkText(seen: WalkFound, fields: Readonly<Record<string, unknown>>): s
     const run = seen.end.how === "finished" && seen.run_dir !== undefined ? [`  run: ${seen.run_dir}/run.json`] : [];
     return `${[`walk ${seen.number} ${walkStanding(seen)}`, ...run].join("\n")}\n`;
   }
-  const after = seen.state === "running" ? seen.after : 0;
-  return `walk ${seen.number} is running ${after === 0 ? "its first step" : `the step after pause ${after}`}\n  do: ${String(fields["do"])}\n`;
+  const where = seen.state === "starting" ? "is starting: its run has not begun the scenario yet" : walkStanding(seen);
+  return `walk ${seen.number} ${where}\n  do: ${String(fields["do"])}\n`;
 }
 
 function wholeNumber(value: number | undefined): value is number {

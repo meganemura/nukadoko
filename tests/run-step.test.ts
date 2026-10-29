@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { constants } from "node:os";
@@ -541,6 +541,35 @@ describe("nuka run --step and nuka step", () => {
 
       // A wait that names the walk reports it however often it was reported.
       expect(await nukaStep(rootDir, "wait", "--walk", "1")).toEqual(ended);
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "reports a walk whose run has not begun its scenario as starting, not as running a step",
+    async () => {
+      // A program that takes seconds to listen keeps the walk starting.
+      await writeFile(
+        path.join(rootDir, "slow-server.mjs"),
+        'import { createServer } from "node:http";\nsetTimeout(() => createServer((req, res) => res.end("ok")).listen(Number(process.env.PORT), "127.0.0.1"), 4000);\n',
+      );
+      await writeFile(
+        path.join(rootDir, "nukadoko.program.ts"),
+        'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ serve: { command: "node slow-server.mjs", ready: "/" }, env: { PORT: "{port}" } });\n',
+      );
+      const run = nukaRun(rootDir, ["features/order.feature:3", "--step"]);
+      while (!existsSync(path.join(rootDir, ".nukadoko", "walk.json"))) await settle(50);
+
+      const starting = await nukaStepJson(rootDir, "wait", "--timeout", "1");
+      expect(starting.code).toBe(0);
+      expect(starting.document).toMatchObject({ walk: "starting", do: "nuka step wait --walk 1" });
+      expect(starting.document["after"]).toBeUndefined();
+      const text = await nukaStep(rootDir, "wait", "--timeout", "0");
+      expect(text.stdout).toBe("walk 1 is starting: its run has not begun the scenario yet\n  do: nuka step wait --walk 1\n");
+
+      expect((await nukaStep(rootDir, "wait", ...FIRST_WAIT)).stdout).toMatch(/^walk 1 paused after step 1\/3/);
+      await nukaStep(rootDir, "stop", "1", "--walk", "1");
+      await run.closed;
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );

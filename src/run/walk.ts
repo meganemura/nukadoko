@@ -307,7 +307,7 @@ export function stepDecision(call: StepCall, target: number, seen: WalkSeen, ans
 }
 
 /** What `nuka step` prints beside the envelope's five fields, its
- * findings, and its exit code: 0 for a walk paused, running, or ended
+ * findings, and its exit code: 0 for a walk paused, starting, running, or ended
  * green; 1 for one ended red, interrupted, or gone. */
 export interface StepReport {
   readonly exitCode: 0 | 1;
@@ -331,7 +331,7 @@ export function restartCommand(target: string): string {
   return `nuka run ${target} --step`;
 }
 
-/** The report for a walk as `seen`. A walk still running is one the
+/** The report for a walk as `seen`. A walk starting or running is one the
  * call's wait ran out on: the call itself is then the `do`, since repeating
  * it is safe. */
 export function stepReport(seen: WalkFound, call: StepCall): StepReport {
@@ -369,17 +369,11 @@ export function stepReport(seen: WalkFound, call: StepCall): StepReport {
       },
     };
   }
-  const after = seen.state === "running" ? seen.after : 0;
-  return {
-    exitCode: 0,
-    findings: [],
-    fields: {
-      walk: "running",
-      ...runFields(seen),
-      after,
-      do: call.kind === "answer" ? answerCommand(call.walk, call.pause, call.answer) : waitCommand(seen.number),
-    },
-  };
+  // A walk the call's wait ran out on. Starting is its own state: the run
+  // has not begun the scenario, so no step is running yet.
+  const again = call.kind === "answer" ? answerCommand(call.walk, call.pause, call.answer) : waitCommand(seen.number);
+  if (seen.state === "starting") return { exitCode: 0, findings: [], fields: { walk: "starting", do: again } };
+  return { exitCode: 0, findings: [], fields: { walk: "running", ...runFields(seen), after: seen.after, do: again } };
 }
 
 /** The two lines `nuka run --step` writes on stderr at a pause of walk
