@@ -1508,7 +1508,14 @@ export default defineStep({
     expect(lastClaimStep(rootDir).claims[0]).toMatchObject({ actual: 1, expected: 1, outcome: "held" });
     await writeFile(path.join(rootDir, "features/steps/the-cart-count-matches.ts"), step("(inputs as Record<string, { count: number }>)[\"cart\"]!.count"));
     expect((await cli(rootDir, ["run", "features/t.feature"])).exitCode).toBe(1);
-    expect(latestRunJson(rootDir).scenarios[0].steps[1]).toMatchObject({ observation: "unobserved" });
+    expect(latestRunJson(rootDir).scenarios[0].steps[1]).toMatchObject({
+      observation: "unobserved",
+      error: {
+        kind: "unobserved",
+        message:
+          'the step observed nothing, so no claim was judged: observe of step "the-cart-count-matches" read "cart", which a claim reads as its actual value and compares with a value observe returns. observe reads the world, and the claim compares what it read with the actual value',
+      },
+    });
   });
 
   it("refuses and breaks an observe that receives a second key holding the from value the actual reads, when the expected value comes from observe", async () => {

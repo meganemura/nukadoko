@@ -736,21 +736,23 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
  * claim under its `each`, takes its expected value from `observe`.
  * Holding back the first keeps the expected value out of `observe`'s
  * hands; holding back the second keeps the actual value out of them, so
- * `observe` cannot return what it will be compared with either way.
+ * `observe` cannot return what it will be compared with either way. Each
+ * key maps to the side a claim reads it on, `expected` when it is both.
  * Pure. */
-export function observeWithheldKeys(claims: readonly Claim[], fromKeys: ReadonlySet<string>): ReadonlySet<string> {
-  const keys = new Set<string>();
+export function observeWithheldKeys(claims: readonly Claim[], fromKeys: ReadonlySet<string>): ReadonlyMap<string, "expected" | "actual"> {
+  const keys = new Map<string, "expected" | "actual">();
+  const expectedKey = (key: string): void => void keys.set(key, "expected");
   for (const claim of claims) {
     const entries: readonly ItemClaim[] = isEachClaim(claim) ? [...(claim.each.where ?? []), ...claim.each.claims] : [claim];
     for (const entry of entries) {
       const expected = entry.expected as unknown;
-      if (typeof expected === "string") keys.add(expected);
+      if (typeof expected === "string") expectedKey(expected);
       else if (typeof expected === "object" && expected !== null && "from" in expected) {
         const head = pathSegments(String((expected as { from: unknown }).from))?.[0];
-        if (head !== undefined) keys.add(head);
+        if (head !== undefined) expectedKey(head);
       } else if (typeof expected === "object" && expected !== null && "observe" in expected) {
         const head = pathSegments(claim.actual)?.[0];
-        if (head !== undefined && fromKeys.has(head)) keys.add(head);
+        if (head !== undefined && fromKeys.has(head) && !keys.has(head)) keys.set(head, "actual");
       }
     }
   }

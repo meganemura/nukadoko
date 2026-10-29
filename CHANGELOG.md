@@ -22,7 +22,8 @@ just until 0.1.
   `nuka check` refused it as `claim-compares-itself` because `observe`
   received the actual key, with a fix no step file could carry out. The
   key is now withheld, as an expected key is, so the claim is judged;
-  reading it throws, and the step is `unobserved`. A second `from` key
+  reading it throws with a message that names it as the claim's actual
+  value, and the step is `unobserved`. A second `from` key
   that holds the same value is still refused, and the finding now says to
   take that key out of `from`.
 - **`measured` no longer names a channel that only happens to hold the

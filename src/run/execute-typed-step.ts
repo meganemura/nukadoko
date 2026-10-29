@@ -261,12 +261,12 @@ async function runRunStep(input: RunValidatedStepInput, step: RunStep): Promise<
   }
 }
 
-/** A copy of each args key `observe` receives (every key but an expected
+/** A copy of each args key `observe` receives (every key but a withheld
  * one), or the first key that cannot be copied and why. Made once per
  * step; each call of `observe` gets a clone of it (`observeInputs`). */
 function observeInputCopies(
   args: Readonly<Record<string, unknown>>,
-  withheld: ReadonlySet<string>,
+  withheld: { has(key: string): boolean },
 ): { readonly copies: Readonly<Record<string, unknown>> } | { readonly key: string; readonly problem: string } {
   const copies: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
@@ -285,14 +285,25 @@ function observeInputCopies(
  * which the `ObserveInputs` type does not reach, cannot pick what to read
  * by the value it will be compared with either; the throw records the
  * step as unobserved, naming the key. */
-function observeInputs(copies: Readonly<Record<string, unknown>>, withheld: ReadonlySet<string>, stepName: string): Readonly<Record<string, unknown>> {
+function observeInputs(
+  copies: Readonly<Record<string, unknown>>,
+  withheld: ReadonlyMap<string, "expected" | "actual">,
+  stepName: string,
+): Readonly<Record<string, unknown>> {
   const visible = structuredClone(copies) as Record<string, unknown>;
   return new Proxy(visible, {
     get(target, key, receiver) {
-      if (typeof key === "string" && withheld.has(key)) {
+      const side = typeof key === "string" ? withheld.get(key) : undefined;
+      if (side === "expected") {
         throw new Error(
-          `observe of step "${stepName}" read "${key}", which a claim names as its expected value. ` +
+          `observe of step "${stepName}" read "${String(key)}", which a claim names as its expected value. ` +
             "observe reads the world, and the claim compares what it read with the expected value",
+        );
+      }
+      if (side === "actual") {
+        throw new Error(
+          `observe of step "${stepName}" read "${String(key)}", which a claim reads as its actual value and compares with a value observe returns. ` +
+            "observe reads the world, and the claim compares what it read with the actual value",
         );
       }
       return Reflect.get(target, key, receiver) as unknown;
