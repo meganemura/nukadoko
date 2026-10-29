@@ -161,11 +161,12 @@ line names (`references/verdicts.md`).
 
 A Then counts an earlier step's events: `events: { writes: { of: placeScore,
 count: { kind: "db", op: ["insert", "update", "delete", "other"], committed:
-true } } }` beside a claim on `actual: "writes"`, compared as a number. It
-waits while they may still be `whole` (the step's `timeout`, else 10 s), and
-is `unjudged`, naming the gap, while the count is a range: an absence holds on
-a whole reading only. `events_read` keeps the reading; a line that arrives
-after the claim makes the cell `broke` (docs/spec.md, "A claim on a count").
+true } } }` beside a claim on `actual: "writes"` and a number. It waits while
+they may still be `whole` (the step's `timeout`, else 10 s), and is `unjudged`,
+naming the gap, while the count is a range: an absence holds on a whole reading
+only. `events_read` keeps the reading; a line that arrives after the claim
+makes the cell `broke` (docs/spec.md, "A claim on a count").
+`events-inlet-missing` and `events-unread` name a world that reads none.
 
 ## Environments and programs nukadoko does not start
 
@@ -181,19 +182,18 @@ environments: {
 },
 ```
 
-`conditions` sets nothing, and nukadoko does not check it against the
-program; `{condition.checkout_v2}` hands the program the declared side,
-so the two cannot disagree. It says which side
-the environment is on for a scenario's `@with:checkout_v2` or
-`@without:checkout_v2` tag (`references/verdicts.md`). `nuka run` without `--env` runs every environment that
-declares `conditions`, or the ones a top-level `defaultEnvironments`
-names, so a deployment target can declare its switches and stay out. `url` in place of `serve` names a program
+`conditions` sets nothing, and nukadoko does not check it against the program;
+`{condition.checkout_v2}` hands the program the declared side, so the two
+cannot disagree. It says which side the environment is on for a scenario's
+`@with:checkout_v2` or `@without:checkout_v2` tag (`references/verdicts.md`).
+`nuka run` without `--env` runs every environment that declares `conditions`,
+or the ones a top-level `defaultEnvironments` names, so a deployment target can
+declare its switches and stay out. `url` in place of `serve` names a program
 that runs elsewhere, such as a staging server, and starts nothing: give it
 `build: []` and `prepare: []` when the top level has them, and
-`policy: "read-only"` when the data there belongs to someone else.
-Under `nuka run --base`, a `url` function receives `tree` and branches on
-it: one that answers the base world with head's URL leaves that world not
-run.
+`policy: "read-only"` when the data there belongs to someone else. Under
+`nuka run --base`, a `url` function receives `tree` and branches on it: one
+that answers the base world with head's URL leaves that world not run.
 
 A tree with no program file starts no world, which suits a command-line
 tool whose steps run commands with `runCommand`. "Program" in

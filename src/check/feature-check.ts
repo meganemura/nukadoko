@@ -11,6 +11,7 @@ import { attachmentTypeMismatch } from "./attachment-type.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { declaresDoneCallback, doneCallbackMessage, passedArgCountForStep } from "./done-callback.js";
 import { shellWord } from "../shell/shell-word.js";
+import { checkEventsOrder } from "./events-check.js";
 import { checkFromOrder, fromOrderFix, fromOrderHold, isHeldBackByUndefinedLine } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
@@ -472,6 +473,19 @@ export function checkFeatures(
           file: feature.relativePath,
           line: pickle.steps[hold.stepIndex]?.line,
           fix: hold.fix,
+        });
+      }
+      // The same order rule for a claim step's `events`, whose producer
+      // the run reads by trace: a scenario that cannot supply one leaves
+      // each claim on the count unjudged.
+      for (const issue of checkEventsOrder(pickle, vocabulary, match)) {
+        errors.push({
+          code: issue.code,
+          message: issue.message,
+          file: feature.relativePath,
+          line: pickle.steps[issue.stepIndex]?.line,
+          step: issue.stepName,
+          fix: issue.fix,
         });
       }
 

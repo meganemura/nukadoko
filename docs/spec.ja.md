@@ -3167,6 +3167,9 @@ export default defineStep({
   `from` のキーの producer と同じく、scenario の前の行でちょうど 1 つが走り、それを走らせた最後の行が数えられます。
   1 つも走っていないとき、claim は `unjudged`(`producer-not-run`)です。
   2 つが走ったとき、claim は `unjudged` で、その両方を名指します。
+  `nuka check` は world が起動する前に、そのどちらもエラー `events-producer-missing` と `events-producer-ambiguous` として報告します。
+  前の行がどの step にも一致しないとき、生産者がない所見は保留します。
+  その行はタイプミスを含んだ生産者かもしれず、その行自身の `undefined-step` のエラーがすでにチェックを失敗させるからです。
 - `count` は、種類と、その種類のフィールドの値で行を選びます。
   種類とフィールドは [docs/execution-events.ja.md](execution-events.ja.md) のものです: `{ kind: "db", table: "scores", op: "insert", committed: true }`。
   フィールドは 1 つの値か値のリストを取り、そのどれかに一致すれば選ばれます。
@@ -3207,6 +3210,11 @@ world が選んだ種類の行を 1 つも報告していない間、読みは�
 その種類を報告しないプログラムでは、その不在が成り立ってしまうからです。
 `url` の world では `world-unread`、`{events}` を名指さないプログラムのファイルでは `inlet-unnamed` になります。
 どちらでも claim は `unjudged` で、reason は `were not read` を持ちます。
+`nuka check` は、同じ `--env` の指定で run が起動する world について、その両方を名指します。
+nukadoko が serve する world で、プログラムのファイルが `{events}` を名指さないものはエラー `events-inlet-missing` です。
+直す場所がプロジェクト自身のファイルにあるからです。
+`url` の world と、プログラムのファイルがないプロジェクトは警告 `events-unread` です。
+そうした world は、共有の staging サーバーのように、プロジェクトが動かしていないことが多く、ほかの scenario はそこでも走るからです。
 
 claim step の record は、各読みをキーごとに `events_read` に持ちます。
 読みが数えたすべての行は、redact して、record の隣の `events-read.jsonl` に置きます:
@@ -6229,7 +6237,11 @@ nuka check [feature..] [--json] [--fail-on <code>] [--env <name>]...
                               what an expected from reads, an expected
                               value a parameter type's transformer
                               rewrites, a claim step that observes a page and
-                              does not state poll, a scenario no claim
+                              does not state poll, a claim step whose events
+                              counts a step no earlier line runs or two that
+                              did, or a world that reads no execution events
+                              (an error when nukadoko serves it, a warning
+                              otherwise), a scenario no claim
                               judges, undefined steps per
                               feature (each naming the patterned steps no
                               scanned feature line binds), ambiguous steps (one line two patterns

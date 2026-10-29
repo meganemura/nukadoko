@@ -233,7 +233,13 @@ just until 0.1.
   world stops, each reading is counted again over every line of the
   trace, and a claim that the whole count judges otherwise gets
   `after_world_stop` in run.json and makes its cell `broke`, since it was
-  judged on lines still on their way.
+  judged on lines still on their way. `nuka check` names a claim it can
+  only leave unjudged before a world starts: `events-producer-missing`
+  when no earlier line runs a candidate, `events-producer-ambiguous` when
+  two do, and `events-inlet-missing` for a served world whose program
+  file names no `{events}` are errors, and `events-unread`, for a world
+  at a `url` or a project with no program file, is a warning, since the
+  other scenarios still run there.
 - **A line can state a count with `once`, `twice`, or `never`.** The
   literal rule reads the fixed words `once` and `twice` as `1` and `2`,
   under any compare, as a number word, so "the score row was inserted

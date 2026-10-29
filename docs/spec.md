@@ -4025,6 +4025,11 @@ export default defineStep({
   key's producers, and the latest line that ran it is the one counted.
   When none ran, the claim is `unjudged` (`producer-not-run`); when
   two of them ran, the claim is `unjudged` and names both.
+  `nuka check` reports both before a world starts, as the errors
+  `events-producer-missing` and `events-producer-ambiguous`.
+  A missing producer behind an earlier line that matches no step is
+  held back, since that line may be the producer mistyped, and its own
+  `undefined-step` error already fails the check.
 - `count` selects lines by kind and by the values of the kind's fields,
   with the kinds and the fields of
   [docs/execution-events.md](execution-events.md):
@@ -4085,6 +4090,13 @@ kind would make an absence of it hold.
 A world at a `url` gives `world-unread`, and a program file that names
 no `{events}` gives `inlet-unnamed`, and the claim is `unjudged` in
 both, with `were not read` in its reason.
+`nuka check` names both for the worlds a run with the same `--env`
+flags starts.
+A world nukadoko serves whose program file names no `{events}` is the
+error `events-inlet-missing`, since the fix is in the project's own file.
+A world at a `url`, or a project with no program file, is the warning
+`events-unread`: such a world is often one the project does not run,
+such as a shared staging server, and its other scenarios still run there.
 
 The claim step's record holds each reading in `events_read`, by key,
 and every line its readings counted, redacted, in `events-read.jsonl`
@@ -7790,7 +7802,11 @@ nuka check [feature..] [--json] [--fail-on <code>] [--env <name>]...
                               what an expected from reads, an expected
                               value a parameter type's transformer
                               rewrites, a claim step that observes a page and
-                              does not state poll, a scenario no claim
+                              does not state poll, a claim step whose events
+                              counts a step no earlier line runs or two that
+                              did, or a world that reads no execution events
+                              (an error when nukadoko serves it, a warning
+                              otherwise), a scenario no claim
                               judges, undefined steps per
                               feature (each naming the patterned steps no
                               scanned feature line binds), ambiguous steps (one line two patterns

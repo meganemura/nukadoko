@@ -4,7 +4,7 @@ import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
-import { loadProgram, type LoadedProgram } from "../config/load-program.js";
+import { loadProgram, PROGRAM_FILE_NAME, type LoadedProgram } from "../config/load-program.js";
 import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import { isPlaywrightInstalled } from "../context/load-playwright.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
@@ -48,6 +48,7 @@ import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { findUnusedParameterTypes } from "./unused-parameter-type.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
+import { findEventsWorldGaps } from "./events-check.js";
 import { findPlaywrightMissing, playwrightImportMissing } from "./playwright-check.js";
 import { checkCodeFix } from "./codes.js";
 import { importSuppressionFix } from "./suppressed-fix.js";
@@ -656,6 +657,9 @@ async function reportFor(
   });
   errors.push(...findPlaywrightMissing(featureResult.boundSteps, vocabulary, fixtureGraph, isPlaywrightInstalled));
   errors.push(...findUnstatedPolls(featureResult.boundSteps, vocabulary, fixtureGraph));
+  const eventsGaps = findEventsWorldGaps(featureResult.boundSteps, vocabulary, program, envs, program?.fileName ?? PROGRAM_FILE_NAME);
+  errors.push(...eventsGaps.errors);
+  warnings.push(...eventsGaps.warnings);
   errors.push(...findTransformedExpected(featureResult.boundSteps, vocabulary, [...config.parameterTypes, ...compatParameterTypes]));
 
   // A broken glue file's own missing steps otherwise resurface here as a

@@ -161,6 +161,30 @@ const CHECK_CODES = {
     severity: "warning",
     fix: "Create the file, or remove it from that environment's envFiles in nukadoko.program.ts.",
   },
+  "events-inlet-missing": {
+    description:
+      "A step's events counts execution events, and a world the run would serve names no {events} in its program file, so the program has no file to write them to and each claim on the count is unjudged there (inlet-unnamed).",
+    severity: "error",
+    fix: 'Set the variable the program reads to {events} under env in the program file, such as EXECUTION_EVENTS: "{events}", and have the program append its execution events to that file.',
+  },
+  "events-producer-ambiguous": {
+    description:
+      "A step's events names more than one candidate step in of, and more than one of them runs earlier in the scenario, so the run cannot choose whose execution events to count and each claim on the count is unjudged.",
+    severity: "error",
+    fix: "Remove or move lines so that exactly one of the candidate steps runs before the line that counts their events.",
+  },
+  "events-producer-missing": {
+    description:
+      "A step's events counts the execution events of a step that no earlier line in the scenario runs, so each claim on the count is unjudged (producer-not-run).",
+    severity: "error",
+    fix: "Put a line that runs the step earlier in the scenario, or list the step an earlier line runs in that key's of.",
+  },
+  "events-unread": {
+    description:
+      "A step's events counts execution events, and a world the run would start is one nukadoko does not serve (a url, or a project with no program file), so it reads no execution events there and each claim on the count is unjudged (world-unread).",
+    severity: "warning",
+    fix: "Run those scenarios in a world nukadoko serves, with {events} in env, or select one with --env.",
+  },
   "feature-parse-error": {
     description: "A .feature file could not be parsed, so nothing in it was checked.",
     severity: "error",

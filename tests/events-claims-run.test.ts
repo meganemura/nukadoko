@@ -175,6 +175,37 @@ describe("a claim on a count of execution events, under nuka run", () => {
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     expect(summary).toContain("| failed | `features/events.feature:3` a slow writer | broke@6 |");
   });
+
+  it("refuses a scenario that cannot supply a producer before a world starts, and leaves its claims unjudged under --no-check", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "events.feature"),
+      feature([
+        ["two producers", ['When the client gets "/rooms/7"', 'And the client posts to "/scores"', "Then nothing was written"]],
+        ["no producer", ["Then the score row was inserted once"]],
+      ]),
+    );
+    const refused = await cli(rootDir, ["run"]);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.stderr.split("\n").filter((line) => line.startsWith("error\t")).map((line) => line.split("\t").slice(1, 3))).toEqual([
+      ["events-producer-ambiguous", "features/events.feature:6"],
+      ["events-producer-missing", "features/events.feature:9"],
+    ]);
+
+    const { exitCode } = await cli(rootDir, ["run", "--no-check"]);
+    expect(exitCode).toBe(1);
+    const scenarios = scenariosOf(rootDir);
+    expect(scenarios.get("two producers")!.steps[2]!.claims![0]).toMatchObject({
+      outcome: "unjudged",
+      reason: 'events.writes.of names "get" and "post", and each ran earlier in this scenario, so the step cannot choose whose events to count',
+      measured: null,
+    });
+    expect(scenarios.get("no producer")!.steps[0]!.claims![0]).toMatchObject({
+      actual_range: { at_least: 0, at_most: null },
+      outcome: "unjudged",
+      reason:
+        "the events of post were not read (producer-not-run): no earlier line of the scenario ran the step whose events are read, so the count is at least 0, with no upper bound, and equal 1 is not known",
+    });
+  });
 });
 
 describe("a claim on a count of execution events in a world at a URL", () => {
@@ -192,7 +223,7 @@ describe("a claim on a count of execution events in a world at a URL", () => {
     await removeTempDir(rootDir);
   });
 
-  it("is unjudged, saying the events were not read", async () => {
+  it("runs, since the check only warns, and is unjudged, saying the events were not read", async () => {
     await writeUrlProgram(rootDir, `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
     await writeFile(path.join(rootDir, "features", "events.feature"), feature([["a read writes nothing", ['When the client gets "/rooms/7"', "Then nothing was written"]]]));
     const { exitCode } = await cli(rootDir, ["run"]);
