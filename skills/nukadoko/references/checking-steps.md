@@ -52,14 +52,15 @@ Pick the source from the sentence; the record names it in `expected_from`.
 - **An earlier step returned it** ("the item count is unchanged"):
   `expected: { from: "<from key>.<path>" }`, recorded as
   `from:<step>@<line>.<key>`.
-- **The pattern's fixed words state it** ("is refused", "exits 0", "holds no
-  items"): `expected: { literal: "refused" }`. The literal is exactly the
+- **The pattern's fixed words state it** ("is refused", "exits 0"):
+  `expected: { literal: "refused" }`, or `compare: "is-a", expected: {
+  literal: "UUID" }` for "the order id is a UUID". The literal is exactly the
   pattern's own words, `zero` to `twelve` as a number word (any compare), or
   `0`, `""`, or `[]` for `no`, `none`, `nothing`, or `neither` (`""` or `[]`
-  for `empty`) with `compare: "equal"` only, or `"not-equal"` only right
-  after the fixed word `not`, `neither`, or `nor` ("is not empty"). A
-  `neither` that a `nor` follows states nothing. Any other literal is
-  refused: `Then the command succeeds` cannot claim `0`.
+  for `empty`) with `compare: "equal"` only, or `"not-equal"` only right after
+  the fixed word `not`, `neither`, or `nor` ("is not empty"). A `neither` that
+  a `nor` follows states nothing. Any other literal is refused: `Then the
+  command succeeds` cannot claim `0`.
 - **A second reading** ("A is listed before B"): `expected: { observe:
   "<path>" }`, a value `observe` returned beside the actual one.
 
@@ -113,31 +114,30 @@ expected: "count" }`. `{ actual, each: { where?, claims } }` applies item
 claims to every item of an array (paths inside are relative to the item), and
 breaks when the array, or what `where` selects, is empty. A `where` claim whose
 path starts an item claim's, or the reverse, is refused with `equal`,
-`has-same-items`, `has-fields`, `fits-text`, `has-item`, `matches`,
+`has-same-items`, `has-fields`, `fits-text`, `is-a`, `has-item`, `matches`,
 `contains-text`, `starts-with-text`, or `ends-with-text`, and breaks the claim
 where it implies it.
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `starts-with-text`, `ends-with-text`, `has-item`,
 `has-same-items` (in any order), `has-fields` (the expected object's fields at
-any depth, each array whole; other fields are fine), `fits-text` (line by line;
-a line `...` is any lines, `[..]` any text in its line), `matches`,
-`greater-than`, `at-least`, `less-than`, `at-most`. Against a docstring,
-`fits-text` claims output whose times and paths change each run, and `{
-actual: "body", compare: "has-fields", expected: "fields", expected_view:
-"json" }` the few fields it states of a large response. Two values of
-different JSON types break the claim, and so does an expected value nearly
-every value holds (blank under a text compare, a pattern that matches `""`
-under `matches`, an object with no field under `has-fields`, only `...` and
-`[..]` under `fits-text`). Each side is a plain JSON copy taken when its value
-arrives, and `observe` gets a clone of its inputs; a `Date`, a bigint, `NaN`,
-an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the claim
-`unjudged` (return an ISO string or a number). Judging has the step's deadline:
-each claim or item not judged by then, a running `matches` pattern included, is
-`unjudged`, with how many. `nuka check` reads each `from` path against the
-producer's `returns` (`claim-path-unknown`), reports a claim whose sides are
-one place (`claim-compares-itself`), and refuses a parameter type with a
-transformer on an expected key (`claim-expected-transformed`).
+any depth, each array whole), `fits-text` (line by line; a line `...` is any
+lines, `[..]` any text in its line), `is-a` (a kind: `string`, `number`,
+`integer`, `boolean`, `list`, `object`, `null`, `uuid`, `date`, `timestamp`,
+`url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A
+docstring claims the few fields of a large response as JSON (`expected_view:
+"json"`) with `has-fields`, and output whose times change each run with
+`fits-text`. Two values of different JSON types break the claim (`is-a` aside),
+and so does an expected value nearly every value holds (a blank text, a pattern
+that matches `""`, an object with no field, only `...` and `[..]`). Each side
+is a plain JSON copy, and `observe` gets a clone of its inputs; a `Date`, a
+bigint, `NaN`, an `undefined` item, a `Proxy`, or nesting past 256 levels
+leaves the claim `unjudged` (return an ISO string or a number). Judging has the
+step's deadline: each claim or item not judged by then, a running `matches`
+pattern included, is `unjudged`, with how many. `nuka check` reads each `from`
+path against the producer's `returns` (`claim-path-unknown`), reports a claim
+whose sides are one place (`claim-compares-itself`), and refuses a parameter
+type with a transformer on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 

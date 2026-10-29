@@ -1870,7 +1870,8 @@ expected text), `has-item` (the array has an item equal to the expected value),
 `has-same-items` (two arrays hold the same items in any order),
 `has-fields` (the actual object holds every field of the expected one),
 `fits-text` (the actual text fits the expected one line by line, with
-stand-ins for the parts that change),
+stand-ins for the parts that change), `is-a` (the actual value is of the
+kind the expected text names),
 `matches` (the expected text, as a regular expression, matches),
 `greater-than`, `at-least`, `less-than`, and `at-most`. Equality is
 structural over JSON values: object key order does not count, and `0`
@@ -1920,6 +1921,25 @@ part of the expected text can end at, so an expected text with many
 `...` lines costs its lines times the actual lines, never a number of
 tries that grows with each `...`.
 
+`is-a` lets a sentence name the kind of a value it cannot state, such
+as an id or a time the system generated: "the order id is a UUID". The
+expected value is a string that names a kind, read after trimming and
+ignoring case, so the pattern's own word can be the literal (`expected:
+{ literal: "UUID" }`), or a capture such as `{kind:word}` can fill it.
+The kinds are `string` and `text` (a JSON string), `number`, `integer`
+(a number with no fraction), `boolean`, `list` and `array`, `object` (an
+object that is not an array and not `null`), `null`, `uuid` (8, 4, 4, 4,
+and 12 hexadecimal digits joined by hyphens, in any case), `date`
+(`YYYY-MM-DD` that names a day of the calendar), `timestamp` (an ISO
+8601 date and time with seconds, an optional fraction, and an offset,
+`Z` or `+hh:mm` or `-hh:mm`, that names a real day and time; a leap
+second is refused), and `url` (an absolute `http` or `https` URL that the
+WHATWG URL parser accepts, written with `//` after the scheme and with no
+whitespace or control character). An expected value that is not a
+string, or a name that is no kind, breaks the claim, and the reason
+lists the kinds. `is-a` is the one compare whose two sides are of
+different JSON types by design, so it does not break for that.
+
 Both sides are plain JSON before any compare runs: `null`, a boolean, a
 string, a finite number (an integer no larger than
 `Number.MAX_SAFE_INTEGER`), an array with no holes and no other keys, or
@@ -1934,7 +1954,8 @@ structurally equal), so the record could not show what was compared, and
 nothing is known about the criterion.
 
 A comparison across two JSON types breaks and names both types, because a
-string is never equal to a number for the reason the claim states. An
+string is never equal to a number for the reason the claim states
+(`is-a` aside, whose expected side names a kind). An
 expected text that nearly every string holds breaks, wherever it came
 from: under `contains-text`, `starts-with-text`, or `ends-with-text`, a
 text of only whitespace or nothing; under
@@ -1978,7 +1999,7 @@ followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
 and `{ at: "a.b" }` read one path, and a `view` on either side does not
 separate them: it reads the same value another way. A `where` claim
 that overlaps an item claim and compares with `equal`,
-`has-same-items`, `has-fields`, `fits-text`, `contains-text`,
+`has-same-items`, `has-fields`, `fits-text`, `is-a`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `matches`, or `has-item` is refused at import. It selects the items by
 the value the item claim then judges, or by a part of it the claim cannot
 be told apart from, so "every item" would read as "every item that

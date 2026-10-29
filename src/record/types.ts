@@ -681,6 +681,7 @@ export type ClaimCompare =
   | "has-same-items"
   | "has-fields"
   | "fits-text"
+  | "is-a"
   | "matches"
   | "greater-than"
   | "at-least"

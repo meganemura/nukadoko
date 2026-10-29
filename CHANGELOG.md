@@ -40,6 +40,17 @@ just until 0.1.
   stopped (`; expected lines 1 to 2 fit, and expected line 3 fits
   nothing from actual line 2: actual "wrote dist/a.js", expected "wrote
   dist/c.js"`).
+- **A claim can name the kind of a value the sentence cannot state.**
+  `is-a` holds when the actual value is of the kind its expected text
+  names, read after trimming and ignoring case: `string` or `text`,
+  `number`, `integer`, `boolean`, `list` or `array`, `object`, `null`,
+  `uuid`, `date` (a real `YYYY-MM-DD` day), `timestamp` (an ISO 8601
+  date and time with seconds and an offset), or `url` (an absolute
+  `http` or `https` URL). "The order id is a UUID" claims a generated id
+  with `expected: { literal: "UUID" }`, where the sentence could only
+  weaken to "the order has an id". An expected value that is not a
+  string, or names no kind, breaks the claim and lists the kinds, and a
+  `where` claim that overlaps an item claim cannot use the compare.
 
 ### Fixed
 

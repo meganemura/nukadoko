@@ -256,6 +256,77 @@ export function onlyStandIns(expected: string): boolean {
   return fitLines(expected).every((line) => line === ANY_LINES || line.split(ANY_TEXT).join("").trim() === "");
 }
 
+function isLeapYear(year: number): boolean {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+/** Whether a year, a month, and a day name a day of the calendar. */
+function isCalendarDay(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) return false;
+  const days = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]!;
+  return day <= days;
+}
+
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+// Seconds are required and a leap second (60) is refused: a time a
+// program generates names its second, and no runtime clock prints 60.
+// Only an uppercase T and Z are read, as a program writes them.
+const TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isDate(value: unknown): boolean {
+  const match = typeof value === "string" ? DATE.exec(value) : null;
+  return match !== null && isCalendarDay(Number(match[1]), Number(match[2]), Number(match[3]));
+}
+
+function isTimestamp(value: unknown): boolean {
+  const match = typeof value === "string" ? TIMESTAMP.exec(value) : null;
+  if (match === null || !isCalendarDay(Number(match[1]), Number(match[2]), Number(match[3]))) return false;
+  const [hour, minute, second] = [Number(match[4]), Number(match[5]), Number(match[6])];
+  const offset = match[7] === undefined ? true : Number(match[7]) <= 23 && Number(match[8]) <= 59;
+  return hour <= 23 && minute <= 59 && second <= 59 && offset;
+}
+
+// The URL parser takes "http:example.com" and strips or encodes spaces and
+// line breaks, so a text it accepts can still be no URL a program wrote:
+// the scheme has to be followed by "//", and no whitespace or control
+// character may appear.
+function isUrl(value: unknown): boolean {
+  if (typeof value !== "string" || !/^https?:\/\//i.test(value) || /[\s\u0000-\u001f\u007f]/.test(value)) return false;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** The kinds `is-a` names, each with what a value of that kind is. A
+ * sentence can name the kind of a generated value (an id, a time, a link)
+ * when it cannot state the value itself. A new kind is a new row. */
+export const VALUE_KINDS: Readonly<Record<string, (value: unknown) => boolean>> = {
+  string: (value) => typeof value === "string",
+  text: (value) => typeof value === "string",
+  number: (value) => typeof value === "number",
+  integer: (value) => Number.isInteger(value),
+  boolean: (value) => typeof value === "boolean",
+  list: (value) => Array.isArray(value),
+  array: (value) => Array.isArray(value),
+  object: (value) => jsonType(value) === "object",
+  null: (value) => value === null,
+  uuid: (value) => typeof value === "string" && UUID.test(value),
+  date: isDate,
+  timestamp: isTimestamp,
+  url: isUrl,
+};
+
+/** The predicate of the kind `name` names, matched after trimming and
+ * ignoring case, or `undefined` for a name no row has. Pure. */
+export function valueKind(name: string): ((value: unknown) => boolean) | undefined {
+  const key = name.trim().toLowerCase();
+  return Object.hasOwn(VALUE_KINDS, key) ? VALUE_KINDS[key] : undefined;
+}
+
 /** The value after `view`, or why the view could not apply. A view reads a
  * snapshot, and what it makes of one is a snapshot too: the JSON a text
  * parses to is held to the same depth limit. */
@@ -379,6 +450,16 @@ export async function compareValues(
         return { reason: "fits-text has an expected text of only whitespace, ... lines, and [..], which almost every text holds" };
       }
       return { holds: textFit(actual as string, expected as string).fits };
+    }
+    case "is-a": {
+      // The one compare whose two sides have different types by design:
+      // the expected side names a kind, and the actual value is of it.
+      if (expectedType !== "string") return { reason: `is-a reads the name of a kind as a string, and the expected value is ${article(expectedType)}` };
+      const kind = valueKind(expected as string);
+      if (kind === undefined) {
+        return { reason: `is-a names one of the kinds ${Object.keys(VALUE_KINDS).join(", ")}, and the expected value is ${JSON.stringify(expected)}` };
+      }
+      return { holds: kind(actual) };
     }
     case "has-item": {
       if (actualType !== "array") return { reason: `has-item reads an array, and the actual value is ${article(actualType)}` };

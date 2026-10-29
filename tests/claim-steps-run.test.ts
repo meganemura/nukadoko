@@ -2177,3 +2177,46 @@ export default defineStep({
     ]);
   });
 });
+
+describe("is-a through a run", () => {
+  it("holds for a generated id the sentence names as a UUID, by a fixed word or a capture, and breaks for a total named as a text", async () => {
+    const order = `observe() {
+    return { order: { id: "0190A1B2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", total: 12 } };
+  },`;
+    const rootDir = await project({
+      "features/steps/the-order-id-is-a-uuid.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the order id is a UUID",
+  args: z.object({}),
+  ${order}
+  claims: [{ actual: "order.id", compare: "is-a", expected: { literal: "UUID" } }],
+});
+`,
+      "features/steps/the-order-total-is-a.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the order total is a {kind:word}",
+  args: z.object({ kind: z.string() }),
+  ${order}
+  claims: [{ actual: "order.total", compare: "is-a", expected: "kind" }],
+});
+`,
+      "features/t.feature": [
+        "Feature: kinds",
+        "  Scenario: holds",
+        "    Then the order id is a UUID",
+        "    Then the order total is a number",
+        "  Scenario: breaks",
+        "    Then the order total is a text",
+        "",
+      ].join("\n"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: "))).toEqual([
+      '  - "0190A1B2-c3d4-7e5f-8a9b-0c1d2e3f4a5b" (observe:order.id) is-a "UUID" (literal:UUID) held; measured: none',
+      '  - 12 (observe:order.total) is-a "number" (sentence:kind) held; measured: none',
+      '  - 12 (observe:order.total) is-a "text" (sentence:kind) broken; measured: none',
+    ]);
+  });
+});

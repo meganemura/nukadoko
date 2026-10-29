@@ -620,6 +620,11 @@
       "en": ["stand-in", "stand-ins", "stands for"],
       "ja": "代わりの記号 / 表す",
       "note": "fits-text の期待するテキストで、実行ごとに変わる部分の代わりに書く `...`(任意の数の行)と `[..]`(1 行の中の任意の文字)。記号そのものはコードスパンで書く"
+    },
+    {
+      "en": ["kind (is-a)", "kinds"],
+      "ja": "種類",
+      "note": "is-a の期待値が名指す値の種類(string、uuid、timestamp など)。種類の名前はコードスパンで英語のまま。変化の種類(change kind)とは別の語"
     }
   ],
   "keep_english": [

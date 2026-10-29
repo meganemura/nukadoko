@@ -1531,7 +1531,7 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 
 #### 比較
 
-`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`is-a`(実際の値が、期待するテキストが名指す種類である)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
 `has-same-items` は各要素を、もう一方の側の等しい要素 1 つと組にします。
@@ -1571,6 +1571,19 @@ Then the build prints
 判定は期待する行を 1 度だけたどり、期待するテキストの各部分が終わりうる実際の行を残していきます。
 そのため、`...` の行が多い期待するテキストでも、かかる手間は期待する行の数と実際の行の数の積までで、`...` ごとに増える数の試行にはなりません。
 
+`is-a` は、システムが生成した id や時刻のように、文が値そのものを述べられない値の種類を名指せるようにします(「the order id is a UUID」)。
+期待値は種類を名指す文字列で、前後の空白を除き、大文字と小文字を区別せずに読みます。
+そのため pattern 自身の語を literal にでき(`expected: { literal: "UUID" }`)、`{kind:word}` のような capture で埋めることもできます。
+種類は次のとおりです。
+`string` と `text`(JSON の文字列)、`number`、`integer`(小数部のない数値)、`boolean`、`list` と `array`、`object`(配列でも `null` でもないオブジェクト)、`null` です。
+`uuid` は、8、4、4、4、12 桁の 16 進数をハイフンでつないだもので、大文字と小文字を問いません。
+`date` は、暦の上にある日を名指す `YYYY-MM-DD` です。
+`timestamp` は、秒を持つ ISO 8601 の日付と時刻で、省略できる小数部と、`Z` か `+hh:mm` か `-hh:mm` のオフセットを持ち、実在する日と時刻を名指すものです。
+うるう秒は拒否します。
+`url` は、WHATWG の URL パーサーが受け入れる、`http` か `https` の絶対 URL で、スキームのあとに `//` があり、空白も制御文字も含まないものです。
+文字列でない期待値や、どの種類でもない名前では、claim は成り立たず、理由が種類を並べます。
+`is-a` は、2 つの辺の JSON の型が意図して違う唯一の比較なので、そのことでは成り立たなくなりません。
+
 どの比較の前でも、両辺は素の JSON です。
 つまり `null`、真偽値、文字列、有限の数値(整数なら `Number.MAX_SAFE_INTEGER` 以下)、穴も他のキーもない配列、プロトタイプが `Object.prototype` か `null` で自分のプロパティがすべて文字列キーの列挙可能なデータプロパティであるオブジェクトです。
 それ以外(`Date`、`Map`、bigint、`NaN`、`undefined` の要素、getter、クラスのインスタンス、`Proxy`)では claim は `unjudged` になり、理由がそれが何でどこにあるかを名指しします(`observe:when is a Date, which is not plain JSON, so the claim was not judged`)。
@@ -1578,6 +1591,7 @@ Then the build prints
 
 JSON の型が違う 2 つの値の比較では、claim は成り立たず、両方の型を名指しします。
 文字列が数値と等しくなることは、claim が述べる理由ではありえないからです。
+期待する側が種類を名指す `is-a` は例外です。
 ほとんどどの文字列も満たす期待するテキストでは、それがどこから来たかにかかわらず claim は成り立ちません。
 `contains-text`、`starts-with-text`、`ends-with-text` では空白だけか空のテキスト、`matches` では空文字列に一致する pattern です。
 `has-fields` では、フィールドを持たない期待するオブジェクトも、最上位でもどの深さでも、どのオブジェクトも持つので同じように成り立ちません。
@@ -1609,7 +1623,7 @@ pattern には残り時間を与え、残りが無いときに与えることは
 読むパスは `actual` に `at` を続けたものです。
 したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読みます。
 どちらかの側の `view` は、同じ値を別の形で読むだけなので、2 つを分けません。
-要素の claim と重なり、`equal`、`has-same-items`、`has-fields`、`fits-text`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
+要素の claim と重なり、`equal`、`has-same-items`、`has-fields`、`fits-text`、`is-a`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
 要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
 
 重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。

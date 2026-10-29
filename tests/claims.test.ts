@@ -34,6 +34,7 @@ import {
   fitLines,
   lineFits,
   textFit,
+  VALUE_KINDS,
   jsonType,
   judgingBudget,
   pollReadings,
@@ -169,6 +170,7 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "has-same-items",
   "has-fields",
   "fits-text",
+  "is-a",
   "matches",
   "greater-than",
   "at-least",
@@ -449,12 +451,103 @@ describe("compares", () => {
     expect(await compare("has-fields", { id: 1 }, {})).toEqual({ reason: "has-fields has an expected object with no field, which every object holds" });
   });
 
+  /** A kind's name as a sentence may write it: any case, spaces around. */
+  const spelledKind = (tc: hegel.TestCase, kind: string): string => {
+    const cased = [...kind].map((letter) => (tc.draw(gs.booleans()) ? letter.toUpperCase() : letter)).join("");
+    return `${tc.draw(gs.sampledFrom(["", " "]))}${cased}${tc.draw(gs.sampledFrom(["", " \n"]))}`;
+  };
+
+  it("is-a holds for a JSON value exactly when the kind its sentence names is the value's JSON type, however the name is cased", () =>
+    hegel.testAsync(async (tc) => {
+      const value = tc.draw(jsonValues);
+      const kind = tc.draw(gs.sampledFrom(["string", "text", "number", "integer", "boolean", "list", "array", "object", "null"]));
+      const type = jsonType(value);
+      const of: Record<string, boolean> = {
+        string: type === "string",
+        text: type === "string",
+        number: type === "number",
+        integer: type === "number" && Math.trunc(value as number) === value,
+        boolean: type === "boolean",
+        list: type === "array",
+        array: type === "array",
+        object: type === "object",
+        null: type === "null",
+      };
+      expect(holds(await compare("is-a", value, spelledKind(tc, kind)))).toBe(of[kind]);
+    }));
+
+  it("is-a integer holds for a whole number and not for one with a fraction", () =>
+    hegel.testAsync(async (tc) => {
+      const whole = tc.draw(gs.integers({ minValue: -1e6, maxValue: 1e6 }));
+      expect(holds(await compare("is-a", whole, "integer"))).toBe(true);
+      expect(holds(await compare("is-a", whole + 0.5, "integer"))).toBe(false);
+      expect(holds(await compare("is-a", whole + 0.5, "number"))).toBe(true);
+    }));
+
+  const hex = (count: number) => gs.text({ alphabet: "0123456789abcdefABCDEF", minSize: count, maxSize: count });
+
+  it("is-a uuid holds for five groups of 8, 4, 4, 4, and 12 hexadecimal digits in any case, and for nothing a character away", () =>
+    hegel.testAsync(async (tc) => {
+      const groups = [8, 4, 4, 4, 12].map((count) => tc.draw(hex(count)));
+      const id = groups.join("-");
+      expect(holds(await compare("is-a", id, spelledKind(tc, "uuid")))).toBe(true);
+      const at = tc.draw(gs.integers({ minValue: 0, maxValue: id.length - 1 }));
+      expect(holds(await compare("is-a", `${id.slice(0, at)}g${id.slice(at + 1)}`, "uuid"))).toBe(false);
+      expect(holds(await compare("is-a", `${id}0`, "uuid"))).toBe(false);
+      expect(holds(await compare("is-a", groups.join(""), "uuid"))).toBe(false);
+    }));
+
+  it("is-a date holds for YYYY-MM-DD exactly when it names a day of the calendar", () =>
+    hegel.testAsync(async (tc) => {
+      const year = tc.draw(gs.integers({ minValue: 1000, maxValue: 9999 }));
+      const month = tc.draw(gs.integers({ minValue: 0, maxValue: 13 }));
+      const day = tc.draw(gs.integers({ minValue: 0, maxValue: 32 }));
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const date = new Date(Date.UTC(year, month - 1, day));
+      const real = month >= 1 && month <= 12 && day >= 1 && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+      expect(holds(await compare("is-a", `${year}-${pad(month)}-${pad(day)}`, "date"))).toBe(real);
+      expect(holds(await compare("is-a", `${year}-${month}-${day}`, "date"))).toBe(real && month >= 10 && day >= 10);
+    }));
+
+  it("is-a timestamp holds for the ISO text of any instant, at any offset, and not without its seconds or past the 24 hours of a day", () =>
+    hegel.testAsync(async (tc) => {
+      const instant = new Date(tc.draw(gs.integers({ minValue: 0, maxValue: 253402300799999 }))).toISOString();
+      expect(holds(await compare("is-a", instant, "timestamp"))).toBe(true);
+      const offset = `${tc.draw(gs.sampledFrom(["+", "-"]))}${String(tc.draw(gs.integers({ minValue: 0, maxValue: 23 }))).padStart(2, "0")}:${String(tc.draw(gs.integers({ minValue: 0, maxValue: 59 }))).padStart(2, "0")}`;
+      expect(holds(await compare("is-a", instant.replace(/\.\d+Z$/, offset), "timestamp"))).toBe(true);
+      expect(holds(await compare("is-a", instant.replace(/:\d\d\.\d+Z$/, "Z"), "timestamp"))).toBe(false);
+      expect(holds(await compare("is-a", instant.replace(/T\d\d/, "T24"), "timestamp"))).toBe(false);
+      expect(holds(await compare("is-a", instant.slice(0, 10), "timestamp"))).toBe(false);
+      expect(holds(await compare("is-a", instant.replace(/Z$/, ""), "timestamp"))).toBe(false);
+    }));
+
+  it("is-a url holds for an absolute http or https URL and not for another scheme, a relative path, or a text with a space", () =>
+    hegel.testAsync(async (tc) => {
+      const host = tc.draw(gs.text({ alphabet: "abc", minSize: 1, maxSize: 5 }));
+      const route = tc.draw(gs.text({ alphabet: "abc/", maxSize: 6 }));
+      const scheme = tc.draw(gs.sampledFrom(["http", "https", "HTTPS"]));
+      expect(holds(await compare("is-a", `${scheme}://${host}.example/${route}`, "url"))).toBe(true);
+      expect(holds(await compare("is-a", `ftp://${host}.example/${route}`, "url"))).toBe(false);
+      expect(holds(await compare("is-a", `/${route}`, "url"))).toBe(false);
+      expect(holds(await compare("is-a", `http:${host}.example`, "url"))).toBe(false);
+      expect(holds(await compare("is-a", `https://${host}.example/a b`, "url"))).toBe(false);
+    }));
+
+  it("is-a reads the name of a kind it knows, and names every kind it knows otherwise", async () => {
+    expect(await compare("is-a", "x", 3)).toEqual({ reason: "is-a reads the name of a kind as a string, and the expected value is a number" });
+    expect(await compare("is-a", "x", "guid")).toEqual({
+      reason: `is-a names one of the kinds ${Object.keys(VALUE_KINDS).join(", ")}, and the expected value is "guid"`,
+    });
+    expect(Object.keys(VALUE_KINDS)).toEqual(["string", "text", "number", "integer", "boolean", "list", "array", "object", "null", "uuid", "date", "timestamp", "url"]);
+    expect(await compare("is-a", "x", "constructor")).toHaveProperty("reason");
+  });
+
   it("never holds across two JSON types, and names both types", () =>
     hegel.testAsync(async (tc) => {
       const actual = tc.draw(jsonValues);
       const expected = tc.draw(jsonValues);
       tc.assume(jsonType(actual) !== jsonType(expected));
-      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item")));
+      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a")));
       const result = await compare(name, actual, expected);
       expect(result).toHaveProperty("reason");
       const reason = (result as { reason: string }).reason;
@@ -476,7 +569,7 @@ describe("compares", () => {
       const actual = tc.draw(jsonValues);
       const want = tc.draw(jsonValues);
       tc.assume(jsonType(actual) !== jsonType(want));
-      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item")));
+      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a")));
       const record = await judgeOne({ actual: "value", compare: name, expected: "want" }, { want }, { value: actual });
       expect(record.outcome).toBe("broken");
     }));
@@ -974,14 +1067,14 @@ describe("where", () => {
     return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected };
   }
 
-  const decides = ["equal", "has-same-items", "has-fields", "fits-text", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
+  const decides = ["equal", "has-same-items", "has-fields", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
   const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
 
   it("sorts every compare into one that a where clause may not use on an overlapping place, or one the run judges", () => {
     expect([...decides, ...leaves].sort()).toEqual([...CLAIM_COMPARES].sort());
   });
 
-  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, fits-text, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
+  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, fits-text, is-a, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
     hegel.test((tc) => {
       const wherePath = tc.draw(segmentsGen);
       const itemPath = tc.draw(gs.booleans()) ? [...wherePath, ...tc.draw(segmentsGen)].slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: 4 }))) : tc.draw(segmentsGen);
