@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { StepProcesses } from "../execution-events/tally.js";
 import type { ObservedCounts, ProcessEntry, ProcessOutput, UnmeasuredEntry } from "../record/types.js";
 import { redact, redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -85,8 +86,9 @@ export interface BoundaryTrace {
   /** How many requests the boundary sent to the world with a
    * `traceparent`. */
   readonly stamped: number;
-  /** When the boundary last stamped a request, as `Date.now()` reads,
-   * or `undefined` when it stamped none. */
+  /** When the boundary last stamped a request or gave a process its
+   * `TRACEPARENT`, as `Date.now()` reads, or `undefined` when it did
+   * neither: a slice waits for the lines of either. */
   readonly lastStampAt: number | undefined;
 }
 
@@ -99,8 +101,9 @@ export interface StampedBoundaryTrace extends BoundaryTrace {
   readonly spans: readonly string[];
   /** Stamped requests past MAX_KEPT_SPANS, whose span ids are not kept. */
   readonly spansNotKept: number;
-  /** How many `runCommand` processes the boundary started. */
-  readonly processes: number;
+  /** What the boundary's `runCommand` processes leave open, by
+   * `processesOf`. */
+  readonly processes: StepProcesses;
   /** The span ids of the `TRACEPARENT` values the boundary gave its
    * processes, at most MAX_KEPT_SPANS of them. */
   readonly processSpans: readonly string[];
@@ -366,6 +369,7 @@ export function createObservedCollector(
         const state = current();
         if (trace === undefined || state.traceId === undefined) return undefined;
         const span = newSpanId();
+        state.lastStampAt = Date.now();
         // A process's span is never waited for (tally.ts), so one past the
         // cap is only not recognized.
         if (state.processSpans.length < MAX_KEPT_SPANS) state.processSpans.push(span);
@@ -473,11 +477,20 @@ export function createObservedCollector(
         lastStampAt: state.lastStampAt,
         spans: [...state.spans],
         spansNotKept: state.spansNotKept,
-        processes: state.processes?.length ?? 0,
+        processes: processesOf(state.processes),
         processSpans: [...state.processSpans],
       };
     },
   };
+}
+
+/** What a boundary's processes leave open: a process still running has no
+ * entry yet, and only an entry whose group ended bounds what the process
+ * sent (src/context/run-command.ts). An entry from an older copy of
+ * runCommand, or from Windows, names no group. */
+function processesOf(entries: readonly (ProcessEntry | undefined)[] | null): StepProcesses {
+  if (entries === null || entries.length === 0) return "none";
+  return entries.every((entry) => entry?.group === "ended") ? "ended" : "unbounded";
 }
 
 /** Writes the entry of a `runCommand` process that started after its

@@ -18,7 +18,10 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // after it answered, and not at the stop: only a wait before the stop
 // reads it. `/spliced` splits one line across two writes with another line
 // between them. `/secret` writes the world's token inside an event.
-// `/missing` matches no route, so its request line names none. `/inlet`
+// `/missing` matches no route, so its request line names none. `/stream`
+// sends its body in three chunks 20 ms apart and writes its request line
+// when the response closes: once the body has ended, or once the client
+// went away first, which can be after the client's process exited. `/inlet`
 // answers where the events file is, who may read it, and which
 // variables of the server's environment name a file nukadoko made for
 // events. `/lobby` reads the rooms, asks the flag `score_input_slider`, and
@@ -88,6 +91,21 @@ createServer(async (req, res) => {
   const id = newId();
   const url = new URL(req.url, "http://localhost");
   let route = url.pathname;
+  if (url.pathname === "/stream") {
+    const line = { trace, kind: "request", id, method: req.method, route, status: 200 };
+    res.once("close", () => emit(line));
+    res.writeHead(200, { "content-type": "text/plain" });
+    let chunks = 0;
+    const next = () => {
+      if (res.destroyed) return;
+      chunks += 1;
+      if (chunks === 3) return res.end(`chunk ${chunks}\n`);
+      res.write(`chunk ${chunks}\n`);
+      setTimeout(next, 20);
+    };
+    next();
+    return;
+  }
   let status = 200;
   let body = "ok";
   if (url.pathname.startsWith("/missing")) {

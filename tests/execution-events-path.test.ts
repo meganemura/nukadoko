@@ -50,7 +50,7 @@ function text(entry: PathOp): string {
 }
 
 function fold(texts: readonly string[], spans: readonly string[], file = { truncated: false, replaced: false }): StepPath {
-  const paths = createPathFold({ spans, spansNotKept: 0, ranProcesses: false, processSpans: [] });
+  const paths = createPathFold({ spans, spansNotKept: 0, processes: "none", processSpans: [] });
   for (const line of texts.map(parseEventLine)) {
     if (line.state === "unreadable") paths.damaged();
     else paths.owned(line);
@@ -88,7 +88,7 @@ describe("createPathFold", () => {
       const spans = SPANS.slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: SPANS.length })));
       const texts = tc.draw(gs.arrays(pathOp, { maxSize: 12 })).map(text);
       const file = { truncated: tc.draw(gs.booleans()), replaced: tc.draw(gs.booleans()) };
-      const tally = createTraceTally({ spans, spansNotKept: 0, ranProcesses: false, processSpans: [] });
+      const tally = createTraceTally({ spans, spansNotKept: 0, processes: "none", processSpans: [] });
       for (const line of texts.map(parseEventLine)) {
         if (line.state === "unreadable") tally.damaged();
         else tally.owned(line);
@@ -237,7 +237,7 @@ describe("the world's stop", () => {
         const reader = createEventsReader(file, PREFIX, []);
         appendFileSync(file, mixed.slice(0, before).map((line) => `${line}\n`).join(""));
         const stepDir = path.join(dir, "step");
-        const slice = await reader.slice(stepDir, { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: 0, processSpans: [] });
+        const slice = await reader.slice(stepDir, { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: "none", processSpans: [] });
         appendFileSync(file, mixed.slice(before).map((line) => `${line}\n`).join(""));
         const { paths } = collectWorldEvents(file, PREFIX, [{ traceId: T, lines: slice.lines, dir: stepDir, inputs: tallyInputsOfSlice(slice), replaced: false }], [], path.join(dir, "world.jsonl"));
         expect(paths.get(T)).toEqual(fold(own, spans));

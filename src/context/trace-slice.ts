@@ -25,8 +25,10 @@ import { completeLines } from "./trace-context.js";
 // otherwise make every stamped step wait the whole SETTLE_MS. The quiet
 // counts from the step's end, not from the request: a request that took
 // longer than QUIET_MS to answer would otherwise leave no wait at all for
-// the line the program wrote as it answered. A step that stamped nothing
-// does not wait.
+// the line the program wrote as it answered. A `runCommand` process given
+// the step's trace counts as a stamp: the program writes the line of a
+// request whose client went away once it notices, which can be after the
+// process has closed. A step that did neither does not wait.
 //
 // A line that arrives after that is still the step's. Its record is
 // already written and is not rewritten, so when the world stops, one pass
@@ -154,9 +156,9 @@ export class StepLines {
 export interface TraceFileReader {
   /** Reads what the file gained since the last call and hands each
    * complete line to `own`, which answers whether the line is the ending
-   * step's; then, when the step stamped a request (`lastStampAt`), keeps
-   * reading as it waits for the step's lines still on their way (module
-   * header). */
+   * step's; then, when the step stamped a request or gave a process its
+   * trace (`lastStampAt`), keeps reading as it waits for the step's lines
+   * still on their way (module header). */
   readStep(lastStampAt: number | undefined, own: (line: string) => boolean): Promise<void>;
   /** The byte the next read starts at: no line before it can carry a
    * trace id made after the last read. */

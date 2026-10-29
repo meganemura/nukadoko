@@ -127,7 +127,7 @@ export interface EventsReader {
 
 /** What a tally needs of a boundary's trace. */
 export function tallyInputsOf(trace: StampedBoundaryTrace): Omit<TallyInputs, "selections"> {
-  return { spans: trace.spans, spansNotKept: trace.spansNotKept, ranProcesses: trace.processes > 0, processSpans: trace.processSpans };
+  return { spans: trace.spans, spansNotKept: trace.spansNotKept, processes: trace.processes, processSpans: trace.processSpans };
 }
 
 /** A reader of the events file at `filePath` for the world whose trace

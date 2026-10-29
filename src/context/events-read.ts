@@ -29,12 +29,15 @@ import { traceIdIn } from "./trace-context.js";
 // The reading waits while the producer's events may still become whole:
 // a request with no line yet, a job not yet performed, no line at all. It
 // stops once they are whole, once a gap no more lines can close is open
-// (the producer ran a process, a line of its trace did not read, the file
-// was replaced), or when the deadline is near. It never waits until a
-// claim would hold: it does not know the claims, and waiting for "one row
-// was written" would make "nothing was written" hold before the write
-// arrived. Waiting here, in the step that needs the answer, leaves the
-// steps between the producer and the claim where they ran.
+// (a process the producer ran may still send, a line of its trace did not
+// read, the file was replaced), or when the deadline is near. It never
+// waits until a claim would hold: it does not know the claims, and waiting
+// for "one row was written" would make "nothing was written" hold before
+// the write arrived. Waiting here, in the step that needs the answer,
+// leaves the steps between the producer and the claim where they ran.
+// Nothing here waits for the lines of a process the producer ran once its
+// group has ended: the producer's slice already waited for them, and the
+// reading, in a later step, reads every line since.
 //
 // A kind the world's program never reported, in this world, so far, keeps
 // the reading of it from being whole (`kind-unreported`): a program that
@@ -95,13 +98,19 @@ export interface EventsReadOptions {
 }
 
 /** The tally inputs of a recorded slice: a record written before
- * `stamped_spans` existed matches none of its requests by span. */
+ * `stamped_spans` existed matches none of its requests by span. The
+ * slice's own gaps say what its processes left open where it changes a
+ * reading: `processes-unbounded` names one that may still send, and
+ * `no-requests` a step that ran none and stamped nothing. A step with no
+ * gap of either kind that stamped nothing ran processes that all ended;
+ * one that stamped requests reads alike whether it ran any. */
 export function tallyInputsOfSlice(slice: EventsSlice): Omit<TallyInputs, "selections"> {
   const spans = slice.stamped_spans ?? [];
+  const has = (word: "processes-unbounded" | "no-requests"): boolean => slice.open.some((gap) => gap.gap === word);
   return {
     spans,
     spansNotKept: Math.max(0, slice.stamped - spans.length),
-    ranProcesses: slice.open.some((gap) => gap.gap === "processes-unbounded"),
+    processes: has("processes-unbounded") ? "unbounded" : has("no-requests") || slice.stamped > 0 ? "none" : "ended",
     processSpans: slice.process_spans ?? [],
   };
 }

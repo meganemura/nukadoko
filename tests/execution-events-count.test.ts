@@ -214,7 +214,7 @@ describe("createTraceTally's counts", () => {
   ];
 
   function fold(texts: readonly string[], spans: readonly string[], chosen: readonly EventSelection[] = selections) {
-    const tally = createTraceTally({ spans, spansNotKept: 0, ranProcesses: false, processSpans: [], selections: chosen });
+    const tally = createTraceTally({ spans, spansNotKept: 0, processes: "none", processSpans: [], selections: chosen });
     for (const text of texts) {
       const parsed = parseEventLine(text);
       if (parsed.state === "unreadable") tally.damaged();

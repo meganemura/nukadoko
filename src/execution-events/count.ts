@@ -113,7 +113,7 @@ export function describeGap(gap: EventsGap): string {
     case "no-requests":
       return "the step sent the world no request with a traceparent and ran no process";
     case "processes-unbounded":
-      return "the step ran a process, and no line can say that every request it sent the world reported";
+      return "a process the step ran may still send the world requests, so no line can say that every one reported";
     case "no-lines":
       return "no line carries the step's trace id";
     case "request-unreported":

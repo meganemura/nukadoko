@@ -5,6 +5,7 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { parseProcStat } from "../src/process-group/process-group.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir, writeUrlProgram } from "./helpers/fixtures.js";
 
 // Responsibility: execution events end to end against
@@ -290,8 +291,6 @@ describe("the program's execution events", () => {
         stamped_spans: [],
         process_spans: [span!],
         process_requests: 1,
-        whole: false,
-        open: [{ gap: "processes-unbounded" }],
       }),
     );
     expect(sliceOf(rootDir, tool).find((line) => line.kind === "request")!.trace).toBe(given);
@@ -301,7 +300,81 @@ describe("the program's execution events", () => {
     const chosen = steps!.get('the tool gets "/rooms/8" under a trace of its own')!;
     expect(toolRecord(chosen).result.traceparent).toBe(own);
     expect(toolRecord(chosen).observed.processes[0]).not.toHaveProperty("traceparent");
-    expect(chosen.observed.events).toEqual(reading(chosen, { stamped: 0, unowned: 2, whole: false, open: [{ gap: "processes-unbounded" }] }));
+    expect(chosen.observed.events).toEqual(reading(chosen, { stamped: 0, unowned: 2 }));
+  });
+
+  it.runIf(process.platform !== "win32")(
+    "closes a process's gap once its group has ended, so a count after it is judged, and keeps it while the group still runs",
+    async () => {
+      await writeFile(
+        path.join(rootDir, "features", "events.feature"),
+        [
+          "Feature: f",
+          "",
+          "  Background:",
+          '    Given the client gets "/rooms/1"',
+          "",
+          "  Scenario: ended",
+          '    When the tool gets "/rooms/7"',
+          "    Then the tool wrote nothing",
+          "",
+          "  Scenario: streamed",
+          '    When the tool leaves "/stream" after the first chunk',
+          "    Then the tool wrote nothing",
+          "",
+          "  Scenario: still running",
+          "    When the tool leaves a process running for 5000 ms",
+          "    Then the tool wrote nothing",
+          "",
+        ].join("\n"),
+      );
+      await cli(rootDir, ["run"]);
+      const [ended, streamed, running] = latestRunJson(rootDir).scenarios as { steps: StepFacts[] }[];
+      interface ProcessRecord {
+        readonly result: { readonly pid?: number };
+        readonly observed: { readonly processes: readonly { readonly group?: string }[] };
+        readonly claims: readonly { readonly outcome: string; readonly reason?: string }[];
+      }
+      const recordAt = (scenario: { steps: StepFacts[] }, index: number): ProcessRecord => recordOf(rootDir, scenario.steps[index]!) as unknown as ProcessRecord;
+      const helper = recordAt(running!, 1).result.pid!;
+      try {
+        expect(recordAt(ended!, 1).observed.processes[0]!.group).toBe("ended");
+        expect(ended!.steps[1]!.observed.events).toMatchObject({ lines: 2, process_requests: 1, whole: true, open: [] });
+        expect(recordAt(ended!, 2).claims.map((claim) => claim.outcome)).toEqual(["held"]);
+
+        // The program writes this request's line once the tool has gone,
+        // and the step's slice waits for it as for a stamped request's.
+        expect(streamed!.steps[1]!.observed.events).toMatchObject({ lines: 1, process_requests: 1, whole: true, open: [] });
+        expect(streamed!.steps[1]!.events_late).toBeUndefined();
+        expect(recordAt(streamed!, 2).claims.map((claim) => claim.outcome)).toEqual(["held"]);
+
+        expect(recordAt(running!, 1).observed.processes[0]!.group).toBe("running");
+        expect(running!.steps[1]!.observed.events).toMatchObject({ whole: false, open: [{ gap: "processes-unbounded" }] });
+        expect(recordAt(running!, 2).claims).toMatchObject([{ outcome: "unjudged" }]);
+        expect(recordAt(running!, 2).claims[0]!.reason).toContain("(processes-unbounded): a process the step ran may still send the world requests");
+      } finally {
+        try {
+          process.kill(helper, "SIGKILL");
+        } catch {
+          // Gone already.
+        }
+      }
+    },
+  );
+
+  it.runIf(process.platform === "linux")("stops every process of a command's group at its timeout", async () => {
+    await writeFile(path.join(rootDir, "features", "events.feature"), ["Feature: f", "", "  Scenario: s", "    When the tool hangs past a timeout of 500 ms", ""].join("\n"));
+    const { exitCode } = await cli(rootDir, ["run"]);
+
+    expect(exitCode).toBe(0);
+    const [steps] = scenarioSteps(rootDir);
+    const step = steps!.get("the tool hangs past a timeout of 500 ms")!;
+    const record = recordOf(rootDir, step) as unknown as { result: { stopped: string }; observed: { processes: readonly Record<string, unknown>[] } };
+    expect(record.result.stopped).toMatch(/did not exit within 500 ms and was stopped with SIGTERM$/);
+    expect(record.observed.processes[0]).toMatchObject({ signal: "SIGTERM", timed_out: true, group: "ended" });
+    const helper = Number(readFileSync(path.join(latestRunDir(rootDir), step.record, "process-1.stdout.txt"), "utf8"));
+    const stat = existsSync(`/proc/${helper}/stat`) ? parseProcStat(readFileSync(`/proc/${helper}/stat`, "utf8")) : undefined;
+    expect(stat === undefined || stat.state === "Z" || stat.state === "X").toBe(true);
   });
 
   it("gives the program the variable that names {events} and keeps it from every step, under nuka run and nuka do", async () => {

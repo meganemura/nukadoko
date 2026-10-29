@@ -23,11 +23,17 @@ import { matchLine, type EventSelection } from "./selection.js";
 // one unknown. Lines of several processes are in write order, not in time
 // order, so a job's `perform` line may come before its `enqueue` line and
 // the counts per job are compared, never their order. A `runCommand`
-// process the step ran is work no count bounds: the program it runs may
-// send the world any number of requests, so a trace whose step ran one is
-// never whole. Its `TRACEPARENT` names a span of its own, so a request
-// line that carries one is the process's request, told apart from the
-// step's and never waited for: the process may send nothing.
+// process the step ran is work no count bounds while it may still run:
+// the program it runs may send the world any number of requests, so a
+// trace whose step ran one is not whole until it has closed and no
+// process of its group is left (src/context/run-command.ts). From then on
+// nothing it started can send another request, and the lines of the ones
+// it sent are on their way like any request's: the step's slice waits
+// for them as it does for its own (src/context/trace-slice.ts), and the
+// world's stop counts again what came later. Its `TRACEPARENT` names a
+// span of its own, so a request line that carries one is the process's
+// request, told apart from the step's and never waited for by span: the
+// process may send nothing.
 //
 // A count never drops a line it cannot read as a match or a miss. A line
 // of the trace that is unreadable, of a kind the format does not define,
@@ -71,9 +77,9 @@ export type TraceGap =
    * no `runCommand` process: it caused no work a line could report the
    * end of, and no line can say that it caused none. */
   | { readonly gap: "no-requests" }
-  /** The step ran a `runCommand` process. What that process sent the
-   * world is not counted, since a program may send any number of
-   * requests or none, so no line can say all of them reported. */
+  /** A `runCommand` process the step ran may still send the world
+   * requests (StepProcesses), and a program may send any number of them
+   * or none, so no line can say all of them reported. */
   | { readonly gap: "processes-unbounded" }
   /** The step stamped requests and no line carries its trace id: no
    * writer, a wrong variable, or lines still buffered. */
@@ -157,13 +163,19 @@ export interface TraceTally {
   reading(file: { readonly truncated: boolean; readonly replaced: boolean }): TraceReading;
 }
 
+/** What the step's `runCommand` processes leave open: it ran `none`;
+ * each one `ended`, closed with no process of its group left; or one is
+ * `unbounded`, since it still ran when the step's record was built, left
+ * a process of its group running, or ran where nukadoko sees no group
+ * (Windows). */
+export type StepProcesses = "none" | "ended" | "unbounded";
+
 export interface TallyInputs {
   /** The span ids of the requests the step sent with its `traceparent`. */
   readonly spans: readonly string[];
   /** Stamped requests past the span ids kept. */
   readonly spansNotKept: number;
-  /** Whether the step ran a `runCommand` process. */
-  readonly ranProcesses: boolean;
+  readonly processes: StepProcesses;
   /** The span ids of the `TRACEPARENT` values its processes got. */
   readonly processSpans: readonly string[];
   /** What the counts count, one count each, in order. */
@@ -239,8 +251,8 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
       const pending = [...jobs].filter(([, job]) => job.performs < job.enqueues).map(([id]) => id);
       const silent = requests > 0 && lines === 0 && unreadable === 0 && !file.replaced;
       const open: TraceGap[] = [
-        ...(requests === 0 && !inputs.ranProcesses ? [{ gap: "no-requests" as const }] : []),
-        ...(inputs.ranProcesses ? [{ gap: "processes-unbounded" as const }] : []),
+        ...(requests === 0 && inputs.processes === "none" ? [{ gap: "no-requests" as const }] : []),
+        ...(inputs.processes === "unbounded" ? [{ gap: "processes-unbounded" as const }] : []),
         ...(silent ? [{ gap: "no-lines" as const }] : []),
         ...(!silent && unmatched > 0 ? [{ gap: "request-unreported" as const, requests: unmatched }] : []),
         ...(pending.length > 0 ? [{ gap: "jobs-pending" as const, job_ids: pending }] : []),

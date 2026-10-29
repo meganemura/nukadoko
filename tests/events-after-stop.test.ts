@@ -43,7 +43,7 @@ const requestLine = (trace = T) => line(trace, { kind: "request", id: "5a0f3c9e1
 const insertLine = (trace = T) => line(trace, { kind: "db", table: "scores", op: "insert", committed: true });
 const append = (file: string, texts: readonly string[]): void => appendFileSync(file, texts.map((text) => `${text}\n`).join(""));
 
-const producerTrace: StampedBoundaryTrace = { traceId: T, stamped: 1, lastStampAt: undefined, spans: [SPANS[0]!], spansNotKept: 0, processes: 0, processSpans: [] } as unknown as StampedBoundaryTrace;
+const producerTrace: StampedBoundaryTrace = { traceId: T, stamped: 1, lastStampAt: undefined, spans: [SPANS[0]!], spansNotKept: 0, processes: "none", processSpans: [] } as unknown as StampedBoundaryTrace;
 
 function readRecord(over: Partial<EventsReadRecord> = {}): EventsReadRecord {
   return { of: OF, trace_id: T, count: WRITES, range: { at_least: 1, at_most: 1 }, counted: [scores(1)], whole: true, open: [], maybe: NO_MAYBE, lines: 2, unreadable: 0, unowned: 0, file: "events-read.jsonl", waited_ms: 3, ...over };
@@ -142,7 +142,7 @@ describe("the world's stop counts a reading again", () => {
       }
       const file = path.join(dir, `events-${Math.random().toString(16).slice(2)}.jsonl`);
       writeFileSync(file, mixed.map((text) => `${text}\n`).join(""));
-      const inputs = { spans: SPANS.slice(0, 2), spansNotKept: 0, ranProcesses: false, processSpans: [] };
+      const inputs = { spans: SPANS.slice(0, 2), spansNotKept: 0, processes: "none" as const, processSpans: [] };
       const { recounted } = collectWorldEvents(file, PREFIX, [], [], path.join(dir, "copy.jsonl"), [{ traceId: T, inputs, selection: WRITES, replaced: false }]);
 
       const alone = createTraceTally({ ...inputs, selections: [WRITES] });
@@ -166,7 +166,7 @@ describe("the world's stop counts a reading again", () => {
     expect(readingsToRecount([scenarioOf(slice, { foreign, nothing }, [])])).toEqual({ places: [], recounts: [] });
     const replaced = readRecord({ whole: false, open: [{ gap: "file-replaced" }] });
     expect(readingsToRecount([scenarioOf(slice, { replaced }, [])]).recounts).toEqual([
-      { traceId: T, inputs: { spans: [SPANS[0]], spansNotKept: 0, ranProcesses: false, processSpans: [] }, selection: WRITES, replaced: true },
+      { traceId: T, inputs: { spans: [SPANS[0]], spansNotKept: 0, processes: "none", processSpans: [] }, selection: WRITES, replaced: true },
     ]);
   });
 });

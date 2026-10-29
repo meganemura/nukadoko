@@ -10,9 +10,11 @@ import type { NukadokoConfig } from "../src/config/schema.js";
 import { installChannelPatches } from "../src/context/channels.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { createEventsReader, type EventsReader } from "../src/context/events-file.js";
-import { EVENTS_READ_FILE_NAME, readEvents, type EventsProducer, type EventsRequest } from "../src/context/events-read.js";
+import { EVENTS_READ_FILE_NAME, readEvents, tallyInputsOfSlice, type EventsProducer, type EventsRequest } from "../src/context/events-read.js";
 import type { StampedBoundaryTrace } from "../src/context/observed.js";
+import { parseEventLine, type ReadableLine } from "../src/execution-events/format.js";
 import type { EventSelection } from "../src/execution-events/selection.js";
+import { createTraceTally, type StepProcesses } from "../src/execution-events/tally.js";
 import type { EventsReadRecord, EventsSlice } from "../src/record/types.js";
 import type { SecretSet } from "../src/secrets/types.js";
 import { JOBS, PREFIX, REQUEST_ID, render, SPANS, T, traceparent, TX_IDS, U, type Op } from "./helpers/event-lines.js";
@@ -47,10 +49,11 @@ afterEach(() => {
 const line = (trace: string, fields: Record<string, unknown>, span: string = SPANS[0]!): string => JSON.stringify({ trace: traceparent(trace, span), ...fields });
 const requestLine = (trace = T, span = SPANS[0]!) => line(trace, { kind: "request", id: REQUEST_ID, method: "POST", route: "/rooms/:id/scores", status: 303 }, span);
 const insertLine = (trace = T, extra: Record<string, unknown> = {}) => line(trace, { kind: "db", table: "scores", op: "insert", committed: true, ...extra });
+const parseReadable = (text: string): ReadableLine => parseEventLine(text) as ReadableLine;
 const jobLine = (phase: "enqueue" | "perform", trace = T) => line(trace, { kind: "job", name: "ScoreRecalcJob", phase, job_id: JOBS[0] });
 
 function trace(spans: readonly string[], over: Partial<StampedBoundaryTrace> = {}): StampedBoundaryTrace {
-  return { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: 0, processSpans: [], ...over } as StampedBoundaryTrace;
+  return { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: "none", processSpans: [], ...over } as StampedBoundaryTrace;
 }
 
 /** An events file with `before` written, and a reader whose producer, the
@@ -96,7 +99,7 @@ describe("readEvents from the world's file", () => {
   });
 
   it("does not wait for what no more lines can close", async () => {
-    const { file, live } = await world([], trace([SPANS[0]!], { processes: 1, processSpans: [SPANS[2]!] }));
+    const { file, live } = await world([], trace([SPANS[0]!], { processes: "unbounded", processSpans: [SPANS[2]!] }));
     append(file, [jobLine("enqueue"), requestLine()]);
     const started = Date.now();
     const readings = await read(path.join(dir, "then"), requests(live, { performs: PERFORMS }), 5000);
@@ -284,6 +287,21 @@ describe("readEvents from a finished record", () => {
     expect(readings.inserts).toMatchObject({ range: { at_least: 1, at_most: 1 }, whole: true, lines: 4, waited_ms: 0, file: EVENTS_READ_FILE_NAME });
     expect(readings.performs).toMatchObject({ range: { at_least: 1, at_most: 1 }, whole: true });
   });
+
+  it("reads back from a slice's gaps what its step's processes left open, so the record's reading opens the same gaps", () =>
+    hegel.test((tc) => {
+      const processes = tc.draw(gs.sampledFrom<StepProcesses>(["none", "ended", "unbounded"]));
+      const spans = SPANS.slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: SPANS.length })));
+      const reported = spans.filter(() => tc.draw(gs.booleans()));
+      const readingOf = (inputs: Parameters<typeof createTraceTally>[0]) => {
+        const tally = createTraceTally(inputs);
+        for (const span of reported) tally.owned(parseReadable(requestLine(T, span)));
+        return tally.reading({ truncated: false, replaced: false });
+      };
+      const live = readingOf({ spans, spansNotKept: 0, processes, processSpans: [] });
+      const slice = { trace_id: T, lines: live.lines, file: null, kinds: live.kinds, stamped: spans.length, stamped_spans: spans, unreadable: 0, unowned: 0, process_spans: [], process_requests: 0, whole: live.whole, open: live.open } satisfies EventsSlice;
+      expect(readingOf(tallyInputsOfSlice(slice)).open).toEqual(live.open);
+    }));
 
   it("widens each count by the lines no step owned in the producer's slice, and matches no request of a record without its spans", async () => {
     const widened = await read(path.join(dir, "widened"), requests(recorded([insertLine(), requestLine()], [], { unowned: 2 }), { inserts: INSERTS }));

@@ -82,3 +82,23 @@ describe("createObservedCollector process output", () => {
     expect(observed.snapshot().processes).toEqual([entry]);
   });
 });
+
+describe("a boundary's processes, as its trace states them", () => {
+  const ending = gs.sampledFrom(["ended", "running", "no group", "still running"] as const);
+
+  it("are none until one starts, ended once each closed with its group empty, and unbounded otherwise", () =>
+    hegel.test((tc) => {
+      const ends = tc.draw(gs.arrays(ending, { maxSize: 6 }));
+      const observed = createObservedCollector({ trace: { prefix: "4bf92f35", origin: "http://127.0.0.1:1" } });
+      for (const end of ends) {
+        const finish = observed.startProcess();
+        observed.processTraceparent?.();
+        if (end === "still running") continue;
+        finish({ command: ["x"], cwd: "/", exit_code: 0, duration_ms: 1, ...(end === "no group" ? {} : { group: end }) });
+      }
+      const trace = observed.boundaryTrace()!;
+      expect(trace.processes).toBe(ends.length === 0 ? "none" : ends.every((end) => end === "ended") ? "ended" : "unbounded");
+      // A slice waits for the lines of a process given the step's trace.
+      expect(trace.lastStampAt !== undefined).toBe(ends.length > 0);
+    }));
+});

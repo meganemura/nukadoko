@@ -24,7 +24,7 @@ async function sliceOf(dir: string, texts: readonly string[], spans: readonly st
   const reader = createEventsReader(file, PREFIX, []);
   appendFileSync(file, texts.map((text) => `${text}\n`).join(""));
   const stepDir = path.join(dir, "step");
-  const { unowned: _unowned, ...slice } = await reader.slice(stepDir, { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: 0, processSpans: [] });
+  const { unowned: _unowned, ...slice } = await reader.slice(stepDir, { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: "none", processSpans: [] });
   const kept = path.join(stepDir, "events.jsonl");
   return { slice, kept: existsSync(kept) ? readFileSync(kept, "utf8") : null };
 }
@@ -65,7 +65,7 @@ describe("createTraceTally", () => {
   };
 
   function fold(texts: readonly string[], spans: readonly string[]) {
-    const tally = createTraceTally({ spans, spansNotKept: 0, ranProcesses: false, processSpans: [] });
+    const tally = createTraceTally({ spans, spansNotKept: 0, processes: "none", processSpans: [] });
     for (const text of texts) {
       const line = readable(text);
       if (line === undefined) tally.damaged();
@@ -117,7 +117,7 @@ describe("createTraceTally", () => {
       render(["request", 0], T, U, ""),
       render(["damaged"], T, U, ""),
     ];
-    const tally = createTraceTally({ spans: SPANS, spansNotKept: 2, ranProcesses: false, processSpans: [] });
+    const tally = createTraceTally({ spans: SPANS, spansNotKept: 2, processes: "none", processSpans: [] });
     for (const text of lines) {
       const line = readable(text);
       if (line === undefined) tally.damaged();
@@ -139,8 +139,8 @@ describe("createTraceTally", () => {
       ],
       counts: [],
     });
-    expect(createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: false, processSpans: [] }).reading({ truncated: false, replaced: false }).open).toEqual([{ gap: "no-lines" }]);
-    expect(createTraceTally({ spans: [], spansNotKept: 0, ranProcesses: false, processSpans: [] }).reading({ truncated: false, replaced: false })).toEqual({
+    expect(createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, processes: "none", processSpans: [] }).reading({ truncated: false, replaced: false }).open).toEqual([{ gap: "no-lines" }]);
+    expect(createTraceTally({ spans: [], spansNotKept: 0, processes: "none", processSpans: [] }).reading({ truncated: false, replaced: false })).toEqual({
       lines: 0,
       kinds: {},
       unreadable: 0,
@@ -152,17 +152,18 @@ describe("createTraceTally", () => {
     });
   });
 
-  it("is never whole for a step that ran a process, whose requests to the world nukadoko cannot count", () => {
-    const reported = render(["request", 0], T, U, "");
-    const ranOnly = createTraceTally({ spans: [], spansNotKept: 0, ranProcesses: true, processSpans: [] });
-    expect(ranOnly.reading({ truncated: false, replaced: false })).toMatchObject({ whole: false, open: [{ gap: "processes-unbounded" }] });
-    const ranAndStamped = createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: true, processSpans: [] });
-    ranAndStamped.owned(readable(reported)!);
-    expect(ranAndStamped.reading({ truncated: false, replaced: false })).toMatchObject({ whole: false, open: [{ gap: "processes-unbounded" }] });
-    const stampedOnly = createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: false, processSpans: [] });
-    stampedOnly.owned(readable(reported)!);
-    expect(stampedOnly.reading({ truncated: false, replaced: false })).toMatchObject({ whole: true, open: [] });
-  });
+  it("leaves a step's processes open only while one may still send, and a step that started nothing open for that alone", () =>
+    hegel.test((tc) => {
+      const processes = tc.draw(gs.sampledFrom(["none", "ended", "unbounded"] as const));
+      const spans = SPANS.slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: SPANS.length })));
+      const tally = createTraceTally({ spans, spansNotKept: 0, processes, processSpans: [] });
+      for (const span of spans.keys()) tally.owned(readable(render(["request", span], T, U, ""))!);
+      const startedNothing = spans.length === 0 && processes === "none";
+      expect(tally.reading({ truncated: false, replaced: false }).open).toEqual([
+        ...(startedNothing ? [{ gap: "no-requests" }] : []),
+        ...(processes === "unbounded" ? [{ gap: "processes-unbounded" }] : []),
+      ]);
+    }));
 });
 
 describe("readingGaps", () => {
