@@ -1,7 +1,8 @@
 import { appendFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { flagOf, ownerOf, parseEventLine, requestOf, type FlagEvaluation, type ParsedLine, type ServedRequest } from "../execution-events/format.js";
+import { ownerOf, parseEventLine, type ParsedLine } from "../execution-events/format.js";
 import type { CountedGroup } from "../execution-events/counted.js";
+import { createPathFold, type PathFold, type StepPath } from "../execution-events/path.js";
 import type { EventSelection } from "../execution-events/selection.js";
 import { createKindsSeen, createTraceTally, readingGaps, type EventsGap, type KindsSeen, type SelectionCount, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
 import type { EventsSlice } from "../record/types.js";
@@ -16,13 +17,13 @@ import { traceIdIn } from "./trace-context.js";
 // file `{events}` names (docs/execution-events.md, docs/spec.md "Execution
 // events"): each step's slice of them, written beside its record when the
 // step ends, and, once the world has stopped, the world's redacted copy,
-// each step's lines that arrived after its record, the flags each trace
-// evaluated and the requests it sent, read in that one pass so a late
-// flag or request line counts as one in the slice does, and each count a
-// claim step took of a step's lines, taken again over all of them.
-// Boundary: owns no file (the program writes it, src/program/world.ts
-// makes and removes it), and decides nothing a line says
-// (src/execution-events/ does).
+// each step's lines that arrived after its record, each step's coarse
+// path (src/execution-events/path.ts: the flags it evaluated and the
+// requests it sent among them), read in that one pass so a late line
+// counts as one in the slice does, and each count a claim step took of a
+// step's lines, taken again over all of them. Boundary: owns no file (the
+// program writes it, src/program/world.ts makes and removes it), and
+// decides nothing a line says (src/execution-events/ does).
 // Reading forward, the wait, the cap, and the late pass are
 // trace-slice.ts's, shared with the program's log.
 //
@@ -214,6 +215,15 @@ export interface Recount {
   readonly replaced: boolean;
 }
 
+/** A step of the stopped world whose slice read the file. */
+export interface EventsStep extends TracedStep {
+  /** What its trace needs to be told whole. */
+  readonly inputs: Omit<TallyInputs, "selections">;
+  /** Its slice found the file replaced or made shorter: the file the
+   * stop reads is not the one the slice read. */
+  readonly replaced: boolean;
+}
+
 /** That count, over every line of the file. The lines no step owns are
  * not counted: they belong to the reading's window, which closed when it
  * read. */
@@ -238,27 +248,22 @@ export interface WorldEvents {
   readonly undefinedKinds: Readonly<Record<string, number>>;
   /** Each step with a line after its slice, by trace id. */
   readonly late: ReadonlyMap<string, LateSlice>;
-  /** The distinct flag evaluations of each trace id of the world, by
-   * trace id, from every line the file holds: a step's slice and its
-   * late lines alike. */
-  readonly flags: ReadonlyMap<string, readonly FlagEvaluation[]>;
+  /** Each step's coarse path, by trace id, from every line of its trace
+   * the file holds: its slice and its late lines alike. */
+  readonly paths: ReadonlyMap<string, StepPath>;
   /** One per recount the stop was given, in order. */
   readonly recounted: readonly Recounted[];
-  /** Every request each trace id of the world sent that a `request`
-   * line reports, one per line, from every line the file holds, by trace
-   * id. */
-  readonly requests: ReadonlyMap<string, readonly ServedRequest[]>;
 }
 
 /** Reads the whole events file of a stopped world: writes its redacted
  * copy to `copyPath`, each step's lines past its slice to its
- * EVENTS_LATE_FILE_NAME, counts what the file holds, and counts each of
- * `recounts` again over every line of its trace. `steps` give `lines`
- * as `observed.events.lines`. */
+ * EVENTS_LATE_FILE_NAME, counts what the file holds, folds each step's
+ * path, and counts each of `recounts` again over every line of its
+ * trace. `steps` give `lines` as `observed.events.lines`. */
 export function collectWorldEvents(
   filePath: string,
   prefix: string,
-  steps: readonly TracedStep[],
+  steps: readonly EventsStep[],
   secrets: SecretSet,
   copyPath: string,
   recounts: readonly Recount[] = [],
@@ -267,12 +272,11 @@ export function collectWorldEvents(
   let unowned = 0;
   let unreadable = 0;
   const undefinedKinds = new Map<string, number>();
-  const flags = new Map<string, Map<string, FlagEvaluation>>();
+  const folds = new Map<string, PathFold>(steps.map((step) => [step.traceId, createPathFold(step.inputs)]));
   const kinds = createKindsSeen();
   const tallies = recounts.map((recount) => createTraceTally({ ...recount.inputs, selections: [recount.selection] }));
   const talliesOf = new Map<string, TraceTally[]>();
   recounts.forEach((recount, index) => talliesOf.set(recount.traceId, [...(talliesOf.get(recount.traceId) ?? []), tallies[index]!]));
-  const requests = new Map<string, ServedRequest[]>();
   let pending: string[] = [];
   let pendingBytes = 0;
   let copied = true;
@@ -305,28 +309,18 @@ export function collectWorldEvents(
       if (parsed.state === "unreadable") unreadable += 1;
       else if (owner === undefined) unowned += 1;
       if (parsed.state === "undefined-kind") undefinedKinds.set(parsed.kind, (undefinedKinds.get(parsed.kind) ?? 0) + 1);
-      const flag = flagOf(parsed);
-      if (flag !== undefined && owner !== undefined) {
-        const seen = flags.get(owner) ?? new Map<string, FlagEvaluation>();
-        seen.set(JSON.stringify([flag.name, flag.side, flag.gate]), flag);
-        flags.set(owner, seen);
-      }
       kinds.note(parsed);
-      if (talliesOf.size > 0) {
-        // Ownership as the slice reads it (module header): a damaged line by
-        // the id its text carries, a readable one by its `trace` field.
-        if (parsed.state === "unreadable") {
-          const id = traceIdIn(line.text, prefix);
-          for (const tally of id === undefined ? [] : (talliesOf.get(id) ?? [])) tally.damaged();
-        } else if (owner !== undefined) {
-          for (const tally of talliesOf.get(owner) ?? []) tally.owned(parsed);
+      // Ownership as the slice reads it (module header): a damaged line by
+      // the id its text carries, a readable one by its `trace` field.
+      if (parsed.state === "unreadable") {
+        const id = traceIdIn(line.text, prefix);
+        if (id !== undefined) {
+          folds.get(id)?.damaged();
+          for (const tally of talliesOf.get(id) ?? []) tally.damaged();
         }
-      }
-      const request = requestOf(parsed);
-      if (request !== undefined && owner !== undefined) {
-        const sent = requests.get(owner) ?? [];
-        requests.set(owner, sent);
-        sent.push(request);
+      } else if (owner !== undefined) {
+        folds.get(owner)?.owned(parsed);
+        for (const tally of talliesOf.get(owner) ?? []) tally.owned(parsed);
       }
       if (!copied) return;
       const text = keptLine(line.text, parsed, secrets);
@@ -336,7 +330,8 @@ export function collectWorldEvents(
     },
   });
   withoutChannelRecording(flush);
-  const evaluated = new Map([...flags].map(([traceId, seen]) => [traceId, [...seen.values()]]));
+  // Nothing is kept, so nothing is cut.
+  const paths = new Map(steps.map((step) => [step.traceId, folds.get(step.traceId)!.path({ truncated: false, replaced: step.replaced })]));
   const recounted = recounts.map((recount, index): Recounted => {
     // Nothing is kept, so nothing is cut.
     const reading = tallies[index]!.reading({ truncated: false, replaced: recount.replaced });
@@ -345,5 +340,5 @@ export function collectWorldEvents(
     const count = { ...reading.counts[0]!, counted: redact(reading.counts[0]!.counted, secrets) as CountedGroup[] };
     return { lines: reading.lines, unreadable: reading.unreadable, count, open: readingGaps(reading.open, recount.selection.kind, kinds) };
   });
-  return { copied, lines, owned, unowned, unreadable, undefinedKinds: Object.fromEntries(undefinedKinds), late, flags: evaluated, recounted, requests };
+  return { copied, lines, owned, unowned, unreadable, undefinedKinds: Object.fromEntries(undefinedKinds), late, paths, recounted };
 }

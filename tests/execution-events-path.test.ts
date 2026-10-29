@@ -1,12 +1,15 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { collectWorldEvents, createEventsReader } from "../src/context/events-file.js";
+import { tallyInputsOfSlice } from "../src/context/events-read.js";
 import { parseEventLine } from "../src/execution-events/format.js";
 import { boundingGaps, createPathFold, rangeOn, type PathKey, type StepPath } from "../src/execution-events/path.js";
 import { createTraceTally } from "../src/execution-events/tally.js";
-import { JOBS, op, render, SPANS, T, traceparent, U, type Op } from "./helpers/event-lines.js";
+import { JOBS, op, PREFIX, render, SPANS, T, traceparent, U, type Op } from "./helpers/event-lines.js";
 import { repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: a step's coarse execution path
@@ -14,7 +17,9 @@ import { repoRoot } from "./helpers/fixtures.js";
 // that the order lines arrive in changes no count, that its gaps are the
 // tally's over the same lines, and the range a count on a path lies in.
 // The format's own example is read line by line, as a reader of a path
-// would read it.
+// would read it. The world's stop folds a step's path over every line of
+// its trace, so a line that arrived after the step's record counts as one
+// in its slice does.
 
 // The kinds the shared generator does not write: a read, which no path
 // keeps, a flag with a gate, an error, and an outgoing call.
@@ -206,4 +211,40 @@ describe("rangeOn", () => {
     const found = fold([text(["enqueue", 0]), text(["enqueue", 1]), text(["perform", 1])], [SPANS[0]!]);
     expect(found.entries.find((entry) => entry.kind === "job" && entry.phase === "enqueue")?.count).toBe(JOBS.length);
   });
+});
+
+describe("the world's stop", () => {
+  const withDir = async <Result>(run: (dir: string) => Promise<Result>): Promise<Result> => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-path-test-"));
+    try {
+      return await run(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const fileLines = (file: string): string[] => (existsSync(file) ? readFileSync(file, "utf8").split("\n").filter((line) => line !== "") : []);
+
+  it("gives a step the path of every line of its trace, its slice and its late lines alike, wherever another trace's lines fall", () =>
+    hegel.testAsync(async (tc) => {
+      const spans = SPANS.slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: SPANS.length })));
+      const own = tc.draw(gs.arrays(pathOp, { maxSize: 10 })).map(text);
+      const mixed = [...own];
+      for (const other of tc.draw(gs.arrays(op, { maxSize: 6 })).map((entry) => render(entry, U, T, ""))) mixed.splice(tc.draw(gs.integers({ minValue: 0, maxValue: mixed.length })), 0, other);
+      const before = tc.draw(gs.integers({ minValue: 0, maxValue: mixed.length }));
+      await withDir(async (dir) => {
+        const file = path.join(dir, "events.jsonl");
+        writeFileSync(file, "");
+        const reader = createEventsReader(file, PREFIX, []);
+        appendFileSync(file, mixed.slice(0, before).map((line) => `${line}\n`).join(""));
+        const stepDir = path.join(dir, "step");
+        const slice = await reader.slice(stepDir, { traceId: T, stamped: spans.length, lastStampAt: undefined, spans, spansNotKept: 0, processes: 0, processSpans: [] });
+        appendFileSync(file, mixed.slice(before).map((line) => `${line}\n`).join(""));
+        const { paths } = collectWorldEvents(file, PREFIX, [{ traceId: T, lines: slice.lines, dir: stepDir, inputs: tallyInputsOfSlice(slice), replaced: false }], [], path.join(dir, "world.jsonl"));
+        expect(paths.get(T)).toEqual(fold(own, spans));
+        // A damaged line is kept only in the world's copy, so the step's
+        // own two files give the same path when no line of it is damaged.
+        const kept = [...fileLines(path.join(stepDir, "events.jsonl")), ...fileLines(path.join(stepDir, "events-late.jsonl"))];
+        if (own.every((line) => parseEventLine(line).state !== "unreadable")) expect(fold(kept, spans)).toEqual(paths.get(T));
+      });
+    }));
 });

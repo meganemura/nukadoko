@@ -747,7 +747,17 @@
     { "en": ["route", "routes"], "ja": "ルート", "note": "リクエストを受けるパスのテンプレート(`/rooms/:id`)とメソッドの組。`request` の行の `route` フィールドはコードスパンで英語のまま" },
     { "en": ["handler", "handlers"], "ja": "ハンドラ", "note": "ルートが実行するもの(`rooms#update`)。サーバ と同じく長音を付けない。フィールド名 `handler` はコードスパンで英語のまま" },
     { "en": ["requested (a route)", "never requested", "no step requested"], "ja": "リクエストした / 一度もリクエストしなかった / どの step もリクエストしなかった", "note": "run.json の `routes` が言うこと。`request` の行が言うのはプログラムが一致させたルートで、step がその返事を claim で確かめたことではないので、「確かめた」「テストした」とは書かない" },
-    { "en": ["the only side evaluated", "only this side was evaluated"], "ja": "評価された唯一の側 / この側だけが評価された", "note": "受け入れ基準が flag のほかの側を評価しなかったときの、その 1 つの側。フィールド `only_side_evaluated` と、サマリの文言 `only this side was evaluated` はコードスパンで英語のまま" }
+    { "en": ["the only side evaluated", "only this side was evaluated"], "ja": "評価された唯一の側 / この側だけが評価された", "note": "受け入れ基準が flag のほかの側を評価しなかったときの、その 1 つの側。フィールド `only_side_evaluated` と、サマリの文言 `only this side was evaluated` はコードスパンで英語のまま" },
+    {
+      "en": ["coarse execution path", "path (of a step)", "paths"],
+      "ja": "実行経路",
+      "note": "step の trace の行が言うプログラムのしたことを、行がしたことごとに(書き込みは表と op、ジョブは名前と phase)数えたもの。ファイルの パス とは別の語。フィールド `path`、`paths`、`requests`、`entries` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["entry (of a path)", "entries"],
+      "ja": "項目",
+      "note": "実行経路の、種類とフィールドの値の組 1 つと、それを報告した行の数。断定の表の行とも実行イベントの行とも別なので、行 と書かない"
+    }
   ],
   "keep_english": [
     {

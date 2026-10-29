@@ -1001,36 +1001,33 @@ export async function runRun(options: RunRunOptions): Promise<number> {
                 lines: slice.lines,
                 stamped: slice.stamped,
                 dir: path.join(runDirAbsolute, step.record),
-                ...(events === undefined || events === null ? {} : { eventLines: events.lines }),
+                ...(events === undefined || events === null ? {} : { events }),
               },
             ];
           }),
         );
-      const { exitedEarly, late, eventsLate, flags, recounted, requests } = await world.stop(steps, recounts);
+      const { exitedEarly, late, eventsLate, paths, recounted } = await world.stop(steps, recounts);
       worlds.push(world.record());
       // Read here, where every line of the world has its owner, so a flag
-      // line that came after its step's record counts too.
-      if (flags.size > 0) {
+      // or request line that came after its step's record counts too. Both
+      // come from the step's path, the one fold of its trace.
+      if (paths.size > 0) {
         for (const scenario of runScenarios) {
           if (!inWorld(scenario)) continue;
-          const evaluated = scenario.steps.flatMap((step) => {
+          const found = scenario.steps.flatMap((step) => {
             const traceId = step.observed?.events?.trace_id;
-            return traceId === undefined ? [] : (flags.get(traceId) ?? []);
+            const stepPath = traceId === undefined ? undefined : paths.get(traceId);
+            return stepPath === undefined ? [] : [stepPath];
           });
+          const evaluated = found.flatMap((stepPath) =>
+            stepPath.entries.flatMap((entry) => (entry.kind === "flag" ? (entry.gates ?? []).map((gate) => ({ name: entry.name, side: entry.side, gate })) : [])),
+          );
+          const sent = found.flatMap((stepPath) => stepPath.requests);
           if (evaluated.length > 0) flagEvaluations.set(scenario.scenario_record_id, [...(flagEvaluations.get(scenario.scenario_record_id) ?? []), ...evaluated]);
-        }
-      }
-      if (requests.size > 0) {
-        for (const scenario of runScenarios) {
-          if (!inWorld(scenario)) continue;
-          const sent = scenario.steps.flatMap((step) => {
-            const traceId = step.observed?.events?.trace_id;
-            return traceId === undefined ? [] : (requests.get(traceId) ?? []);
-          });
           if (sent.length > 0) requestsServed.set(scenario.scenario_record_id, [...(requestsServed.get(scenario.scenario_record_id) ?? []), ...sent]);
         }
       }
-      if (late.size > 0 || eventsLate.size > 0) {
+      if (late.size > 0 || eventsLate.size > 0 || paths.size > 0) {
         for (const [index, scenario] of runScenarios.entries()) {
           if (!inWorld(scenario)) continue;
           runScenarios[index] = {
@@ -1039,10 +1036,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               const traceId = step.observed?.program_log?.trace_id;
               const found = traceId === undefined ? undefined : late.get(traceId);
               const foundEvents = traceId === undefined ? undefined : eventsLate.get(traceId);
+              const eventsTrace = step.observed?.events?.trace_id;
+              const foundPath = eventsTrace === undefined ? undefined : paths.get(eventsTrace);
               return {
                 ...step,
                 ...(found === undefined ? {} : { program_log_late: found }),
                 ...(foundEvents === undefined ? {} : { events_late: foundEvents }),
+                ...(foundPath === undefined ? {} : { path: foundPath }),
               };
             }),
           };

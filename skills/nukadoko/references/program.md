@@ -152,10 +152,10 @@ wrong variable), `request-unreported`, `jobs-pending` (with `job_ids`),
 `unreadable` (a line spliced or cut), `truncated`, `file-replaced`. A line that
 arrived later is in `events-late.jsonl`, and the run summary names it. The
 whole file, redacted, is in `worlds/<environment>/events.jsonl`; a world at a
-`url` has none, and `observed.events` is `null` there. A `flag` line, late or
-not, also puts its step's criterion in run.json's `flags`, under the side the
-line names (`references/verdicts.md`). `lists` names the routes and flags the
-program has (docs/spec.md "Lists"), so run.json names those no step reached.
+`url` has none, and `observed.events` is `null` there. run.json's step gets
+`path`, what its trace did, late lines included (writes, jobs, requests,
+flags; no reads); its flags and requests make run.json's `flags` and `routes`,
+and `lists` (docs/spec.md "Lists") names those no step reached (`references/verdicts.md`).
 
 ## Claiming what the program did
 

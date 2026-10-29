@@ -3941,11 +3941,61 @@ Each step's `observed.events` is `null`, the world's `events` in
 - events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
-The same pass reads each `flag` line a step owns, so a flag line that
-arrived after its step's record counts as one in the record does.
-`run.json` gathers them into `flags`, one row per flag and side, so a
-reader deciding whether to turn a flag on for everyone finds which
-criteria ran on each side and what their rows came to:
+The same pass folds each step's path: what the lines of its trace say
+the program did, counted by what each line did and no finer.
+A line that arrived after the step's record counts as one in the
+record does.
+The step in `run.json` carries it as `path`, beside `events_late`.
+The path of the request in the format's example
+([docs/execution-events.md](execution-events.md), "Example") is:
+
+```json
+"path": {
+  "requests": [{ "method": "POST", "route": "/rooms/:room_id/scores", "status": 303 }],
+  "entries": [
+    { "kind": "db", "table": "rankings", "op": "update", "count": 1 },
+    { "kind": "db", "table": "scores", "op": "insert", "count": 1 },
+    { "kind": "job", "name": "ScoreRecalcJob", "phase": "enqueue", "count": 1 },
+    { "kind": "job", "name": "ScoreRecalcJob", "phase": "perform", "count": 1 },
+    { "kind": "flag", "name": "score_input_slider", "side": "off", "count": 1, "gates": ["boolean"] }
+  ],
+  "maybe": 0,
+  "open": []
+}
+```
+
+- `requests` holds the `method`, `route`, and `status` of each
+  `request` line, in the order the step sent the request (its span's
+  place in `stamped_spans`), then the lines with a bare trace id and the
+  requests of the step's `runCommand` processes, as they arrived.
+- `entries` counts every other line by the fields its kind keeps, in
+  this order of kinds: `error` by `class` and `handled`, `db` by
+  `table` and `op`, `http` by `method`, `origin`, `path`, and
+  `status`, `job` by `name` and `phase`, and `flag` by `name` and
+  `side`, with `gates`, each `gate` its lines named, as the cells of
+  `flags` name them.
+  Within a kind, the entries are in the order of their values.
+- A path leaves out a database read, a `tx` line, row ids, and
+  `actor`.
+  Reads stay out for now: a count of queries moves with every cache, so
+  it would differ between two runs of one criterion when nothing else
+  did.
+  A path does not read commit state either, so a write that rolled back
+  counts as written.
+- `maybe` counts the lines of the trace that may be any line: one that
+  did not read and whose text carries the trace id, one of a kind the
+  format does not define, and one of a later version.
+  A writer's own `x_` kind is not counted.
+- `open` names the trace's gaps by the rules of `observed.events.open`,
+  over every line the file held when the world stopped, so a job that
+  performed after the step's record leaves it open no longer.
+- A step has no `path` when its world has no events file, and when it
+  did not run.
+
+The flag entries of the head steps' paths make `run.json`'s `flags`,
+one row per flag and side, so a reader deciding whether to turn a flag
+on for everyone finds which criteria ran on each side and what their
+rows came to:
 
 ```json
 "flags": [
@@ -4420,9 +4470,9 @@ ones that were:
 ```
 
 - `requests` counts every `request` line a head step owns that names
-  the method and route, a late one included, read in the same pass as
-  `flags`, and `statuses` holds each status those lines name, once,
-  ascending.
+  the method and route, a late one included, read from the `requests`
+  of the steps' paths as `flags` reads their flag entries, and
+  `statuses` holds each status those lines name, once, ascending.
   Every such line is in exactly one entry.
 - A request counts the same in a Given as in a Then.
   A `request` line says which route the program matched and what it

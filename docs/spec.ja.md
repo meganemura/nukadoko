@@ -3084,9 +3084,45 @@ run サマリはこう言います:
 - events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
-同じ 1 回の読みで、step が持つ `flag` の行もそれぞれ読みます。
-そのため、step の record のあとに届いた flag の行も、record の中の行と同じように数えます。
-`run.json` はそれを `flags` に集め、flag と側の組ごとに 1 つの要素にします。
+同じ 1 回の読みで、各 step の実行経路も数えます。
+実行経路は、step の trace の行が言うプログラムのしたことを、行がしたことごとに、それより細かくせずに数えたものです。
+step の record のあとに届いた行も、record の中の行と同じように数えます。
+`run.json` の step は、それを `events_late` の隣の `path` に持ちます。
+形式の例([docs/execution-events.ja.md](execution-events.ja.md) の「例」)のリクエストの実行経路はこうです:
+
+```json
+"path": {
+  "requests": [{ "method": "POST", "route": "/rooms/:room_id/scores", "status": 303 }],
+  "entries": [
+    { "kind": "db", "table": "rankings", "op": "update", "count": 1 },
+    { "kind": "db", "table": "scores", "op": "insert", "count": 1 },
+    { "kind": "job", "name": "ScoreRecalcJob", "phase": "enqueue", "count": 1 },
+    { "kind": "job", "name": "ScoreRecalcJob", "phase": "perform", "count": 1 },
+    { "kind": "flag", "name": "score_input_slider", "side": "off", "count": 1, "gates": ["boolean"] }
+  ],
+  "maybe": 0,
+  "open": []
+}
+```
+
+- `requests` は、各 `request` の行の `method`、`route`、`status` を持ちます。
+  順は step がリクエストを送った順(その span の `stamped_spans` での位置)で、そのあとに、trace id だけの行と、step の `runCommand` のプロセスのリクエストが、届いた順に続きます。
+- `entries` は、ほかの行を、その種類が残すフィールドごとに数えます。
+  種類の順はこうです: `error` は `class` と `handled`、`db` は `table` と `op`、`http` は `method`、`origin`、`path`、`status`、`job` は `name` と `phase`、`flag` は `name` と `side` で数えます。
+  `flag` は、行が名指した `gate` を、`flags` のセルと同じように `gates` に持ちます。
+  同じ種類の中では、値の順に並びます。
+- 実行経路は、データベースの読み取り、`tx` の行、行の id、`actor` を持ちません。
+  読み取りは、今のところ入れません。
+  クエリの数はキャッシュのたびに動くので、ほかに何も変わらなくても、同じ受け入れ基準の 2 回の実行の間で違ってしまうからです。
+  実行経路はコミットの状態も読まないので、ロールバックした書き込みも書いたものとして数えます。
+- `maybe` は、trace の行のうち、どの行でもありうる行を数えます。
+  読めずテキストに trace id を持つ行、形式が定めない種類の行、あとの版の行です。
+  書き手自身の `x_` の種類は数えません。
+- `open` は、`observed.events.open` の規則で trace の欠けを名指します。
+  world が止まったときにファイルにあったすべての行で決めるので、step の record のあとに perform したジョブは、もう欠けになりません。
+- world に実行イベントのファイルが無いとき、また step が走らなかったとき、step は `path` を持ちません。
+
+head の step の実行経路の flag の項目から、`run.json` の `flags` を作り、flag と側の組ごとに 1 つの要素にします。
 flag を全員に有効にするかを決める読み手が、どの受け入れ基準がそれぞれの側で走り、その行が何になったかを見つけられるようにするためです:
 
 ```json
@@ -3480,7 +3516,7 @@ head の world がルートの一覧を読むと、`run.json` は `routes` を�
 ```
 
 - `requests` は、head の step が持つ `request` の行のうち、そのメソッドとルートを名指すものを、遅れて届いた行も含めて数えます。
-  `flags` と同じ 1 回の読みで読みます。
+  `flags` が flag の項目を読むのと同じく、step の実行経路の `requests` から読みます。
   `statuses` は、その行が名指す各ステータスを 1 回ずつ、小さい順に持ちます。
   そうした行は、どれもちょうど 1 つの要素に入ります。
 - リクエストは、Given のものも Then のものも同じに数えます。

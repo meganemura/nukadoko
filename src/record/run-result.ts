@@ -6,6 +6,7 @@ import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
 import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStatus, ScenarioStepStatus, ScenarioStop } from "./scenario-record.js";
 import type { CountRange } from "../execution-events/count.js";
+import type { StepPath } from "../execution-events/path.js";
 import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
@@ -86,6 +87,11 @@ export interface RunStep {
    * trace id and arrived after its record was written, found when the
    * world stopped. Present only when there is one. */
   readonly events_late?: RunEventsLate;
+  /** What the program's execution events say the step did, counted by
+   * what each line did, from every line of its trace: its slice and its
+   * late lines alike, found when the world stopped. Absent when the
+   * world has no events file, or the step read none. */
+  readonly path?: StepPath;
   /** A claim step's claims, as its step record holds them, with each value
    * whose JSON is longer than `CLAIM_VALUE_MAX_BYTES` cut (`RunClaim`). */
   readonly claims?: readonly RunClaim[];

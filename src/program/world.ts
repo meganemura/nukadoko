@@ -5,12 +5,14 @@ import net from "node:net";
 import path from "node:path";
 import { commandWords, programUrlProblem, urlPort, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
 import { collectWorldEvents, EVENTS_WORLD_FILE_NAME, type Recount, type Recounted } from "../context/events-file.js";
+import { tallyInputsOfSlice } from "../context/events-read.js";
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
-import type { FlagEvaluation, ServedRequest } from "../execution-events/format.js";
 import { parseList, type ListedPlaces, type ListKind } from "../execution-events/lists.js";
+import type { StepPath } from "../execution-events/path.js";
 import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldList, RunWorldName } from "../record/run-result.js";
+import type { EventsSlice } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
@@ -98,8 +100,7 @@ import type { WorldView } from "./world-view.js";
 // before its first command runs. When the world stops, after the program
 // has, one pass over that file writes the world's redacted copy beside
 // `program.log` and each step's events that arrived after its record,
-// and reads the flags each trace evaluated and the requests it sent
-// (src/context/events-file.ts),
+// and folds each step's coarse path (src/context/events-file.ts),
 // and the file is removed. The steps get
 // the world's env without any variable that names `{events}`, so no
 // step's code, and no process a step starts, can write to the file.
@@ -126,9 +127,9 @@ import type { WorldView } from "./world-view.js";
 export interface WorldStep extends TracedStep {
   /** How many requests it sent to the world with a `traceparent`. */
   readonly stamped: number;
-  /** How many of the program's events its slice read
-   * (`observed.events.lines`), when the world has an events file. */
-  readonly eventLines?: number;
+  /** What its slice read of the program's events (`observed.events`),
+   * when the world has an events file. */
+  readonly events?: EventsSlice;
 }
 
 export interface WorldStop {
@@ -142,17 +143,13 @@ export interface WorldStop {
   /** Each step's execution events that arrived after its record was
    * written, by trace id. Empty when the world has no events file. */
   readonly eventsLate: ReadonlyMap<string, LateSlice>;
-  /** The flags each trace of the world evaluated, by trace id, from every
-   * line of its events file, a late one included. Empty when the world
-   * has no events file. */
-  readonly flags: ReadonlyMap<string, readonly FlagEvaluation[]>;
+  /** Each step's coarse path, by trace id, from every line of its trace
+   * in the events file, a late one included. Empty when the world has no
+   * events file. */
+  readonly paths: ReadonlyMap<string, StepPath>;
   /** One per recount the stop was given, in order, counted over every
    * line of the file. Empty when the world has no events file. */
   readonly recounted: readonly Recounted[];
-  /** The requests each trace of the world sent that a `request` line
-   * reports, by trace id, one per line, a late one included. Empty when
-   * the world has no events file. */
-  readonly requests: ReadonlyMap<string, readonly ServedRequest[]>;
 }
 
 export interface StartedWorld {
@@ -563,18 +560,18 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               };
             }
             let eventsLate: ReadonlyMap<string, LateSlice> = new Map();
-            let flags: ReadonlyMap<string, readonly FlagEvaluation[]> = new Map();
+            let paths: ReadonlyMap<string, StepPath> = new Map();
             let recounted: readonly Recounted[] = [];
-            let requests: ReadonlyMap<string, readonly ServedRequest[]> = new Map();
             if (events !== undefined) {
               try {
                 const copy = path.join(dir, EVENTS_WORLD_FILE_NAME);
-                const traced = (steps ?? []).flatMap((step) => (step.eventLines === undefined ? [] : [{ traceId: step.traceId, lines: step.eventLines, dir: step.dir }]));
+                const traced = (steps ?? []).flatMap(({ traceId, dir, events: slice }) =>
+                  slice === undefined ? [] : [{ traceId, lines: slice.lines, dir, inputs: tallyInputsOfSlice(slice), replaced: slice.open.some((gap) => gap.gap === "file-replaced") }],
+                );
                 const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy, recounts);
                 eventsLate = found.late;
-                flags = found.flags;
+                paths = found.paths;
                 recounted = found.recounted;
-                requests = found.requests;
                 worldEvents = {
                   file: found.copied ? options.recordPath(copy) : null,
                   lines: found.lines,
@@ -592,9 +589,8 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               exitedEarly: exitedEarly === null ? null : redactString(`${exitedEarly}; see ${options.displayPath(log.path)}`, allSecrets),
               late,
               eventsLate,
-              flags,
+              paths,
               recounted,
-              requests,
             };
           },
           record: () => record(null),

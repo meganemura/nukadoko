@@ -330,7 +330,10 @@ describe("the program's execution events", () => {
     expect(exitCode).toBe(0);
     const [steps] = scenarioSteps(rootDir);
     expect(steps!.size).toBe(3);
-    for (const step of steps!.values()) expect(step.observed).not.toHaveProperty("events");
+    for (const step of steps!.values()) {
+      expect(step.observed).not.toHaveProperty("events");
+      expect(step).not.toHaveProperty("path");
+    }
     expect(recordOf(rootDir, steps!.get("wait")!).result).toEqual({ file: null, fileMode: null, dirMode: null, named: [] });
     expect(latestRunJson(rootDir).worlds[0]).not.toHaveProperty("events");
     // The order page evaluated the flag, but no file took the line.
@@ -371,6 +374,7 @@ describe("execution events of a world at a URL", () => {
     for (const step of steps!.values()) {
       expect(step.observed.events).toBeNull();
       expect(recordOf(rootDir, step).observed.events).toBeNull();
+      expect(step).not.toHaveProperty("path");
     }
     expect(latestRunJson(rootDir).worlds[0].events).toBeNull();
     // The order page is a step that evaluates the flag where nukadoko

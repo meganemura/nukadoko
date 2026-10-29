@@ -338,6 +338,23 @@ just until 0.1.
   messages stream's exception all carry it. Two lists whose part between
   the items equal in place at their start and their end makes more than
   250,000 pairs of items get the line without it.
+- **Each step in run.json carries its coarse execution path.** When the
+  world stops, the one pass over its events file folds each step's trace
+  into the step's new `path`: `requests`, the method, route, and status
+  of each `request` line, in the order the step sent them, and
+  `entries`, every other line counted by what it did: an error by class
+  and whether it was handled, a write by table and op, an outgoing call
+  by method, origin, path, and status, a job by name and phase, and a
+  flag by name and side, with the gates its lines named. A line that
+  arrived after the step's record counts as one in it does, so `open`
+  names the trace's gaps over every line, and a job that performed late
+  no longer leaves a path open. `maybe` counts the lines that may be
+  any line. A path leaves out database reads, `tx` lines, row ids, and
+  actors; reads stay out for now, since a query count moves with every
+  cache. run.json's `flags` and `routes` read the flag entries and the
+  requests of these paths in place of folds of their own, and their
+  rows are the same. The field is additive, so no `schema_version`
+  changes.
 
 ### Changed
 

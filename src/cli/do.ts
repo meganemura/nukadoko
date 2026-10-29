@@ -728,7 +728,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
           lines: slice.lines,
           stamped: slice.stamped,
           dir: evidenceDir,
-          ...(events === undefined || events === null ? {} : { eventLines: events.lines }),
+          ...(events === undefined || events === null ? {} : { events }),
         },
       ];
     }
