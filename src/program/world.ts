@@ -4,7 +4,7 @@ import { mkdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { commandWords, programUrlProblem, urlPort, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
-import { collectWorldEvents, EVENTS_WORLD_FILE_NAME } from "../context/events-file.js";
+import { collectWorldEvents, EVENTS_WORLD_FILE_NAME, type Recount, type Recounted } from "../context/events-file.js";
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
@@ -134,15 +134,19 @@ export interface WorldStop {
    * line of its events file, a late one included. Empty when the world
    * has no events file. */
   readonly flags: ReadonlyMap<string, readonly FlagEvaluation[]>;
+  /** One per recount the stop was given, in order, counted over every
+   * line of the file. Empty when the world has no events file. */
+  readonly recounted: readonly Recounted[];
 }
 
 export interface StartedWorld {
   readonly ok: true;
   readonly view: WorldView;
   /** Stops the program and closes the log, then finds the late lines of
-   * `steps`, the pass's steps, and copies the world's events (module
-   * header). */
-  stop(steps?: readonly WorldStep[]): Promise<WorldStop>;
+   * `steps`, the pass's steps, copies the world's events (module
+   * header), and counts each of `recounts`, the claim steps' readings
+   * of the pass's events, again over every line. */
+  stop(steps?: readonly WorldStep[], recounts?: readonly Recount[]): Promise<WorldStop>;
   /** The world's run.json entry, as of now. */
   record(): RunWorld;
 }
@@ -489,7 +493,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         return {
           ok: true,
           view,
-          async stop(steps) {
+          async stop(steps, recounts) {
             const started = Date.now();
             const exitedEarly = running === undefined || running.exit === null ? null : `the program ${describeExit(running)} during the pass`;
             await running?.stop();
@@ -509,13 +513,15 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
             }
             let eventsLate: ReadonlyMap<string, LateSlice> = new Map();
             let flags: ReadonlyMap<string, readonly FlagEvaluation[]> = new Map();
+            let recounted: readonly Recounted[] = [];
             if (events !== undefined) {
               try {
                 const copy = path.join(dir, EVENTS_WORLD_FILE_NAME);
                 const traced = (steps ?? []).flatMap((step) => (step.eventLines === undefined ? [] : [{ traceId: step.traceId, lines: step.eventLines, dir: step.dir }]));
-                const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy);
+                const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy, recounts);
                 eventsLate = found.late;
                 flags = found.flags;
+                recounted = found.recounted;
                 worldEvents = {
                   file: found.copied ? options.recordPath(copy) : null,
                   lines: found.lines,
@@ -534,6 +540,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               late,
               eventsLate,
               flags,
+              recounted,
             };
           },
           record: () => record(null),

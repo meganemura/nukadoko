@@ -1,8 +1,8 @@
 import path from "node:path";
 import { rangeOf } from "../execution-events/count.js";
-import { ownerOf, parseEventLine, type EventKindName, type ParsedLine } from "../execution-events/format.js";
+import { ownerOf, parseEventLine, type ParsedLine } from "../execution-events/format.js";
 import { matchLine, type EventSelection } from "../execution-events/selection.js";
-import { createKindsSeen, createTraceTally, GAP_WORDS, type EventsGap, type KindsSeen, type MaybeCounts, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
+import { createKindsSeen, createTraceTally, readingGaps, type EventsGap, type KindsSeen, type MaybeCounts, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
 import type { EventsProducerRecord, EventsReadRecord, EventsSlice } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import { withoutChannelRecording } from "./channels.js";
@@ -223,12 +223,6 @@ function readRecorded(group: Group, kinds: KindsSeen, keep: (text: string, parse
   group.replaced = slice.open.some((gap) => gap.gap === "file-replaced");
 }
 
-const ORDER = new Map<string, number>(GAP_WORDS.map((word, index) => [word, index]));
-
-function inOrder(open: readonly EventsGap[]): EventsGap[] {
-  return [...open].sort((left, right) => ORDER.get(left.gap)! - ORDER.get(right.gap)!);
-}
-
 const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 };
 
 /** Reads each request's producer, waiting until every live producer's
@@ -284,8 +278,7 @@ export async function readEvents(requests: readonly EventsRequest[], options: Ev
     const count = reading.counts[index]!;
     const maybe = { ...count.maybe, unowned: count.maybe.unowned + group.unownedNotKept };
     const kinds = producer.source === "live" ? kindsOf.get(producer.file)! : recordedKinds;
-    const kind: EventKindName = selection.kind;
-    const open = inOrder([...reading.open, ...(kinds.has(kind) ? [] : [{ gap: "kind-unreported" as const, kind }])]);
+    const open = readingGaps(reading.open, selection.kind, kinds);
     const whole = open.length === 0;
     records[request.key] = {
       of: producer.of,

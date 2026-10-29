@@ -313,6 +313,7 @@ export default {
       glob: "src/run/**",
       surface: [
         "base-run.ts",
+        "events-after-stop.ts",
         "execute-typed-step.ts",
         "flag-rows.ts",
         "match-step.ts",

@@ -62,6 +62,7 @@ import { generateRunId } from "../run/run-id.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
+import { readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
@@ -965,10 +966,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // Stops the pass's world. Every scenario of the pass has its entry by
     // now, so the stop can find each step's lines of the program's log and
     // events that arrived after its record was written, and those entries
-    // say so.
+    // say so. A claim on a count of execution events is judged again over
+    // every line of the producer's trace, and an execution whose claim the
+    // whole count judges otherwise is `broke` in its cell
+    // (src/run/events-after-stop.ts).
     const stopWorld = async (world: StartedWorld, tree: RunWorldName = "head"): Promise<void> => {
       const name = world.view.name;
       const inWorld = (scenario: RunScenario): boolean => scenario.environment === name && (scenario.world ?? "head") === tree;
+      const passIndexes = runScenarios.flatMap((scenario, index) => (inWorld(scenario) ? [index] : []));
+      const { places, recounts } = readingsToRecount(passIndexes.map((index) => runScenarios[index]!));
       const steps: WorldStep[] = runScenarios
         .filter(inWorld)
         .flatMap((scenario) =>
@@ -987,7 +993,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             ];
           }),
         );
-      const { exitedEarly, late, eventsLate, flags } = await world.stop(steps);
+      const { exitedEarly, late, eventsLate, flags, recounted } = await world.stop(steps, recounts);
       worlds.push(world.record());
       // Read here, where every line of the world has its owner, so a flag
       // line that came after its step's record counts too.
@@ -1018,6 +1024,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             }),
           };
         }
+      }
+      if (recounted.length > 0) {
+        const placeKey = (scenario: number, step: number, key: string): string => `${scenario}\u0000${step}\u0000${key}`;
+        const recountedAt = new Map(places.flatMap((place, index) => (recounted[index] === undefined ? [] : [[placeKey(place.scenario, place.step, place.key), recounted[index]!] as const])));
+        passIndexes.forEach((index, position) => {
+          const judged = withAfterWorldStop(runScenarios[index]!, (step, key) => recountedAt.get(placeKey(position, step, key)));
+          if (judged === runScenarios[index]) return;
+          runScenarios[index] = judged;
+          const cell = cellOf[index]!;
+          const outcomes = [...(cellOutcomes.get(cell.key) ?? [])];
+          outcomes[cell.at] = executionOutcome(judged, cell.inThen);
+          cellOutcomes.set(cell.key, outcomes);
+        });
       }
       if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${tree === "head" ? name : `${name} (${tree})`}: ${exitedEarly}` });
     };
@@ -1151,6 +1170,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // The flags each execution's steps evaluated, by scenario record id,
     // filled as each world stops, for run.json's `flags`.
     const flagEvaluations = new Map<string, readonly FlagEvaluation[]>();
+    // Each entry's cell, and its execution's place among the cell's
+    // outcomes, by the entry's index: the world's stop can judge an entry
+    // again (stopWorld).
+    const cellOf: { readonly key: string; readonly at: number; readonly inThen: (index: number) => boolean }[] = [];
     // A scenario's evidence directory is made before it runs, so its id is
     // taken on disk for every worker of the run, and most scenarios leave it
     // empty. Those are removed once the run is over, not when the scenario
@@ -1202,7 +1225,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           : { ...withoutRerun, role, world: tree.world, row: { feature: row.feature, line: row.line } };
       runScenarios.push(entry);
       const key = cellKey(row.feature, row.line, record.environment, tree?.world ?? "head");
-      cellOutcomes.set(key, [...(cellOutcomes.get(key) ?? []), executionOutcome(entry, inThen)]);
+      const outcomes = cellOutcomes.get(key) ?? [];
+      cellOf.push({ key, at: outcomes.length, inThen });
+      cellOutcomes.set(key, [...outcomes, executionOutcome(entry, inThen)]);
       if (entry.evidence === undefined) emptyEvidenceDirs.push(path.join(rootDir, record.evidence.dir));
       stdout.write(`${JSON.stringify(entry)}\n`);
     };

@@ -267,6 +267,14 @@ export interface KindsSeen {
   has(kind: EventKindName): boolean;
 }
 
+/** The gaps of a reading of a selection of `kind`: the trace's, and
+ * `kind-unreported` when the world's program has reported no line of
+ * `kind`, in the order GAP_WORDS lists them. Pure. */
+export function readingGaps(open: readonly EventsGap[], kind: EventKindName, kinds: KindsSeen): EventsGap[] {
+  const gaps: EventsGap[] = kinds.has(kind) ? [...open] : [...open, { gap: "kind-unreported", kind }];
+  return gaps.sort((left, right) => GAP_WORDS.indexOf(left.gap) - GAP_WORDS.indexOf(right.gap));
+}
+
 export function createKindsSeen(): KindsSeen {
   const seen = new Set<EventKindName>();
   return {

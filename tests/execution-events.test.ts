@@ -5,8 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createEventsReader } from "../src/context/events-file.js";
-import { parseEventLine, type ReadableLine } from "../src/execution-events/format.js";
-import { createTraceTally } from "../src/execution-events/tally.js";
+import { EVENT_KINDS, parseEventLine, type EventKindName, type ReadableLine } from "../src/execution-events/format.js";
+import { createKindsSeen, createTraceTally, GAP_WORDS, readingGaps, type EventsGap } from "../src/execution-events/tally.js";
 import { JOBS, op, PREFIX, render, SPANS, T, U } from "./helpers/event-lines.js";
 
 // Responsibility: what the lines of one trace add up to
@@ -163,4 +163,31 @@ describe("createTraceTally", () => {
     stampedOnly.owned(readable(reported)!);
     expect(stampedOnly.reading({ truncated: false, replaced: false })).toMatchObject({ whole: true, open: [] });
   });
+});
+
+describe("readingGaps", () => {
+  const KINDS = Object.keys(EVENT_KINDS) as EventKindName[];
+  const gap: gs.Generator<EventsGap> = gs.sampledFrom<EventsGap>([
+    { gap: "no-requests" },
+    { gap: "processes-unbounded" },
+    { gap: "no-lines" },
+    { gap: "request-unreported", requests: 1 },
+    { gap: "jobs-pending", job_ids: [JOBS[0]!] },
+    { gap: "unreadable", lines: 2 },
+    { gap: "truncated" },
+    { gap: "file-replaced" },
+  ]);
+
+  it("adds kind-unreported exactly when the world reported no line of the kind, and lists every gap in GAP_WORDS order", () =>
+    hegel.test((tc) => {
+      const open = tc.draw(gs.arrays(gap, { maxSize: 4 }));
+      const kind = tc.draw(gs.sampledFrom(KINDS));
+      const kinds = createKindsSeen();
+      for (const text of tc.draw(gs.arrays(op, { maxSize: 6 })).map((entry) => render(entry, U, T, ""))) kinds.note(parseEventLine(text));
+      const gaps = readingGaps(open, kind, kinds);
+      const order = gaps.map((entry) => GAP_WORDS.indexOf(entry.gap));
+      expect(order).toEqual([...order].sort((left, right) => left - right));
+      expect(gaps.filter((entry) => entry.gap !== "kind-unreported")).toEqual([...open].sort((left, right) => GAP_WORDS.indexOf(left.gap) - GAP_WORDS.indexOf(right.gap)));
+      expect(gaps.filter((entry) => entry.gap === "kind-unreported")).toEqual(kinds.has(kind) ? [] : [{ gap: "kind-unreported", kind }]);
+    }));
 });

@@ -3,6 +3,7 @@ import type { Finding } from "../finding/finding.js";
 import type { RunClaim, RunMappingChanges, RunRowChange, RunRowVerdict, RunScenario, RunTable, RunTableCell, RunTableRow, RunWorldName } from "../record/run-result.js";
 import type { ClaimReadingValue } from "../record/types.js";
 import { shellWord } from "../shell/shell-word.js";
+import { stepJudgedTooEarly } from "./events-after-stop.js";
 
 // Responsibility: the verdict table (docs/spec.md "Verdicts"): from a run's
 // executions, one cell per criterion, world, and environment, and from the
@@ -53,7 +54,9 @@ import { shellWord } from "../shell/shell-word.js";
  * Then position says why in `judgedBy` (run.json's `judged_by`), since
  * no world can then show its Then failing. A `fail` names the claim that
  * broke, by its position among its step's claims, and the actual value it
- * saw. A `broke` a hook caused names the hook in `reason`. A `stopped`
+ * saw. A `broke` a hook caused names the hook in `reason`, and so does
+ * one whose claim on execution events the world's stop judged otherwise
+ * (src/run/events-after-stop.ts). A `stopped`
  * names the line of the step a walk was stopped after: the steps after
  * it did not run, which is neither a pass nor something the program
  * broke. */
@@ -68,6 +71,13 @@ type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks" | "judg
 /** What one execution came to. `inThen` says whether the step at an index
  * stands in Then position. Pure. */
 export function executionOutcome(execution: Execution, inThen: (index: number) => boolean): ExecutionOutcome {
+  // A claim judged on lines still on their way decided nothing, whatever
+  // the execution came to.
+  const tooEarly = stepJudgedTooEarly(execution.steps);
+  if (tooEarly !== -1) {
+    const line = execution.steps[tooEarly]!.line ?? execution.line;
+    return { kind: "broke", line, reason: `a claim at line ${line} was judged before every execution event it counts had arrived` };
+  }
   if (execution.status === "passed") return execution.judged_by === undefined ? { kind: "pass" } : { kind: "pass", judgedBy: execution.judged_by };
   if (execution.status === "stopped") return { kind: "stopped", line: execution.stopped?.line ?? execution.line };
   const index = execution.steps.findIndex((step) => step.status !== "passed" && step.status !== "skipped");
