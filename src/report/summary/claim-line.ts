@@ -1,3 +1,4 @@
+import { describeRange } from "../../execution-events/count.js";
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
 import { fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 
@@ -33,10 +34,15 @@ function expectedText(record: { readonly expected?: unknown; readonly expected_f
 }
 
 /** `<actual> (<actual_from>) <compare> <expected> (<expected_from>)`, with
- * a side the record holds no value for named by its source alone. A source
- * label already names its `view` and `at`. */
+ * a side the record holds no value for named by its source alone, and a
+ * count of execution events that is not one number by its range. A
+ * source label already names its `view` and `at`. */
 function comparisonText(record: ClaimComparisonRecord): string {
-  const actual = hasKey(record, "actual") ? `${valueText(record.actual)} (${record.actual_from})` : record.actual_from;
+  const actual = hasKey(record, "actual")
+    ? `${valueText(record.actual)} (${record.actual_from})`
+    : record.actual_range !== undefined
+      ? `${describeRange(record.actual_range)} (${record.actual_from})`
+      : record.actual_from;
   return `${actual} ${record.compare} ${expectedText(record)}`;
 }
 

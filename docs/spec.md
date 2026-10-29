@@ -4148,6 +4148,12 @@ number, and as `actual_range` when it is not, never both.
 0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; measured: events_read.writes
 ```
 
+A count that is not one number shows its range in that place:
+
+```text
+at least 1, with no upper bound (events:place-score@8 count db where table scores, op insert, committed true) equal 1 (literal:once) unjudged: the events of place-score@8 are not whole (jobs-pending): ...
+```
+
 A line of the trace can still arrive after the claim was judged: a
 writer that writes a request's line before the work inside it, or a
 wait that ended first.
@@ -4165,6 +4171,9 @@ The execution's cell is `broke`, with the reason `a claim at line 6 was
 judged before every execution event it counts had arrived` (see
 "Verdicts"): the claim was judged on lines still on their way, so the
 cell proves nothing either way.
+Its scenario may have passed, so `nuka run` reports the execution as
+the finding `claim-judged-early`, and the run summary's line for the
+claim adds `after the world stopped, <reason>, and the cell is broke`.
 
 What this does not reach, in one list:
 

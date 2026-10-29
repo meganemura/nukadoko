@@ -88,11 +88,12 @@ finish (its BeforeAll or AfterAll failed) leaves the control `broke` with
 the reason and a `proof-run-incomplete` warning: the row reads as one
 no control proves (under `--base`, its base cell decides), so correct
 the hook. A `broke` cell whose reason says a claim was judged before every
-execution event it counts had arrived passed or failed on lines still on
-their way (the claim's `after_world_stop` in run.json has the whole
-count): the program wrote a line after the step's events read as whole, so
-have it write a request's line after the work inside it, and work that
-outlives the request as a job (docs/execution-events.md "Inside first").
+execution event it counts had arrived (`claim-judged-early`) passed or
+failed on lines still on their way (the claim's `after_world_stop` in
+run.json has the whole count): the program wrote a line after the step's
+events read as whole, so have it write a request's line after the work
+inside it, and work that outlives the request as a job
+(docs/execution-events.md "Inside first").
 
 ## What to do for each verdict
 

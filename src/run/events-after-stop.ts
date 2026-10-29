@@ -1,8 +1,10 @@
 import type { Recount, Recounted } from "../context/events-file.js";
 import { tallyInputsOfSlice } from "../context/events-read.js";
 import { COUNT_COMPARES, describeRange, judgeCount, rangeOf, type CountCompare } from "../execution-events/count.js";
+import type { Finding } from "../finding/finding.js";
 import type { RunAfterWorldStop, RunClaim, RunScenario, RunStep } from "../record/run-result.js";
 import type { EventsReadRecord, EventsSlice } from "../record/types.js";
+import { formatRerunCommand, scenarioLabel, type RunConditions } from "./progress-log.js";
 
 // Responsibility: a claim on a count of execution events, judged again
 // once its world has stopped, over every line of the producer's trace the
@@ -135,5 +137,39 @@ export function withAfterWorldStop(scenario: RunScenario, recountedAt: (step: nu
  * otherwise than the claim itself was judged, or -1: that execution was
  * judged on lines still on their way. Pure. */
 export function stepJudgedTooEarly(steps: readonly RunStep[]): number {
-  return steps.findIndex((step) => (step.claims ?? []).some((claim) => claim.after_world_stop !== undefined && claim.after_world_stop.outcome !== claim.outcome));
+  return steps.findIndex((step) => (step.claims ?? []).some(judgedTooEarly));
+}
+
+function judgedTooEarly(claim: RunClaim): claim is RunClaim & { readonly after_world_stop: RunAfterWorldStop } {
+  return claim.after_world_stop !== undefined && claim.after_world_stop.outcome !== claim.outcome;
+}
+
+/** A `claim-judged-early` finding for each of head's executions with a
+ * claim the world's stop judged otherwise, naming the first: its scenario
+ * may have passed, so no scenario finding says why its row is red. One
+ * per scenario and environment, since the runs of `--repeat` would say
+ * it again. Pure. */
+export function judgedEarlyFindings(scenarios: readonly RunScenario[], conditions: Pick<RunConditions, "named" | "rerunFlags">): Finding[] {
+  const findings = new Map<string, Finding>();
+  for (const scenario of scenarios) {
+    if (scenario.world !== undefined) continue;
+    const index = stepJudgedTooEarly(scenario.steps);
+    if (index === -1) continue;
+    const step = scenario.steps[index]!;
+    const claim = step.claims!.find(judgedTooEarly)!;
+    const line = step.line ?? scenario.line;
+    const key = `${scenario.feature}:${scenario.line}:${scenario.environment}`;
+    if (findings.has(key)) continue;
+    findings.set(key, {
+      severity: "failed",
+      code: "claim-judged-early",
+      file: scenario.feature,
+      line,
+      message:
+        `${scenarioLabel(scenario.scenario, scenario.environment, conditions)}: a claim at line ${line} ${claim.outcome} before every execution event it counts ` +
+        `had arrived, so its cell is broke: ${claim.after_world_stop.reason}`,
+      do: formatRerunCommand(scenario, conditions.rerunFlags(scenario.environment)),
+    });
+  }
+  return [...findings.values()];
 }

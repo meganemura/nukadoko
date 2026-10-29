@@ -62,7 +62,7 @@ import { generateRunId } from "../run/run-id.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
-import { readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
+import { judgedEarlyFindings, readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
@@ -1368,6 +1368,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // commit the ref resolved to, since a branch or `HEAD` can move
       // before the line runs.
       if (base !== undefined) rows.push(...judgedRowFindings(table, base.commit, rerunFlags, base.obstacles));
+      // A cell a claim judged too early made broke may sit under a
+      // scenario that passed, whose line says nothing failed.
+      rows.push(...judgedEarlyFindings(runScenarios, conditionsOf));
       runFindings.push(...rows);
       const flags = flagRows({ scenarios: runScenarios, evaluated: (id) => flagEvaluations.get(id) ?? [], table });
       const fields: RunFields = {

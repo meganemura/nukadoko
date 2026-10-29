@@ -148,10 +148,15 @@ describe("a claim on a count of execution events, under nuka run", () => {
       // reports the kind the claim counts.
       feature([["a slow writer", ['When the client gets "/rooms/7"', 'And the client gets "/after"', "Then nothing was written"]]]),
     );
-    const { exitCode } = await cli(rootDir, ["run"]);
+    const { exitCode, stderr } = await cli(rootDir, ["run"]);
     expect(exitCode).toBe(1);
     const run = latestRunJson(rootDir);
     const [scenario] = run.scenarios as { status: string; steps: StepFacts[] }[];
+    const late = '1 line of the trace of step "get" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 1, so the claim breaks';
+    // The scenario passed, so the finding is what says why the run is red.
+    expect(stderr).toContain(
+      `failed\tclaim-judged-early\tfeatures/events.feature:6\ta slow writer: a claim at line 6 held before every execution event it counts had arrived, so its cell is broke: ${late}\n  do: nuka run features/events.feature:3\n`,
+    );
     // The run judged the claim on the lines it had, and the claim held.
     expect(scenario!.status).toBe("passed");
     expect(scenario!.steps[2]!.claims![0]).toMatchObject({
@@ -174,6 +179,9 @@ describe("a claim on a count of execution events, under nuka run", () => {
     ]);
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     expect(summary).toContain("| failed | `features/events.feature:3` a slow writer | broke@6 |");
+    expect(summary).toContain(
+      `  - 0 (events:get@5 ${WRITES}) equal 0 (literal:nothing) held; after the world stopped, ${late}, and the cell is broke; measured: events_read.writes`,
+    );
   });
 
   it("refuses a scenario that cannot supply a producer before a world starts, and leaves its claims unjudged under --no-check", async () => {

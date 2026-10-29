@@ -21,6 +21,12 @@ const RUN_CODES = {
       "Under nuka run --base, the base's copy of a feature file does not parse, so its criteria were not compared with head's and each counts as new.",
     fix: "Nothing needs changing at head. Each criterion of the file is judged as new, so its base cell has to show a Then failing; to compare them with the base, name a base whose copy of the file parses.",
   },
+  "claim-judged-early": {
+    severity: "failed",
+    description:
+      "A claim on a count of execution events was judged before every line it counts had arrived: the world's stop counted every line of the producer's trace, and the whole count judges the claim otherwise, so its cell is broke and proves nothing.",
+    fix: 'Have the program write a request\'s line after the work inside it, and run work that outlives the request as a job, which a reading waits for (docs/execution-events.md "Inside first").',
+  },
   "contract-unreadable": {
     severity: "failed",
     description:

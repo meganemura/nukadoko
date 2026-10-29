@@ -651,6 +651,14 @@ function measuredText(claim: RunClaim, ownRecordId: string | null): string {
   return declared.length === 0 ? actual : `${actual}; expected measured: ${declared.join(", ")}`;
 }
 
+// A claim on a count of execution events the world's stop judged
+// otherwise was judged on lines still on their way: its line says what
+// the whole count came to, since its outcome proves nothing.
+function afterWorldStopText(claim: RunClaim): string {
+  const after = "each" in claim ? undefined : claim.after_world_stop;
+  return after === undefined || after.outcome === claim.outcome ? "" : `; after the world stopped, ${after.reason}, and the cell is broke`;
+}
+
 // One entry per Then that declared claims, and under it one line per claim
 // (src/report/summary/claim-line.ts): what was compared, with what, where
 // each value came from, and whether it held. A reader approving the run
@@ -661,6 +669,7 @@ function measuredText(claim: RunClaim, ownRecordId: string | null): string {
 function renderClaims(document: RunDocument): string[] {
   const named = document.environments.length > 1;
   let anyControl = false;
+  let anyLate = false;
   const entries = new Map<string, { readonly sortKey: [string, number]; readonly lines: readonly string[] }>();
   for (const scenario of headScenarios(document)) {
     for (const step of scenario.steps) {
@@ -673,7 +682,8 @@ function renderClaims(document: RunDocument): string[] {
       const attempts = step.attempts !== undefined && step.attempts > 1 ? `, ${step.attempts} readings` : "";
       const observation = step.observation === "unobserved" ? ", observed nothing" : "";
       const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${observation}`;
-      const lines = [head, ...step.claims.map((claim) => `  - ${cellText(`${claimLine(claim)}${measuredText(claim, step.step_record_id)}`)}`)];
+      if (step.claims.some((claim) => afterWorldStopText(claim) !== "")) anyLate = true;
+      const lines = [head, ...step.claims.map((claim) => `  - ${cellText(`${claimLine(claim)}${afterWorldStopText(claim)}${measuredText(claim, step.step_record_id)}`)}`)];
       const key = lines.join("\n");
       if (entries.has(key)) continue;
       entries.set(key, { sortKey: [scenario.feature, step.line ?? scenario.line], lines });
@@ -686,7 +696,8 @@ function renderClaims(document: RunDocument): string[] {
     "## Claims",
     "",
     "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does, or when another channel holds the same number). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`." +
-      (anyControl ? " An entry marked `control` is a control's: a claim it broke is evidence that the scenario tells the behaviour apart, not a failure." : ""),
+      (anyControl ? " An entry marked `control` is a control's: a claim it broke is evidence that the scenario tells the behaviour apart, not a failure." : "") +
+      (anyLate ? " A claim on a count of execution events that the world's stop counted again and judged otherwise says what the whole count came to, after its outcome: it was judged on lines still on their way." : ""),
     "",
     ...sorted.flatMap((entry) => entry.lines),
   ];

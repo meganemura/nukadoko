@@ -233,7 +233,10 @@ just until 0.1.
   world stops, each reading is counted again over every line of the
   trace, and a claim that the whole count judges otherwise gets
   `after_world_stop` in run.json and makes its cell `broke`, since it was
-  judged on lines still on their way. `nuka check` names a claim it can
+  judged on lines still on their way: `nuka run` reports it as the
+  finding `claim-judged-early`, since its scenario may have passed, and
+  the summary's claim line says what the whole count came to. A claim
+  line shows a count that is a range as its range. `nuka check` names a claim it can
   only leave unjudged before a world starts: `events-producer-missing`
   when no earlier line runs a candidate, `events-producer-ambiguous` when
   two do, and `events-inlet-missing` for a served world whose program

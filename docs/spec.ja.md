@@ -3254,6 +3254,12 @@ claim の record は、範囲が 1 つの数のときは数を `actual` に、�
 0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; measured: events_read.writes
 ```
 
+1 つの数でない数は、その場所に範囲を示します:
+
+```text
+at least 1, with no upper bound (events:place-score@8 count db where table scores, op insert, committed true) equal 1 (literal:once) unjudged: the events of place-score@8 are not whole (jobs-pending): ...
+```
+
 claim を判定したあとにも、trace の行が届くことはあります。
 リクエストの行をその中の仕事より先に書く書き手や、先に終わった待ちです。
 world が止まると、nukadoko は各読みを trace のすべての行で数え直します。
@@ -3266,6 +3272,7 @@ world が止まると、nukadoko は各読みを trace のすべての行で数�
 step record は書き直しません。
 その実行のセルは `broke` で、reason は `a claim at line 6 was judged before every execution event it counts had arrived` です(「断定」を参照)。
 claim はまだ届く途中の行で判定されたので、セルはどちらとも示しません。
+その scenario は通ったかもしれないので、`nuka run` はその実行を所見 `claim-judged-early` として報告し、run サマリのその claim の行には `after the world stopped, <reason>, and the cell is broke` が加わります。
 
 この仕組みが届かないものを、1 つの一覧にまとめます:
 
