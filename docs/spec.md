@@ -4095,6 +4095,11 @@ both, with `were not read` in its reason.
 flags starts.
 A world nukadoko serves whose program file names no `{events}` is the
 error `events-inlet-missing`, since the fix is in the project's own file.
+The base and old trees of `nuka run --base` do not stop on it: a
+tree's program file goes with the ref's code, so a ref from before the
+change that names `{events}` is the usual case, and there each claim on
+a count of execution events is `unjudged` with `inlet-unnamed` while
+the tree's other claims run.
 A world at a `url`, or a project with no program file, is the warning
 `events-unread`: such a world is often one the project does not run,
 such as a shared staging server, and its other scenarios still run there.

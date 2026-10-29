@@ -3213,6 +3213,9 @@ world が選んだ種類の行を 1 つも報告していない間、読みは�
 `nuka check` は、同じ `--env` の指定で run が起動する world について、その両方を名指します。
 nukadoko が serve する world で、プログラムのファイルが `{events}` を名指さないものはエラー `events-inlet-missing` です。
 直す場所がプロジェクト自身のファイルにあるからです。
+`nuka run --base` の base と old の tree は、これでは止まりません。
+tree のプログラムのファイルは基点のコードと一緒に動くので、`{events}` を名指す変更より前の基点ではこれが普通だからです。
+そこでは実行イベントの数についての claim がそれぞれ `inlet-unnamed` で `unjudged` になり、tree のほかの claim は走ります。
 `url` の world と、プログラムのファイルがないプロジェクトは警告 `events-unread` です。
 そうした world は、共有の staging サーバーのように、プロジェクトが動かしていないことが多く、ほかの scenario はそこでも走るからです。
 

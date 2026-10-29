@@ -265,6 +265,14 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka run --base` runs the base world of the change that adds
+  execution events.** When head's steps count execution events and the
+  ref's program file names no `{events}`, the base tree's check stopped
+  the whole tree on `events-inlet-missing`, so every base cell was not
+  run, and a new row there could be neither proven nor compared. The
+  base and old trees now leave that finding out, as they leave out the
+  condition findings: each claim on a count there is `unjudged` with
+  `inlet-unnamed`, and every other claim runs. Head keeps the error.
 - **A pattern word that every object answers no longer breaks the
   literal rule.** `defineStep` threw `values?.some is not a function`
   for a claim with a literal on a pattern that holds the fixed word

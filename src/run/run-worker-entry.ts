@@ -97,7 +97,11 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // and runs nothing, and the cells it was to fill say why. The condition
 // findings are left out of that check: which cells are required is decided
 // by head's program file, and a condition only head declares is the usual
-// case for a change that adds one. Its records go to head's run, and the
+// case for a change that adds one. `events-inlet-missing` is left out too:
+// the tree's program file goes with its code, so a ref whose program names
+// no `{events}` is the usual case for the change that adds them, and each
+// claim on a count there is unjudged (`inlet-unnamed`) while every other
+// claim still runs. Its records go to head's run, and the
 // env files are read from head's root, since they hold the environment's
 // values and no tree holds them.
 
@@ -206,7 +210,7 @@ async function main(): Promise<void> {
     tree !== null && tree.check
       ? await (async () => {
           const analysis = await inTree("nuka check did not finish", () => analyzeRunSelectionKeepingSteps(rootDir, features, [resolvedEnv.name]));
-          const errors = analysis.report.errors.filter((issue) => !issue.code.startsWith("condition-"));
+          const errors = analysis.report.errors.filter((issue) => !issue.code.startsWith("condition-") && issue.code !== "events-inlet-missing");
           const first = errors[0];
           if (first !== undefined) {
             const where = first.file === undefined ? "" : ` at ${first.file}${first.line === undefined ? "" : `:${first.line}`}`;
