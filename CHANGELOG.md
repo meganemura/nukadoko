@@ -81,7 +81,9 @@ just until 0.1.
   "rent: 101"`), and for two arrays or two objects the path of keys and
   indexes (`first difference at 1.name: actual "lamp", expected
   "desk"`). A short one-line text or a number shows the difference in
-  its values already, and gets no addition.
+  its values already, and gets no addition. A character position counts
+  code points, and the text shown around it never splits one, so an
+  emoji before the difference moves it by one and prints whole.
 
 ### Fixed
 

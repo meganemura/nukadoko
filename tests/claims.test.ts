@@ -1473,6 +1473,17 @@ describe("a broken equal names where its two values first differ", () => {
       expect(difference).toMatch(new RegExp(`^first difference at character ${at + 1}: actual "[.]*[ab]*c`));
     }));
 
+  it("counts characters in code points, and never cuts one in two", () =>
+    hegel.test((tc) => {
+      const alphabet = ["a", "\u{1F600}", "\u00e9", "\u{20000}"];
+      const points = tc.draw(gs.arrays(gs.sampledFrom(alphabet), { minSize: 130, maxSize: 160 }));
+      const at = tc.draw(gs.integers({ minValue: 0, maxValue: points.length - 1 }));
+      const changed = points.map((point, index) => (index === at ? (point === "b" ? "c" : "b") : point));
+      const difference = equalDifference(changed.join(""), points.join(""))!;
+      expect(difference.startsWith(`first difference at character ${at + 1}: `)).toBe(true);
+      expect(difference).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+    }));
+
   it("names the line where two texts first differ, and leaves a short one-line text to the values the line shows", () => {
     expect(equalDifference("food: 5.5\nrent: 100", "food: 5.5\nrent: 101")).toBe('first difference at line 2: actual "rent: 100", expected "rent: 101"');
     expect(equalDifference({ rows: [{ note: "x\ny" }] }, { rows: [{ note: "x\nz" }] })).toBe('first difference at rows.0.note, line 2: actual "y", expected "z"');

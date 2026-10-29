@@ -114,11 +114,16 @@ function textDifference(actual: string, expected: string): string {
     while (actualLines[line] === expectedLines[line]) line += 1;
     return `line ${line + 1}: actual ${sideText(actualLines[line])}, expected ${sideText(expectedLines[line])}`;
   }
+  // Counted in code points, so the position is the character a reader
+  // counts and the window never splits a character outside the BMP.
+  const actualPoints = Array.from(actual);
+  const expectedPoints = Array.from(expected);
   let at = 0;
-  while (at < actual.length && actual[at] === expected[at]) at += 1;
+  while (at < actualPoints.length && actualPoints[at] === expectedPoints[at]) at += 1;
   const start = Math.max(0, at - DIFFERENCE_CONTEXT);
-  const around = (text: string): string => `${start > 0 ? "..." : ""}${text.slice(start, at + DIFFERENCE_CONTEXT)}${text.length > at + DIFFERENCE_CONTEXT ? "..." : ""}`;
-  return `character ${at + 1}: actual ${JSON.stringify(around(actual))}, expected ${JSON.stringify(around(expected))}`;
+  const around = (points: readonly string[]): string =>
+    `${start > 0 ? "..." : ""}${points.slice(start, at + DIFFERENCE_CONTEXT).join("")}${points.length > at + DIFFERENCE_CONTEXT ? "..." : ""}`;
+  return `character ${at + 1}: actual ${JSON.stringify(around(actualPoints))}, expected ${JSON.stringify(around(expectedPoints))}`;
 }
 
 /** Where a broken `equal` claim's two values first differ, for a text
