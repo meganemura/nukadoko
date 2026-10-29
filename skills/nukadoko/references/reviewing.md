@@ -27,7 +27,7 @@ walk 1 paused after step 1/4 (passed): the shopper opens the cart
   record: .nukadoko/runs/<run_id>/steps/<id>/record.json
   view: page 1 http://127.0.0.1:41233/cart "Cart": <run_dir>/pauses/1/page.png <run_dir>/pauses/1/page.aria.yml
   world: http://127.0.0.1:41233
-  do: nuka step next 1   (or: nuka step stop 1)
+  do: nuka step next 1 --walk 1   (or: nuka step stop 1 --walk 1)
 ```
 
 `--json` gives the same as fields: `pause` (`pause`, `of`, `line`,
@@ -162,11 +162,12 @@ Tell the person, in their language and in plain words:
 
 Then stop and wait for the person. Never answer a pause they have not
 answered: the run waits exactly so that they judge each step while its
-world is still there. Answer with the pause number they saw:
+world is still there. Answer with the pause number they saw and the walk
+number it printed (`walk 1 paused ...`), as the `do` line spells it:
 
-- To go on: `npx nuka step next <n>`. It runs the next step and prints
-  the next pause, or the end after the last step.
-- To stop: `npx nuka step stop <n>`. The steps after it do not run, After
+- To go on: `npx nuka step next <n> --walk <w>`. It runs the next step
+  and prints the next pause, or the end after the last step.
+- To stop: `npx nuka step stop <n> --walk <w>`. The steps after it do not run, After
   hooks and teardown do, and the record says the scenario was `stopped`
   at that step, not that it failed (`walk-stopped`).
 
@@ -174,7 +175,10 @@ A call whose output you lost, or that printed `running`, is safe to run
 again as it was: an answer is written once, and the same answer again
 prints what followed it. `pause-answered` means another answer reached
 that pause first; `pause-not-current` means the walk is elsewhere, and
-`nuka step wait` shows where. A failed step pauses with only `next`
+the `nuka step wait --walk <w>` its `do` names shows where;
+`walk-not-current` means the answer named a walk that a later one
+replaced, so show the person the pause its `do` prints before you answer
+again. A failed step pauses with only `next`
 offered, since nothing is left to stop: show its `error` (its `kind` and
 message) the same way, answer `next` when the person has seen it, and go
 to `diagnosing.md`. A walk that a signal ended (the host's background
@@ -188,7 +192,7 @@ evidence.
 
 ## 5. When the person disagrees
 
-Stop the walk at that pause (`nuka step stop <n>`) before you change
+Stop the walk at that pause (`nuka step stop <n> --walk <w>`) before you change
 anything. The fix goes in the step file or the feature, never in the
 record: a hand edit turns a measurement back into a claim. To show a
 variation of one step without rerunning the whole scenario, `nuka do

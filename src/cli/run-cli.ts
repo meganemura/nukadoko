@@ -96,6 +96,9 @@ interface StepArgs {
   /** `next` and `stop` only. yargs reads a word that is not a number as
    * `NaN`, which step.ts refuses with the rest. */
   pause?: number;
+  /** `--walk`: required for `next` and `stop`, which step.ts checks so the
+   * refusal says what the number is for. */
+  walk?: number;
   timeout?: number;
   json?: boolean;
 }
@@ -1070,14 +1073,21 @@ export async function runCli(
         default: false,
         describe: "print the walk as one JSON document on stdout, and nothing on stderr",
       })
-      .check(rejectRepeatedFlags(["timeout"]));
+      .check(rejectRepeatedFlags(["timeout", "walk"]));
+  const walkFlag = (y: Argv, answers: boolean): Argv =>
+    y.option("walk", {
+      type: "number",
+      describe: answers
+        ? "the walk whose pause this answers, as the pause printed it; required, so that the same command cannot answer a later walk"
+        : "the walk to wait for, as a pause printed it; without it, the newest walk",
+    });
   const stepAction = (action: "wait" | "next" | "stop", command: string, describe: string): CommandModule<Record<string, never>, StepArgs> => ({
     command,
     describe,
     builder: (y: Argv) =>
       (action === "wait"
-        ? stepFlags(y)
-        : stepFlags(y).positional("pause", { type: "number", demandOption: true, describe: "the pause number nuka step wait printed" })) as Argv<StepArgs>,
+        ? walkFlag(stepFlags(y), false)
+        : walkFlag(stepFlags(y), true).positional("pause", { type: "number", demandOption: true, describe: "the pause number nuka step wait printed" })) as Argv<StepArgs>,
     handler: async (args: Arguments<StepArgs>) => {
       if (argsFailed) return;
       const { runStep } = await import("./step.js");
@@ -1085,6 +1095,7 @@ export async function runCli(
         rootDir,
         action,
         ...(args.pause === undefined ? {} : { pause: args.pause }),
+        ...(args.walk === undefined ? {} : { walk: args.walk }),
         timeout: args.timeout ?? 90,
         json: args.json ?? false,
         notices,
@@ -1095,8 +1106,8 @@ export async function runCli(
   });
   const stepCommands = [
     namingMissingConfig(stepAction("wait", "wait", "wait for the walk nuka run --step records to pause or end, and print where it is")),
-    namingMissingConfig(stepAction("next", "next <pause>", "answer a pause: run the next step")),
-    namingMissingConfig(stepAction("stop", "stop <pause>", "answer a pause: skip the steps left, and record the scenario as stopped")),
+    namingMissingConfig(stepAction("next", "next <pause>", "answer a pause of the walk --walk names: run the next step")),
+    namingMissingConfig(stepAction("stop", "stop <pause>", "answer a pause of the walk --walk names: skip the steps left, and record the scenario as stopped")),
   ];
   const stepCommand: CommandModule = {
     command: "step",

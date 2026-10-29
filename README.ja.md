@@ -1237,7 +1237,7 @@ nukadoko は承認の記録を自分では書きません([レビュー](docs/sp
 
 各 step を自分の目で見たい人は、エージェントを隣にして 1 つの scenario を walk できます。
 `nuka run <file>:<line> --step` は各 step の後で、world、ブラウザ、fixture を開いたまま一時停止します。
-エージェントは step record と開いているページのビューをその人に読んで聞かせ、その人の答えが `nuka step next <n>` か `nuka step stop <n>` として返ってきたときにだけ run は進みます。
+エージェントは step record と開いているページのビューをその人に読んで聞かせ、その人の答えが `nuka step next <n> --walk <w>` か `nuka step stop <n> --walk <w>` として返ってきたときにだけ run は進みます。
 walk した run はサマリでそのことを述べます。
 step の間、プログラムは何に対しても開いていたからです。
 これは scenario を理解するための方法であって、承認する run ではありません([人と一緒の walk](docs/spec.ja.md#人と一緒の-walk)を参照)。

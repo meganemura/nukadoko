@@ -131,11 +131,11 @@ const REFUSAL_CODES = {
   },
   "pause-answered": {
     description: "nuka step names a pause that was already answered the other way, so this answer changes nothing.",
-    fix: "Run nuka step wait to see where the walk stands, and answer the pause it shows.",
+    fix: "Run nuka step wait --walk <n> to see where the walk stands, and answer the pause it shows.",
   },
   "pause-not-current": {
     description: "nuka step answers a pause that is not the one the walk waits at: the walk has not reached it, has moved past it, or has ended.",
-    fix: "Run nuka step wait to see the pause the walk waits at, and answer that pause.",
+    fix: "Run nuka step wait --walk <n> to see the pause the walk waits at, and answer that pause.",
   },
   "read-only-environment": {
     description: "A step that declares mutates: true targets an environment whose policy is read-only.",
@@ -204,6 +204,10 @@ const REFUSAL_CODES = {
   "walk-in-progress": {
     description: "nuka run --step found another walk in progress in this project: one walk at a time, since nuka step answers the walk the state directory names.",
     fix: "Finish the walk in progress with nuka step, or stop its nuka run --step process, then start this one.",
+  },
+  "walk-not-current": {
+    description: "nuka step names a walk that is not the walk in this project: a later walk replaced it, or no walk with that number started yet. An answer names its walk so that it cannot move a walk the person was not shown.",
+    fix: "Run the nuka step wait the finding names, show the person the pause it prints, and answer with that walk's number.",
   },
   "walk-not-found": {
     description: "nuka step found no walk to answer or wait for: no nuka run --step recorded one, or the walk an answer is for was replaced by a later one.",

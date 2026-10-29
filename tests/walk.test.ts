@@ -178,7 +178,7 @@ describe("stepDecision", () => {
       const states = walkThrough(tc.draw(gs.arrays(events, { maxSize: 12 })));
       const seen = seeWalk(states.at(-1)!, () => tc.draw(gs.booleans()));
       const answers = new Map(tc.draw(gs.arrays(gs.tuples(gs.integers({ minValue: 0, maxValue: STEPS + 1 }), gs.sampledFrom(["next", "stop"] as const)), { maxSize: 4 })));
-      const call: StepCall = { kind: "answer", pause: tc.draw(gs.integers({ minValue: 0, maxValue: STEPS + 1 })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
+      const call: StepCall = { kind: "answer", walk: START.number, pause: tc.draw(gs.integers({ minValue: 0, maxValue: STEPS + 1 })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
       if (stepDecision(call, START.number, seen, answers).kind !== "write-answer") return;
       expect(seen.state === "paused" && seen.pause.pause === call.pause).toBe(true);
       expect(answers.has(call.pause)).toBe(false);
@@ -188,7 +188,7 @@ describe("stepDecision", () => {
     hegel.test((tc) => {
       const k = tc.draw(gs.integers({ minValue: 1, maxValue: STEPS - 1 }));
       const answer = tc.draw(gs.sampledFrom(["next", "stop"] as const));
-      const call: StepCall = { kind: "answer", pause: k, answer };
+      const call: StepCall = { kind: "answer", walk: START.number, pause: k, answer };
       const paused = walkTo(k, answer, "paused");
       expect(stepDecision(call, START.number, paused.seen, paused.answers)).toEqual({ kind: "write-answer", runDir: RUN.run_dir });
       // The answer is on disk, and the run has not read it yet.
@@ -209,7 +209,7 @@ describe("stepDecision", () => {
       const then = tc.draw(gs.sampledFrom(["answered", "next-pause", "ended"] as const));
       const { seen, answers } = walkTo(k, answer, then);
       const other: WalkAnswer = answer === "next" ? "stop" : "next";
-      expect(stepDecision({ kind: "answer", pause: k, answer: other }, START.number, seen, answers)).toMatchObject({ kind: "refuse", code: "pause-answered" });
+      expect(stepDecision({ kind: "answer", walk: START.number, pause: k, answer: other }, START.number, seen, answers)).toMatchObject({ kind: "refuse", code: "pause-answered" });
     }));
 
   it("refuses an answer to a pause nobody was shown or that has passed without one", () =>
@@ -219,7 +219,7 @@ describe("stepDecision", () => {
       const answer = tc.draw(gs.sampledFrom(["next", "stop"] as const));
       const { seen, answers } = walkTo(k, answer, "paused");
       if (named === k || answers.has(named)) return;
-      expect(stepDecision({ kind: "answer", pause: named, answer }, START.number, seen, answers)).toMatchObject({ kind: "refuse", code: "pause-not-current" });
+      expect(stepDecision({ kind: "answer", walk: START.number, pause: named, answer }, START.number, seen, answers)).toMatchObject({ kind: "refuse", code: "pause-not-current" });
     }));
 
   it("reports an ended walk to any answer that does not contradict one given, since a wait after an end waits for the next walk", () =>
@@ -227,23 +227,28 @@ describe("stepDecision", () => {
       const k = tc.draw(gs.integers({ minValue: 1, maxValue: STEPS - 1 }));
       const answer = tc.draw(gs.sampledFrom(["next", "stop"] as const));
       const { seen, answers } = walkTo(k, answer, "ended");
-      const call: StepCall = { kind: "answer", pause: tc.draw(gs.integers({ minValue: 1, maxValue: STEPS + 1 })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
+      const call: StepCall = { kind: "answer", walk: START.number, pause: tc.draw(gs.integers({ minValue: 1, maxValue: STEPS + 1 })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
       const given = answers.get(call.pause);
       const decision = stepDecision(call, START.number, seen, answers);
       if (given !== undefined && given !== call.answer) expect(decision).toEqual({ kind: "refuse", code: "pause-answered", message: expect.any(String) });
       else expect(decision).toEqual({ kind: "report", seen });
     }));
 
-  it("refuses an answer once a later walk replaced the one it is for, and reports a gone walk", () =>
+  it("refuses an answer for any walk but the one walk.json holds, naming that walk, and reports a gone walk", () =>
     hegel.test((tc) => {
-      const k = tc.draw(gs.integers({ minValue: 1, maxValue: STEPS }));
-      const answer = tc.draw(gs.sampledFrom(["next", "stop"] as const));
-      const { seen, answers } = walkTo(k, answer, "paused");
-      const call: StepCall = { kind: "answer", pause: k, answer };
-      const later = { ...seen, number: START.number + 1 };
-      expect(stepDecision(call, START.number, later, answers)).toMatchObject({ kind: "refuse", code: "walk-not-found" });
-      const gone = seeWalk(seen, () => false);
-      expect(stepDecision(call, START.number, gone, answers)).toEqual({ kind: "report", seen: gone });
+      const states = walkThrough(tc.draw(gs.arrays(events, { maxSize: 12 })));
+      const seen = seeWalk(states.at(-1)!, () => tc.draw(gs.booleans()));
+      const answers = new Map(tc.draw(gs.arrays(gs.tuples(gs.integers({ minValue: 0, maxValue: STEPS + 1 }), gs.sampledFrom(["next", "stop"] as const)), { maxSize: 4 })));
+      const walk = tc.draw(gs.integers({ minValue: 1, maxValue: START.number + 2 }));
+      const call: StepCall = { kind: "answer", walk, pause: tc.draw(gs.integers({ minValue: 1, maxValue: STEPS })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
+      const decision = stepDecision(call, callTarget(call, seen), seen, answers);
+      if (walk === START.number) {
+        expect(decision).not.toMatchObject({ code: "walk-not-current" });
+        if (seen.state === "gone") expect(decision).toEqual({ kind: "report", seen });
+        return;
+      }
+      expect(decision).toMatchObject({ kind: "refuse", code: "walk-not-current", do: `nuka step wait --walk ${START.number}` });
+      if (decision.kind === "refuse") expect(decision.message).toContain(`this answer is for walk ${walk}, and the walk in this project is walk ${START.number}`);
     }));
 
   it("makes a wait wait for a walk that is running or not recorded yet, and report one that paused, ended, or is gone", () =>
@@ -275,8 +280,8 @@ describe("stepReport", () => {
       expect(report.exitCode).toBe(red ? 1 : 0);
       if (seen.state === "paused") {
         expect(report.fields["do"]).toEqual({
-          next: `nuka step next ${seen.pause.pause}`,
-          ...(seen.pause.remaining > 0 ? { stop: `nuka step stop ${seen.pause.pause}` } : {}),
+          next: `nuka step next ${seen.pause.pause} --walk ${START.number}`,
+          ...(seen.pause.remaining > 0 ? { stop: `nuka step stop ${seen.pause.pause} --walk ${START.number}` } : {}),
         });
       }
       if (seen.state === "gone") expect(report.findings.map((finding) => [finding.code, finding.do])).toEqual([["walk-gone", `nuka run ${START.target} --step`]]);
@@ -285,7 +290,7 @@ describe("stepReport", () => {
 
 describe("pauseLines", () => {
   it("names the pause, its step, and the commands that answer it, and leaves stop out after the last step", () => {
-    expect(pauseLines(pauseAt(2, 3))).toBe("paused after step 2/5 (passed): step 2\n  do: nuka step next 2   (or: nuka step stop 2)\n");
-    expect(pauseLines(pauseAt(5, 0))).toBe("paused after step 5/5 (passed): step 5\n  do: nuka step next 5\n");
+    expect(pauseLines(3, pauseAt(2, 3))).toBe("paused after step 2/5 (passed): step 2\n  do: nuka step next 2 --walk 3   (or: nuka step stop 2 --walk 3)\n");
+    expect(pauseLines(3, pauseAt(5, 0))).toBe("paused after step 5/5 (passed): step 5\n  do: nuka step next 5 --walk 3\n");
   });
 });

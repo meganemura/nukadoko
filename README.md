@@ -1390,7 +1390,7 @@ with an agent beside them. `nuka run <file>:<line> --step` pauses after
 each step with the world, the browser, and the fixtures still open; the
 agent reads the step record and the views of the open pages to the
 person, and the run goes on only when the person's answer comes back as
-`nuka step next <n>` or `nuka step stop <n>`. A walked run says so in its
+`nuka step next <n> --walk <w>` or `nuka step stop <n> --walk <w>`. A walked run says so in its
 summary, since between steps the program was open to anything: it is a
 way to understand a scenario, not the run that approves it (see
 [A walk with a person](docs/spec.md#a-walk-with-a-person)).

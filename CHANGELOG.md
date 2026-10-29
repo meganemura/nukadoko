@@ -25,12 +25,14 @@ just until 0.1.
   time.** After each step the run pauses with the world, the browser,
   and the fixtures still open, writes a screenshot and an ARIA snapshot
   of each open page under `runs/<run_id>/pauses/<n>/`, and waits.
-  `nuka step wait`, `nuka step next <pause>`, and `nuka step stop
-  <pause>` answer it from another shell, so an agent can explain each
-  step record and go on only once the person has answered. An answer
-  names its pause, so a repeated call is safe: the same answer reports
-  what followed it, and another answer to that pause is refused
-  (`pause-answered`). A stop skips the steps after the pause, runs the
+  `nuka step wait`, `nuka step next <pause> --walk <n>`, and `nuka step
+  stop <pause> --walk <n>` answer it from another shell, so an agent can
+  explain each step record and go on only once the person has answered.
+  An answer names its walk and its pause, so a repeated call is safe: the
+  same answer reports what followed it, another answer to that pause is
+  refused (`pause-answered`), and an answer for an earlier walk is
+  refused (`walk-not-current`) instead of moving the walk that replaced
+  it. A stop skips the steps after the pause, runs the
   After hooks and the teardown, and records the scenario as `stopped`
   with the `walk-stopped` finding, not as failed. What a page sends
   while the run waits goes to the pause's `http.jsonl`, not to the

@@ -1,11 +1,12 @@
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
-import { runStepCall, type StepCall, type StepCallResult, type WalkFound } from "../run/walk-files.js";
+import { answerCommand, runStepCall, type StepCall, type StepCallResult, type WalkFound } from "../run/walk-files.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { REFUSED_EXIT_CODE, RefusalError, formatEnvelope, refusalOf, refuse, withHint } from "./refusal.js";
 
-// Responsibility: `nuka step wait`, `nuka step next <pause>`, and `nuka
-// step stop <pause>`, the side of a walk that answers it. Boundary: this
+// Responsibility: `nuka step wait`, `nuka step next <pause> --walk <n>`,
+// and `nuka step stop <pause> --walk <n>`, the side of a walk that answers
+// it. Boundary: this
 // module reads its arguments, finds the state directory, and prints.
 // walk-files.ts reads and writes the walk's files, and walk.ts decides what
 // a call does; no answer is written from here.
@@ -17,6 +18,8 @@ export interface RunStepOptions {
   readonly action: StepAction;
   /** The pause an answer names, as the command line gave it. */
   readonly pause?: number;
+  /** `--walk`: the walk an answer is for, which a wait may name too. */
+  readonly walk?: number;
   /** `--timeout`, in seconds. */
   readonly timeout: number;
   readonly json: boolean;
@@ -48,7 +51,7 @@ function walkText(seen: WalkFound, fields: Readonly<Record<string, unknown>>): s
         return `  view: ${name} ${view.url} ${JSON.stringify(view.title)}${files.length === 0 ? " (no capture)" : `: ${files.join(" ")}`}`;
       }),
       ...(world === null ? [] : [`  world: ${world.url}`]),
-      `  do: nuka step next ${pause.pause}${pause.remaining > 0 ? `   (or: nuka step stop ${pause.pause})` : ""}`,
+      `  do: ${answerCommand(seen.number, pause.pause, "next")}${pause.remaining > 0 ? `   (or: ${answerCommand(seen.number, pause.pause, "stop")})` : ""}`,
     ];
     return `${lines.join("\n")}\n`;
   }
@@ -69,13 +72,21 @@ function walkText(seen: WalkFound, fields: Readonly<Record<string, unknown>>): s
   return `walk ${seen.number} is running ${after === 0 ? "its first step" : `the step after pause ${after}`}\n  do: ${String(fields["do"])}\n`;
 }
 
+function wholeNumber(value: number | undefined): value is number {
+  return value !== undefined && Number.isInteger(value) && value >= 1;
+}
+
 function callOf(options: RunStepOptions): StepCall | { readonly refused: string } {
-  if (options.action === "wait") return { kind: "wait" };
-  const { pause } = options;
-  if (pause === undefined || !Number.isInteger(pause) || pause < 1) {
+  const { pause, walk } = options;
+  if (walk !== undefined && !wholeNumber(walk)) return { refused: `--walk needs the number of a walk, a whole number of 1 or more (got ${walk})` };
+  if (options.action === "wait") return walk === undefined ? { kind: "wait" } : { kind: "wait", walk };
+  if (!wholeNumber(pause)) {
     return { refused: `nuka step ${options.action} needs the number of the pause it answers, a whole number of 1 or more${pause === undefined ? "" : ` (got ${pause})`}` };
   }
-  return { kind: "answer", pause, answer: options.action };
+  // An answer without its walk could reach a walk that replaced the one the
+  // person was shown.
+  if (walk === undefined) return { refused: `nuka step ${options.action} needs --walk, the number of the walk whose pause it answers` };
+  return { kind: "answer", walk, pause, answer: options.action };
 }
 
 export async function runStep(options: RunStepOptions): Promise<number> {

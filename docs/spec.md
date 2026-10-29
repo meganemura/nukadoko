@@ -4610,8 +4610,8 @@ it, checked with `nuka check`, and run again from nothing.
 ```sh
 nuka run features/checkout.feature:12 --step      # in the background
 nuka step wait
-nuka step next 1
-nuka step stop 2
+nuka step next 1 --walk 1
+nuka step stop 2 --walk 1
 ```
 
 A person who reviews a scenario with an agent beside them wants to see
@@ -4620,8 +4620,8 @@ it talked to, the fixtures it set up. `nuka run --step` runs one scenario
 and pauses after each step, once its AfterStep hooks ran and its step
 record was written, with the world, the browser, and the fixtures still
 open, until the pause is answered. Another command answers it: `nuka step
-next <n>` runs the next step, and `nuka step stop <n>` ends the walk
-there. That answer is the only input a walk takes, and only between two
+next <n> --walk <w>` runs the next step, and `nuka step stop <n> --walk
+<w>` ends the walk there. That answer is the only input a walk takes, and only between two
 steps the feature names, so the previous section still holds: nothing
 outside the scenario drives the world through nukadoko, and a walk has no
 socket and no idle timeout.
@@ -4641,7 +4641,10 @@ the run writes it, whole, renamed into place. An answer is
 `<run_dir>/answers/<n>.json`, which `nuka step` creates only when it does
 not exist and never rewrites, and which the run looks for every 100 ms.
 Because the file name is the pause, an answer can only move the pause the
-person was shown. A call made twice writes nothing the second time: the
+person was shown. An answer also names its walk with `--walk`, the number
+each pause prints, so the same command run again once a later walk has
+started is refused with `walk-not-current`, which names the walk there
+is, and moves nothing. A call made twice writes nothing the second time: the
 same answer again prints what followed it, another answer to that pause
 is refused with `pause-answered`, and an answer to a pause the walk is
 not at with `pause-not-current`. `nuka step wait` waits until the walk
@@ -6634,23 +6637,26 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
-nuka step wait [--timeout <s>] [--json]
+nuka step wait [--walk <n>] [--timeout <s>] [--json]
                               wait until the walk a nuka run --step
                               started pauses or ends, then print where it
                               stands: the step, its record, the views of
                               the open pages, the world, and the answers.
                               At a pause it answers nothing. A wait that
                               finds the last walk ended waits for the
-                              next one (walk-not-found when none starts)
-nuka step next <pause> [--timeout <s>] [--json]
-                              answer the pause the person saw: run the
-                              next step, then print the next pause or the
-                              end. The same answer again prints the same
-                              and writes nothing; another answer to that
-                              pause is refused (pause-answered), and so is
-                              a pause the walk is not at
-                              (pause-not-current)
-nuka step stop <pause> [--timeout <s>] [--json]
+                              next one (walk-not-found when none starts);
+                              --walk waits for that walk alone
+nuka step next <pause> --walk <n> [--timeout <s>] [--json]
+                              answer the pause the person saw, of the walk
+                              --walk names (required): run the next step,
+                              then print the next pause or the end. The
+                              same answer again prints the same and
+                              writes nothing; another answer to that
+                              pause is refused (pause-answered), and so
+                              are a pause the walk is not at
+                              (pause-not-current) and a walk that is not
+                              the walk in the project (walk-not-current)
+nuka step stop <pause> --walk <n> [--timeout <s>] [--json]
                               answer the pause by stopping: the steps
                               after it do not run, After hooks and
                               teardown do, and the scenario is stopped.

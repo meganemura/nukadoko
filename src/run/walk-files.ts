@@ -43,7 +43,7 @@ import {
 // and `process.kill(pid, 0)` answers the same on Windows.
 
 export type { Pause, StepCall, StepRefusalCode, StepReport, WalkAnswer, WalkEnd, WalkFound, WalkRun, WalkScenario, WalkState };
-export { restartCommand } from "./walk.js";
+export { answerCommand, restartCommand, waitCommand } from "./walk.js";
 
 const LOCK_FILE = "walk.lock";
 const STATE_FILE = "walk.json";
@@ -285,7 +285,7 @@ export function openWalk(options: {
         views,
       };
       apply({ kind: "paused", pause });
-      announce?.(pauseLines(pause));
+      announce?.(pauseLines(state.number, pause));
       const answerPath = path.join(answersDir(rootDir, runDir), `${k}.json`);
       let answer = readAnswer(answerPath);
       while (answer === null) {
