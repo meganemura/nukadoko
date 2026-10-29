@@ -14,8 +14,10 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, r
 // criterion is a cell of the base and shows the audit row head writes.
 // The two criteria that did not change are no cells of the base, so the
 // base runs them for paths alone: the room's path shows the cache miss,
-// and the audit's Then fails at the base once, with no proof run, while
-// the table is what it would be without those executions.
+// the audit's Then fails at the base once, with no proof run, and the
+// slow writer's claim, which head fails too, is judged again when the base
+// world stops, as a cell's is. The table is what it would be without those
+// executions.
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" } });
@@ -35,9 +37,12 @@ const PROGRAM = [
   "",
 ].join("\n");
 
-// Lines 3, 6, and 10 of the feature file.
+// Lines 3, 6, 10, and 15 of the feature file.
 const ROOM = ["  Scenario: a room page reads the room", '    When the client gets "/rooms/7"', ""];
 const AUDIT = ["  Scenario: a score is audited", '    When the client posts to "/scores"', '    Then "audit_log" was written 1 time', ""];
+// Its claim holds on the lines it has, and the insert `/after` writes
+// later breaks it once the world stops: `broke@13`, wherever it runs.
+const SLOW = ["  Scenario: a slow writer", '    When the client gets "/rooms/7"', '    And the client gets "/after"', "    Then nothing was written", ""];
 const SCORE = ["  Scenario: a score is placed", '    When the client posts to "/scores"', '    Then "scores" was written 1 time', ""];
 const feature = (...scenarios: string[][]): string => ["Feature: Rooms and scores", "", ...scenarios.flat()].join("\n");
 
@@ -81,14 +86,14 @@ describe("the paths of each environment's base world against its head world", ()
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
-    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, AUDIT));
+    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, AUDIT, SLOW));
     git(rootDir, "init", "-q", "-b", "main");
     git(rootDir, "add", "-A");
     git(rootDir, "commit", "-q", "-m", "base");
     git(rootDir, "branch", "base-branch");
     const server = path.join(rootDir, "app", "server.mjs");
     writeFileSync(server, headServer(readFileSync(server, "utf8")));
-    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, AUDIT, SCORE));
+    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, AUDIT, SLOW, SCORE));
     git(rootDir, "add", "-A");
     git(rootDir, "commit", "-q", "-m", "head");
     const sink = createCaptureSink();
@@ -108,22 +113,25 @@ describe("the paths of each environment's base world against its head world", ()
     expect(run.table.rows.map((row) => [row.line, row.cells.map((cell) => cell.world)])).toEqual([
       [3, ["head", "head"]],
       [6, ["head", "head"]],
-      [10, ["head", "head", "base", "base"]],
+      [10, ["head", "head"]],
+      [15, ["head", "head", "base", "base"]],
     ]);
     const atBase = run.scenarios.filter((scenario) => scenario.world === "base").map((scenario) => [scenario.line, scenario.environment, scenario.for_paths]);
-    expect(atBase).toHaveLength(6);
+    expect(atBase).toHaveLength(8);
     expect(atBase).toEqual(
       expect.arrayContaining([
         [3, "reorder-off", { outcome: "pass" }],
         [3, "reorder-on", { outcome: "pass" }],
         [6, "reorder-off", { outcome: "fail", line: 8 }],
         [6, "reorder-on", { outcome: "fail", line: 8 }],
-        [10, "reorder-off", undefined],
-        [10, "reorder-on", undefined],
+        [10, "reorder-off", { outcome: "broke", line: 13 }],
+        [10, "reorder-on", { outcome: "broke", line: 13 }],
+        [15, "reorder-off", undefined],
+        [15, "reorder-on", undefined],
       ]),
     );
     expect(stderr).toContain("base reorder-off  features/events.feature:3  a room page reads the room  (for paths)\n");
-    expect(stderr).not.toContain("features/events.feature:10  a score is placed  (for paths)");
+    expect(stderr).not.toContain("features/events.feature:15  a score is placed  (for paths)");
     expect(stderr).not.toContain("proof run");
   });
 
@@ -139,6 +147,7 @@ describe("the paths of each environment's base world against its head world", ()
         [3, "changed"],
         [6, "changed"],
         [10, "changed"],
+        [15, "changed"],
       ]);
       expect(comparison.criteria[0]!.steps).toEqual([
         {
@@ -151,7 +160,8 @@ describe("the paths of each environment's base world against its head world", ()
         },
       ]);
       expect(comparison.criteria[1]).toMatchObject({ a: { outcome: "fail", line: 8 }, steps: [AUDITED] });
-      expect(comparison.criteria[2]).toMatchObject({ steps: [{ ...AUDITED, line: 11 }] });
+      expect(comparison.criteria[2]).toMatchObject({ a: { outcome: "broke", line: 13 }, b: { outcome: "broke", line: 13 }, steps: [{ line: 11, ran: "both" }] });
+      expect(comparison.criteria[3]).toMatchObject({ steps: [{ ...AUDITED, line: 16 }] });
       expect(comparison.not_compared).toEqual([]);
     }
   });
@@ -162,14 +172,16 @@ describe("the paths of each environment's base world against its head world", ()
     expect(summary.slice(start, summary.indexOf("### `reorder-off` → `reorder-on` (`quick_reorder` false → true)"))).toEqual([
       "### base → head",
       "",
-      "3 criteria compared: 3 changed.",
+      "4 criteria compared: 4 changed.",
       "",
       "- `features/events.feature:3` a room page reads the room, in `reorder-off`, `reorder-on`",
       '  - line 4 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1',
+      "- `features/events.feature:10` a slow writer, in `reorder-off`, `reorder-on`",
+      '  - line 11 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1',
       "- `features/events.feature:6` a score is audited, in `reorder-off`, `reorder-on`",
       '  - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1',
-      "- `features/events.feature:10` a score is placed, in `reorder-off`, `reorder-on`",
-      '  - line 11 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1',
+      "- `features/events.feature:15` a score is placed, in `reorder-off`, `reorder-on`",
+      '  - line 16 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1',
       "",
     ]);
   });
