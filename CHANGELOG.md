@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.24.0 — 2026-10-29
+
 ### Added
 
 - **`showRequests` (experimental) puts a step's own requests on the
@@ -69,6 +71,37 @@ just until 0.1.
   elements are not found within 5 seconds, no screenshot is written. A
   secret split across elements, on a canvas, in an image, or in another
   spelling is not covered, and traces are still not redacted.
+
+### Skill eval
+
+One run of one model, as `docs/releasing.md` describes: the `cli`
+example, Claude Opus 5.5, without `cli.md` in the installed skill. A
+fresh agent ran it, with only the installed package to read.
+`nuka check` and `nuka run` passed (5 scenarios, 5 criteria held, each
+claim measured on the process the When ran).
+
+| Rule | Result | Reason |
+| --- | --- | --- |
+| S1 | met | Each Then claims an exit code, the exact output lines, a JSON object, or the exact error line. |
+| S2 | met | Every scenario ends with its Then lines after its When. |
+| S3 | met | The ticket gives no data, so the agent worked out the totals from the stated rule before the first run and listed each assumption (exit 0, stderr, numbers in the object, whole amounts) and its open questions under `Feature:`. It named the tension it saw: S3 says to stop when the criteria give no example, and `writing-the-feature.md` says chosen values are expected once they are surfaced. |
+| S4 | met | The sentences name the command, the file, the output, and the exit code. |
+| S5 | met | The file contents, the arguments, and the expected text are in docstrings and the sentences. |
+| S6 | met | The unreadable file and the bad line are their own scenarios and claim the exit code and the exact message. |
+| S7 | met | The Outline's name carries `<line>`. |
+| S8 | met | Each scenario writes its own file in a scratch directory. |
+| S9 | met | One When per scenario, and one claim per Then line. |
+| S10 | met | `Given an empty directory` establishes, and running tally is always the When. |
+| S11 | not applicable | No step failed in the final run, so no first line was read. |
+| S12 | met | The ticket sits under `Feature:` word for word, and each scenario proves one of its sentences. |
+
+The agent reported three things that slowed it. `nuka do <step> --use`
+with the record of a Given that made a `scratch` directory failed with
+`spawn /opt/node22/bin/node ENOENT`: the directory was gone, since it
+lasts one call, and the message blames the node binary. `scratch.dir("tally-")`
+made `tally--<random>`, with a second hyphen. The `next:` lines of `nuka
+scaffold --feature` give no `--description`, so the stubs say `TODO:
+describe`.
 
 ## 0.23.0 — 2026-10-29
 

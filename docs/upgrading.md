@@ -46,7 +46,7 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
-## 0.23.0 to the next release
+## 0.23.0 to 0.24.0
 
 - **`run.json`'s `counts` always has `stopped`,** 0 for every run but a
   walk (`nuka run --step`). A reader that compares `counts` whole adds
