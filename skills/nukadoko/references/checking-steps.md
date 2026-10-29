@@ -122,22 +122,22 @@ The compares: `equal` (structural), `not-equal`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `has-item`, `has-same-items` (in any
 order), `has-fields` (the expected fields at any depth, each array whole),
 `fits-text` (line by line; a line `...` is any lines, `[..]` any text in its
-line), `is-a` (a kind: `string`, `number`, `integer`, `boolean`, `list`,
-`object`, `null`, `uuid`, `date`, `timestamp`, `url`), `matches`,
-`greater-than`, `at-least`, `less-than`, `at-most`. A docstring claims the few
-fields of a response with `has-fields`, only as JSON (`expected_view: "json"`),
-and output that changes each run with `fits-text`, never from `{ from }` or `{
-observe }`. Two values of different JSON types break the claim (`is-a` aside),
-and so does an expected value nearly every value holds (a blank text, a pattern
-that matches `""`, an object with no field, only `...` and `[..]`). Each side
-is a plain JSON copy, and `observe` gets a clone of its inputs; a `Date`, a
-bigint, `NaN`, an `undefined` item, a `Proxy`, or nesting past 256 levels
-leaves the claim `unjudged` (return an ISO string or a number). Each claim or
-item not judged by the step's deadline, a running `matches` pattern included,
-is `unjudged`, with how many. `nuka check` reads each `from` path against the
-producer's `returns` (`claim-path-unknown`), reports a claim whose sides are
-one place (`claim-compares-itself`), and refuses a parameter type with a
-transformer on an expected key (`claim-expected-transformed`).
+line), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
+`url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A
+docstring claims the few fields of a response with `has-fields`, only as JSON
+(`expected_view: "json"`), and output that changes each run with `fits-text`,
+never from `{ from }` or `{ observe }`. Two values of different JSON types
+break the claim (`is-a` aside), and so does an expected value nearly every
+value holds (a blank text, a pattern matching `""`, an object with no field,
+only `...` and `[..]`). Each side is a plain JSON copy, and `observe` gets a
+clone of its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a `Proxy`,
+or nesting past 256 levels leaves the claim `unjudged` (return an ISO string or
+a number). Each claim or item the step's deadline cuts off, a running `matches`
+included, is `unjudged`, with how many. `nuka check` reads each `from` path
+against the producer's `returns` (`claim-path-unknown`), reports a claim whose
+sides are one place (`claim-compares-itself`) and an `is-a` capture that names
+no kind (`claim-kind-unknown`), and refuses a parameter type with a transformer
+on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 

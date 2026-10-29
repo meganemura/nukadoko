@@ -23,6 +23,7 @@ import {
   type Claim,
   type ClaimPlace,
   type ClaimStepShape,
+  VALUE_KINDS,
 } from "../src/step/claims.js";
 import {
   applyView,
@@ -34,7 +35,6 @@ import {
   fitLines,
   lineFits,
   textFit,
-  VALUE_KINDS,
   jsonType,
   judgingBudget,
   pollReadings,
@@ -535,36 +535,52 @@ describe("compares", () => {
       expect(holds(await compare("is-a", `${year}-${month}-${day}`, "date"))).toBe(real && month >= 10 && day >= 10);
     }));
 
-  it("is-a timestamp holds for the ISO text of any instant, at any offset, and not without its seconds or past the 24 hours of a day", () =>
+  it("is-a timestamp holds for any instant written with T, t, or a space, Z or z, and an offset of +hh:mm, +hhmm, or +hh, and not without its seconds, past the 24 hours of a day, or at a leap second", () =>
     hegel.testAsync(async (tc) => {
       const instant = new Date(tc.draw(gs.integers({ minValue: 0, maxValue: 253402300799999 }))).toISOString();
       expect(holds(await compare("is-a", instant, "timestamp"))).toBe(true);
-      const offset = `${tc.draw(gs.sampledFrom(["+", "-"]))}${String(tc.draw(gs.integers({ minValue: 0, maxValue: 23 }))).padStart(2, "0")}:${String(tc.draw(gs.integers({ minValue: 0, maxValue: 59 }))).padStart(2, "0")}`;
-      expect(holds(await compare("is-a", instant.replace(/\.\d+Z$/, offset), "timestamp"))).toBe(true);
+      const two = (n: number) => String(n).padStart(2, "0");
+      const [hours, minutes] = [tc.draw(gs.integers({ minValue: 0, maxValue: 23 })), tc.draw(gs.integers({ minValue: 0, maxValue: 59 }))];
+      const sign = tc.draw(gs.sampledFrom(["+", "-"]));
+      const offset = tc.draw(gs.sampledFrom([`${sign}${two(hours)}:${two(minutes)}`, `${sign}${two(hours)}${two(minutes)}`, `${sign}${two(hours)}`, "Z", "z"]));
+      const separator = tc.draw(gs.sampledFrom(["T", "t", " "]));
+      const spelled = instant.replace("T", separator).replace(/Z$/, offset);
+      expect(holds(await compare("is-a", spelled, "timestamp"))).toBe(true);
+      expect(holds(await compare("is-a", spelled.replace(/\.\d+/, ""), "timestamp"))).toBe(true);
       expect(holds(await compare("is-a", instant.replace(/:\d\d\.\d+Z$/, "Z"), "timestamp"))).toBe(false);
       expect(holds(await compare("is-a", instant.replace(/T\d\d/, "T24"), "timestamp"))).toBe(false);
+      expect(holds(await compare("is-a", instant.replace(/:\d\d\./, ":60."), "timestamp"))).toBe(false);
       expect(holds(await compare("is-a", instant.slice(0, 10), "timestamp"))).toBe(false);
       expect(holds(await compare("is-a", instant.replace(/Z$/, ""), "timestamp"))).toBe(false);
+      expect(holds(await compare("is-a", instant.replace("T", tc.draw(gs.sampledFrom(["", "_", "  ", "\n"]))), "timestamp"))).toBe(false);
+      const wrongOffset = tc.draw(gs.sampledFrom([`${sign}24:00`, `${sign}${two(hours)}:60`, `${sign}${two(hours)}:`, `${sign}${two(hours)}:${minutes % 10}`, `${sign}${hours % 10}`]));
+      expect(holds(await compare("is-a", instant.replace(/Z$/, wrongOffset), "timestamp"))).toBe(false);
     }));
 
-  it("is-a url holds for an absolute http or https URL and not for another scheme, a relative path, or a text with a space", () =>
+  it("is-a url holds for an absolute http or https URL and not for another scheme, a relative path, or a text with a space, a control character, or a format character anywhere", () =>
     hegel.testAsync(async (tc) => {
       const host = tc.draw(gs.text({ alphabet: "abc", minSize: 1, maxSize: 5 }));
       const route = tc.draw(gs.text({ alphabet: "abc/", maxSize: 6 }));
       const scheme = tc.draw(gs.sampledFrom(["http", "https", "HTTPS"]));
-      expect(holds(await compare("is-a", `${scheme}://${host}.example/${route}`, "url"))).toBe(true);
+      const url = `${scheme}://${host}.example/${route}`;
+      expect(holds(await compare("is-a", url, "url"))).toBe(true);
       expect(holds(await compare("is-a", `ftp://${host}.example/${route}`, "url"))).toBe(false);
       expect(holds(await compare("is-a", `/${route}`, "url"))).toBe(false);
       expect(holds(await compare("is-a", `http:${host}.example`, "url"))).toBe(false);
-      expect(holds(await compare("is-a", `https://${host}.example/a b`, "url"))).toBe(false);
+      // C0 and C1 controls, and format characters a reader cannot see: a
+      // zero-width space, a mark, a word joiner, a byte order mark, a soft
+      // hyphen.
+      const unseen = tc.draw(gs.sampledFrom([" ", "\t", "\u0000", "\u001f", "\u007f", "\u0080", "\u0085", "\u009f", "​", "‎", "⁠", "﻿", "­"]));
+      const at = tc.draw(gs.integers({ minValue: scheme.length + 3, maxValue: url.length }));
+      expect(holds(await compare("is-a", `${url.slice(0, at)}${unseen}${url.slice(at)}`, "url"))).toBe(false);
     }));
 
   it("is-a reads the name of a kind it knows, and names every kind it knows otherwise", async () => {
     expect(await compare("is-a", "x", 3)).toEqual({ reason: "is-a reads the name of a kind as a string, and the expected value is a number" });
     expect(await compare("is-a", "x", "guid")).toEqual({
-      reason: `is-a names one of the kinds ${Object.keys(VALUE_KINDS).join(", ")}, and the expected value is "guid"`,
+      reason: `is-a names one of the kinds ${VALUE_KINDS.join(", ")}, and the expected value is "guid"`,
     });
-    expect(Object.keys(VALUE_KINDS)).toEqual(["string", "text", "number", "integer", "boolean", "list", "array", "object", "null", "uuid", "date", "timestamp", "url"]);
+    expect(VALUE_KINDS).toEqual(["string", "text", "number", "integer", "boolean", "list", "array", "object", "null", "uuid", "date", "timestamp", "url"]);
     expect(await compare("is-a", "x", "constructor")).toHaveProperty("reason");
   });
 
@@ -1828,6 +1844,23 @@ describe("an expected value a compare can never judge as the sentence means it",
       const claim = { actual: "result", compare: "has-fields", expected: "fields", ...(view === undefined ? {} : { expected_view: view }) };
       expect(claimsProblem([claim], literalShape("the result reads"))).toContain("never an object, so has-fields always breaks");
       expect(claimsProblem([{ ...claim, expected_view: "json" }], literalShape("the result reads"))).toBeNull();
+    }));
+
+  it("refuses is-a with a literal that names no kind, or a kind its view always makes, and takes any other kind", () =>
+    hegel.test((tc) => {
+      const kind = tc.draw(gs.sampledFrom(VALUE_KINDS));
+      const view = tc.draw(gs.sampledFrom([undefined, "text", "lines", "json", "comma-list"] as const));
+      const at = tc.draw(gs.booleans()) ? "0" : undefined;
+      const claim = { actual: "result", ...(view === undefined ? {} : { view }), ...(at === undefined ? {} : { at }), compare: "is-a", expected: { literal: kind } };
+      const problem = claimsProblem([claim], literalShape(`the result is a ${kind}`));
+      const strings = view === "text" && (kind === "string" || kind === "text");
+      const arrays = (view === "lines" || view === "comma-list") && (kind === "list" || kind === "array");
+      if (at === undefined && (strings || arrays)) expect(problem).toContain("holds whenever the view applies and states nothing");
+      else expect(problem).toBeNull();
+      const word = tc.draw(gs.text({ alphabet: "xyz", minSize: 1, maxSize: 5 }));
+      expect(claimsProblem([{ actual: "result", compare: "is-a", expected: { literal: word } }], literalShape(`the result is a ${word}`))).toContain(
+        `and is-a names one of the kinds ${VALUE_KINDS.join(", ")}, so the claim always breaks`,
+      );
     }));
 
   it("refuses fits-text whose expected text a step returned or observe read, and takes one the sentence states", () => {

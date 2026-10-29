@@ -2,21 +2,25 @@ import type { Pickle } from "@cucumber/messages";
 import type { z } from "zod";
 import type { ParameterTypeConfig } from "../binding/parameter-type-config.js";
 import { stripCaptureNames } from "../binding/pattern.js";
+import { asObjectShape, isPlainString } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
 import {
   ANY_INDEX,
   isEachClaim,
+  kindNamed,
   observeWithheldKeys,
   pathSegments,
   placesOverlap,
   type Claim,
   type ClaimExpected,
   type ItemClaim,
+  VALUE_KINDS,
 } from "../step/claims.js";
 import type { ClaimView } from "../record/types.js";
 import { isClaimStep, isStep, tryFromCandidates, type ClaimStep, type Step } from "../step/define-step.js";
+import type { CheckedPattern } from "./binding-check.js";
 import type { BoundStepLine, StepTextMatcher } from "./feature-check.js";
 import type { CheckIssue } from "./types.js";
 
@@ -31,7 +35,9 @@ import type { CheckIssue } from "./types.js";
 // an `observe` that receives the value an expected `from` reads, or a
 // value that holds it or that it holds, and an `observe` that receives
 // the value an actual `from` reads when the expected value is
-// `{ observe }`. Two findings are per bound step:
+// `{ observe }`. A third reads the line's own words: an `is-a` claim
+// whose expected sentence key a capture fills with a name that is no kind
+// (`claim-kind-unknown`). Two findings are per bound step:
 // a claim step whose `observe` reaches a browser page and does not state
 // `poll` (`claim-poll-unstated`), and an expected sentence key that a
 // parameter type with a transformer fills (`claim-expected-transformed`),
@@ -52,7 +58,7 @@ export interface ClaimCheckIssue {
   /** 0-based index into `pickle.steps`: the claim step's line. */
   readonly stepIndex: number;
   readonly stepName: string;
-  readonly code: "claim-compares-itself" | "claim-path-unknown";
+  readonly code: "claim-compares-itself" | "claim-kind-unknown" | "claim-path-unknown";
   readonly message: string;
 }
 
@@ -318,6 +324,9 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       const where = actual.text === expected.text ? `${actual.text} on both sides` : `${actual.text} as its actual value and ${expected.text} as its expected value, one place`;
       report("claim-compares-itself", `Step "${stepName}"'s ${label} reads ${where}, so it holds whatever the behaviour is`);
     };
+    reportUnknownKinds(step, match(pickle.steps[stepIndex]!.text).matched, pickle.steps[stepIndex]!.text, (message) =>
+      report("claim-kind-unknown", `Step "${stepName}"'s ${message}`),
+    );
     // Every place of the step that `observe` must not receive, for the
     // observe check: each expected `{ from }` place, and each actual
     // `from` place whose claim takes its expected value from `observe`.
@@ -395,6 +404,55 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     }
   });
   return issues;
+}
+
+/** The value each capture of a typed pattern gives on `text`, by key, for
+ * the built-in types whose value is the line's own text: `{word}`, the
+ * anonymous `{key:}`, and `{string}` without its quotes, unescaped the way
+ * the run's transformer does. A custom type's transformer is never run by
+ * `nuka check`, and a number type gives no name, so neither is here. */
+function capturedTexts(matched: CheckedPattern | undefined, text: string): ReadonlyMap<string, string> {
+  const texts = new Map<string, string>();
+  if (matched?.matcherKind !== "expression") return texts;
+  const args = matched.expression.match(text);
+  if (args === null) return texts;
+  matched.captures.forEach((capture, index) => {
+    const raw = args[index]?.group.value;
+    if (raw === undefined) return;
+    if (capture.type === "word" || capture.type === "") texts.set(capture.key, raw);
+    else if (capture.type === "string" && raw.length >= 2) texts.set(capture.key, raw.slice(1, -1).replace(/\\"/g, '"').replace(/\\'/g, "'"));
+  });
+  return texts;
+}
+
+/** `claim-kind-unknown`: an `is-a` claim whose expected value is a sentence
+ * key this line fills, through a capture, with a name that is no kind.
+ * Only a plain string key read as it is or as text counts, so the value
+ * the claim reads is the captured text and the run would break the claim
+ * on this line for certain. */
+function reportUnknownKinds(step: ClaimStep, matched: CheckedPattern | undefined, text: string, report: (message: string) => void): void {
+  const captured = capturedTexts(matched, text);
+  if (captured.size === 0) return;
+  const shape = asObjectShape(step.args);
+  step.claims.forEach((claim, index) => {
+    const label = `claims[${index}]`;
+    const entries: readonly [string, ItemClaim | Claim][] = isEachClaim(claim)
+      ? [
+          ...(claim.each.where ?? []).map((item, itemIndex): [string, ItemClaim] => [`${label}.each.where[${itemIndex}]`, item]),
+          ...claim.each.claims.map((item, itemIndex): [string, ItemClaim] => [`${label}.each.claims[${itemIndex}]`, item]),
+        ]
+      : [[label, claim]];
+    for (const [entryLabel, entry] of entries) {
+      if (entry.compare !== "is-a" || typeof entry.expected !== "string") continue;
+      if (entry.expected_view !== undefined && entry.expected_view !== "text") continue;
+      const named = captured.get(entry.expected);
+      const schema = shape?.[entry.expected];
+      if (named === undefined || schema === undefined || !isPlainString(schema) || kindNamed(named) !== undefined) continue;
+      report(
+        `${entryLabel}.expected is args.${entry.expected}, which this line fills with ${JSON.stringify(named)}, and is-a names one of the kinds ${VALUE_KINDS.join(", ")}, so the claim would always break`,
+      );
+    }
+  });
 }
 
 /** Item paths of an `each` claim against the array's element schema. */

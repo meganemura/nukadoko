@@ -11,6 +11,7 @@ import type {
 } from "../record/types.js";
 import {
   isEachClaim,
+  kindNamed,
   literalStatedByAll,
   pathSegments,
   placeAt,
@@ -22,6 +23,8 @@ import {
   type ClaimPlace,
   type EachClaim,
   type ItemClaim,
+  type ValueKind,
+  VALUE_KINDS,
 } from "./claims.js";
 import { readAt, snapshot, type Read, type Refusal } from "./snapshot.js";
 
@@ -279,9 +282,11 @@ function isCalendarDay(year: number, month: number, day: number): boolean {
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 // Seconds are required and a leap second (60) is refused: a time a
-// program generates names its second, and no runtime clock prints 60.
-// Only an uppercase T and Z are read, as a program writes them.
-const TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
+// program generates names its second, and no runtime clock prints 60. The
+// separator may be "T", "t", or a space, the zone "Z" or "z", and the
+// offset "+hh:mm", "+hhmm", or "+hh": RFC 3339 allows the first two
+// spellings, ISO 8601 the offsets, and programs print all of them.
+const TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|[+-](\d{2})(?::?(\d{2}))?)$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isDate(value: unknown): boolean {
@@ -293,16 +298,17 @@ function isTimestamp(value: unknown): boolean {
   const match = typeof value === "string" ? TIMESTAMP.exec(value) : null;
   if (match === null || !isCalendarDay(Number(match[1]), Number(match[2]), Number(match[3]))) return false;
   const [hour, minute, second] = [Number(match[4]), Number(match[5]), Number(match[6])];
-  const offset = match[7] === undefined ? true : Number(match[7]) <= 23 && Number(match[8]) <= 59;
+  const offset = match[7] === undefined ? true : Number(match[7]) <= 23 && Number(match[8] ?? 0) <= 59;
   return hour <= 23 && minute <= 59 && second <= 59 && offset;
 }
 
 // The URL parser takes "http:example.com" and strips or encodes spaces and
 // line breaks, so a text it accepts can still be no URL a program wrote:
-// the scheme has to be followed by "//", and no whitespace or control
-// character may appear.
+// the scheme has to be followed by "//", and no whitespace, control
+// character (C0 and C1), or format character (a zero-width space, a word
+// joiner, a byte order mark) may appear, since a reader cannot see one.
 function isUrl(value: unknown): boolean {
-  if (typeof value !== "string" || !/^https?:\/\//i.test(value) || /[\s\u0000-\u001f\u007f]/.test(value)) return false;
+  if (typeof value !== "string" || !/^https?:\/\//i.test(value) || /[\s\p{Cc}\p{Cf}]/u.test(value)) return false;
   try {
     const { protocol } = new URL(value);
     return protocol === "http:" || protocol === "https:";
@@ -311,10 +317,9 @@ function isUrl(value: unknown): boolean {
   }
 }
 
-/** The kinds `is-a` names, each with what a value of that kind is. A
- * sentence can name the kind of a generated value (an id, a time, a link)
- * when it cannot state the value itself. A new kind is a new row. */
-export const VALUE_KINDS: Readonly<Record<string, (value: unknown) => boolean>> = {
+/** What a value of each kind `is-a` names is. A new kind is a new row
+ * here and a new name in `VALUE_KINDS`. */
+const KIND_TESTS: Readonly<Record<ValueKind, (value: unknown) => boolean>> = {
   string: (value) => typeof value === "string",
   text: (value) => typeof value === "string",
   number: (value) => typeof value === "number",
@@ -330,11 +335,11 @@ export const VALUE_KINDS: Readonly<Record<string, (value: unknown) => boolean>> 
   url: isUrl,
 };
 
-/** The predicate of the kind `name` names, matched after trimming and
- * ignoring case, or `undefined` for a name no row has. Pure. */
+/** The test of the kind `name` names (`kindNamed`), or `undefined` for a
+ * name that is no kind. Pure. */
 export function valueKind(name: string): ((value: unknown) => boolean) | undefined {
-  const key = name.trim().toLowerCase();
-  return Object.hasOwn(VALUE_KINDS, key) ? VALUE_KINDS[key] : undefined;
+  const kind = kindNamed(name);
+  return kind === undefined ? undefined : KIND_TESTS[kind];
 }
 
 /** The value after `view`, or why the view could not apply. A view reads a
@@ -467,7 +472,7 @@ export async function compareValues(
       if (expectedType !== "string") return { reason: `is-a reads the name of a kind as a string, and the expected value is ${article(expectedType)}` };
       const kind = valueKind(expected as string);
       if (kind === undefined) {
-        return { reason: `is-a names one of the kinds ${Object.keys(VALUE_KINDS).join(", ")}, and the expected value is ${JSON.stringify(expected)}` };
+        return { reason: `is-a names one of the kinds ${VALUE_KINDS.join(", ")}, and the expected value is ${JSON.stringify(expected)}` };
       }
       return { holds: kind(actual) };
     }

@@ -1938,8 +1938,8 @@ with no `...` costs time linear in its lines, one with many costs its
 lines times the actual lines at most, and neither costs a number of tries
 that grows with each `...`.
 
-`is-a` lets a sentence name the kind of a value it cannot state, such
-as an id or a time the system generated: "the order id is a UUID". The
+`is-a` lets a sentence name the kind of a value it cannot state, such as
+an id or a time the system generated: "the order id is a UUID". The
 expected value is a string that names a kind, read after trimming and
 ignoring case, so the pattern's own word can be the literal (`expected:
 { literal: "UUID" }`), or a capture such as `{kind:word}` can fill it.
@@ -1947,15 +1947,28 @@ The kinds are `string` and `text` (a JSON string), `number`, `integer`
 (a number with no fraction), `boolean`, `list` and `array`, `object` (an
 object that is not an array and not `null`), `null`, `uuid` (8, 4, 4, 4,
 and 12 hexadecimal digits joined by hyphens, in any case), `date`
-(`YYYY-MM-DD` that names a day of the calendar), `timestamp` (an ISO
-8601 date and time with seconds, an optional fraction, and an offset,
-`Z` or `+hh:mm` or `-hh:mm`, that names a real day and time; a leap
-second is refused), and `url` (an absolute `http` or `https` URL that the
-WHATWG URL parser accepts, written with `//` after the scheme and with no
-whitespace or control character). An expected value that is not a
-string, or a name that is no kind, breaks the claim, and the reason
-lists the kinds. `is-a` is the one compare whose two sides are of
-different JSON types by design, so it does not break for that.
+(`YYYY-MM-DD` that names a day of the calendar), `timestamp` (a date and
+a time with seconds and an optional fraction, joined by `T`, `t`, or a
+space, then `Z`, `z`, or an offset of `+` or `-` with `hh:mm`, `hhmm`,
+or `hh`, that names a real day and time; RFC 3339 allows the lowercase
+letters and the space, ISO 8601 the three offsets, and a leap second is
+refused), and `url` (an absolute `http` or `https` URL that the WHATWG
+URL parser accepts, written with `//` after the scheme, and with no
+whitespace, no C0 or C1 control character, and no format character such
+as a zero-width space, which a reader cannot see). An expected value
+that is not a string, or a name that is no kind, breaks the claim, and
+the reason lists the kinds. `is-a` is the one compare whose two sides
+are of different JSON types by design, so it does not break for that.
+
+`defineStep` refuses an `is-a` claim whose literal is not a string
+that names a kind, since it would break on every line, and one whose
+literal names a kind its `view` always makes, with no `at`: `string` or
+`text` through `view: "text"`, and `list` or `array` through `view:
+"lines"` or `view: "comma-list"`. Such a claim holds whenever the view
+applies, so it states nothing. A capture's value is known only on a
+line, so `nuka check` reports a line whose `{word}`, `{string}`, or
+anonymous capture fills an `is-a` claim's plain string key with a name
+that is no kind (`claim-kind-unknown`).
 
 Both sides are plain JSON before any compare runs: `null`, a boolean, a
 string, a finite number (an integer no larger than

@@ -73,6 +73,12 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Capture the key with a type that has no transformer, such as {key:string}, and declare expected_view (text, lines, json, or comma-list) on the claim if the text needs one.",
   },
+  "claim-kind-unknown": {
+    description:
+      "An is-a claim's expected value is a plain string args key, read as it is or with expected_view text, and the line fills it through a {word}, {string}, or anonymous capture with a name that is none of the kinds is-a names, so the claim always breaks on that line. defineStep refuses a literal that names no kind; only the line says what a capture holds, so this half is the check's.",
+    severity: "error",
+    fix: "Write one of the kinds is-a names in the line (string, text, number, integer, boolean, list, array, object, null, uuid, date, timestamp, or url), or compare with another claim if the line states something else.",
+  },
   "claim-path-unknown": {
     description:
       "A claim reads a path into a value an earlier step returned, and that step's returns schema has nothing at the path, so the value is undefined and the claim always breaks.",

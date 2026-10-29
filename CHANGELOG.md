@@ -50,13 +50,19 @@ just until 0.1.
   `is-a` holds when the actual value is of the kind its expected text
   names, read after trimming and ignoring case: `string` or `text`,
   `number`, `integer`, `boolean`, `list` or `array`, `object`, `null`,
-  `uuid`, `date` (a real `YYYY-MM-DD` day), `timestamp` (an ISO 8601
-  date and time with seconds and an offset), or `url` (an absolute
-  `http` or `https` URL). "The order id is a UUID" claims a generated id
-  with `expected: { literal: "UUID" }`, where the sentence could only
-  weaken to "the order has an id". An expected value that is not a
-  string, or names no kind, breaks the claim and lists the kinds, and a
-  `where` claim that overlaps an item claim cannot use the compare.
+  `uuid`, `date` (a real `YYYY-MM-DD` day), `timestamp` (a date and a
+  time with seconds, joined by `T`, `t`, or a space, and `Z`, `z`, or an
+  offset `+hh:mm`, `+hhmm`, or `+hh`), or `url` (an absolute `http` or
+  `https` URL with no whitespace, control character, or format
+  character). "The order id is a UUID" claims a generated id with
+  `expected: { literal: "UUID" }`, where the sentence could only weaken
+  to "the order has an id". An expected value that is not a string, or
+  names no kind, breaks the claim and lists the kinds, and a `where`
+  claim that overlaps an item claim cannot use the compare. `defineStep`
+  refuses a literal that names no kind, and a kind the claim's `view`
+  always makes (`string` through `text`, `list` through `lines`), which
+  states nothing; `nuka check` reports a line whose capture names no kind
+  (`claim-kind-unknown`).
 
 ### Fixed
 

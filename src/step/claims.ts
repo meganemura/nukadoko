@@ -33,6 +33,20 @@ export const CLAIM_COMPARES = [
 /** Every view a claim may name. */
 export const CLAIM_VIEWS = ["text", "lines", "json", "comma-list"] as const satisfies readonly ClaimView[];
 
+/** Every kind `is-a` may name. A sentence can name the kind of a generated
+ * value (an id, a time, a link) when it cannot state the value itself;
+ * src/step/evaluate-claims.ts holds what a value of each kind is. */
+export const VALUE_KINDS = ["string", "text", "number", "integer", "boolean", "list", "array", "object", "null", "uuid", "date", "timestamp", "url"] as const;
+
+export type ValueKind = (typeof VALUE_KINDS)[number];
+
+/** The kind `name` names, read after trimming and ignoring case, or
+ * `undefined` for a name that is no kind. Pure. */
+export function kindNamed(name: string): ValueKind | undefined {
+  const key = name.trim().toLowerCase();
+  return (VALUE_KINDS as readonly string[]).includes(key) ? (key as ValueKind) : undefined;
+}
+
 // Fails to compile when the record's union gains a member this list lacks.
 type MissingCompare = Exclude<ClaimCompare, (typeof CLAIM_COMPARES)[number]>;
 type MissingView = Exclude<ClaimView, (typeof CLAIM_VIEWS)[number]>;
@@ -636,7 +650,32 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
       `${label}.expected reads { ${key}: ${describe((expected as Record<string, unknown>)[key!])} }, ${what}, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal`,
     );
   },
+  // A literal is the one expected value known before a line binds, so it
+  // is the one this can judge: a name that is no kind breaks on every line,
+  // and a kind the view always makes (text makes a string, lines and
+  // comma-list an array) holds whenever the view applies. An `at` reads
+  // inside the viewed value, which can be of any kind.
+  "is-a": (label, claim) => {
+    const literal = literalOf(claim.expected);
+    if (literal === null) return;
+    const kind = typeof literal.literal === "string" ? kindNamed(literal.literal) : undefined;
+    if (kind === undefined) {
+      throw new InvalidClaimError(
+        `${label}.expected is the literal ${describe(literal.literal)}, and is-a names one of the kinds ${VALUE_KINDS.join(", ")}, so the claim always breaks. State one of them in the pattern's fixed words`,
+      );
+    }
+    const view = claim.view as (typeof CLAIM_VIEWS)[number] | undefined;
+    const made = view === undefined || claim.at !== undefined ? null : VIEW_MAKES[view];
+    if (made === null || VIEW_KIND_TYPES[kind] !== made) return;
+    const instead = made === "string" ? "Name a kind a string may not be, such as uuid, date, timestamp, or url, or claim the value itself" : "Claim what its items are with each, or claim the value itself";
+    throw new InvalidClaimError(
+      `${label} reads its actual value through view ${view}, which always makes ${article(made)}, so is-a ${describe(literal.literal)} holds whenever the view applies and states nothing. ${instead}`,
+    );
+  },
 };
+
+/** Each kind that holds for every value of one JSON type, with that type. */
+const VIEW_KIND_TYPES: Partial<Record<ValueKind, "string" | "array">> = { string: "string", text: "string", list: "array", array: "array" };
 
 function article(word: string): string {
   return /^[aeiou]/.test(word) ? `an ${word}` : `a ${word}`;

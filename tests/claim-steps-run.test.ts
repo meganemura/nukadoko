@@ -2219,6 +2219,47 @@ export default defineStep({
       '  - 12 (observe:order.total) is-a "text" (sentence:kind) broken; measured: none',
     ]);
   });
+  it("reports in nuka check a line whose capture names no kind, and none whose capture names one", async () => {
+    const rootDir = await project({
+      "features/steps/the-order-total-is-a.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the order total is a {kind:word}",
+  args: z.object({ kind: z.string() }),
+  observe() {
+    return { order: { total: 12 } };
+  },
+  claims: [{ actual: "order.total", compare: "is-a", expected: "kind" }],
+});
+`,
+      "features/steps/the-order-id-is.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the order id is {kind:string}",
+  args: z.object({ kind: z.string() }),
+  observe() {
+    return { order: { id: "x" } };
+  },
+  claims: [{ actual: "order", each: { claims: [{ actual: "id", compare: "is-a", expected: "kind", expected_view: "text" }] } }],
+});
+`,
+      "features/t.feature": [
+        "Feature: kinds",
+        "  Scenario: named",
+        "    Then the order total is a number",
+        '    Then the order id is " UUID "',
+        "  Scenario: unnamed",
+        "    Then the order total is a snowflake",
+        '    Then the order id is "guid"',
+        "",
+      ].join("\n"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    const kinds = "string, text, number, integer, boolean, list, array, object, null, uuid, date, timestamp, url";
+    expect(checked.stdout.split("\n").filter((line) => line.includes("claim-kind-unknown"))).toEqual([
+      `error\tclaim-kind-unknown\tfeatures/t.feature:6\tStep "the-order-total-is-a"'s claims[0].expected is args.kind, which this line fills with "snowflake", and is-a names one of the kinds ${kinds}, so the claim would always break`,
+      `error\tclaim-kind-unknown\tfeatures/t.feature:7\tStep "the-order-id-is"'s claims[0].each.claims[0].expected is args.kind, which this line fills with "guid", and is-a names one of the kinds ${kinds}, so the claim would always break`,
+    ]);
+  });
 });
 
 describe("a claim its compare could never judge as the sentence means it, refused at import", () => {
@@ -2262,6 +2303,31 @@ export default defineStep({
       "fits-text with an expected text observe read",
       step("the output is the same", "said: z.string()", `{ actual: "said", compare: "fits-text", expected: { observe: "printed" } }`),
       'claims[0].expected reads { observe: "printed" }, a value observe read, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal',
+    ],
+    [
+      "is-a with a literal that names no kind",
+      step("the id is a snowflake", "said: z.string()", `{ actual: "body.id", compare: "is-a", expected: { literal: "snowflake" } }`),
+      'claims[0].expected is the literal "snowflake", and is-a names one of the kinds string, text, number, integer, boolean, list, array, object, null, uuid, date, timestamp, url, so the claim always breaks. State one of them in the pattern\'s fixed words',
+    ],
+    [
+      "is-a with a literal that is no text",
+      step("the id is 3", "said: z.string()", `{ actual: "body.id", compare: "is-a", expected: { literal: 3 } }`),
+      'claims[0].expected is the literal 3, and is-a names one of the kinds string, text, number, integer, boolean, list, array, object, null, uuid, date, timestamp, url, so the claim always breaks. State one of them in the pattern\'s fixed words',
+    ],
+    [
+      "is-a string on a value read as text",
+      step("the output is a string", "said: z.string()", `{ actual: "printed", view: "text", compare: "is-a", expected: { literal: "string" } }`),
+      'claims[0] reads its actual value through view text, which always makes a string, so is-a "string" holds whenever the view applies and states nothing. Name a kind a string may not be, such as uuid, date, timestamp, or url, or claim the value itself',
+    ],
+    [
+      "is-a list on a value read as lines",
+      step("the output is a list", "said: z.string()", `{ actual: "printed", view: "lines", compare: "is-a", expected: { literal: "list" } }`),
+      'claims[0] reads its actual value through view lines, which always makes an array, so is-a "list" holds whenever the view applies and states nothing. Claim what its items are with each, or claim the value itself',
+    ],
+    [
+      "is-a array on a value read as a comma list",
+      step("the output is an array", "said: z.string()", `{ actual: "printed", view: "comma-list", compare: "is-a", expected: { literal: "array" } }`),
+      'claims[0] reads its actual value through view comma-list, which always makes an array, so is-a "array" holds whenever the view applies and states nothing. Claim what its items are with each, or claim the value itself',
     ],
   ])("refuses %s", async (_name, source, message) => {
     const rootDir = await project({
