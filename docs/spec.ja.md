@@ -2155,6 +2155,13 @@ run を始めた tree と、`--base` のもとでは base の tree もそうで�
 run は world を起動せず、`run.json` は `worlds: []` を持ち、各 step record の `world_name` は `null` です。
 step が `runCommand` でコマンドを実行するコマンドラインツールには、それが正しい形です。
 そうしたプロジェクトに新しく必要なものはありません。
+ただし、step が git の追跡するファイルだけを実行する場合に限ります。
+`--base` のもとでは、base と old の tree は git が無視するものを持たないので、`dist/cli.js` のような build の出力や、`<root>/node_modules` へ組み立てたパスを実行する step は、そこに何も見つけられず、その world で止まります。
+そのセルは製品の結果のように見えます。
+そうしたプロジェクトには、各 tree でその出力を作る `build` を持つプログラムのファイルが要ります(`build: ["npm run build"]`、`serve` なし)。
+step ファイルがその出力を import するときは、`nuka run` の前に head でも build してください。
+run の前の検査は、どの build よりも先に head の step ファイルを読み込むからです。
+パッケージのコマンドを実行する step は、両方の tree を中に持つ head のルートからそれを解決します。
 
 ### フィールド
 

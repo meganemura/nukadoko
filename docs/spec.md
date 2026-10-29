@@ -2654,7 +2654,17 @@ A tree with no program file has no program to start.
 The run starts no world, `run.json` holds `worlds: []`, and each step
 record's `world_name` is `null`.
 That is the right shape for a command-line tool whose steps run commands
-with `runCommand`: such a project needs nothing new.
+with `runCommand`: such a project needs nothing new, as long as its
+steps run only files git tracks. Under `--base`, the base and old trees
+hold nothing git ignores, so a step that runs build output such as
+`dist/cli.js`, or a path it builds to `<root>/node_modules`, finds
+nothing there and breaks in that world, a cell that reads like a product
+result. Such a project needs a program file whose `build` makes that
+output in each tree (`build: ["npm run build"]`, no `serve`). When a
+step file imports that output, build it at head before `nuka run` too,
+since the check before a run loads head's step files before any build.
+A step that runs a package's command resolves it from head's root, which
+both trees sit inside.
 
 ### The fields
 

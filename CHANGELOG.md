@@ -94,6 +94,12 @@ just until 0.1.
   `identity` on the item result: `item 1 (name "caller"): "#2"
   (observe:calls.1.counter) equal "#1" (sentence:counter)`. The step's
   failure message names the item the same way.
+- **The spec no longer says a command-line project needs nothing for
+  `--base`.** The base and old trees hold nothing git ignores, so a step
+  that runs `dist/` output or a path into `node_modules` breaks there,
+  and the cell reads like a product result. "Program" now says such a
+  project needs a program file whose `build` makes that output in each
+  tree, and that head needs it built before `nuka run`.
 
 ## 0.22.0 — 2026-10-28
 

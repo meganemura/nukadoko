@@ -362,6 +362,50 @@ describe("the old world's environments", () => {
   }, 60_000);
 });
 
+describe("a project whose steps run build output git ignores", () => {
+  const distStep = CART_STEP.replace("../../lib/cart.mjs", "../../dist/cart.mjs");
+  const buildScript = `import { copyFileSync, mkdirSync } from "node:fs";\nmkdirSync("dist", { recursive: true });\ncopyFileSync("lib/cart.mjs", "dist/cart.mjs");\n`;
+
+  it("runs the base's code at the base when a program file's build makes that output in each tree", async () => {
+    project = await makeBaseProject();
+    writeFileSync(path.join(project.top, ".gitignore"), ".nukadoko/\nnode_modules/\ndist/\n");
+    project.write({
+      "build.mjs": buildScript,
+      "nukadoko.program.ts": `import { defineProgram } from "nukadoko";\nexport default defineProgram({ build: ["node build.mjs"] });\n`,
+      "features/steps/a-cart.ts": distStep,
+      "features/cart.feature": feature(scenario("three items", 3, 6)),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    project.write({ "lib/cart.mjs": cartModule("return count * 3;"), "features/cart.feature": feature(scenario("three items", 3, 9)) });
+    project.commit("head");
+    execFileSync("node", ["build.mjs"], { cwd: project.root });
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(0);
+    expect(rowSummary(rows(project.root))).toEqual([["three items", "changed", "proven", ["head:default:pass", "base:default:fail"]]]);
+  }, 60_000);
+
+  it("leaves the row unproven, with no claim judged at the base, when no build makes that output in the base tree", async () => {
+    project = await makeBaseProject();
+    writeFileSync(path.join(project.top, ".gitignore"), ".nukadoko/\nnode_modules/\ndist/\n");
+    project.write({
+      "build.mjs": buildScript,
+      "features/steps/a-cart.ts": distStep,
+      "features/cart.feature": feature(scenario("three items", 3, 6)),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    project.write({ "lib/cart.mjs": cartModule("return count * 3;"), "features/cart.feature": feature(scenario("three items", 3, 9)) });
+    project.commit("head");
+    execFileSync("node", ["build.mjs"], { cwd: project.root });
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(1);
+    const [row] = rows(project.root);
+    expect(row!.verdict).toBe("unproven");
+    expect(row!.cells.find((cell) => cell.world === "base")!.outcome).not.toBe("fail");
+  }, 60_000);
+});
+
 describe("a shape --base cannot build a world for", () => {
   interface JudgedFinding {
     readonly code: string;
