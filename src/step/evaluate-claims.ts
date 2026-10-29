@@ -390,6 +390,10 @@ export interface ClaimInputs {
   /** The args keys `observe` received: every key but an expected one for
    * a step with `observe`, none for a step without it. */
   readonly observeReceived: readonly string[];
+  /** The from keys a claim's actual starts with that `observe` also
+   * returned: the claim reads the from value, never the reading, so it is
+   * broken, naming the key. Absent or empty when there is none. */
+  readonly shadowedByObserve?: ReadonlySet<string>;
   /** Where an args key's value starts: `sentence:<key>` for a value the
    * line states, `from:<step>@<line>.<returns key>` for a value an earlier
    * step returned. */
@@ -944,6 +948,15 @@ function fromKeyOf(claim: Claim, fromKeys: ReadonlySet<string>): string | null {
   return head !== undefined && fromKeys.has(head) ? head : null;
 }
 
+/** Why a claim whose actual starts with `key` is not judged when
+ * `observe` returned `key` too. Pure. */
+export function shadowedReason(key: string): string {
+  return (
+    `observe returned "${key}", and from has a key of the same name, so actual "${key}" reads the from value and never what observe returned. ` +
+    `Rename the key observe returns, or the from key, so each name has one source`
+  );
+}
+
 /** Judges every claim against what the step read. A failure while judging
  * one claim makes that claim `unjudged` with the failure as its reason,
  * and the other claims are still judged. */
@@ -958,6 +971,10 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
     if (stoppedAt !== null) {
       const reason = budgetSpent(inputs.budget, claims.length - stoppedAt, claims.length, "claims");
       judged.push({ record: notJudged(claim, inputs, "unjudged", reason), rawActual: undefined, fromKey, expectedOrigins });
+      continue;
+    }
+    if (fromKey !== null && inputs.shadowedByObserve?.has(fromKey) === true) {
+      judged.push({ record: notJudged(claim, inputs, "broken", shadowedReason(fromKey)), rawActual: undefined, fromKey, expectedOrigins });
       continue;
     }
     let rawActual: unknown;

@@ -1451,6 +1451,10 @@ record の読み手は、値を行が使った言葉と見比べられます。
 最初の要素は `from` のキーであるか、そうでなければ `observe` が返すオブジェクトのキーです。
 最初の要素が文の埋めるキーであるパスは拒否されます。
 claim が計測する値は、行から来ることはありません。
+`observe` が `from` のキーと同じ名前で返したキーは、`from` のキーが勝つので claim に届きません。
+そのため、どちらも黙って起こることはありません。
+`observe` を持ち、その返すものをどの claim も読まない step(すべての actual が `from` のキーで、どの期待値も `{ observe }` でない)は、import の時点で拒否されます。
+claim の actual が `from` から読むキーを `observe` が返したときは、その claim は成り立たず、キーを名指しします(`observe returned "sections", and from has a key of the same name, so actual "sections" reads the from value and never what observe returned`)。
 そのあと、次の順に適用されます。
 
 - `view` が値を正規化します。

@@ -693,6 +693,16 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
       );
     });
   });
+  // An observe no claim reads changes no verdict, and the likely cause is
+  // a key it returns under a from key's name: the from value wins, so the
+  // reading is never compared and nothing says so.
+  if (shape.hasObserve && !claimsReadObserve(claims as readonly Claim[], shape.fromKeys)) {
+    throw new InvalidClaimError(
+      "the step has observe, and no claim reads what it returns: every claim's actual is a key of from, and no expected value is { observe }. " +
+        "A key observe returns under a from key's name never reaches a claim, since the from value wins. " +
+        "Rename the key observe returns so no from key has its name, or drop observe",
+    );
+  }
   // A value the line states that no claim reads, in a step with no observe
   // to receive it, is a value nothing checks: the line says more than the
   // step judges. The docstring or table key is known only per line, so
@@ -707,6 +717,17 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
       );
     }
   }
+}
+
+/** Whether any claim reads what `observe` returns: an actual whose first
+ * segment is not a from key, or an expected `{ observe }`, in a claim or
+ * in an `each`'s `where` and item claims. Pure. */
+export function claimsReadObserve(claims: readonly Claim[], fromKeys: ReadonlySet<string>): boolean {
+  return claims.some((claim) => {
+    if (actualReadsObserve(claim.actual, fromKeys)) return true;
+    const entries: readonly ItemClaim[] = isEachClaim(claim) ? [...(claim.each.where ?? []), ...claim.each.claims] : [claim];
+    return entries.some((entry) => typeof entry.expected === "object" && entry.expected !== null && "observe" in entry.expected);
+  });
 }
 
 /** Why a claim step does not judge the value its line's docstring or

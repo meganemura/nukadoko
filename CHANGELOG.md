@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- **A key `observe` returns under a `from` key's name no longer
+  vanishes in silence.** A claim's actual resolves a `from` key first,
+  so such a reading never reached the claim, and `nuka check` and the
+  run stayed green. `defineStep` now refuses a step with `observe` whose
+  claims read nothing it returns (every actual is a `from` key and no
+  expected value is `{ observe }`), and the run breaks a claim whose
+  actual `from` key `observe` also returned, naming the key.
+
 ### Added
 
 - **A claim can compare a prefix or a suffix.** `starts-with-text` and

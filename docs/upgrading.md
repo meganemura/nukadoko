@@ -43,6 +43,17 @@ This part does not change release to release.
   whose range ends above your version: a project on 0.13.0, 0.13.1, or
   0.14.0 starts at "0.14.0 to 0.14.1".
 
+## 0.22.0 to the next release
+
+- **A step whose `observe` no claim reads is refused at import.** Every
+  claim's actual is a `from` key and no expected value is `{ observe }`,
+  so what `observe` returns changes no verdict; the usual cause is a key
+  it returns under a `from` key's name, which the `from` value hid.
+  `nuka check` names the file as `step-file-import-failed`. Rename the
+  key `observe` returns so no `from` key has its name, or drop `observe`.
+  At run time, a claim whose actual `from` key `observe` also returned
+  now breaks and names the key, where it used to read the `from` value.
+
 ## 0.21.0 to 0.22.0
 
 - **A typed Then declares claims, and a Then that runs code is an

@@ -883,16 +883,58 @@ describe("a value the line states", () => {
       const named = tc.draw(gs.arrays(gs.sampledFrom(keys), { minSize: 1, maxSize: 3 }));
       const inWhere = tc.draw(gs.booleans());
       const hasObserve = tc.draw(gs.booleans());
-      const claims: Claim[] = inWhere
-        ? [{ actual: "result", each: { where: named.map((key) => ({ actual: "n", compare: "at-least" as const, expected: key })), claims: [{ actual: "m", compare: "at-least", expected: named[0]! }] } }]
-        : named.map((key) => ({ actual: "result", compare: "equal" as const, expected: key }));
+      // A step with observe has a claim that reads it, or it is refused for that.
+      const claims: Claim[] = [
+        ...(inWhere
+          ? [{ actual: "result", each: { where: named.map((key) => ({ actual: "n", compare: "at-least" as const, expected: key })), claims: [{ actual: "m", compare: "at-least" as const, expected: named[0]! }] } }]
+          : named.map((key) => ({ actual: "result", compare: "equal" as const, expected: key }))),
+        ...(hasObserve ? [{ actual: "seen", compare: "equal" as const, expected: named[0]! }] : []),
+      ];
       const shape: ClaimStepShape = { ...literalShape(`the result is ${[...captured].map((key) => `{${key}}`).join(" ")}`), captureKeys: captured, hasObserve };
       const problem = claimsProblem(claims, shape);
       const unread = [...captured].find((key) => !named.includes(key));
       if (hasObserve || unread === undefined) expect(problem).toBeNull();
       else expect(problem).toBe(`the pattern captures "${unread}", and no claim reads it, and the step has no observe to receive it, so nothing checks the value the line states. Compare a claim with "${unread}", or take it out of the pattern`);
-      expect(claimArgKeysRead(claims)).toEqual(new Set(["result", ...named]));
+      expect(claimArgKeysRead(claims)).toEqual(new Set(["result", ...named, ...(hasObserve ? ["seen"] : [])]));
     }));
+});
+
+describe("an observe no claim reads", () => {
+  const observeShape = (fromKeys: readonly string[]): ClaimStepShape => ({ ...literalShape("the value is {want}"), fromKeys: new Set(fromKeys), hasObserve: true, captureKeys: new Set(["want"]) });
+
+  it("is refused exactly when every actual is a from key and no expected value is observe", () =>
+    hegel.test((tc) => {
+      const fromKeys = ["a", "b"];
+      const actuals = tc.draw(gs.arrays(gs.sampledFrom(["a", "b", "c"]), { minSize: 1, maxSize: 3 }));
+      const observeExpected = tc.draw(gs.booleans());
+      const claims: Claim[] = actuals.map((actual, index) => ({
+        actual,
+        compare: "equal" as const,
+        expected: observeExpected && index === 0 ? { observe: "other" } : "want",
+      }));
+      const problem = claimsProblem(claims, observeShape(fromKeys));
+      const reads = actuals.some((actual) => !fromKeys.includes(actual)) || observeExpected;
+      if (reads) expect(problem).toBeNull();
+      else expect(problem).toBe(
+        "the step has observe, and no claim reads what it returns: every claim's actual is a key of from, and no expected value is { observe }. " +
+          "A key observe returns under a from key's name never reaches a claim, since the from value wins. " +
+          "Rename the key observe returns so no from key has its name, or drop observe",
+      );
+    }));
+});
+
+describe("an actual from key observe also returned", () => {
+  it("breaks the claim that reads it, names the key, and judges the others", async () => {
+    const claims: Claim[] = [
+      { actual: "sections", compare: "equal", expected: "want" },
+      { actual: "gate", compare: "equal", expected: "want" },
+    ];
+    const judged = await evaluateClaims(claims, { ...inputs({ want: "ok", sections: "ok" }, { sections: "ok", gate: "ok" }, ["sections"]), shadowedByObserve: new Set(["sections"]) });
+    expect(judged.map((entry) => entry.record.outcome)).toEqual(["broken", "held"]);
+    expect(judged[0]!.record.reason).toBe(
+      'observe returned "sections", and from has a key of the same name, so actual "sections" reads the from value and never what observe returned. Rename the key observe returns, or the from key, so each name has one source',
+    );
+  });
 });
 
 describe("each", () => {

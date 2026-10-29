@@ -318,6 +318,46 @@ export default step;
     });
   });
 
+  it("breaks a claim whose actual from key observe also returned, and judges the claim that reads observe", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-holds.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart holds {n:int} items",
+  args: z.object({ n: z.number(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  observe() { return { cart: { count: 3 }, seen: 3 }; },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "n" }, { actual: "seen", compare: "equal", expected: "n" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart holds 3 items"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const [, step] = latestRunJson(rootDir).scenarios[0].steps;
+    expect(step.claims.map((claim: { outcome: string }) => claim.outcome)).toEqual(["broken", "held"]);
+    expect(step.claims[0].reason).toContain('observe returned "cart", and from has a key of the same name');
+  });
+
+  it("refuses at import a step whose observe no claim reads, and nuka check names the file", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-holds.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart holds {n:int} items",
+  args: z.object({ n: z.number(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  observe() { return { cart: { count: 3 } }; },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "n" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart holds 3 items"),
+    });
+    const result = await cli(rootDir, ["check"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("step-file-import-failed\tfeatures/steps/the-cart-holds.ts\tdefineStep the step has observe, and no claim reads what it returns");
+  });
+
   it("judges the value the producing step returned, whatever observe does to its own copy", async () => {
     const rootDir = await project({
       "features/steps/the-cart-holds.ts": `import { defineStep, z } from "nukadoko";
@@ -326,8 +366,8 @@ export default defineStep({
   pattern: "the cart holds {n:int} items",
   args: z.object({ n: z.number(), cart: answer.returns.shape.cart }),
   from: { cart: [answer, "cart"] },
-  observe({}, { cart }) { (cart as any).count = 3; return {}; },
-  claims: [{ actual: "cart.count", compare: "equal", expected: "n" }],
+  observe({}, { cart }) { (cart as any).count = 3; return { seen: (cart as any).count }; },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "n" }, { actual: "seen", compare: "equal", expected: "n" }],
 });
 `,
       "features/t.feature": feature("When the app answers", "Then the cart holds 3 items"),

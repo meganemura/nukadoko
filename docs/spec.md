@@ -1698,8 +1698,8 @@ ones nothing validated.
   spells it, under any compare, as its digits would be: `at least three
   routed points` may claim `3` with `at-least`, and `one relation line`
   may claim `1`. Only a fixed word counts. A capture's text reaches a
-  claim through its parameter type, and `{int}` reads digits alone, so a number word
-  in a line is a fixed word or nothing.
+  claim through its parameter type, and `{int}` reads digits alone, so a
+  number word in a line is a fixed word or nothing.
   Only the pattern's words lose their edge punctuation, so a literal with
   other spacing or punctuation is a text the sentence does not state. Or
   it is the fixed value of a word in a short table: `no`, `none`,
@@ -1757,7 +1757,14 @@ words the line used.
 `actual` is a path. Its first segment is a key of `from`, or else a key of
 the object `observe` returns. A path whose first segment is a key the
 sentence fills is refused: the value a claim measures never comes from the
-line. Then, in order:
+line. A key `observe` returns under the name of a `from` key would never
+reach the claim, since the `from` key wins, so neither may happen in
+silence. A step with `observe` whose claims read nothing it returns
+(every actual is a `from` key, and no expected value is `{ observe }`) is
+refused at import. When `observe` does return a key that a claim's actual
+reads from `from`, that claim breaks and names the key: `observe returned
+"sections", and from has a key of the same name, so actual "sections"
+reads the from value and never what observe returned`. Then, in order:
 
 - `view` normalizes the value: `text` trims its end, `lines` trims its end
   and splits it into lines (an empty text has no lines), `json` parses

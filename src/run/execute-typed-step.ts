@@ -311,6 +311,8 @@ function observeInputs(copies: Readonly<Record<string, unknown>>, withheld: Read
   });
 }
 
+const NONE_SHADOWED: ReadonlySet<string> = new Set();
+
 /** The time one judging may take when the step has no deadline at all,
  * which only a caller that passes no `stepTimeout` can arrange. */
 export const PATTERN_LIMIT_MS = 10_000;
@@ -339,10 +341,16 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const schemaChanged = changedBySchema(argReads, reads, args);
   const noObservation: Reader = readerOf(new Map());
   const withheld = expectedKeys(step.claims);
+  // The from keys a claim's actual starts with: a key observe returns
+  // under the same name never reaches that claim, so a reading that holds
+  // one is recorded beside its reader.
+  const actualFromKeys = step.claims.map((claim) => pathSegments(claim.actual)?.[0] ?? "").filter((key) => fromKeys.has(key));
+  const shadowsOf = new WeakMap<Reader, ReadonlySet<string>>();
   const observeReceived = step.observe === undefined ? [] : Object.keys(args).filter((key) => !withheld.has(key));
   const claimInputs = (observed: Reader): ClaimInputs => ({
     args: readerOf(argReads),
     observed,
+    shadowedByObserve: shadowsOf.get(observed) ?? NONE_SHADOWED,
     schemaChanged,
     fromKeys,
     observeReceived,
@@ -457,7 +465,12 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     };
   }
   const copies = inputCopies.copies;
-  const takeObserved = (value: unknown): Reader => readerOf(takeReads(value, reads.observed));
+  const takeObserved = (value: unknown): Reader => {
+    const reader = readerOf(takeReads(value, reads.observed));
+    const shadowed = typeof value === "object" && value !== null && !types.isProxy(value) ? actualFromKeys.filter((key) => Object.hasOwn(value, key)) : [];
+    if (shadowed.length > 0) shadowsOf.set(reader, new Set(shadowed));
+    return reader;
+  };
   // The snapshot is taken the moment observe returns, before anything else
   // runs: a value it returned and changes later (on a timer, in a promise
   // callback, on the next reading) is not what the claims read.
