@@ -1,10 +1,14 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
 import type { ClaimCompare } from "../src/record/types.js";
+import { repoRoot } from "./helpers/fixtures.js";
 import {
   ANY_INDEX,
+  CLAIM_COMPARES,
   claimArgKeysRead,
   claimsProblem,
   LITERAL_WORDS,
@@ -868,6 +872,18 @@ describe("where", () => {
   /** Whether `value <compare> bound` holds. */
   const holds = (compare: ClaimCompare, value: number, bound: number): boolean =>
     compare === "greater-than" ? value > bound : compare === "at-least" ? value >= bound : compare === "less-than" ? value < bound : compare === "at-most" ? value <= bound : value !== bound;
+
+  it("the skill lists every compare a where clause is refused with on an item claim's place, and no other", () => {
+    // The reference is how an agent learns which where clauses check
+    // refuses; a compare missing from its list reads as one the run judges.
+    const refused = CLAIM_COMPARES.filter((compare) =>
+      (claimsProblem([{ actual: "result", each: { where: [{ actual: "a", compare, expected: "least" }], claims: [{ actual: "a", compare: "at-least", expected: "least" }] } }], shape) ?? "").includes("so where selects the items by the value the claim then judges"),
+    );
+    const reference = readFileSync(path.join(repoRoot, "skills/nukadoko/references/checking-steps.md"), "utf8").replace(/\s+/g, " ");
+    const listed = /is refused with ([^.]*?), and breaks the claim where it implies it/.exec(reference)?.[1];
+    expect(listed).toBeDefined();
+    expect([...listed!.matchAll(/`([a-z-]+)`/g)].map((match) => match[1]).sort()).toEqual([...refused].sort());
+  });
 
   it("whereImplies is true for a pair in one order direction, or two not-equal, exactly when every number the where clause selects holds the claim, and false for any other pair", () =>
     hegel.test((tc) => {

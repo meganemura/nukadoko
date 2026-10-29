@@ -72,6 +72,9 @@ just until 0.1.
   splits a text at each comma and trims each item, so "the namespaces
   "CFP, Schedule, Registration"" claims a drawing that lists them in
   another order without the sentence or the reading being sorted.
+  Like `equal`, it decides the value it reads, so a `where` clause that
+  compares with it on an item claim's place is refused, and the nukadoko
+  skill's reference lists it with the other compares refused there.
 - **A broken `equal` names where its two values first differ.** On a
   text with more than one line or too long to show whole, the line
   printed both values and left a reader to compare them, or cut both at

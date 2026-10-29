@@ -114,8 +114,9 @@ compare: "equal", expected: "count" }`. `{ actual, each: { where?, claims }
 }` applies item claims to every item of an array (paths inside are relative
 to the item), and breaks when the array, or what `where` selects, is empty.
 A `where` claim whose path starts an item claim's, or the reverse, is
-refused with `equal`, `matches`, `has-item`, or a text compare, and breaks
-the claim where it implies it.
+refused with `equal`, `has-same-items`, `has-item`, `matches`,
+`contains-text`, `starts-with-text`, or `ends-with-text`, and breaks the
+claim where it implies it.
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `starts-with-text`, `ends-with-text`, `has-item`,
