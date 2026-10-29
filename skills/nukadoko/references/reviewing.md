@@ -47,8 +47,8 @@ For each pause, before you say anything about the step:
 - The contract: `npx nuka describe <step>` gives its `description`,
   `mutates`, `from`, `args`, `returns`, and `file`, the step file to read.
 - The record: `<run_dir>/<record>/record.json`. Read `args`,
-  `args_origin`, `result` (or `error` when it failed), `mutates`,
-  `observed`, `used`, `calls`, and `evidence`.
+  `args_origin`, `result` (or `error` when it failed), `returns_dropped`,
+  `mutates`, `observed`, `used`, `calls`, and `evidence`.
 - The views: each open page as the step left it, `page.png` for the
   person and `page.aria.yml`, its accessibility tree, for you
   (`page-2.*`, `page.<name>.*` for a second page or a `pageAs` context),

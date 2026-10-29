@@ -55,7 +55,7 @@ export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
-import type { ArgOrigin, ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
+import type { ArgOrigin, ErrorKind, FixtureUsageEntry, ReturnsDrop, StepRecord } from "../record/types.js";
 import { readStepRecord } from "../record/read-step-record.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
@@ -1095,8 +1095,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // step, whose arguments are positional.
     argsOrigin: Record<string, ArgOrigin> | undefined,
     // The step and the snapshots of its result (`ChainEntry`), for a
-    // typed step; `undefined` for a compat step.
-    chainKey: { readonly step: Step; readonly snapshots: ReadonlyMap<string, Snapshot> } | undefined,
+    // typed step; `undefined` for a compat step. `returnsDropped` is set
+    // for a step that runs, whose `returns` parsed what it returned.
+    chainKey:
+      | { readonly step: Step; readonly snapshots: ReadonlyMap<string, Snapshot>; readonly returnsDropped: readonly ReturnsDrop[] | undefined }
+      | undefined,
     // This step's own declared `mutates` (typed) or `null` (compat, which
     // has no declaration at all).
     mutates: boolean | null,
@@ -1220,6 +1223,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             args: recordedArgs,
             ...(argsOrigin !== undefined ? { args_origin: argsOrigin } : {}),
             result,
+            ...(chainKey?.returnsDropped === undefined ? {} : { returns_dropped: [...chainKey.returnsDropped] }),
             status: "passed",
             environment,
             world_name: programWorld?.name ?? null,
@@ -1942,6 +1946,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         let status: "passed" | "failed";
         let result: unknown;
         let resultSnapshots: ReadonlyMap<string, Snapshot> = new Map();
+        let resultDropped: readonly ReturnsDrop[] | undefined;
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
         let thrown: unknown;
@@ -2041,6 +2046,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               status = "passed";
               result = executed.result;
               resultSnapshots = executed.snapshots ?? new Map();
+              resultDropped = executed.returnsDropped;
             } else {
               status = "failed";
               errorMessage = executed.error.message;
@@ -2061,7 +2067,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           result,
           recordedArgs,
           argOrigins(recordedArgs, originOf),
-          { step: entry.step, snapshots: resultSnapshots },
+          { step: entry.step, snapshots: resultSnapshots, returnsDropped: resultDropped },
           entry.step.mutates,
           fixtureUsage,
           claimExecution,

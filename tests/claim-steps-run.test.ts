@@ -2473,6 +2473,24 @@ export default defineStep({
     }
   });
 
+  it("is named on the producer's step record, at each object its returns dropped it from, in a run and in nuka do", async () => {
+    const signUpOnly = ["Feature: sign up", "  Scenario: sign up", "    When a user signs up", ""].join("\n");
+    for (const [user, dropped] of [
+      ["z.object({ name: z.string() })", [{ at: ["user"], keys: ["password"] }, { at: ["users", "0"], keys: ["password"] }]],
+      ["z.looseObject({ name: z.string() })", []],
+      ["z.object({ name: z.string(), password: z.string() })", []],
+    ] as const) {
+      const rootDir = await project({ "features/steps/a-user-signs-up.ts": signUp(user, user), "features/t.feature": signUpOnly });
+      expect((await cli(rootDir, ["run", "features/t.feature"])).exitCode).toBe(0);
+      const step = latestRunJson(rootDir).scenarios[0].steps[0] as { record: string };
+      const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as Record<string, unknown>;
+      expect(record.returns_dropped).toEqual(dropped);
+      const done = await cli(rootDir, ["do", "a-user-signs-up", "--args", "{}"]);
+      expect(done.exitCode).toBe(0);
+      expect(JSON.parse(done.stdout).returns_dropped).toEqual(dropped);
+    }
+  });
+
   /** A step that returns nothing, so the wrapper above each object in its
    * returns hands back the fallback the test names. */
   const openAccount = (account: string, users: string) => `import { defineStep, z } from "nukadoko";

@@ -5282,6 +5282,7 @@ its scenario record's id, so either record leads to the other.
   "args": { "name": "acme" },
   "args_origin": { "name": "command_line" },
   "result": { "id": "p_0001", "name": "acme" },
+  "returns_dropped": [],
   "status": "passed",
   "mutates": true,
   "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] },
@@ -5306,6 +5307,35 @@ its scenario record's id, so either record leads to the other.
 - `result` provides the trust anchor: it passed the returns schema and the tool
   (not the caller) produced it. On failure, `error: { kind, message }`
   replaces it. Compat steps record `result: null`.
+- `returns_dropped` names each place in `result` where the step's
+  `returns` dropped keys that its code returned. A `z.object` drops
+  every key it does not declare, and so does a union or an intersection
+  of one, so such a key is in `result` nowhere, and the field lets a
+  reader tell a key the step never returned from one its `returns`
+  threw away. `{ "at": ["user"], "keys": ["password"] }` says the object
+  at `result.user` held `password` when the step returned it. `at` is
+  the path from `result`, `[]` for `result` itself, with an array
+  index as a string. A key counts when the returned value holds it at a
+  place where `result` holds an object without it, whichever schema
+  dropped it: a catch whose own value stood in counts too. A key whose
+  value was `undefined` does not count, since no copy of the value holds
+  it, and neither does a default or a prefault that stands in where the
+  step returned nothing. Where nukadoko cannot see which keys `returns`
+  dropped, the entry says why in place of `keys`:
+  `{ "at": ["user"], "unmeasured": "the step returned a Proxy at user, which nukadoko does not read" }`.
+  Such an entry covers its place and every place inside it, and appears
+  only where a schema there can lose a key. nukadoko reads the returned
+  value without running code of the value's own: it calls no getter,
+  reads nothing through a Proxy, and does not read a key that a class
+  instance takes from its prototype, so each of these is `unmeasured`. A
+  pipe or a transform (other than a pipe whose first schema is
+  `z.unknown()` or `z.any()`), a record whose key schema can change a
+  key (`z.string().toLowerCase()`), and a union or an intersection that
+  holds either one can put a value at a place the step did not return it
+  at, so each of these is `unmeasured` as well. The list is `[]` when
+  `returns` dropped nothing. A typed step that ran has the field on a
+  `passed` record; a claim step and a compat step have no `returns` to
+  parse, and a record an earlier nukadoko wrote lacks it.
 - `args` uses the same distinction (see "Typed steps" for the refusal this
   backs). On a `passed` record it is the schema-validated value `run`
   actually received, a schema's own `.default(...)` included even where

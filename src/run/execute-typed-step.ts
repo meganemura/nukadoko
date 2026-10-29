@@ -1,10 +1,11 @@
+import { returnsDropped } from "../step/returns-dropped.js";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import { parseStepReturns } from "../step/parse-returns.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContextHandle } from "../context/create-context.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
-import type { ClaimComparisonRecord, ClaimEachRecord, ClaimReading, ErrorKind, FixtureUsageEntry } from "../record/types.js";
+import type { ClaimComparisonRecord, ClaimEachRecord, ClaimReading, ErrorKind, FixtureUsageEntry, ReturnsDrop } from "../record/types.js";
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -87,6 +88,10 @@ export type ValidatedStepOutcome =
        * the moment it returned (`snapshotKeys`), which every later `from`
        * value is a fresh copy of. */
       readonly snapshots?: ReadonlyMap<string, Snapshot>;
+      /** A step that runs: where its `returns` dropped keys of the value
+       * its code returned (`returnsDropped`), the step record's
+       * `returns_dropped`. */
+      readonly returnsDropped?: readonly ReturnsDrop[];
       readonly fixtureUsage: FixtureUsageEntry[];
       readonly claims?: ClaimExecution;
     }
@@ -252,8 +257,15 @@ async function runRunStep(input: RunValidatedStepInput, step: RunStep): Promise<
     }
     // Taken before anything else runs, so a value the step keeps a
     // reference to and changes later (on a timer, in a callback) is not
-    // what a later step receives.
-    return { status: "passed", result: returnsResult.data, snapshots: snapshotKeys(returnsResult.data), fixtureUsage };
+    // what a later step receives, and the keys `returns` dropped are read
+    // off the value it parsed.
+    return {
+      status: "passed",
+      result: returnsResult.data,
+      snapshots: snapshotKeys(returnsResult.data),
+      returnsDropped: returnsDropped(step.returns, runResult, returnsResult.data),
+      fixtureUsage,
+    };
   } catch (error) {
     // A deadline arrives as the timeout error and records as "timeout",
     // not as the step's own throw.
@@ -576,6 +588,7 @@ export type TypedStepOutcome =
       readonly status: "passed";
       readonly args: unknown;
       readonly result: unknown;
+      readonly returnsDropped?: readonly ReturnsDrop[];
       readonly fixtureUsage: FixtureUsageEntry[];
       readonly claims?: ClaimExecution;
     }
@@ -603,7 +616,14 @@ export async function executeTypedStep(input: ExecuteTypedStepInput): Promise<Ty
   const outcome = await runValidatedStep({ ...input, args: argsResult.data, ...(claimArgs === undefined ? {} : { claimArgs }) });
   const claims = outcome.claims === undefined ? {} : { claims: outcome.claims };
   if (outcome.status === "passed") {
-    return { status: "passed", args: argsResult.data, result: outcome.result, fixtureUsage: outcome.fixtureUsage, ...claims };
+    return {
+      status: "passed",
+      args: argsResult.data,
+      result: outcome.result,
+      ...(outcome.returnsDropped === undefined ? {} : { returnsDropped: outcome.returnsDropped }),
+      fixtureUsage: outcome.fixtureUsage,
+      ...claims,
+    };
   }
   return { status: "failed", args: argsResult.data, error: outcome.error, fixtureUsage: outcome.fixtureUsage, ...claims };
 }

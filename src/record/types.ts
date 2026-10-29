@@ -402,6 +402,15 @@ export interface UnmeasuredEntry {
   readonly detail: string;
 }
 
+/** One place in a typed step's `result` where the step's `returns`
+ * dropped keys that its code returned (`keys`), or where nukadoko could
+ * not see which keys it dropped, and why (`unmeasured`). `at` is the path
+ * from the result, `[]` for the result itself; an `unmeasured` entry
+ * covers its place and every place inside it. */
+export type ReturnsDrop =
+  | { readonly at: readonly string[]; readonly keys: readonly string[] }
+  | { readonly at: readonly string[]; readonly unmeasured: string };
+
 /** Where one args key's value came from. `capture`, `docstring`, and
  * `table` are the feature line's own; `from` names the step record and
  * the result key it was read from; `command_line` is `nuka do --args`;
@@ -1238,6 +1247,11 @@ export interface StepRecordPassed extends StepRecordBase {
   /** Passed the step's `returns` schema; this is the trust anchor
    * (docs/spec.md "Records"). */
   result: unknown;
+  /** A typed step that runs: each place in `result` where `returns`
+   * dropped keys the step's code returned, `[]` when it dropped none.
+   * Absent for a claim step and a compat step, which no `returns` parses,
+   * and on a record an earlier nukadoko wrote. */
+  returns_dropped?: ReturnsDrop[];
   /** The earlier executions whose validated results this execution actually
    * read from — through a `from` injection or a `ctx.resultOf` call alike
    * (docs/spec.md "Records"). Present only when non-empty;

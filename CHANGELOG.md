@@ -121,6 +121,20 @@ just until 0.1.
   depth, and for any schema it cannot read to the end. Declare the field
   as optional in `returns`, such as `password: z.unknown().optional()`,
   so its presence reaches the claim.
+- **A step record names the keys a step's `returns` dropped.** A typed
+  step's `passed` record gains `returns_dropped`: each place in
+  `result` where `returns` dropped keys that the step's code returned,
+  such as `{ "at": ["user"], "keys": ["password"] }`, and `[]` when it
+  dropped none. A `z.object` drops every key it does not declare, and so
+  does a union or an intersection of one, so a key that `result` lacks
+  was either never returned or thrown away, and the record now says
+  which. Where nukadoko cannot see which keys were dropped (a getter, a
+  Proxy, a key a class instance takes from its prototype, a pipe or a
+  transform, or a record whose key schema can change a key), the entry
+  gives the reason in `unmeasured` and covers every place inside it.
+  nukadoko runs no code of the returned value to measure it. A claim
+  step, a compat step, and a record an earlier nukadoko wrote lack the
+  field.
 
 - **Each step record holds what the program did inside the step.** A
   program file that names the new `{events}` placeholder

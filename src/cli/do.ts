@@ -784,6 +784,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             args: recordedArgs,
             ...(argsOrigin !== undefined ? { args_origin: argsOrigin } : {}),
             result,
+            ...(outcome.status === "passed" && outcome.returnsDropped !== undefined ? { returns_dropped: [...outcome.returnsDropped] } : {}),
             status: "passed",
             environment: resolvedEnv.name,
             world_name: world?.view.name ?? null,

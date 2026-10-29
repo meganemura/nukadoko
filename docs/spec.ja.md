@@ -4148,6 +4148,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   "args": { "name": "acme" },
   "args_origin": { "name": "command_line" },
   "result": { "id": "p_0001", "name": "acme" },
+  "returns_dropped": [],
   "status": "passed",
   "mutates": true,
   "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] },
@@ -4173,6 +4174,26 @@ scenario record は独立したファイルではなく、その run の `run.js
   returns のスキーマを通過しており、それを作ったのは(呼び出し側ではなく)ツールです。
   失敗時には `error: { kind, message }` がそれに置き換わります。
   compat の step は `result: null` を記録します。
+- `returns_dropped` は、step のコードが返したキーを step の `returns` が落とした、`result` の中の場所を 1 つずつ示します。
+  `z.object` は宣言していないキーをすべて落とし、それを含む union や intersection も同じく落とすので、そのようなキーは `result` のどこにもありません。
+  このフィールドがあるので、読み手は、step が返さなかったキーと、`returns` が捨てたキーを見分けられます。
+  `{ "at": ["user"], "keys": ["password"] }` は、step が返したとき `result.user` のオブジェクトが `password` を持っていたことを示します。
+  `at` は `result` からのパスで、`result` そのものなら `[]` です。
+  配列の添字は文字列で書きます。
+  返された値がある場所にキーを持ち、`result` がその場所にそのキーのないオブジェクトを持つとき、どのスキーマが落としたかによらず、そのキーを数えます。
+  catch が自分の値で置き換えた場合も数えます。
+  値が `undefined` のキーは数えません。
+  値のどのコピーも、そのキーを持たないからです。
+  step が何も返さなかった場所に入った default や prefault も数えません。
+  `returns` がどのキーを落としたかを nukadoko が見られない場所では、エントリは `keys` の代わりにその理由を示します。
+  `{ "at": ["user"], "unmeasured": "the step returned a Proxy at user, which nukadoko does not read" }` がその例です。
+  そのエントリは、その場所と、その内側のすべての場所を覆い、そこにあるスキーマがキーを失いうる場所にだけ現れます。
+  nukadoko は、返された値を、値自身のコードを動かさずに読みます。
+  getter は呼ばず、Proxy を通しては何も読まず、クラスのインスタンスがプロトタイプから得るキーも読まないので、これらは `unmeasured` になります。
+  pipe や transform(最初のスキーマが `z.unknown()` か `z.any()` の pipe を除く)、キーのスキーマがキーを変えうる record(`z.string().toLowerCase()`)、そのどちらかを含む union や intersection は、step が返していない場所に値を置きうるので、これらも `unmeasured` になります。
+  `returns` が何も落とさなかったとき、リストは `[]` です。
+  動いた型付き step は、`passed` な record にこのフィールドを持ちます。
+  claim step と compat の step にはパースする `returns` が無く、以前の nukadoko が書いた record にもこのフィールドはありません。
 - `args` も同じ分かれ方をします(この背後にある拒否については「型付き step」を参照)。
   `passed` な record では `run` が実際に受け取った、スキーマで検証済みの値です。
   呼び出し側が書かなかったキーにスキーマ自身の `.default(...)` が入った場合も含みます。
