@@ -181,27 +181,58 @@ export function walkSchema(schema: z.ZodTypeAny, segments: readonly string[], de
   return { kind: "schema", schema: current };
 }
 
-/** The keys an object schema keeps, when it keeps no other key for
- * certain: a `z.object` with no catchall, which drops a key it does not
- * declare, or a `never` catchall (`z.strictObject`), which refuses it.
- * `null` for any other schema, whose parsed value may hold any key.
- * Pure. */
-export function closedObjectKeys(schema: z.ZodTypeAny): readonly string[] | null {
+/** An object schema that keeps no key it does not declare, with the keys
+ * it declares and what it does with another one: a `z.object` with no
+ * catchall drops the key from the value it parses, and a `never` catchall
+ * (`z.strictObject`) refuses the value. */
+interface ClosedObject {
+  readonly keys: readonly string[];
+  readonly undeclared: "dropped" | "refused";
+}
+
+function closedObject(schema: z.ZodTypeAny): ClosedObject | null {
   let def = defOf(schema);
   while (PARSING_WRAPPERS.has(def.type) && def.innerType !== undefined) def = defOf(def.innerType);
   if (def.type !== "object") return null;
   const catchall = def.catchall === undefined ? undefined : defOf(def.catchall).type;
   if (catchall !== undefined && catchall !== "never") return null;
-  return Object.keys(def.shape ?? {});
+  return { keys: Object.keys(def.shape ?? {}), undeclared: catchall === undefined ? "dropped" : "refused" };
+}
+
+/** The walk sees through the parsing wrappers alone: a default or a catch
+ * anywhere on the path can hand back its own value, with any key at any
+ * depth below it. */
+function closedObjectAt(schema: z.ZodTypeAny, segments: readonly string[]): ClosedObject | null {
+  const walk = walkSchema(schema, segments, 0, PARSING_WRAPPERS);
+  return walk.kind === "schema" ? closedObject(walk.schema) : null;
+}
+
+/** The keys an object schema keeps, when it keeps no other key for
+ * certain (`ClosedObject`). `null` for any other schema, whose parsed value
+ * may hold any key. Pure. */
+export function closedObjectKeys(schema: z.ZodTypeAny): readonly string[] | null {
+  return closedObject(schema)?.keys ?? null;
 }
 
 /** The keys the object at `segments` inside `schema` keeps, as
- * `closedObjectKeys` names them, or `null`. The walk sees through the
- * parsing wrappers alone: a default or a catch anywhere on the path can
- * hand back its own value, with any key at any depth below it. Pure. */
+ * `closedObjectKeys` names them, or `null`. Pure. */
 export function closedObjectKeysAt(schema: z.ZodTypeAny, segments: readonly string[]): readonly string[] | null {
-  const walk = walkSchema(schema, segments, 0, PARSING_WRAPPERS);
-  return walk.kind === "schema" ? closedObjectKeys(walk.schema) : null;
+  return closedObjectAt(schema, segments)?.keys ?? null;
+}
+
+/** The keys the object at `segments` inside `schema` keeps when it drops
+ * every other key of the value it parses: a `z.object`, found as
+ * `closedObjectKeysAt` finds one. `null` for a `z.strictObject`, which
+ * refuses such a value, so the step that returned it failed before a later
+ * step could read it, and for every schema this walk cannot read for
+ * certain. The run reads it for a `from` value whose step record does not
+ * say what its `returns` dropped (`returns_dropped`), as one an earlier
+ * nukadoko wrote. A refine or an overwrite on the object runs on the value
+ * after the drop, so it can add a key of its own and never brings back one
+ * the step returned. Pure. */
+export function droppingObjectKeysAt(schema: z.ZodTypeAny, segments: readonly string[]): readonly string[] | null {
+  const object = closedObjectAt(schema, segments);
+  return object?.undeclared === "dropped" ? object.keys : null;
 }
 
 /** The producer a `from` key resolves to on line `stepIndex`: the nearest
@@ -382,7 +413,7 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
         "claim-field-stripped",
         `Step "${stepName}"'s ${label} is lacks-field ${JSON.stringify(field)} on ${path}, and step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`} ` +
           `returns that value through an object schema that declares ${has}, which drops any key it does not declare, or refuses it as a strict object. ` +
-          `${field} is never there, so ${where ? "where selects every item, whatever the behaviour is" : "the claim holds whatever the behaviour is"}`,
+          `${field} is never there, so ${where ? "where never leaves an item out, whatever the behaviour is" : "the claim never breaks, whatever the behaviour is"}`,
       );
     };
     // Every place of the step that `observe` must not receive, for the

@@ -270,6 +270,7 @@ export default {
       surface: [
         "analyze.ts",
         "binding-check.ts",
+        "claim-check.ts",
         "codes.ts",
         "config-check.ts",
         "description-todo.ts",

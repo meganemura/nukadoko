@@ -46,6 +46,23 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
+## 0.24.0 to the next release
+
+- **A claim that a key an earlier step's `returns` dropped could change
+  is `unjudged` where it held,** and the scenario fails on it. The run
+  reads the keys the producing step's record names in `returns_dropped`,
+  and the reason names the step, the place, and the keys. Declare such a
+  key in `returns` as optional (`password: z.unknown().optional()`), or
+  declare the object with `z.looseObject`, which keeps every key, so the
+  claim judges the key, or claim only the fields that matter with
+  `has-fields`. A claim through a `z.strictObject` is judged as before.
+- **`nuka do --use` of a record an earlier nukadoko wrote reads the
+  producer's `returns` in its place,** since such a record has no
+  `returns_dropped`, and leaves a claim on an object that a `z.object`
+  there parsed `unjudged` wherever a key it does not declare could
+  change it. Run the producing step again with `nuka do` and pass the
+  new record id to `--use`.
+
 ## 0.23.0 to 0.24.0
 
 - **`run.json`'s `counts` always has `stopped`,** 0 for every run but a

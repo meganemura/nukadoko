@@ -64,7 +64,7 @@ import type { FixtureOutcome } from "../step/fixture-types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
-import { runValidatedStep, snapshotClaimArgs, type ClaimExecution } from "./execute-typed-step.js";
+import { runValidatedStep, snapshotClaimArgs, type ClaimExecution, type FilledFrom } from "./execute-typed-step.js";
 import { copyOf, type Refusal, type Snapshot } from "../step/snapshot.js";
 import { transformedFillReason } from "../step/claims.js";
 import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
@@ -250,6 +250,10 @@ interface ChainEntry {
   readonly snapshots: ReadonlyMap<string, Snapshot>;
   readonly recordId: string;
   readonly stepName: string;
+  /** What the step's `returns` dropped, as its record's `returns_dropped`
+   * names it, so a claim on a value this step's result filled is judged
+   * against what the step returned, not only against what was kept. */
+  readonly returnsDropped: readonly ReturnsDrop[] | undefined;
 }
 
 
@@ -549,8 +553,16 @@ function injectFrom(
   // Told each key it filled, and from where: the step record's
   // `args_origin`.
   // `refused` is set when the producing step's snapshot of that key was
-  // refused, and the key holds the value as it was returned.
-  onFilled: (key: string, from: { step_record_id: string; step: string; key: string }, refused: Refusal | undefined) => void = () => undefined,
+  // refused, and the key holds the value as it was returned. `producer`
+  // is the step whose result filled the key, and `dropped` what its
+  // `returns` dropped.
+  onFilled: (
+    key: string,
+    from: { step_record_id: string; step: string; key: string },
+    refused: Refusal | undefined,
+    producer: Step,
+    dropped: readonly ReturnsDrop[] | undefined,
+  ) => void = () => undefined,
 ): Map<string, string> {
   const stillMissing = new Map<string, string>();
   for (const [key, entry] of Object.entries(step.from)) {
@@ -585,7 +597,7 @@ function injectFrom(
       );
     }
 
-    const { upstreamKey, chainEntry } = present[0]!;
+    const { upstream, upstreamKey, chainEntry } = present[0]!;
     // A fresh copy for every step that receives it: one step changing its
     // args reaches neither the producing step nor any other receiver.
     const taken = chainEntry.snapshots.get(upstreamKey);
@@ -600,6 +612,8 @@ function injectFrom(
       key,
       { step_record_id: chainEntry.recordId, step: chainEntry.stepName, key: upstreamKey },
       taken !== undefined && "refused" in taken ? taken.refused : undefined,
+      upstream,
+      chainEntry.returnsDropped,
     );
   }
   return stillMissing;
@@ -1205,7 +1219,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Only a step whose *final* status is "passed" ever becomes readable via
     // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
     if (status === "passed" && chainKey !== undefined) {
-      chain.set(chainKey.step, { result, snapshots: chainKey.snapshots, recordId: begun.recordId, stepName: outcomeStepName });
+      chain.set(chainKey.step, {
+        result,
+        snapshots: chainKey.snapshots,
+        recordId: begun.recordId,
+        stepName: outcomeStepName,
+        returnsDropped: chainKey.returnsDropped,
+      });
     }
 
     const stepFinishedAt = new Date();
@@ -1938,6 +1958,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           pickleStep.argument?.docString !== undefined ? "docstring" : pickleStep.argument?.dataTable !== undefined ? "table" : undefined;
         const fromOrigins = new Map<string, ArgOrigin>();
         const refusedFrom = new Map<string, Refusal>();
+        const filledFrom = new Map<string, FilledFrom>();
         const originOf = (key: string): ArgOrigin | undefined =>
           captureKeys.has(key) ? "capture" : key === attachmentKey ? attachmentOrigin : fromOrigins.get(key);
         began.originOf = originOf;
@@ -1978,9 +1999,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             chain,
             stepNameOf,
             contextHandle.recordUsed,
-            (key, from, refused) => {
+            (key, from, refused, producer, dropped) => {
               fromOrigins.set(key, { from });
               if (refused !== undefined) refusedFrom.set(key, refused);
+              filledFrom.set(key, { step: producer, stepName: from.step, key: from.key, dropped });
             },
           );
           // Before the schema runs: what a claim judges is the value the
@@ -2016,6 +2038,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               secrets,
               config,
               argSide: (key) => claimArgSide(key, originOf(key), (id) => recordLines.get(id) ?? null),
+              filledFrom,
               ...(attachmentKey === null || (attachmentOrigin !== "docstring" && attachmentOrigin !== "table")
                 ? {}
                 : { attachment: { key: attachmentKey, kind: attachmentOrigin } }),

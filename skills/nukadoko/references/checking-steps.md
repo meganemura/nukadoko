@@ -127,18 +127,18 @@ line), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
 `url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A JSON
 docstring (`expected_view: "json"`) claims a whole response with `equal` (a
 field it leaves out breaks it, a `null` one too) or some of its fields with
-`has-fields`, which takes only that; output that changes each run takes
-`fits-text`, never `{ from }` or `{ observe }`. Two values of different JSON
-types break the claim (`is-a` and `lacks-field` aside), and so does an expected
-value nearly every value holds (a blank text or field name, a pattern matching
-`""`, an object with no field, only `...` and `[..]`). Each side is a plain
-JSON copy, and `observe` gets a clone of its inputs; a `Date`, a bigint, `NaN`,
-an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the claim
-`unjudged` (return an ISO string or a number). Each claim or item the step's
-deadline cuts off, a running `matches` included, is `unjudged`, with how many.
-`nuka check` reports a `from` path the producer's `returns` does not declare
-(`claim-path-unknown`) or holds as an object that drops the field a
-`lacks-field` names (`claim-field-stripped`), a claim whose sides are one place
+`has-fields`; output that changes each run takes `fits-text`, never `{ from }`
+or `{ observe }`. Two values of different JSON types break the claim (`is-a` and
+`lacks-field` aside), and so does an expected value nearly every value holds (a
+blank text or field name, a pattern matching `""`, an object with no field, only
+`...` and `[..]`). Each side is a plain JSON copy, and `observe` gets a clone of
+its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a `Proxy`, or
+nesting past 256 levels leaves the claim `unjudged` (return an ISO string or a
+number). Each claim or item the step's deadline cuts off, a running `matches`
+included, is `unjudged`, with how many. So is a claim that a key the producer's
+`returns` dropped could break. `nuka check` reports a `from` path the producer's
+`returns` does not declare (`claim-path-unknown`), a `lacks-field` on a field it
+drops (`claim-field-stripped`), a claim whose sides are one place
 (`claim-compares-itself`), an `is-a` capture that names no kind
 (`claim-kind-unknown`), and a parameter type with a transformer on an expected
 key (`claim-expected-transformed`).

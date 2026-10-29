@@ -44,6 +44,13 @@ import { readAt, snapshot, type Read, type Refusal } from "./snapshot.js";
 // what was compared and what the record shows are one value. A value a
 // snapshot refuses (not plain JSON, a Proxy, nested too deep) is not
 // judged: the claim is `unjudged` and names the part and what it is.
+//
+// A `from` value is the copy an earlier step's `returns` parsed, and a
+// `z.object` there drops every key it does not declare. The step record
+// names those keys (`returns_dropped`), so a claim that held on the copy
+// and could come out otherwise with them is `unjudged` and names the
+// step, the place, and the keys, and one that holds whatever they were
+// still holds.
 
 /** The JSON type a compare sees. `undefined` never reaches a compare: an
  * undefined side breaks first, naming its path. */
@@ -694,10 +701,28 @@ export interface ClaimInputs {
    * (`claim-expected-transformed`); the run leaves the claim unjudged, so
    * a run under `--no-check` agrees with the check. */
   readonly transformed?: (key: string) => string | null;
+  /** What an earlier step's `returns` dropped from the object at an
+   * args path (`[key, ...path]`) of a `from` value, as `DroppedKeys`;
+   * `null` (or absent) where it dropped nothing, and for a value no
+   * `returns` parsed. A claim that held on the value without those keys,
+   * and could come out otherwise with them, is `unjudged`
+   * (`droppedChange`). */
+  readonly droppedAt?: (segments: readonly string[]) => DroppedKeys | null;
   readonly patterns: readonly string[];
   readonly testPattern: PatternTester;
   readonly budget: JudgingBudget;
 }
+
+/** What nukadoko knows of the keys an earlier step (`step`) had its
+ * `returns` drop from one object of the value it returned: the keys its
+ * step record names (`keys`, never empty), that the record says it could
+ * not see which, and why (`unseen`), or, for a record that does not say,
+ * the keys the `z.object` there declares, so that any other key is one
+ * it may have dropped (`declared`). */
+export type DroppedKeys =
+  | { readonly step: string; readonly keys: readonly string[] }
+  | { readonly step: string; readonly unseen: string }
+  | { readonly step: string; readonly declared: readonly string[] };
 
 /** Where an expected value was read, when a step record can hold it: the
  * args key a `from` value filled (the record of the step that returned
@@ -932,13 +957,21 @@ function declarationOf(claim: ItemClaim, expected: ExpectedSide | null): ClaimIt
   };
 }
 
-async function judgeComparison(
-  claim: ItemClaim,
-  rawActual: Side,
-  readSegments: readonly string[] | null,
-  inputs: ClaimInputs,
-  atRead = false,
-): Promise<ClaimComparisonRecord> {
+/** How `judgeComparison` reads one comparison. `readSegments` is the
+ * args path the args schema's output is compared at for the claim as a
+ * whole, `atRead` says its `at` was read there already, `valuePath` is
+ * the args path of the actual value before `view` and `count`, an item's
+ * too, and `where` marks a `where` clause, whose broken outcome decides
+ * which items an `each` selects. */
+interface Judging {
+  readonly readSegments?: readonly string[] | null;
+  readonly atRead?: boolean;
+  readonly valuePath?: readonly string[] | null;
+  readonly where?: boolean;
+}
+
+async function judgeComparison(claim: ItemClaim, rawActual: Side, inputs: ClaimInputs, judging: Judging = {}): Promise<ClaimComparisonRecord> {
+  const { readSegments = null, atRead = false, valuePath = null, where = false } = judging;
   const expected = expectedSide(claim, inputs);
   const actual = counted(shaped(rawActual, claim.view, claim.at, atRead), claim.count);
   // Field order is the order a reader reads a claim in: what was measured,
@@ -962,7 +995,222 @@ async function judgeComparison(
   );
   if ("stopped" in result) return { ...base, outcome: "unjudged", reason: result.stopped };
   if ("reason" in result) return { ...base, outcome: "broken", reason: result.reason };
+  // A view or a count makes a value of its own, which no returns parsed.
+  const actualSide = dropSide(actual.place, claim.view === undefined && claim.count !== true ? valuePath : null, inputs);
+  const expectedSideDrops = dropSide(expected.place, claim.expected_view === undefined ? expected.segments : null, inputs);
+  const changed = droppedChange(
+    claim.compare,
+    result.holds,
+    { value: (actual as { value: unknown }).value, side: actualSide },
+    { value: (expected as { value: unknown }).value, side: expectedSideDrops },
+    where,
+  );
+  if (changed !== null) return { ...base, outcome: "unjudged", reason: changed };
   return { ...base, outcome: result.holds ? "held" : "broken" };
+}
+
+// --- what an earlier step's returns dropped ---
+
+/** One side of a comparison as `droppedChange` reads it: its place, and
+ * what was dropped from the object at each path inside its value. */
+interface DropSide {
+  readonly place: ClaimPlace;
+  readonly drops: (rel: readonly string[]) => DroppedKeys | null;
+}
+
+/** A side's value with the side it is read from. */
+interface Compared {
+  readonly value: unknown;
+  readonly side: DropSide;
+}
+
+const NO_DROPS = (): null => null;
+
+/** The side at `place`, whose value sits at the args path `path`, or at
+ * none (`null`): a value the line states, `observe` returned, or a view
+ * or a count made. */
+function dropSide(place: ClaimPlace, path: readonly string[] | null, inputs: ClaimInputs): DropSide {
+  const droppedAt = inputs.droppedAt;
+  return { place, drops: path === null || droppedAt === undefined ? NO_DROPS : (rel) => droppedAt([...path, ...rel]) };
+}
+
+/** What was dropped from one object, and where the object sits. */
+interface FoundDrop {
+  readonly place: ClaimPlace;
+  readonly dropped: DroppedKeys;
+}
+
+function foundAt(side: DropSide, rel: readonly string[], dropped: DroppedKeys): FoundDrop {
+  return { place: placeAt(side.place, rel.join(".")), dropped };
+}
+
+/** Whether `key` may be one of the keys `dropped` stands for. */
+function mayHaveDropped(dropped: DroppedKeys, key: string): boolean {
+  if ("keys" in dropped) return dropped.keys.includes(key);
+  if ("declared" in dropped) return !dropped.declared.includes(key);
+  return true;
+}
+
+/** The first object inside `value`, itself included, that had a key
+ * dropped, or may have had one, with where it sits. Pure. */
+function firstDrop(value: unknown, side: DropSide, rel: readonly string[] = []): FoundDrop | null {
+  const type = jsonType(value);
+  if (type !== "object" && type !== "array") return null;
+  if (type === "object") {
+    const dropped = side.drops(rel);
+    if (dropped !== null) return foundAt(side, rel, dropped);
+  }
+  const entries = type === "array" ? (value as unknown[]).map((item, index) => [String(index), item] as const) : Object.entries(value as Record<string, unknown>);
+  for (const [key, item] of entries) {
+    const found = firstDrop(item, side, [...rel, key]);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/** Whether two values were equal as the steps returned them, before any
+ * key was dropped: `equal` or `unequal` for certain, or `unknown`,
+ * with the drop the answer turns on (`via`, `null` when none does). */
+interface Equality {
+  readonly answer: "equal" | "unequal" | "unknown";
+  readonly via: FoundDrop | null;
+}
+
+const EQUAL: Equality = { answer: "equal", via: null };
+const UNEQUAL: Equality = { answer: "unequal", via: null };
+
+/** `Equality` of `a` (at `relA` of side `A`) and `b` (at `relB` of
+ * `B`). A dropped key never changes a value's JSON type or an array's
+ * length, and a dropped key's value is not known, so two objects can be
+ * equal as returned only where each key one of them holds or dropped is a
+ * key the other holds or may have dropped. Pure. */
+function rawEquality(a: unknown, b: unknown, A: DropSide, B: DropSide, relA: readonly string[] = [], relB: readonly string[] = []): Equality {
+  const type = jsonType(a);
+  if (type !== jsonType(b)) return UNEQUAL;
+  if (type === "array") {
+    const left = a as unknown[];
+    const right = b as unknown[];
+    if (left.length !== right.length) return UNEQUAL;
+    let open: FoundDrop | null = null;
+    for (let index = 0; index < left.length; index += 1) {
+      const item = rawEquality(left[index], right[index], A, B, [...relA, String(index)], [...relB, String(index)]);
+      if (item.answer === "unequal") return item;
+      if (item.answer === "unknown") open ??= item.via;
+    }
+    return open === null ? EQUAL : { answer: "unknown", via: open };
+  }
+  if (type !== "object") return deepEqual(a, b) ? EQUAL : UNEQUAL;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  const droppedA = A.drops(relA);
+  const droppedB = B.drops(relB);
+  let open: FoundDrop | null = null;
+  for (const key of new Set([...Object.keys(left), ...Object.keys(right)])) {
+    const inLeft = Object.hasOwn(left, key);
+    if (inLeft && Object.hasOwn(right, key)) {
+      const field = rawEquality(left[key], right[key], A, B, [...relA, key], [...relB, key]);
+      if (field.answer === "unequal") return field;
+      if (field.answer === "unknown") open ??= field.via;
+      continue;
+    }
+    // A key one side holds was in the other side's value only if that
+    // side's object dropped it.
+    const [side, rel, dropped] = inLeft ? [B, relB, droppedB] : [A, relA, droppedA];
+    if (dropped === null || !mayHaveDropped(dropped, key)) return UNEQUAL;
+    open ??= foundAt(side, rel, dropped);
+  }
+  // Each key an object is known to have dropped was in its value, so the
+  // other side's value held it too, or the two differ.
+  const known: readonly (readonly [DroppedKeys | null, Record<string, unknown>, DroppedKeys | null, DropSide, readonly string[]])[] = [
+    [droppedA, right, droppedB, A, relA],
+    [droppedB, left, droppedA, B, relB],
+  ];
+  for (const [dropped, other, otherDropped, side, rel] of known) {
+    if (dropped === null) continue;
+    if (!("keys" in dropped)) {
+      open ??= foundAt(side, rel, dropped);
+      continue;
+    }
+    for (const key of dropped.keys) {
+      if (!Object.hasOwn(other, key) && (otherDropped === null || !mayHaveDropped(otherDropped, key))) return { answer: "unequal", via: foundAt(side, rel, dropped) };
+      open ??= foundAt(side, rel, dropped);
+    }
+  }
+  return open === null ? EQUAL : { answer: "unknown", via: open };
+}
+
+/** Why a comparison that came out `holds` on the values the steps'
+ * `returns` parsed may come out otherwise on the values the steps
+ * returned, or `null`. A dropped key never changes a text, a number, a
+ * kind, or an array's length, so only these compares turn on one:
+ * `lacks-field` on a field the object dropped or may have dropped;
+ * `equal`, `not-equal`, `has-item`, and `has-same-items` where the
+ * values as returned may differ in such a key (`rawEquality`); and
+ * `has-fields`, which holds on an actual object with more keys, where
+ * the expected object had a key dropped. A broken comparison stays broken,
+ * except in a `where` clause (`where`), where it decides which items an
+ * `each` selects. Pure. */
+function droppedChange(compare: ClaimCompare, holds: boolean, actual: Compared, expected: Compared, where: boolean): string | null {
+  if (!holds && !where) return null;
+  switch (compare) {
+    case "lacks-field": {
+      // A key the parsed object holds is no key its returns dropped.
+      if (!holds) return null;
+      const field = expected.value as string;
+      const dropped = actual.side.drops([]);
+      if (dropped === null || !mayHaveDropped(dropped, field)) return null;
+      return droppedReason(foundAt(actual.side, [], dropped), "keys" in dropped ? `the ${field} field was there` : `a ${field} field may have been there`);
+    }
+    case "equal":
+    case "not-equal": {
+      const parsedEqual = compare === "equal" ? holds : !holds;
+      const equality = rawEquality(actual.value, expected.value, actual.side, expected.side);
+      if (equality.answer === (parsedEqual ? "equal" : "unequal") || equality.via === null) return null;
+      const consequence = !parsedEqual
+        ? "the two values may have been equal as returned"
+        : equality.answer === "unequal"
+          ? "the two values differed as returned"
+          : "the two values may have differed as returned";
+      return droppedReason(equality.via, consequence);
+    }
+    case "has-item": {
+      const items = actual.value as unknown[];
+      let via: FoundDrop | null = null;
+      for (const [index, item] of items.entries()) {
+        if (holds && !deepEqual(item, expected.value)) continue;
+        const equality = rawEquality(item, expected.value, actual.side, expected.side, [String(index)], []);
+        if (holds && equality.answer === "equal") return null;
+        if (!holds && equality.answer !== "unequal") return equality.via === null ? null : droppedReason(equality.via, "an item may have equaled the expected value as returned");
+        via ??= equality.via;
+      }
+      return holds && via !== null ? droppedReason(via, "no item is known to have equaled the expected value as returned") : null;
+    }
+    case "has-same-items": {
+      if (!holds && (actual.value as unknown[]).length !== (expected.value as unknown[]).length) return null;
+      const via = firstDrop(actual.value, actual.side) ?? firstDrop(expected.value, expected.side);
+      return via === null ? null : droppedReason(via, holds ? "the items may have differed as returned" : "the items may have been the same as returned");
+    }
+    case "has-fields": {
+      const via = holds ? firstDrop(expected.value, expected.side) : firstDrop(actual.value, actual.side);
+      if (via === null) return null;
+      return droppedReason(via, holds ? "the expected value may have held a field the actual value lacks" : "the actual value may have held the expected fields as returned");
+    }
+    default:
+      return null;
+  }
+}
+
+/** The reason a claim is not judged, naming the step, the place, and what
+ * it dropped there, then `consequence`. */
+function droppedReason(found: FoundDrop, consequence: string): string {
+  const { place, dropped } = found;
+  const what =
+    "keys" in dropped
+      ? `step "${dropped.step}" returned ${dropped.keys.join(", ")} at ${place.label}, and its returns dropped ${dropped.keys.length === 1 ? "it" : "them"}`
+      : "unseen" in dropped
+        ? `nukadoko could not see which keys the returns of step "${dropped.step}" dropped at ${place.label} (${dropped.unseen})`
+        : `the record of step "${dropped.step}" does not say which keys its returns dropped, and its returns parses ${place.label} with an object schema that declares ${dropped.declared.length === 0 ? "no key" : dropped.declared.join(", ")} and drops any key it does not declare`;
+  return `${what}, so ${consequence}, and the claim was not judged`;
 }
 
 /** Tests a pattern with the time left of the budget, and never with none:
@@ -1053,12 +1301,16 @@ async function judgeEach(claim: EachClaim, rawActual: Side, readSegments: readon
       reason: budgetSpent(inputs.budget, items.length - next + unjudged, items.length, "items"),
     };
   };
+  // The args path of each item while it is the value an earlier step
+  // returned: after a view, the items are values of the view's own.
+  const arrayPath = claim.view === undefined ? readSegments : null;
+  const itemPath = (index: number, entry: ItemClaim): readonly string[] | null => (arrayPath === null ? null : [...arrayPath, String(index), ...itemSegments(entry)]);
   for (let index = 0; index < items.length; index += 1) {
     if (inputs.budget.left() <= 0) return stopped(index);
     const itemPlace = placeAt(actual.place, String(index));
     const whereRecords: ClaimComparisonRecord[] = [];
     for (const entry of where) {
-      whereRecords.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), null, inputs));
+      whereRecords.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), inputs, { valuePath: itemPath(index, entry), where: true }));
     }
     // A where claim that could not compare at all (an undefined value, two
     // JSON types) says nothing about whether the item belongs, so leaving
@@ -1075,7 +1327,7 @@ async function judgeEach(claim: EachClaim, rawActual: Side, readSegments: readon
     }
     const claims: ClaimComparisonRecord[] = [];
     for (const entry of claim.each.claims) {
-      claims.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), null, inputs));
+      claims.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), inputs, { valuePath: itemPath(index, entry) }));
     }
     const outcome = itemOutcome(claims);
     const identity = outcome === "broken" ? itemIdentity(items[index]) : undefined;
@@ -1306,7 +1558,7 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
       const segments = actual.fromKey === null ? null : actualSegments(claim);
       const record = isEachClaim(claim)
         ? await judgeEach(claim, actual, segments, inputs, actual.atRead)
-        : await judgeComparison(claim, actual, segments, inputs, actual.atRead);
+        : await judgeComparison(claim, actual, inputs, { readSegments: segments, atRead: actual.atRead, valuePath: segments });
       judged.push({ record, rawActual, fromKey, expectedOrigins });
     } catch (error) {
       const reason = `nukadoko could not judge this claim: ${messageOf(error)}`;

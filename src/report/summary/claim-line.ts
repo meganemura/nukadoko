@@ -220,10 +220,23 @@ function reasonText(record: ClaimComparisonRecord | ClaimEachRecord): string {
   return record.reason === undefined ? differenceText(record) : `: ${record.reason}`;
 }
 
-/** The first selected item of a broken `each` whose claims did not hold. */
-function firstBrokenItem(record: ClaimEachRecord): Extract<ClaimItemRecord, { selected: true }> | undefined {
-  const item = record.each.results.find((entry) => entry.selected && entry.outcome === "broken");
+/** The outcome of the item an `each` line names. */
+const namedOutcome = (record: ClaimEachRecord): "broken" | "unjudged" => (record.outcome === "unjudged" ? "unjudged" : "broken");
+
+/** The first selected item of a broken `each` whose claims did not hold,
+ * or of an `each` nukadoko could not judge, the first selected item it
+ * could not judge: without it, such a line would say `unjudged` and
+ * not why. */
+function namedItem(record: ClaimEachRecord): Extract<ClaimItemRecord, { selected: true }> | undefined {
+  const outcome = namedOutcome(record);
+  const item = record.each.results.find((entry) => entry.selected && entry.outcome === outcome);
   return item === undefined || !item.selected ? undefined : item;
+}
+
+/** An item claim as an `each` line names it: what it compared, and why
+ * nukadoko could not judge it, when it could not. */
+function itemClaimText(claim: ClaimComparisonRecord): string {
+  return claim.outcome === "unjudged" && claim.reason !== undefined ? `${comparisonText(claim)}: ${claim.reason}` : comparisonText(claim);
 }
 
 /** `item 3`, or `item 3 (name "Beta")` when the item has a field that
@@ -235,21 +248,23 @@ function itemName(item: Extract<ClaimItemRecord, { selected: true }>): string {
 /** The claim and its outcome on one line, with the reason a broken claim
  * gives when it has one. A broken `each` names its first broken item and
  * that item's first broken comparison, since the declaration alone states
- * the expected value and not what the item held. Pure. */
+ * the expected value and not what the item held, and an `each` nukadoko
+ * could not judge names its first such item and comparison, and why. Pure. */
 export function claimLine(record: ClaimComparisonRecord | ClaimEachRecord): string {
   const line = `${claimText(record)} ${record.outcome}${reasonText(record)}`;
   if (!isEach(record)) return line;
-  const item = firstBrokenItem(record);
-  const claim = item?.claims.find((entry) => entry.outcome === "broken");
-  return item === undefined || claim === undefined ? line : `${line}; ${itemName(item)}: ${comparisonText(claim)}`;
+  const item = namedItem(record);
+  const claim = item?.claims.find((entry) => entry.outcome === namedOutcome(record));
+  return item === undefined || claim === undefined ? line : `${line}; ${itemName(item)}: ${itemClaimText(claim)}`;
 }
 
-/** The first broken item of a broken `each`, one line per claim that
- * broke, so a failure names the item and the comparison. */
-function brokenItemLines(record: ClaimEachRecord): string[] {
-  const item = firstBrokenItem(record);
+/** The item `claimLine` names of an `each` that did not hold, one line
+ * per claim of it that broke or that nukadoko could not judge, so a
+ * failure names the item and the comparison. */
+function namedItemLines(record: ClaimEachRecord): string[] {
+  const item = namedItem(record);
   if (item === undefined) return [];
-  return item.claims.filter((claim) => claim.outcome === "broken").map((claim) => `  ${itemName(item)}: ${claimLine(claim)}`);
+  return item.claims.filter((claim) => claim.outcome === namedOutcome(record)).map((claim) => `  ${itemName(item)}: ${claimLine(claim)}`);
 }
 
 /** The failure message of a claim step whose claims did not all hold: one
@@ -260,7 +275,7 @@ export function brokenClaimsMessage(records: readonly (ClaimComparisonRecord | C
     .filter((record) => record.outcome === "broken" || record.outcome === "unjudged")
     .flatMap((record) => [
       `claim ${record.outcome}: ${claimText(record)}${reasonText(record)}`,
-      ...(isEach(record) ? brokenItemLines(record) : []),
+      ...(isEach(record) ? namedItemLines(record) : []),
     ])
     .join("\n");
 }

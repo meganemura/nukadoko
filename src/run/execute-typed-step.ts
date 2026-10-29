@@ -1,3 +1,4 @@
+import { droppingObjectKeysAt } from "../check/claim-check.js";
 import { returnsDropped } from "../step/returns-dropped.js";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import { parseStepReturns } from "../step/parse-returns.js";
@@ -31,6 +32,7 @@ import {
   type ArgSide,
   type ClaimInputs,
   type ClaimReads,
+  type DroppedKeys,
   type JudgingBudget,
   type JudgedClaim,
   type PatternTester,
@@ -132,6 +134,11 @@ export interface RunValidatedStepInput {
    * has a transformer, with why a claim that compares with it is not
    * judged (`transformedFillReason`). Read only for a claim step. */
   readonly transformed?: ReadonlyMap<string, string>;
+  /** Each `from` key an earlier step's result filled, with that step and
+   * what its record says its `returns` dropped, so a claim that held
+   * without a key it dropped is not judged (`droppedKeysAt`). Read only
+   * for a claim step. */
+  readonly filledFrom?: ReadonlyMap<string, FilledFrom>;
   /** The values the records redact. A claim's failure message is built
    * from redacted records, since a message cut to its first difference
    * can cut a secret where redacting the message afterwards no longer
@@ -139,6 +146,72 @@ export interface RunValidatedStepInput {
   readonly secrets: SecretSet;
   /** Injected by tests; the wall clock otherwise. */
   readonly clock?: PollClock;
+}
+
+/** The step whose result filled a `from` key, its name, the key of its
+ * result the value was read from, and what its step record says its
+ * `returns` dropped (`returns_dropped`), `undefined` for a record that
+ * does not say. */
+export interface FilledFrom {
+  readonly step: Step;
+  readonly stepName: string;
+  readonly key: string;
+  readonly dropped: readonly ReturnsDrop[] | undefined;
+}
+
+/** What the producer of a `from` value had its `returns` drop from the
+ * object at the args path `segments` (`ClaimInputs.droppedAt`): the
+ * `unmeasured` entry of its `returns_dropped` that covers the place, the
+ * entry at the place, or, for a record without the field, the keys a
+ * `z.object` there declares (`droppingObjectKeysAt`). `null` for a key no
+ * earlier step filled and for a place where nothing was dropped. Pure. */
+export function droppedKeysAt(filledFrom: ReadonlyMap<string, FilledFrom>, segments: readonly string[]): DroppedKeys | null {
+  const [key, ...path] = segments;
+  const filled = key === undefined ? undefined : filledFrom.get(key);
+  if (filled === undefined) return null;
+  const at = [filled.key, ...path];
+  if (filled.dropped === undefined) {
+    const declared = droppingObjectKeysAt(filled.step.returns, at);
+    return declared === null ? null : { step: filled.stepName, declared };
+  }
+  const index = dropIndexOf(filled.dropped);
+  for (let length = 0; length <= at.length; length += 1) {
+    const unseen = index.unmeasured.get(placeKey(at.slice(0, length)));
+    if (unseen !== undefined) return { step: filled.stepName, unseen };
+  }
+  const keys = index.keys.get(placeKey(at));
+  return keys === undefined ? null : { step: filled.stepName, keys };
+}
+
+/** A record's `returns_dropped` by place, so an `each` over many items
+ * reads each item's place once rather than every entry for every item. */
+interface DropIndex {
+  readonly keys: ReadonlyMap<string, readonly string[]>;
+  readonly unmeasured: ReadonlyMap<string, string>;
+}
+
+const dropIndexes = new WeakMap<readonly ReturnsDrop[], DropIndex>();
+
+// A segment can hold any text, so each one carries its length: no two
+// paths share a key, whatever their segments hold.
+const placeKey = (at: readonly string[]): string => at.map((segment) => `${segment.length}:${segment}`).join("");
+
+function dropIndexOf(dropped: readonly ReturnsDrop[]): DropIndex {
+  const known = dropIndexes.get(dropped);
+  if (known !== undefined) return known;
+  const keys = new Map<string, readonly string[]>();
+  const unmeasured = new Map<string, string>();
+  for (const entry of dropped) {
+    const place = placeKey(entry.at);
+    if ("unmeasured" in entry) {
+      if (!unmeasured.has(place)) unmeasured.set(place, entry.unmeasured);
+    } else if (!keys.has(place)) {
+      keys.set(place, entry.keys);
+    }
+  }
+  const index = { keys, unmeasured };
+  dropIndexes.set(dropped, index);
+  return index;
 }
 
 const WALL_CLOCK: PollClock = {
@@ -373,6 +446,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     argSide: input.argSide,
     sentenceText: input.sentenceText,
     transformed: (key) => input.transformed?.get(key) ?? null,
+    droppedAt: (segments) => (input.filledFrom === undefined ? null : droppedKeysAt(input.filledFrom, segments)),
     patterns: step.patterns,
     testPattern,
     budget: budgetOf(),
@@ -577,6 +651,7 @@ export interface ExecuteTypedStepInput {
   readonly config: Pick<NukadokoConfig, "fixtureTimeout" | "stepTimeout">;
   readonly argSide: (key: string) => ArgSide;
   readonly sentenceText: (key: string) => string | null;
+  readonly filledFrom?: ReadonlyMap<string, FilledFrom>;
   readonly secrets: SecretSet;
 }
 

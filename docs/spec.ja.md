@@ -1532,6 +1532,33 @@ args スキーマはいまも動き、`observe` が受け取るのはその出�
 import の時点の拒否は、よくある書き換えを先に名指しします。
 record を正しく保つのはこの比較であり、`defineStep` が返ったあとで step ファイルが変えたスキーマもこの比較が見つけます。
 
+`from` の値は、値を返す step の `returns` がパースしたあとでコピーします。
+そこにある `z.object` は、宣言していないキーをそれぞれ落とします。
+値を返す step の record は、落としたキーを名指しし(`returns_dropped`、「Records」を参照)、run はそれを読みます。
+コピーで成り立った claim のうち、step がそこで返したキーがあれば結果が変わりうるものは、`unjudged` になります。
+それらのキーが何を持っていても成り立つ claim は、前と同じく判定します。
+理由は、step、場所、キーを名指しします(`step "a-user-signs-up" returned password at from:a-user-signs-up@3.user, and its returns dropped it, so the password field was there, and the claim was not judged`)。
+エラーの種類は `claim_unjudged` です。
+落としたキーは、テキスト、数値、種類、配列の長さを変えないので、それで結果が変わりうるのは次の比較だけです。
+
+- オブジェクトが落としたフィールドについての `lacks-field`。
+- 落としたキーのせいで、返されたときの 2 つの値が違っていたかもしれない `equal` と、2 つの値が、ある辺が落としたキーか、落としたかもしれないキーでしか違わない `not-equal`。
+- 期待値と等しく、どちらもキーを落としていない要素がない `has-item` と、どちらかの配列が、キーを落としたオブジェクトを持つ `has-same-items`。
+- 期待値がキーを落とした `has-fields`。
+  実際の値はそのキーを持たないかもしれないからです。
+
+コピーで成り立たない claim は、成り立たないままです。
+コピーは、値を返す step が次に渡す結果だからです。
+`where` の claim は、`each` がどの要素を判定するかを決めます。
+そのため、落としたキーでどちら向きにも結果が変わりうる `where` の claim は、その要素で `each` を止め、`each` はその要素を名指しして `unjudged` になります(`where could not judge item 0: ...`)。
+この規則が `unjudged` にした要素の claim は、別の要素が成り立たない場合を除いて、`each` を `unjudged` にします。
+`view` や `count` は自分の値を作り、その値はどの `returns` もパースしていないので、この規則はその先で落としたキーを読みません。
+record が `unmeasured` と名指す場所では、どのキーも落としたかもしれません。
+`returns_dropped` を持たない record(以前の nukadoko が書き、`nuka do --use` が読むもの)は、どのキーを落としたかを示しません。
+そのため run は、値を返す step の `returns` を `claim-field-stripped` と同じく読み(「比較」を参照)、そこにある `z.object` が宣言していないキーを、落としたかもしれないキーとします(`the record of step "a-user-signs-up" does not say which keys its returns dropped, and its returns parses from:a-user-signs-up@3.user with an object schema that declares name and drops any key it does not declare, so a password field may have been there, and the claim was not judged`)。
+`z.strictObject` は宣言していないキーを持つ結果を拒否するので、何も落としません。
+オブジェクト全体を比べるには、すべてのキーを残す `z.looseObject` で宣言するか、`returns` にフィールドを任意のものとして宣言します(`password: z.unknown().optional()`)。
+
 値が素の JSON でないとき(「比較」を参照)、どの深さであれ `Proxy` であるとき、配列とオブジェクトが 256 段より深く入れ子になっているときは、コピーを取らず、claim はその場所を名指しする理由とともに `unjudged` になります。
 `Proxy` は、そのトラップがどれも動く前に拒否します。
 トラップは、比較にはある答えを、record には別の答えを返せるからです。
@@ -1591,12 +1618,13 @@ literal が文字列でない `lacks-field` の claim、リストを作る `expe
 
 前の step が返した値は、その step の `returns` を通っています。
 `z.object` は宣言していないキーを落とし(`z.strictObject` は代わりに結果を拒否します)、そのスキーマが宣言していないフィールドは、step が何を返してもありません。
-そのため、そのフィールドについての `lacks-field` の claim は、振る舞いがどうであっても成り立ちます。
+そのため、そのフィールドについての `lacks-field` の claim は、振る舞いがどうであっても、成り立たなくなることはありません。
 `nuka check` はそのような claim と、そのようなフィールドのない要素を選ぶ `where` の claim を報告します(`claim-field-stripped`)。
-そのような `where` はすべての要素を選ぶからです。
+そのような `where` は、どの要素も外さないからです。
 読むのは、claim が literal で名指すフィールドか、行の `{word}`、`{string}`、無名の capture が埋めるテキストです。
 キーを残しうるスキーマ(`z.looseObject`、catchall、union、transform、パスのどこかにあり、自身の値をその下のどの深さでもパースせずに返す `default` や `catch`)は、キーを残すものとします。
-`--no-check` のもとでは、そのような claim は成り立ちます。
+`--no-check` のもとでは、run はそのような claim を、step が返したもので判定します。
+step がそのフィールドを返したときは `unjudged` になり、返さなかったときは成り立ちます(「claim が判定する値」を参照)。
 `returns` にフィールドを任意のものとして宣言すれば(`password: z.unknown().optional()`)、step が返したときにフィールドが残ります。
 
 `fits-text` は 2 つのテキストを比べ、実行のたびに時刻、大きさ、パスが変わるプログラムの出力を、変わる部分ごとに claim を分けずに docstring で述べられるようにします。
@@ -1711,6 +1739,7 @@ record は、宣言された `where` の claim と要素の claim を期待値�
 これは `id`、`name`、`key` のフィールドのうち、文字列か数値を持つ最初のもので、形は `{ "field", "value" }` です。
 run サマリの行は、`where` の claim と要素の claim を、比較と期待値とともに名指しします。
 成り立たなかった `each` では、行の最後に最初に成り立たなかった要素とその値が続きます(`; item 1 (name "caller"): "#2" (observe:calls.1.counter) equal "#1" (sentence:counter)`)。
+nukadoko が判定できなかった `each` では、行の最後に、選ばれた要素のうち最初に判定できなかったものと、その値と、その理由が続きます。
 
 #### observe
 
@@ -1900,6 +1929,7 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 実際のテキストの終わりを越えたときは `nothing` です。
 期待する行がすべて合ったときは、余った最初の実際の行を名指しします(`; expected lines 1 to 2 fit, and expected line 3 fits nothing from actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`)。
 成り立たない claim ごとに 1 行で、`each` では最初に成り立たなかった要素がその下に続きます。
+nukadoko が判定できなかった `each` では、最初に判定できなかった要素が続きます。
 その要素は、番号と、あれば `identity` で名指しされます。
 nukadoko が判定できなかった claim は、代わりに `claim_unjudged` で step を落とし、その行は `claim unjudged:` で始まります。
 run サマリは、すべての Then のすべての claim を「Claims」の下に 1 行ずつ、同じ言葉に成否を続けて並べます。
@@ -4194,6 +4224,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   `returns` が何も落とさなかったとき、リストは `[]` です。
   動いた型付き step は、`passed` な record にこのフィールドを持ちます。
   claim step と compat の step にはパースする `returns` が無く、以前の nukadoko が書いた record にもこのフィールドはありません。
+  その step の値についての claim は、このフィールドを読みます(「claim が判定する値」を参照)。
 - `args` も同じ分かれ方をします(この背後にある拒否については「型付き step」を参照)。
   `passed` な record では `run` が実際に受け取った、スキーマで検証済みの値です。
   呼び出し側が書かなかったキーにスキーマ自身の `.default(...)` が入った場合も含みます。

@@ -38,6 +38,18 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   たとえば 0.13.0、0.13.1、0.14.0 のプロジェクトは、「0.14.0 から 0.14.1 へ」から読み始めます。
   0.18.0、0.19.0、0.20.0 のプロジェクトは、「0.20.0 から 0.21.0 へ」から読み始めます。
 
+## 0.24.0 から次のリリースへ
+
+- **前の step の `returns` が落としたキーで結果が変わりうる claim は、成り立っていたところで `unjudged` になり、scenario はそこで失敗します。**
+  run は、値を返す step の record が `returns_dropped` で名指すキーを読み、理由は step、場所、キーを名指しします。
+  そのキーを `returns` に任意のものとして宣言するか(`password: z.unknown().optional()`)、すべてのキーを残す `z.looseObject` でオブジェクトを宣言して、claim がそのキーを判定するようにします。
+  または、大事なフィールドだけを `has-fields` で claim します。
+  `z.strictObject` を通る claim は、前と同じく判定します。
+- **以前の nukadoko が書いた record を `nuka do --use` で使うと、代わりに値を返す step の `returns` を読みます。**
+  そのような record には `returns_dropped` がないからです。
+  そこにある `z.object` がパースしたオブジェクトについての claim は、宣言していないキーで結果が変わりうるところで `unjudged` になります。
+  値を返す step を `nuka do` でもう一度動かし、新しい record の id を `--use` に渡します。
+
 ## 0.23.0 から 0.24.0 へ
 
 - **`run.json` の `counts` は常に `stopped` を持ちます。**

@@ -110,8 +110,9 @@ just until 0.1.
   `returns` drops (`claim-field-stripped`).** A step's result passes
   through its `returns` schema before the next step reads it: `z.object`
   drops every key it does not declare, and `z.strictObject` refuses the
-  result. A claim that a `from` value lacks such a field then holds, or
-  its `where` selects every item, whatever the behaviour is. The check
+  result. A claim that a `from` value lacks such a field then never
+  breaks, and its `where` never leaves an item out, whatever the
+  behaviour is. The check
   reads the field from a literal or from a capture of plain text, walks
   the claim's `at` (or, in an `each`, the item path) through the
   producer's schema, unwraps `optional`, `nullable`, `nonoptional`,
@@ -219,6 +220,34 @@ just until 0.1.
   or EventSource request to the world gets one `observed.unmeasured`
   entry of the new kind `page_request`, whose `detail` holds the
   browser's message, and the run summary names it on the step's line.
+- **A claim no longer holds without a key an earlier step's `returns`
+  dropped.** A `from` value reaches a claim after the producing step's
+  `returns` has parsed it, and a `z.object` drops every key it does not
+  declare. So under `nuka run --no-check` and `nuka do --use`, a
+  `lacks-field` on such a field held, and a `where` over it selected
+  every item, whatever the step returned. An `equal`, `has-item`, or
+  `has-same-items` on an object that schema parsed held the same way
+  when the step returned a key the expected value lacks, and so did a
+  `not-equal` whose expected value differed only in such a key, and a
+  `has-fields` whose expected object lost a key. The run now reads the
+  keys the producing step's record names in `returns_dropped`, and
+  leaves `unjudged` only a claim that those keys could change, with a
+  reason that names the step, the place, and the keys (`step
+  "a-user-signs-up" returned password at from:a-user-signs-up@3.user,
+  and its returns dropped it, so the password field was there, and the
+  claim was not judged`). A claim that holds whatever those keys held,
+  such as a `lacks-field` on a field the step did not return, is judged
+  as before, and so is a claim that breaks. A `where` claim that a
+  dropped key could change stops its `each` at that item. A place the
+  record names as `unmeasured` may have dropped any key. A record
+  without the field, which an earlier nukadoko wrote, is read through the
+  producer's `returns`: a key that a `z.object` there does not declare
+  counts as one it may have dropped.
+- **An `each` line names the item nukadoko could not judge.** The run
+  summary line and the failure message of an `each` that an item claim
+  left `unjudged` read only `unjudged`. They now end with the first such
+  item, what it held, and why, as a broken `each` names its first broken
+  item.
 
 ## 0.24.0 — 2026-10-29
 

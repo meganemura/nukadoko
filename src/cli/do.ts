@@ -8,6 +8,7 @@ import {
   executeTypedStep,
   recordedChannels,
   withMeasured,
+  type FilledFrom,
 } from "../run/execute-typed-step.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
@@ -602,6 +603,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // Where each args key came from, for the step record's `args_origin`:
     // `--args` first, then each `--use` that filled a key `--args` left.
     const origins = new Map<string, ArgOrigin>();
+    // What the producer's record says its `returns` dropped, for each key
+    // a `--use` filled, so a claim is judged as it is under `nuka run`.
+    const filledFrom = new Map<string, FilledFrom>();
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
       for (const key of Object.keys(argsObject)) origins.set(key, "command_line");
@@ -613,6 +617,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             filledAnyKey = true;
             origins.set(key, {
               from: { step_record_id: resolved.used.step_record_id, step: resolved.used.step, key: resolved.sources[key] ?? key },
+            });
+            filledFrom.set(key, {
+              step: resolved.producer,
+              stepName: resolved.used.step,
+              key: resolved.sources[key] ?? key,
+              dropped: resolved.dropped,
             });
           }
         }
@@ -640,6 +650,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // No feature line produced a `--use` value, so its record id names
       // the producer instead.
       argSide: (key) => claimArgSide(key, origins.get(key), () => null),
+      filledFrom,
       // No line states a value under nuka do: a key --args gave reads as
       // the JSON text it was given.
       sentenceText: (key) =>

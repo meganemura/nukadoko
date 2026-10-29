@@ -2445,10 +2445,10 @@ export default defineStep({
       const checked = await cli(rootDir, ["check", "features/t.feature"]);
       const findings = checked.stdout.split("\n").filter((line) => line.startsWith("error\tclaim-field-stripped\t"));
       expect(findings).toEqual([
-        'error\tclaim-field-stripped\tfeatures/t.feature:4\tStep "the-user-has-no-password-field"\'s claims[0] is lacks-field "password" on user, and step "a-user-signs-up" on line 3 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
-        'error\tclaim-field-stripped\tfeatures/t.feature:7\tStep "the-user-carries-no-field"\'s claims[0] is lacks-field "password" on user, and step "a-user-signs-up" on line 6 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
-        'error\tclaim-field-stripped\tfeatures/t.feature:11\tStep "every-user-without-a-deleted-at-field-has-no-password-field"\'s claims[0].each.where[0] is lacks-field "deleted_at" on each item of users, and step "a-user-signs-up" on line 10 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. deleted_at is never there, so where selects every item, whatever the behaviour is',
-        'error\tclaim-field-stripped\tfeatures/t.feature:11\tStep "every-user-without-a-deleted-at-field-has-no-password-field"\'s claims[0].each.claims[0] is lacks-field "password" on each item of users, and step "a-user-signs-up" on line 10 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
+        'error\tclaim-field-stripped\tfeatures/t.feature:4\tStep "the-user-has-no-password-field"\'s claims[0] is lacks-field "password" on user, and step "a-user-signs-up" on line 3 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim never breaks, whatever the behaviour is',
+        'error\tclaim-field-stripped\tfeatures/t.feature:7\tStep "the-user-carries-no-field"\'s claims[0] is lacks-field "password" on user, and step "a-user-signs-up" on line 6 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim never breaks, whatever the behaviour is',
+        'error\tclaim-field-stripped\tfeatures/t.feature:11\tStep "every-user-without-a-deleted-at-field-has-no-password-field"\'s claims[0].each.where[0] is lacks-field "deleted_at" on each item of users, and step "a-user-signs-up" on line 10 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. deleted_at is never there, so where never leaves an item out, whatever the behaviour is',
+        'error\tclaim-field-stripped\tfeatures/t.feature:11\tStep "every-user-without-a-deleted-at-field-has-no-password-field"\'s claims[0].each.claims[0] is lacks-field "password" on each item of users, and step "a-user-signs-up" on line 10 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim never breaks, whatever the behaviour is',
       ]);
       expect(checked.exitCode).toBe(1);
       const result = await cli(rootDir, ["run", "features/t.feature"]);
@@ -2488,6 +2488,79 @@ export default defineStep({
       const done = await cli(rootDir, ["do", "a-user-signs-up", "--args", "{}"]);
       expect(done.exitCode).toBe(0);
       expect(JSON.parse(done.stdout).returns_dropped).toEqual(dropped);
+    }
+  });
+
+  it("leaves a claim that held without a key the producer's record says its returns dropped unjudged, under --no-check and in nuka do --use", async () => {
+    const dropping = "z.object({ name: z.string() })";
+    const rootDir = await project({ "features/steps/a-user-signs-up.ts": signUp(dropping, dropping), ...steps, "features/t.feature": feature });
+    const ran = await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    expect(ran.exitCode).toBe(1);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: "))).toEqual([
+      '  - {"name":"aki"} (from:a-user-signs-up@3.user) lacks-field "password" (literal:password) unjudged: step "a-user-signs-up" returned password at from:a-user-signs-up@3.user, and its returns dropped it, so the password field was there, and the claim was not judged; measured: none',
+      '  - {"name":"aki"} (from:a-user-signs-up@6.user) lacks-field "password" (sentence:field) unjudged: step "a-user-signs-up" returned password at from:a-user-signs-up@6.user, and its returns dropped it, so the password field was there, and the claim was not judged; measured: none',
+      '  - each of from:a-user-signs-up@10.users (1 item) where item lacks-field "deleted_at" (literal:deleted_at): item lacks-field "password" (literal:password) unjudged; item 0: {"name":"aki"} (from:a-user-signs-up@10.users.0) lacks-field "password" (literal:password): step "a-user-signs-up" returned password at from:a-user-signs-up@10.users.0, and its returns dropped it, so the password field was there, and the claim was not judged; measured: none',
+    ]);
+
+    const signedUp = await cli(rootDir, ["do", "a-user-signs-up", "--args", "{}"]);
+    const producer = JSON.parse(signedUp.stdout).step_record_id as string;
+    const measuredReason = `step "a-user-signs-up" returned password at from:a-user-signs-up@${producer}.user, and its returns dropped it, so the password field was there, and the claim was not judged`;
+    const done = await cli(rootDir, ["do", "the-user-has-no-password-field", "--use", producer]);
+    expect(done.exitCode).toBe(1);
+    expect(JSON.parse(done.stdout).claims[0]).toMatchObject({ outcome: "unjudged", reason: measuredReason });
+
+    // A record from before the field says nothing of what was dropped, so
+    // the claim reads what the producer's returns declares there.
+    const recordPath = path.join(rootDir, ".nukadoko", "do", producer, "record.json");
+    const record = JSON.parse(await readFile(recordPath, "utf8")) as Record<string, unknown>;
+    delete record.returns_dropped;
+    await writeFile(recordPath, JSON.stringify(record));
+    const old = await cli(rootDir, ["do", "the-user-has-no-password-field", "--use", producer]);
+    expect(old.exitCode).toBe(1);
+    expect(JSON.parse(old.stdout).claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: `the record of step "a-user-signs-up" does not say which keys its returns dropped, and its returns parses from:a-user-signs-up@${producer}.user with an object schema that declares name and drops any key it does not declare, so a password field may have been there, and the claim was not judged`,
+    });
+  });
+
+  it("judges a claim on a value the producer's returns dropped nothing from, through the same z.object", async () => {
+    const userStep = (returned: string) => `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "Signs a user up",
+  pattern: "a user signs up",
+  args: z.object({}),
+  returns: z.object({ user: z.object({ name: z.string() }) }),
+  mutates: false,
+  run() {
+    return { user: ${returned} };
+  },
+});
+`;
+    const equalStep = `import { defineStep, z } from "nukadoko";
+import signUp from "./a-user-signs-up.ts";
+export default defineStep({
+  pattern: "the user is",
+  args: z.object({ user: z.unknown(), docstring: z.string() }),
+  from: { user: [signUp, "user"] },
+  claims: [{ actual: "user", compare: "equal", expected: "docstring", expected_view: "json" }],
+});
+`;
+    for (const [returned, outcome, dropped] of [
+      ['{ name: "aki" }', "held", []],
+      ['{ name: "aki", password: "secret" }', "unjudged", [{ at: ["user"], keys: ["password"] }]],
+    ] as const) {
+      const rootDir = await project({
+        "features/steps/a-user-signs-up.ts": userStep(returned),
+        "features/steps/the-user-is.ts": equalStep,
+        "features/t.feature": ["Feature: sign up", "  Scenario: sign up", "    When a user signs up", "    Then the user is", '      """', '      {"name":"aki"}', '      """', ""].join("\n"),
+      });
+      const ran = await cli(rootDir, ["run", "features/t.feature"]);
+      expect(ran.exitCode).toBe(outcome === "held" ? 0 : 1);
+      const [signedUp, judged] = latestRunJson(rootDir).scenarios[0].steps as Record<string, any>[];
+      const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), signedUp!.record, "record.json"), "utf8")) as Record<string, unknown>;
+      expect(record.returns_dropped).toEqual(dropped);
+      expect(judged!.claims[0]).toMatchObject({ actual: { name: "aki" }, compare: "equal", expected: { name: "aki" }, outcome });
     }
   });
 
@@ -2556,8 +2629,8 @@ export default defineStep({
     const rootDir = await project({ "features/steps/an-account-opens.ts": openAccount("prefault", "prefault"), ...accountSteps });
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
     expect(checked.stdout.split("\n").filter((line) => line.startsWith("error\tclaim-field-stripped\t"))).toEqual([
-      'error\tclaim-field-stripped\tfeatures/t.feature:4\tStep "the-account-user-has-no-password-field"\'s claims[0] is lacks-field "password" on account at user, and step "an-account-opens" on line 3 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
-      'error\tclaim-field-stripped\tfeatures/t.feature:7\tStep "every-user-has-no-password-field"\'s claims[0].each.claims[0] is lacks-field "password" on each item of users, and step "an-account-opens" on line 6 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
+      'error\tclaim-field-stripped\tfeatures/t.feature:4\tStep "the-account-user-has-no-password-field"\'s claims[0] is lacks-field "password" on account at user, and step "an-account-opens" on line 3 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim never breaks, whatever the behaviour is',
+      'error\tclaim-field-stripped\tfeatures/t.feature:7\tStep "every-user-has-no-password-field"\'s claims[0].each.claims[0] is lacks-field "password" on each item of users, and step "an-account-opens" on line 6 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim never breaks, whatever the behaviour is',
     ]);
     expect(checked.exitCode).toBe(1);
   });

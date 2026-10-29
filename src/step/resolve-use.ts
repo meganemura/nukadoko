@@ -1,4 +1,4 @@
-import type { StepRecord, UsedEntryWithResult } from "../record/types.js";
+import type { ReturnsDrop, StepRecord, UsedEntryWithResult } from "../record/types.js";
 import { reviveStoredForm } from "../stored-form/revive.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
 
@@ -55,12 +55,49 @@ export interface ResolveUseSuccess {
    * caller strips it back off for a "passed" step record of its own the same
    * way run-scenario.ts's `finishExecutedStep` does. */
   readonly used: UsedEntryWithResult;
+  /** The step this record's result came from, as this step's `from`
+   * names it. */
+  readonly producer: Step;
+  /** What the record says that step's `returns` dropped
+   * (`returns_dropped`), `undefined` for a record that does not say. */
+  readonly dropped: readonly ReturnsDrop[] | undefined;
 }
 
 export type ResolveUseResult = ResolveUseError | ResolveUseSuccess;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const isStrings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+/**
+ * A record's `returns_dropped`, or `undefined` when the record has no such
+ * field or holds one of another shape: a record from before the field, or
+ * one written by hand, says nothing a claim can rely on. A key name the
+ * redactor rewrote is no longer the key the step returned, so its place
+ * becomes one the record cannot name keys at, and a claim there is not
+ * judged rather than judged against the token. Pure.
+ */
+export function readReturnsDropped(value: unknown): ReturnsDrop[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const drops: ReturnsDrop[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || !isStrings(entry.at)) return undefined;
+    if (typeof entry.unmeasured === "string" && entry.keys === undefined) {
+      drops.push({ at: entry.at, unmeasured: entry.unmeasured });
+    } else if (isStrings(entry.keys) && entry.keys.length > 0 && entry.unmeasured === undefined) {
+      // The redactor's token (src/secrets/redact.ts).
+      drops.push(
+        entry.keys.some((key) => key.includes("{{secret."))
+          ? { at: entry.at, unmeasured: "the record names a key it dropped there only as a redacted secret" }
+          : { at: entry.at, keys: entry.keys },
+      );
+    } else {
+      return undefined;
+    }
+  }
+  return drops;
 }
 
 /**
@@ -106,7 +143,7 @@ export function resolveUse(
   // candidates are checked individually via `tryFromCandidates`, so a key
   // whose `from` lists several producers still matches as long as one of
   // them is this step record's own step.
-  const matches: Array<readonly [key: string, upstreamKey: string]> = [];
+  const matches: Array<readonly [key: string, upstreamKey: string, upstream: Step]> = [];
   let unnamedKey: string | undefined;
   for (const [key, entry] of Object.entries(step.from)) {
     const candidates = tryFromCandidates(entry);
@@ -117,7 +154,7 @@ export function resolveUse(
       const upstreamName = stepNameOf.get(upstream);
       if (upstreamName === undefined) unnamedKey ??= key;
       if (upstreamName === stepRecord.step) {
-        matches.push([key, upstreamKey]);
+        matches.push([key, upstreamKey, upstream]);
       }
     }
   }
@@ -159,5 +196,8 @@ export function resolveUse(
     filled: reviveStoredForm(step.args, filled, "input") as Record<string, unknown>,
     sources,
     used: { step_record_id: recordId, step: stepRecord.step, result: stepRecord.result },
+    // Every match names this record's step, so the first names them all.
+    producer: matches[0]![2],
+    dropped: readReturnsDropped((stepRecord as { returns_dropped?: unknown }).returns_dropped),
   };
 }

@@ -1870,6 +1870,52 @@ import name the usual rewrites earlier. This comparison is what keeps the
 record true, and it also catches a schema that a step file changed after
 `defineStep` returned.
 
+A `from` value is copied after the producing step's `returns` has
+parsed it, and a `z.object` there drops each key it does not declare.
+The producing step's record names the keys it dropped
+(`returns_dropped`, see "Records"), and the run reads them. A claim
+that held on the copy, and could come out otherwise with a key the
+step returned there, is `unjudged`. A claim that holds whatever those keys
+held is judged as before. The reason names the step, the place, and the
+keys: `step "a-user-signs-up" returned password at
+from:a-user-signs-up@3.user, and its returns dropped it, so the
+password field was there, and the claim was not judged`. The error kind
+is `claim_unjudged`. A dropped key never changes a text, a number, a
+kind, or the length of an array, so only these compares can turn on one:
+
+- `lacks-field`, on a field the object dropped.
+- `equal`, where a dropped key could make the two values differ as they
+  were returned, and `not-equal`, where the two values differ only in
+  keys that a side dropped, or may have dropped.
+- `has-item`, unless an item equals the expected value and neither had a
+  key dropped, and `has-same-items`, where either array holds an object
+  that had a key dropped.
+- `has-fields`, where the expected value had a key dropped, since the
+  actual value may lack it.
+
+A claim that breaks on the copy stays broken, since the copy is the
+result the producing step hands on. A `where` claim decides
+which items an `each` judges, so a `where` claim that a dropped key
+could change in either direction stops its `each` at that item, which
+is `unjudged` and names the item (`where could not judge item 0: ...`).
+An item claim the rule leaves `unjudged` leaves the `each` `unjudged`
+unless another item breaks it. A `view` or a `count` makes a value of
+its own, which no `returns` parsed, so the rule reads no drop past one.
+At a place the record names as `unmeasured`, any key may have been
+dropped. A record that has no `returns_dropped`, as one an earlier
+nukadoko wrote and `nuka do --use` reads, does not say which keys were
+dropped, so the run reads the producer's `returns` as
+`claim-field-stripped` does (see "The compares") and takes any key a
+`z.object` there does not declare as one it may have dropped:
+`the record of step "a-user-signs-up" does not say which keys its
+returns dropped, and its returns parses from:a-user-signs-up@3.user with
+an object schema that declares name and drops any key it does not
+declare, so a password field may have been there, and the claim was not
+judged`. A `z.strictObject` refuses a result that holds a key it does
+not declare, so it drops nothing. To compare a whole object, declare it
+with `z.looseObject`, which keeps every key, or declare the field in
+`returns` as optional (`password: z.unknown().optional()`).
+
 No copy is taken, and the claim is `unjudged` with a reason that names
 the place, when the value is not plain JSON (see "The compares"), when it
 is a `Proxy` at any depth, or when it nests deeper than 256 arrays and
@@ -1958,17 +2004,19 @@ A value an earlier step returned has passed through that step's
 `returns`, and a `z.object` drops each key it does not declare (a
 `z.strictObject` refuses the result instead), so a field that schema
 does not declare is never there, whatever the step returned, and a
-`lacks-field` claim on it holds whatever the behaviour is. `nuka check`
-reports such a claim, and a `where` claim that selects the items
-lacking such a field, which then selects every item
+`lacks-field` claim on it never breaks, whatever the behaviour is.
+`nuka check` reports such a claim, and a `where` claim that selects the
+items lacking such a field, which then never leaves an item out
 (`claim-field-stripped`). It reads the field a claim names as a
 literal, or the text a `{word}`, `{string}`, or anonymous capture fills
 on the line, and takes a schema that may keep a key (`z.looseObject`, a
 catchall, a union, a transform, or a `default` or a `catch` anywhere on
 the path, which return their own value unparsed at every depth below
-them) to keep it. Under `--no-check` such a claim holds. Declaring the
-field in `returns` as optional (`password: z.unknown().optional()`)
-keeps it when the step returns it.
+them) to keep it. Under `--no-check`, the run judges such a claim on what
+the step returned: it is `unjudged` when the step returned the field,
+and it holds when the step did not (see "The value a claim judges").
+Declaring the field in `returns` as optional
+(`password: z.unknown().optional()`) keeps it when the step returns it.
 
 `fits-text` compares two texts, and lets a docstring state a program's
 output whose times, sizes, and paths change on each run without each
@@ -2138,7 +2186,9 @@ broken item that is an object carries `identity` too: the first of its
 and the item claims with their compares and expected values, and for a
 broken `each` it ends with the first broken item and what it held:
 `; item 1 (name "caller"): "#2" (observe:calls.1.counter) equal "#1"
-(sentence:counter)`.
+(sentence:counter)`. For an `each` that nukadoko could not judge, the
+line ends with the first selected item it could not judge, what it held,
+and why.
 
 #### Observe
 
@@ -2418,7 +2468,8 @@ after that, with the actual line where it stopped, or `nothing` past the
 end; when every expected line fits, it names the first actual line left
 over (`; expected lines 1 to 2 fit, and expected line 3 fits nothing from
 actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`). One line per broken claim, with the first item that broke under an `each`
-on the line below it, named by its index and its `identity` when it has one.
+on the line below it, named by its index and its `identity` when it has one,
+or, under an `each` that nukadoko could not judge, the first item it could not judge.
 A claim nukadoko could not judge fails the step with `claim_unjudged`
 instead, and its line starts `claim unjudged:`. The run summary lists
 every claim of every Then under "Claims", one line each, in the same
@@ -5335,7 +5386,8 @@ its scenario record's id, so either record leads to the other.
   at, so each of these is `unmeasured` as well. The list is `[]` when
   `returns` dropped nothing. A typed step that ran has the field on a
   `passed` record; a claim step and a compat step have no `returns` to
-  parse, and a record an earlier nukadoko wrote lacks it.
+  parse, and a record an earlier nukadoko wrote lacks it. A claim on a
+  value from that step reads it (see "The value a claim judges").
 - `args` uses the same distinction (see "Typed steps" for the refusal this
   backs). On a `passed` record it is the schema-validated value `run`
   actually received, a schema's own `.default(...)` included even where
