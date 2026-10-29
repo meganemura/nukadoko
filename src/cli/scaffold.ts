@@ -22,7 +22,7 @@ import { DESCRIPTION_TODO_PREFIX } from "../check/description-todo.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
-import { fixedWords, LITERAL_WORDS, literalStatement, NUMBER_WORDS, type ClaimLiteral } from "../step/claims.js";
+import { fixedWords, literalStatement, NUMBER_WORDS, tableValuesOf, type ClaimLiteral } from "../step/claims.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
 
@@ -570,7 +570,7 @@ function literalWords(pattern: string | null): readonly { readonly word: string;
   if (pattern === null) return [];
   return fixedWords(pattern).flatMap((word) => {
     const number = NUMBER_WORDS.indexOf(word.toLowerCase());
-    const candidates: readonly ClaimLiteral[] = number === -1 ? (LITERAL_WORDS[word.toLowerCase()] ?? []) : [number];
+    const candidates: readonly ClaimLiteral[] = number === -1 ? tableValuesOf(word) : [number];
     const values = candidates.filter((value) => literalStatement(pattern, value)?.words === word);
     return values.length === 0 ? [] : [{ word, values }];
   });

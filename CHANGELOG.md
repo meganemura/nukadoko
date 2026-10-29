@@ -203,6 +203,14 @@ just until 0.1.
 
 ### Fixed
 
+- **A pattern word that every object answers no longer breaks the
+  literal rule.** `defineStep` threw `values?.some is not a function`
+  for a claim with a literal on a pattern that holds the fixed word
+  `constructor`, `toString`, or another name every object has, since
+  the word table answered it with a function. The table is read by its
+  own keys now, so such a word states nothing and the claim is refused
+  with the literal rule's message. `nuka scaffold --then` threw the same
+  way on such a pattern.
 - **An `each` line counts one item as `1 item`.** The claim line of an
   `each` over one item read `(1 items)` in the run summary and the
   failure message; it now reads `(1 item)`, as a `has-fields` line

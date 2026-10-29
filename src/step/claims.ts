@@ -253,6 +253,15 @@ export const LITERAL_WORDS: Readonly<Record<string, readonly ClaimLiteral[]>> = 
   empty: ["", []],
 };
 
+/** The values `word` fixes through the table, compared
+ * case-insensitively, or none. An own-key lookup: a plain object also
+ * answers `constructor` and `toString`, and a pattern may hold either
+ * word. Pure. */
+export function tableValuesOf(word: string): readonly ClaimLiteral[] {
+  const lower = word.toLowerCase();
+  return Object.hasOwn(LITERAL_WORDS, lower) ? LITERAL_WORDS[lower]! : [];
+}
+
 /** The words that write a whole number in a sentence, by value: a fixed
  * word here states its number as the digits would ("at least three
  * routed points" states 3), under any compare. Twelve is where English
@@ -394,8 +403,7 @@ export function literalStatement(pattern: string, literal: unknown): LiteralStat
   for (const [index, word] of all.entries()) {
     if (!word.fixed) continue;
     const lower = word.text.toLowerCase();
-    const values = LITERAL_WORDS[lower];
-    if (!values?.some((value) => sameLiteral(literal, value))) continue;
+    if (!tableValuesOf(lower).some((value) => sameLiteral(literal, value))) continue;
     if (lower === "neither" && all.slice(index + 1).some((later) => later.fixed && later.text.toLowerCase() === "nor")) continue;
     const before = index > 0 ? all[index - 1]! : null;
     const negated = before !== null && before.fixed && NEGATING_WORDS.has(before.text.toLowerCase());

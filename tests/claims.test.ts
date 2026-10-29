@@ -22,6 +22,7 @@ import {
   placesOverlap,
   placeViewed,
   samePlace,
+  tableValuesOf,
   type Claim,
   type ClaimPlace,
   type ClaimStepShape,
@@ -1314,6 +1315,17 @@ describe("the literal rule, exactly", () => {
     expect(literalStatedBy("a relationship path follows at least three routed points", 3)).toBe("three");
     expect(literalStatedBy("one relation line was drawn throughout and none faded", 1)).toBe("one");
     expect(literalStatedBy("one relation line was drawn throughout and none faded", 0)).toBe("none");
+  });
+
+  it("a fixed word that names a property every object has states nothing, and the claim is refused rather than thrown", () => {
+    for (const word of ["constructor", "toString", "valueOf", "hasOwnProperty", "__proto__"]) {
+      const pattern = `the ${word} runs`;
+      for (const literal of [0, "", []]) {
+        expect(literalStatement(pattern, literal)).toBeNull();
+        expect(claimsProblem([{ actual: "result", compare: "equal", expected: { literal } }], literalShape(pattern))).not.toBeNull();
+      }
+      expect(tableValuesOf(word)).toEqual([]);
+    }
   });
 
   it("neither fixes the values no fixes, so a line about two hosts can state an empty list", () => {
