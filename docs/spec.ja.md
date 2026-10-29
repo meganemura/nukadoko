@@ -1590,11 +1590,12 @@ run サマリの行は、`where` の claim と要素の claim を、比較と期
 `observe(fixtures, args)` は省略できます。
 前の step が値を返していないときに世界を読み、claim が読むキーを持つオブジェクトを返します。
 その fixture の袋は step の袋と同じなので(「Context API」を参照)、`request`、`page`、プロジェクトの fixture を使えます。
-また、claim が期待値として名指しするキー(文から来るものと `from` から来るもの)を除く、すべての args キーのコピーを受け取ります。
+また、claim が期待値として名指しするキー(文から来るものと `from` から来るもの)と、期待値を `observe` から取る claim の actual が始まる `from` のキーを除く、すべての args キーのコピーを受け取ります。
+後者の例は "the strict gate exits 4 when a section did not answer" で、前の step が返した終了コードを、`observe` がレポートから導いた値と比べます。
 前の step が返したパスのように `observe` に届くキーは入力です。
 `observe` に届かないキーは比較の相手です。
 届かないキーを読むと throw し、型が届かない JavaScript の step ファイルにも同じ規則が働きます。
-キーを渡さないことで、期待値は `observe` の手に届きません。
+キーを渡さないことで、もう一方の辺が読む値は `observe` の手に届きません。
 それでも `observe` が定数や自分で導いた値を返すことは止められず、record はそのような値を `measured: none` として示します(「record」を参照)。
 
 `resultOf` は claim step の中では throw し、claim step の実行中にそれを呼ぶプロジェクトの fixture も throw します。
@@ -1607,8 +1608,8 @@ claim step が始まる前に前の step の値を保持していたプロジェ
 その値を含む値や、その値の中にある値を受け取る場合も同じです。
 `observe` が入力をそのまま返せば、claim は値をそれ自身と比べることになるからです。
 逆向きの形も同じように拒否されます。
-実際の値が `from` の値で期待値が `{ observe }` の claim で、`observe` がその値、それを含む値、その中にある値のどれかを受け取る場合です。
-実際の値のキーは `observe` に届くので、そのキー自身も数えます。
+実際の値が `from` の値で期待値が `{ observe }` の claim で、`observe` がその値を含む値か、その中にある値を持つ別のキーを受け取る場合です。
+実際の値のキー自身は `observe` に届かないので、それを運べるのは 2 つ目の `from` のキーだけで、指摘の直し方はそのキーを `from` から外すことです。
 実行も同じ規則を当てはめるので、`--no-check` の run と `nuka do --use` も check と食い違いません。
 `observe` が受け取った args のキーが、もう一方の辺の読む値、それを含む値、その中にある値のどれかを読むとき、claim は成り立たず、理由がそのキーを名指しします。
 項目の claim が `observe` と比べ、`observe` が配列の場所を受け取った `each` は、どの項目よりも前に成り立たなくなります。

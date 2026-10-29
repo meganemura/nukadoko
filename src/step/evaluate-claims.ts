@@ -586,7 +586,8 @@ function stopOf(side: Side): Stop {
  * value the claim compares it with, and the claim holds whatever the
  * behaviour is. `observe` never receives an expected key itself, so on
  * that side only a second key filled from the same earlier result can
- * carry the value; an actual key it does receive. `nuka check` refuses
+ * carry the value; on the other side the actual `from` key is held back
+ * too (`observeWithheldKeys`), so again only a second key can. `nuka check` refuses
  * the step for either (`claim-compares-itself`); the run breaks the claim
  * too, so a run under `--no-check` and `nuka do --use` judge it the same
  * way. `reads` says, in the reason, which side reads `place`. */

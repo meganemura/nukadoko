@@ -1959,11 +1959,15 @@ step returned the value, and returns an object whose keys the claims read.
 Its fixture bag is a step's bag (see "Context API"), so it may use
 `request`, `page`, or a project fixture, and it receives a copy of every
 args key except the ones a claim names as its expected value, from the
-sentence or from `from`. A key that reaches it, such as a path an earlier step
+sentence or from `from`, and except the `from` key a claim's actual
+starts with when that claim takes its expected value from `observe`
+("the strict gate exits 4 when a section did not answer" compares the
+exit code an earlier step returned with a value `observe` works out from
+the report). A key that reaches it, such as a path an earlier step
 returned, is an input; a key withheld from it is what it will be compared
 with. Reading a withheld key throws, and a JavaScript step file, which
 the types do not reach, is held to the same rule. Withholding keeps the
-expected value out of `observe`'s hands. It does not stop `observe` from
+value the other side reads out of `observe`'s hands. It does not stop `observe` from
 returning a constant or a value it worked out itself; the record shows
 that one as `measured: none` (see "The record").
 
@@ -1981,8 +1985,9 @@ value or sits inside it (`claim-compares-itself`): `observe` could return
 its input, and the claim would compare a value with itself. The mirror is
 refused the same way, whichever side is the actual: a claim whose actual
 value is a `from` value and whose expected value is `{ observe }`, when
-`observe` receives that value, one that holds it, or one inside it. An
-actual key is not withheld from `observe`, so the key itself counts. The
+`observe` receives another key that holds that value or sits inside it.
+The actual key itself is withheld, so only a second `from` key can carry
+it, and the finding's fix is to take that key out of `from`. The
 run applies the same rule, so a run under `--no-check` and `nuka do --use`
 agree with the check: when an args key `observe` received reads the
 value the other side reads, one that holds it, or one inside it, the

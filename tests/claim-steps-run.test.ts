@@ -1332,7 +1332,7 @@ export default defineStep({
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
     expect(checked.exitCode).toBe(1);
     expect(checked.stdout).toContain(
-      'error\tclaim-compares-itself\tfeatures/t.feature:4\tStep "the-cart-still-holds"\'s observe receives args.now, which is cart of step "the-app-answers" on line 3, and its claims[0].expected reads cart.count of step "the-app-answers" on line 3, so observe could return the value the claim compares it with. Give observe values from another step, or none from this one\n',
+      'error\tclaim-compares-itself\tfeatures/t.feature:4\tStep "the-cart-still-holds"\'s observe receives args.now, which is cart of step "the-app-answers" on line 3, and its claims[0].expected reads cart.count of step "the-app-answers" on line 3, so observe could return the value the claim compares it with. Take now out of this step\'s from, so observe does not receive it, or fill it from another step\n',
     );
   });
 
@@ -1401,17 +1401,44 @@ export default defineStep({
     });
   });
 
-  it("refuses and breaks an observe that receives the from value the actual reads, when the expected value comes from observe", async () => {
+  it("judges a from actual against a value observe worked out from another key, and holds back the actual key from observe", async () => {
+    const step = (read: string) => `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart count matches the body's tags",
+  args: z.object({ cart: answer.returns.shape.cart, body: answer.returns.shape.body }),
+  from: { cart: [answer, "cart"], body: [answer, "body"] },
+  poll: false,
+  observe({}, inputs) {
+    return { tags: ${read} };
+  },
+  claims: [{ actual: "cart.count", compare: "equal", expected: { observe: "tags" } }],
+});
+`;
+    const rootDir = await project({
+      "features/steps/the-cart-count-matches.ts": step("(inputs.body as { tags: string[] }).tags.length"),
+      "features/t.feature": feature("When the app answers", "Then the cart count matches the body's tags"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.stdout).toBe("ok: no issues found\n");
+    expect((await cli(rootDir, ["run", "features/t.feature"])).exitCode).toBe(0);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({ actual: 1, expected: 1, outcome: "held" });
+    await writeFile(path.join(rootDir, "features/steps/the-cart-count-matches.ts"), step("(inputs as Record<string, { count: number }>)[\"cart\"]!.count"));
+    expect((await cli(rootDir, ["run", "features/t.feature"])).exitCode).toBe(1);
+    expect(latestRunJson(rootDir).scenarios[0].steps[1]).toMatchObject({ observation: "unobserved" });
+  });
+
+  it("refuses and breaks an observe that receives a second key holding the from value the actual reads, when the expected value comes from observe", async () => {
     const rootDir = await project({
       "features/steps/the-cart-agrees.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
 export default defineStep({
   pattern: "the cart agrees with the store",
-  args: z.object({ cart: answer.returns.shape.cart }),
-  from: { cart: [answer, "cart"] },
+  args: z.object({ cart: answer.returns.shape.cart, copy: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"], copy: [answer, "cart"] },
   poll: false,
   observe({}, inputs) {
-    return { stored: inputs.cart.count };
+    return { stored: inputs.copy.count };
   },
   claims: [{ actual: "cart.count", compare: "equal", expected: { observe: "stored" } }],
 });
@@ -1421,7 +1448,7 @@ export default defineStep({
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
     expect(checked.exitCode).toBe(1);
     expect(checked.stdout).toContain(
-      'error\tclaim-compares-itself\tfeatures/t.feature:4\tStep "the-cart-agrees"\'s observe receives args.cart, which is cart of step "the-app-answers" on line 3, and its claims[0].actual reads cart.count of step "the-app-answers" on line 3, so observe could return the value the claim compares it with. Give observe values from another step, or none from this one\n',
+      'error\tclaim-compares-itself\tfeatures/t.feature:4\tStep "the-cart-agrees"\'s observe receives args.copy, which is cart of step "the-app-answers" on line 3, and its claims[0].actual reads cart.count of step "the-app-answers" on line 3, so observe could return the value the claim compares it with. Take copy out of this step\'s from, so observe does not receive it, or fill it from another step\n',
     );
     const ran = await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
     expect(ran.exitCode).toBe(1);
@@ -1430,7 +1457,7 @@ export default defineStep({
       expected: 1,
       outcome: "broken",
       reason:
-        "observe received args.cart, which is from:the-app-answers@3.cart, and the actual value reads from:the-app-answers@3.cart.count, so observe could return the value the claim compares it with",
+        "observe received args.copy, which is from:the-app-answers@3.cart, and the actual value reads from:the-app-answers@3.cart.count, so observe could return the value the claim compares it with",
     });
     const answered = await cli(rootDir, ["do", "the-app-answers", "--args", "{}"]);
     const producer = JSON.parse(answered.stdout).step_record_id as string;
@@ -1438,7 +1465,7 @@ export default defineStep({
     expect(done.exitCode).toBe(1);
     expect(JSON.parse(done.stdout).claims[0]).toMatchObject({
       outcome: "broken",
-      reason: `observe received args.cart, which is from:the-app-answers@${producer}.cart, and the actual value reads from:the-app-answers@${producer}.cart.count, so observe could return the value the claim compares it with`,
+      reason: `observe received args.copy, which is from:the-app-answers@${producer}.cart, and the actual value reads from:the-app-answers@${producer}.cart.count, so observe could return the value the claim compares it with`,
     });
   });
 
@@ -1448,11 +1475,11 @@ export default defineStep({
 import answer from "./the-app-answers.ts";
 export default defineStep({
   pattern: "every item agrees with the store",
-  args: z.object({ cart: answer.returns.shape.cart }),
-  from: { cart: [answer, "cart"] },
+  args: z.object({ cart: answer.returns.shape.cart, copy: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"], copy: [answer, "cart"] },
   poll: false,
   observe({}, inputs) {
-    return { paid: inputs.cart.items[0].paid };
+    return { paid: inputs.copy.items[0].paid };
   },
   claims: [{ actual: "cart.items", each: { claims: [{ actual: "paid", compare: "equal", expected: { observe: "paid" } }] } }],
 });
@@ -1461,13 +1488,13 @@ export default defineStep({
     });
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
     expect(checked.stdout).toContain(
-      'Step "every-item-agrees"\'s observe receives args.cart, which is cart of step "the-app-answers" on line 3, and its claims[0].each.claims[0].actual reads paid of each item of cart.items of step "the-app-answers" on line 3, so observe could return the value the claim compares it with',
+      'Step "every-item-agrees"\'s observe receives args.copy, which is cart of step "the-app-answers" on line 3, and its claims[0].each.claims[0].actual reads paid of each item of cart.items of step "the-app-answers" on line 3, so observe could return the value the claim compares it with',
     );
     await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
     expect(lastClaimStep(rootDir).claims[0]).toMatchObject({
       outcome: "broken",
       reason:
-        "observe received args.cart, which is from:the-app-answers@3.cart, and each.claims[0] reads each item of from:the-app-answers@3.cart.items, so observe could return the value the claim compares it with",
+        "observe received args.copy, which is from:the-app-answers@3.cart, and each.claims[0] reads each item of from:the-app-answers@3.cart.items, so observe could return the value the claim compares it with",
       each: { items: 2, selected: 0, results: [] },
     });
   });

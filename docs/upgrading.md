@@ -53,6 +53,12 @@ This part does not change release to release.
   key `observe` returns so no `from` key has its name, or drop `observe`.
   At run time, a claim whose actual `from` key `observe` also returned
   now breaks and names the key, where it used to read the `from` value.
+- **`observe` no longer receives the actual `from` key of a claim whose
+  expected value is `{ observe }`.** An `observe` that reads that key
+  throws, and the step is `unobserved`; read what it needs from another
+  key. A step `nuka check` refused as `claim-compares-itself` for this
+  shape passes now, when `observe` reads no other key that holds the
+  actual value.
 
 ## 0.21.0 to 0.22.0
 

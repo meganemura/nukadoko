@@ -16,6 +16,15 @@ just until 0.1.
   claims read nothing it returns (every actual is a `from` key and no
   expected value is `{ observe }`), and the run breaks a claim whose
   actual `from` key `observe` also returned, naming the key.
+- **`observe` no longer receives the actual `from` key of a claim whose
+  expected value is `{ observe }`.** Such a claim compares an earlier
+  step's value with a value `observe` works out from other inputs, and
+  `nuka check` refused it as `claim-compares-itself` because `observe`
+  received the actual key, with a fix no step file could carry out. The
+  key is now withheld, as an expected key is, so the claim is judged;
+  reading it throws, and the step is `unobserved`. A second `from` key
+  that holds the same value is still refused, and the finding now says to
+  take that key out of `from`.
 
 ### Added
 

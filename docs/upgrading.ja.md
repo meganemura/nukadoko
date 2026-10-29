@@ -45,6 +45,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `observe` が返すキーを、どの `from` のキーとも違う名前に変えるか、`observe` を外してください。
   実行時には、actual の `from` のキーを `observe` も返した claim は成り立たず、キーを名指しします。
   以前は `from` の値を読んでいました。
+- **期待値が `{ observe }` の claim の actual の `from` のキーを、`observe` は受け取らなくなりました。**
+  そのキーを読む `observe` は throw し、step は `unobserved` になります。
+  必要なものは別のキーから読んでください。
+  この形のために `nuka check` が `claim-compares-itself` として拒否していた step は、actual の値を持つ別のキーを `observe` が読まなければ、いまは通ります。
 
 ## 0.21.0 から 0.22.0 へ
 

@@ -719,6 +719,33 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
   }
 }
 
+/** The args keys `observe` never receives: each key a claim names as its
+ * expected value (a sentence key, or the head of a `{ from }` path), and
+ * the `from` key a claim's actual starts with when that claim, or an item
+ * claim under its `each`, takes its expected value from `observe`.
+ * Holding back the first keeps the expected value out of `observe`'s
+ * hands; holding back the second keeps the actual value out of them, so
+ * `observe` cannot return what it will be compared with either way.
+ * Pure. */
+export function observeWithheldKeys(claims: readonly Claim[], fromKeys: ReadonlySet<string>): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const claim of claims) {
+    const entries: readonly ItemClaim[] = isEachClaim(claim) ? [...(claim.each.where ?? []), ...claim.each.claims] : [claim];
+    for (const entry of entries) {
+      const expected = entry.expected as unknown;
+      if (typeof expected === "string") keys.add(expected);
+      else if (typeof expected === "object" && expected !== null && "from" in expected) {
+        const head = pathSegments(String((expected as { from: unknown }).from))?.[0];
+        if (head !== undefined) keys.add(head);
+      } else if (typeof expected === "object" && expected !== null && "observe" in expected) {
+        const head = pathSegments(claim.actual)?.[0];
+        if (head !== undefined && fromKeys.has(head)) keys.add(head);
+      }
+    }
+  }
+  return keys;
+}
+
 /** Whether any claim reads what `observe` returns: an actual whose first
  * segment is not a from key, or an expected `{ observe }`, in a claim or
  * in an `each`'s `where` and item claims. Pure. */

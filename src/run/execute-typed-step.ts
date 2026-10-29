@@ -7,7 +7,7 @@ import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
 import type { ClaimReading, ErrorKind, FixtureUsageEntry } from "../record/types.js";
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
 import { types } from "node:util";
-import { pathSegments, sentenceUnreadReason, type Claim } from "../step/claims.js";
+import { observeWithheldKeys, pathSegments, sentenceUnreadReason, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
 import { isClaimStep, type ClaimStep, type RunStep, type Step } from "../step/define-step.js";
 import {
@@ -254,24 +254,6 @@ async function runRunStep(input: RunValidatedStepInput, step: RunStep): Promise<
   }
 }
 
-/** The args keys a claim names as its expected value: a sentence key, or
- * the `from` key a `{ from }` path starts with. */
-export function expectedKeys(claims: readonly Claim[]): ReadonlySet<string> {
-  const keys = new Set<string>();
-  const add = (expected: unknown): void => {
-    if (typeof expected === "string") keys.add(expected);
-    else if (typeof expected === "object" && expected !== null && "from" in expected) {
-      const head = pathSegments(String((expected as { from: unknown }).from))?.[0];
-      if (head !== undefined) keys.add(head);
-    }
-  };
-  for (const claim of claims) {
-    if (claim.each === undefined) add(claim.expected);
-    else for (const item of [...(claim.each.where ?? []), ...claim.each.claims]) add(item.expected);
-  }
-  return keys;
-}
-
 /** A copy of each args key `observe` receives (every key but an expected
  * one), or the first key that cannot be copied and why. Made once per
  * step; each call of `observe` gets a clone of it (`observeInputs`). */
@@ -340,7 +322,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const argReads = input.claimArgs ?? takeReads(args, reads.args);
   const schemaChanged = changedBySchema(argReads, reads, args);
   const noObservation: Reader = readerOf(new Map());
-  const withheld = expectedKeys(step.claims);
+  const withheld = observeWithheldKeys(step.claims, fromKeys);
   // The from keys a claim's actual starts with: a key observe returns
   // under the same name never reaches that claim, so a reading that holds
   // one is recorded beside its reader.

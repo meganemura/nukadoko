@@ -384,13 +384,24 @@ type ExpectedKeyOf<E> = E extends string
 
 type ItemExpectedKeys<I> = I extends { readonly expected: infer E } ? ExpectedKeyOf<E> : never;
 
-/** The args keys a claim list names as an expected value: what `observe`
- * never receives. */
-export type ClaimExpectedKeys<C> = C extends { readonly expected: infer E }
-  ? ExpectedKeyOf<E>
-  : C extends { readonly each: { readonly claims: readonly (infer I)[] } }
-    ? ItemExpectedKeys<I> | (C extends { readonly each: { readonly where: readonly (infer W)[] } } ? ItemExpectedKeys<W> : never)
-    : never;
+type ObserveExpected<I> = I extends { readonly expected: { readonly observe: string } } ? true : never;
+
+/** The args keys `observe` never receives (`observeWithheldKeys`): each
+ * key a claim names as an expected value, and the key a claim's actual
+ * starts with when the claim, or an item claim under its `each`, takes
+ * its expected value from `observe`. A key `observe` itself returns is
+ * not an args key, so leaving it out changes nothing. */
+export type ClaimExpectedKeys<C> =
+  | (C extends { readonly expected: infer E }
+      ? ExpectedKeyOf<E>
+      : C extends { readonly each: { readonly claims: readonly (infer I)[] } }
+        ? ItemExpectedKeys<I> | (C extends { readonly each: { readonly where: readonly (infer W)[] } } ? ItemExpectedKeys<W> : never)
+        : never)
+  | (C extends { readonly actual: infer A extends string }
+      ? [ObserveExpected<C> | (C extends { readonly each: { readonly claims: readonly (infer I)[] } } ? ObserveExpected<I> : never) | (C extends { readonly each: { readonly where: readonly (infer W)[] } } ? ObserveExpected<W> : never)] extends [never]
+        ? never
+        : HeadOfPath<A>
+      : never);
 
 /** What `observe` receives: every args key except the ones a claim names
  * as its expected value, so the code that reads the world cannot pick what

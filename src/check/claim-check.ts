@@ -8,6 +8,7 @@ import { stepNeeds } from "../fixture/step-needs.js";
 import {
   ANY_INDEX,
   isEachClaim,
+  observeWithheldKeys,
   pathSegments,
   placesOverlap,
   type Claim,
@@ -375,10 +376,10 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     // the actual one. `observe` never receives an expected key, so only a
     // second key from the same producer can carry it. The mirror: an
     // observe that receives the value an actual `from` reads could return
-    // it as the expected `{ observe }` value, and it does receive the
-    // actual key itself.
+    // it as the expected `{ observe }` value. The actual key itself is
+    // withheld (`observeWithheldKeys`), so only a second key can.
     if (step.observe !== undefined) {
-      const withheld = expectedHeads(step.claims);
+      const withheld = observeWithheldKeys(step.claims, fromKeys);
       for (const key of Object.keys(step.from)) {
         if (withheld.has(key)) continue;
         const input = placeOf("from", key, producerOf, lineOf);
@@ -388,30 +389,12 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
         report(
           "claim-compares-itself",
           `Step "${stepName}"'s observe receives args.${key}, which is ${input.text}, and its ${hit.label} reads ${hit.place.text}, ` +
-            "so observe could return the value the claim compares it with. Give observe values from another step, or none from this one",
+            `so observe could return the value the claim compares it with. Take ${key} out of this step's from, so observe does not receive it, or fill it from another step`,
         );
       }
     }
   });
   return issues;
-}
-
-/** The args keys a claim names as its expected value: a sentence key, or
- * the first segment of a `{ from }` path. `observe` never receives them. */
-function expectedHeads(claims: readonly Claim[]): Set<string> {
-  const keys = new Set<string>();
-  const add = (expected: ClaimExpected): void => {
-    if (typeof expected === "string") keys.add(expected);
-    else if ("from" in expected) {
-      const head = pathSegments(expected.from)?.[0];
-      if (head !== undefined) keys.add(head);
-    }
-  };
-  for (const claim of claims) {
-    if (!isEachClaim(claim)) add(claim.expected);
-    else for (const item of [...(claim.each.where ?? []), ...claim.each.claims]) add(item.expected);
-  }
-  return keys;
 }
 
 /** Item paths of an `each` claim against the array's element schema. */

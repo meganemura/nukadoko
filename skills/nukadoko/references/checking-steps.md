@@ -134,10 +134,11 @@ type with a transformer on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 
-`observe(fixtures, args)` reads the world when no earlier step returned
-the value. It gets every args key but the ones a claim compares with, and
-reading one, or calling `resultOf`, throws: an earlier step's value
-reaches a claim through `from` alone. A throw records `unobserved`.
+`observe(fixtures, args)` reads the world when no earlier step returned the
+value. It gets every args key but the ones a claim compares with, or the
+`from` key of an actual compared with `{ observe }`, and reading one, or
+calling `resultOf`, throws: an earlier step's value reaches a claim through
+`from` alone. A throw records `unobserved`.
 
 Return what you measured, never a verdict: a count, a text, a list. A
 boolean literal is refused when the actual value comes from `observe`,

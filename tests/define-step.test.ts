@@ -296,3 +296,29 @@ describe("defineStep", () => {
     expect(assertOnly.returns.safeParse(undefined)).toEqual({ success: true, data: {} });
   });
 });
+
+describe("what observe's inputs type holds", () => {
+  it("leaves out the actual from key of a claim whose expected value is observe, and keeps every other from key", () => {
+    const gate = defineStep({
+      description: "runs the gate",
+      pattern: "the gate runs",
+      args: z.object({}),
+      returns: z.object({ strictExit: z.number(), sections: z.array(z.string()) }),
+      run() {
+        return { strictExit: 4, sections: ["git"] };
+      },
+    });
+    const claim = defineStep({
+      pattern: "the strict gate fails only when a section did not answer",
+      args: z.object({ strictExit: z.number(), sections: z.array(z.string()) }),
+      from: { strictExit: [gate, "strictExit"], sections: [gate, "sections"] },
+      observe({}, inputs) {
+        // @ts-expect-error the actual key is held back from observe
+        void inputs.strictExit;
+        return { expectedExit: inputs.sections.length > 0 ? 4 : 0 };
+      },
+      claims: [{ actual: "strictExit", compare: "equal", expected: { observe: "expectedExit" } }],
+    });
+    expect(claim.claims).toHaveLength(1);
+  });
+});
