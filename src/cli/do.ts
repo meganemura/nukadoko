@@ -628,6 +628,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       fixtureGraph,
       scenarioCache: fixtureScenarioCache,
       processCache: fixtureProcessCache,
+      secrets,
       config,
       // No feature line produced a `--use` value, so its record id names
       // the producer instead.

@@ -48,6 +48,10 @@ This part does not change release to release.
 
 ## 0.22.0 to the next release
 
+- **A broken claim's failure message shows `{{secret.NAME}}` where a
+  loaded secret stood,** cut after redaction, so its character positions
+  are those of the redacted text, as in the run summary. No step file
+  changes.
 - **`neither` and `nor` right before `no`, `none`, `nothing`, or `empty`
   negate it, as `not` does.** A claim that compared "the reply is
   neither empty nor blank" with `equal ""` held for an empty reply, the

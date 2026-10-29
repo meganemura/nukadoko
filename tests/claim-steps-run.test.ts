@@ -159,6 +159,43 @@ export default defineStep({
     ]);
   });
 
+  it("cuts a broken claim's values after redacting them, so no part of a secret reaches the failure, the output, or the summary", async () => {
+    const token = "tok_LIVEabcdefghijklmnopqrstuvwxyz0123";
+    for (const pad of [130, 110]) {
+      const rootDir = await project({
+        "nukadoko.config.ts": 'import { defineConfig } from "nukadoko";\nexport default defineConfig({ envFiles: [".env"] });\n',
+        ".env": `API_TOKEN=${token}\n`,
+        "features/steps/banner.ts": `import { z } from "zod";
+import { defineStep } from "nukadoko";
+export default defineStep({
+  pattern: "the service prints its banner",
+  args: z.object({}),
+  returns: z.object({ banner: z.string() }),
+  mutates: false,
+  async run({ env }) { return { banner: "x".repeat(${pad}) + env.API_TOKEN + " end" }; },
+});
+`,
+        "features/steps/banner-reads.ts": `import { z } from "zod";
+import { defineStep } from "nukadoko";
+import banner from "./banner.ts";
+export default defineStep({
+  pattern: "the banner reads {text:string}",
+  args: z.object({ text: z.string(), banner: z.string() }),
+  from: { banner: [banner, "banner"] },
+  claims: [{ actual: "banner", compare: "equal", expected: "text" }],
+});
+`,
+        "features/t.feature": feature("Given the service prints its banner", `Then the banner reads "${"x".repeat(pad)}tok_OTHER"`),
+      });
+      const result = await cli(rootDir, ["run", "features/t.feature"]);
+      expect(result.exitCode).toBe(1);
+      const message: string = lastClaimStep(rootDir).error.message;
+      const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+      for (const text of [message, result.stdout, result.stderr, summary]) expect(text).not.toContain("tok_LIVE");
+      expect(message).toContain("{{secret.API_TOKEN}}");
+    }
+  });
+
   it("names where a broken equal on a multi-line text first differs, in the failure and the summary", async () => {
     const rootDir = await project({
       "features/steps/the-report-reads.ts": `import { defineStep, z } from "nukadoko";

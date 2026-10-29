@@ -76,6 +76,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A broken claim's failure message no longer shows part of a secret.**
+  The message was built from the claim's values before they were
+  redacted, then redacted as a whole, so a value cut at 120 characters,
+  or around its first difference, could end inside a loaded secret that
+  redaction then no longer found. The message is now built from the
+  redacted values, as the step record and the run summary are, so the
+  three name the same positions.
 - **The `--base` summary no longer says the old world ran what it did
   not.** Under a changed mapping it said "the old world ran each
   unchanged criterion" even when the old world started for none of them,

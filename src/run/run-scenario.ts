@@ -1943,6 +1943,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               fixtureGraph,
               scenarioCache: fixtureScenarioCache,
               processCache: fixtureProcessCache,
+              secrets,
               config,
               argSide: (key) => claimArgSide(key, originOf(key), (id) => recordLines.get(id) ?? null),
               ...(attachmentKey === null || (attachmentOrigin !== "docstring" && attachmentOrigin !== "table")

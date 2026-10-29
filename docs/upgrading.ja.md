@@ -40,6 +40,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.22.0 から次のリリースへ
 
+- **成り立たない claim の失敗メッセージは、読み込んだ secret があった場所に `{{secret.NAME}}` を示します。**
+  切り詰めは伏せたあとに行うので、文字の位置は run サマリと同じく伏せたテキストの位置です。
+  step ファイルの変更は要りません。
 - **`no`、`none`、`nothing`、`empty` のすぐ前の `neither` と `nor` は、`not` と同じようにそれを否定します。**
   "the reply is neither empty nor blank" を `equal ""` と比べていた claim は、空の返事で成り立っていました。
   これは行と逆のことです。

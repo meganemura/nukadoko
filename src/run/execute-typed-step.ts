@@ -4,8 +4,10 @@ import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContextHandle } from "../context/create-context.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
-import type { ClaimReading, ErrorKind, FixtureUsageEntry } from "../record/types.js";
+import type { ClaimComparisonRecord, ClaimEachRecord, ClaimReading, ErrorKind, FixtureUsageEntry } from "../record/types.js";
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
+import { redact } from "../secrets/redact.js";
+import type { SecretSet } from "../secrets/types.js";
 import { types } from "node:util";
 import { observeWithheldKeys, pathSegments, sentenceUnreadReason, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
@@ -125,6 +127,11 @@ export interface RunValidatedStepInput {
    * has a transformer, with why a claim that compares with it is not
    * judged (`transformedFillReason`). Read only for a claim step. */
   readonly transformed?: ReadonlyMap<string, string>;
+  /** The values the records redact. A claim's failure message is built
+   * from redacted records, since a message cut to its first difference
+   * can cut a secret where redacting the message afterwards no longer
+   * finds it. */
+  readonly secrets: SecretSet;
   /** Injected by tests; the wall clock otherwise. */
   readonly clock?: PollClock;
 }
@@ -309,6 +316,10 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const { name, handle, config } = input;
   const args = (typeof input.args === "object" && input.args !== null ? input.args : {}) as Readonly<Record<string, unknown>>;
   const deadline = deadlineOf(step, config);
+  // Redact first, then cut: the message shows part of each value, and a
+  // part of a secret no longer matches the secret.
+  const failureMessage = (records: readonly (ClaimComparisonRecord | ClaimEachRecord)[]): string =>
+    brokenClaimsMessage(redact(records, input.secrets) as typeof records);
   const startedAt = Date.now();
   const testPattern: PatternTester = testPatternInWorker;
   // Judging is bounded by the step's deadline as a whole: every claim,
@@ -360,7 +371,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     // A claim nukadoko failed to judge is never the criterion failing, so
     // it decides the kind even when another claim broke.
     const kind = records.some((record) => record.outcome === "unjudged") ? "claim_unjudged" : "claim_broken";
-    return { status: "failed", error: { message: brokenClaimsMessage(records), kind }, thrown: undefined, fixtureUsage, claims };
+    return { status: "failed", error: { message: failureMessage(records), kind }, thrown: undefined, fixtureUsage, claims };
   };
   // What a step whose reading did not end records: `unobserved` only when
   // `observe` itself threw; a fixture that failed to set up is the step's
@@ -396,7 +407,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     const judged = claimsEndedEarly(step.claims, claimInputs(noObservation), "broken", unread);
     return {
       status: "failed",
-      error: { message: brokenClaimsMessage(judged.map((entry) => entry.record)), kind: "claim_broken" },
+      error: { message: failureMessage(judged.map((entry) => entry.record)), kind: "claim_broken" },
       thrown: undefined,
       fixtureUsage,
       claims: { judged, observation: "unobserved", attempts: 0 },
@@ -440,7 +451,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     const judged = claimsEndedEarly(step.claims, claimInputs(noObservation), "unjudged", reason);
     return {
       status: "failed",
-      error: { message: brokenClaimsMessage(judged.map((entry) => entry.record)), kind: "claim_unjudged" },
+      error: { message: failureMessage(judged.map((entry) => entry.record)), kind: "claim_unjudged" },
       thrown: undefined,
       fixtureUsage,
       claims: { judged, observation: "unobserved", attempts: 0 },
@@ -543,6 +554,7 @@ export interface ExecuteTypedStepInput {
   readonly config: Pick<NukadokoConfig, "fixtureTimeout" | "stepTimeout">;
   readonly argSide: (key: string) => ArgSide;
   readonly sentenceText: (key: string) => string | null;
+  readonly secrets: SecretSet;
 }
 
 /** `args` is the validated value once validation passed, and the value
