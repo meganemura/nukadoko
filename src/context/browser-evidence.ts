@@ -22,6 +22,7 @@ import { contextFileName } from "./context-name.js";
 import { loadPlaywright } from "./load-playwright.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
+import { secretMasks } from "./secret-masks.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
 // calls `ctx.page()` or `pageAs()`: launch the configured browser engine (chromium by
@@ -152,6 +153,9 @@ export type BrowserEngineName = "chromium" | "firefox" | "webkit";
 // person, though the walk is exactly how they would see that page.
 const VIEW_DEADLINE_MS = 5_000;
 
+// Opaque, so a masked secret leaves no trace of its glyphs.
+const MASK_COLOR = "#000000";
+
 // `capture` with what is left of `deadline`, or `null` once it passed or
 // the capture failed. The capture is raced, not awaited, since a stuck page
 // may never settle the promise; a Playwright call that takes a timeout gets
@@ -235,8 +239,9 @@ export interface TracedContextOptions {
    * that lands after the next boundary still appends to the step that
    * sent the request. */
   logPath: () => string;
-  /** Values page-issued http.jsonl entries must redact, the same
-   * `SecretSet` http-log.ts's own `ctx.request()` wrapper receives. */
+  /** Values page-issued http.jsonl entries must redact, and screenshots
+   * cover, the same `SecretSet` http-log.ts's own `ctx.request()` wrapper
+   * receives. */
   secrets: SecretSet;
   /** Tallies every page-issued request left out of http.jsonl, by
    * `request.resourceType()` (http-omitted.ts). */
@@ -273,12 +278,14 @@ export interface TracedContextHandle {
    * finish within the page's deadline, is `null` in its view, and so is
    * a title: a page that closed, crashed, or froze is no reason to lose
    * the pause. The URL, the title, and the snapshot are redacted with
-   * `secrets`; the screenshot is pixels and is not. */
+   * `secrets`, and the screenshot covers what shows one (secret-masks.ts). */
   viewPages(dir: string, recordedAs: string): Promise<PageView[]>;
   /** Captures the final screenshot as `fileName` in `evidenceDir` and
    * closes the context. Returns the screenshot actually written, at most
    * one (best effort: a screenshot failure here must never mask the step's
-   * real outcome, so it is swallowed rather than thrown). Whatever chunk is
+   * real outcome, so it is swallowed rather than thrown). It covers what
+   * shows a secret, and is not taken when that is not found in time.
+   * Whatever chunk is
    * still open is the caller's to have closed via `endStepChunk` first. */
   finalize(fileName: string): Promise<ScreenshotEntry[]>;
 }
@@ -427,7 +434,11 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
           const deadline = Date.now() + VIEW_DEADLINE_MS;
           // Taken as a buffer and written only once it arrived in time, so a
           // capture that finishes after the pause moved on writes nothing.
-          const shot = await beforeDeadline(deadline, (timeout) => open.screenshot({ caret: "initial", timeout }));
+          // No screenshot rather than one that shows a secret: masks that
+          // were not found in time give none.
+          const masks = await beforeDeadline(deadline, () => secretMasks(open, options.secrets));
+          const shot =
+            masks === null ? null : await beforeDeadline(deadline, (timeout) => open.screenshot({ caret: "initial", timeout, mask: masks, maskColor: MASK_COLOR }));
           const screenshot = shot === null ? null : await written(screenshotName, shot);
           // The snapshot holds what fields hold, passwords included, so a
           // loaded secret a step typed is redacted like in any record.
@@ -441,7 +452,9 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       async finalize(fileName: string): Promise<ScreenshotEntry[]> {
         const screenshots: ScreenshotEntry[] = [];
         try {
-          const buffer = await page.screenshot();
+          const masks = await beforeDeadline(Date.now() + VIEW_DEADLINE_MS, () => secretMasks(page, options.secrets));
+          if (masks === null) throw new Error("the parts of the page that show a secret were not found in time");
+          const buffer = await page.screenshot({ mask: masks, maskColor: MASK_COLOR });
           // Taken right when the screenshot itself resolved (this file's own
           // header), not after the write below, which measures disk I/O
           // rather than the moment the page was captured.

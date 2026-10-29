@@ -4698,8 +4698,11 @@ An ARIA snapshot holds what each field holds, a password field's value
 included. The run redacts every loaded secret from it, and from each
 view's URL and title, as in any record, so a value a step typed from an
 env file reads `{{secret.NAME}}`; a value that is no loaded secret is
-written as the page holds it. The screenshot is pixels and is not
-redacted. A page's three captures share one deadline of 5 seconds, since
+written as the page holds it. The screenshot covers with a black box
+each part of the page that shows a loaded secret, as text or as the value
+of an input or a textarea, in every frame, as the final screenshot does
+(see "Environments and secrets"); the page itself is left as it was. A
+page's three captures share one deadline of 5 seconds, since
 a page whose script never yields answers none of them: one that does
 not finish in time is `null` in the view (the title too), and the walk
 still pauses.
@@ -5695,8 +5698,17 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   on all record surfaces unless `secrets.redact` names it. Those surfaces
   include an agent transcript, which did not exist when `.gitignore`
   classified tracked and untracked files.
-  Therefore, repository membership does not classify that new surface. Traces
-  and screenshots are not redacted, so the state directory is sensitive.
+  Therefore, repository membership does not classify that new surface.
+  A screenshot nukadoko takes (a scenario's final screenshot, a pause's
+  view) covers with a black box each element, in every frame, whose text
+  holds a loaded secret as written, and each input or textarea whose value
+  does; when those elements are not found within 5 seconds, no screenshot
+  is written. A secret split across elements, drawn on a canvas, shown in
+  an image, or written in another spelling is not covered, and the search
+  ignores case, so it can cover a little more than the secret. Traces are
+  not redacted: their screenshots and DOM snapshots hold the page as it
+  was, and so does a screenshot a step saves itself. The state directory
+  is sensitive.
   `nuka check` never prints a key's value. It reports two warnings. The first,
   `secrets-redact-key-too-short`, warns when `secrets.redact` names a value that
   is too short for redaction. For a tracked env file that matches HEAD, the

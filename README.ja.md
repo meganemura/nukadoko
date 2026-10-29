@@ -663,7 +663,8 @@ nukadoko は ESM だけをサポートします。
 `.nukadoko/` を自分で `.gitignore` に追加する必要はありません。
 `nuka init` が追加します。
 `.env` と `.env.*` も追加し、`.env.example` は追跡されたままにします。
-state directory の中の trace とスクリーンショットは redact されないため、state directory には機密データが含まれます。
+nukadoko が撮るスクリーンショットは、ページが表示するロードした secret を覆います。
+ただし state directory の中の trace は redact されないため、state directory には機密データが含まれます。
 
 </details>
 

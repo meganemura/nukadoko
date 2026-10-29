@@ -45,7 +45,8 @@ just until 0.1.
   shown once. A pause where the scenario failed, at a step or at an
   AfterStep hook after one, prints its `failure` with the `walk-failed`
   finding and exits 1. A view's URL, title, and ARIA snapshot are
-  redacted with the loaded secrets, and a page that gives no view within
+  redacted with the loaded secrets, its screenshot covers what shows one
+  (see Changed), and a page that gives no view within
   5 seconds leaves it `null` instead of holding the pause. `nuka clean`
   keeps the run directory of a walk that is live (`walk-run-kept`).
   `run.json`'s `walk` lists the pauses and their answers, and the run
@@ -60,6 +61,14 @@ just until 0.1.
   `stopped`, and an After hook's `result.status` can be `SKIPPED`, which
   the compat `HookParameter` type now allows. `schema_version` does not
   move: the fields and the values are added.
+- **A screenshot nukadoko takes covers the loaded secrets the page
+  shows.** The scenario's final screenshot (`final.png`) and a pause's
+  views mask with a black box each element, in every frame, whose text
+  holds a loaded secret, and each input or textarea whose value does,
+  through Playwright's `mask`; the page is left as it was. When those
+  elements are not found within 5 seconds, no screenshot is written. A
+  secret split across elements, on a canvas, in an image, or in another
+  spelling is not covered, and traces are still not redacted.
 
 ## 0.23.0 — 2026-10-29
 

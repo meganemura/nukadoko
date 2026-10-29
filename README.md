@@ -709,9 +709,9 @@ project loads with a warning, and fails to import under
 rename it to `nukadoko.config.mts`. `nuka init` writes
 `nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
 `.gitignore` yourself because `nuka init` does that. It also adds `.env`
-and `.env.*`, and leaves `.env.example` tracked. Traces and
-screenshots inside the state directory are not redacted, so it contains
-sensitive data.
+and `.env.*`, and leaves `.env.example` tracked. The screenshots nukadoko
+takes cover a loaded secret the page shows, but traces inside the state
+directory are not redacted, so it contains sensitive data.
 
 </details>
 

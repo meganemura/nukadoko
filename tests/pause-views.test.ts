@@ -91,4 +91,68 @@ describe("viewOpenPages", () => {
       await dispose();
     },
   );
+
+  // Red text on white, so a pixel of the secret's glyphs is any clearly red
+  // one; the mask is black and the page has nothing else red.
+  const SECRET = "s3cr3t-token-value-42";
+  const secretPage =
+    `<p style="color:rgb(255,0,0);font:48px sans-serif">token ${SECRET}</p>` +
+    `<input id=key style="color:rgb(255,0,0);font:48px sans-serif;width:900px">` +
+    `<iframe style="width:900px;border:0" srcdoc="<p style='color:rgb(255,0,0);font:48px sans-serif'>${SECRET}</p>"></iframe>`;
+
+  async function redPixels(png: Buffer): Promise<number> {
+    const browser = await chromium.launch({ headless: true });
+    try {
+      const reader = await browser.newPage();
+      // A string, since the tests compile without the DOM's types.
+      return (await reader.evaluate(`(async () => {
+        const image = new Image();
+        image.src = "data:image/png;base64,${png.toString("base64")}";
+        await image.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = image.width;
+        canvas.height = image.height;
+        const draw = canvas.getContext("2d");
+        draw.drawImage(image, 0, 0);
+        const data = draw.getImageData(0, 0, image.width, image.height).data;
+        let red = 0;
+        for (let i = 0; i < data.length; i += 4) if (data[i] > 180 && data[i + 1] < 90 && data[i + 2] < 90) red++;
+        return red;
+      })()`)) as number;
+    } finally {
+      await browser.close();
+    }
+  }
+
+  it.skipIf(!chromiumAvailable)("covers a loaded secret in the screenshot, as text, in a frame, and as a field's value, and leaves the page as it was", async () => {
+    const secrets = [{ name: "API_TOKEN", value: SECRET }];
+    const { ctx, viewOpenPages, dispose } = createStepContext({ config: baseConfig(), evidenceDir, env: {}, secrets, stepTitle: "a step" });
+    const page = await ctx.page();
+    await page.setContent(secretPage);
+    await page.fill("#key", SECRET);
+    const markup = await page.evaluate("document.documentElement.outerHTML");
+
+    const pauseDir = path.join(evidenceDir, "pauses", "1");
+    await mkdir(pauseDir, { recursive: true });
+    const [view] = await viewOpenPages(pauseDir, "pauses/1");
+
+    expect(await redPixels(await readFile(path.join(evidenceDir, view!.screenshot!)))).toBe(0);
+    expect(await redPixels(await page.screenshot({ caret: "initial" }))).toBeGreaterThan(0);
+    expect(await page.evaluate("document.documentElement.outerHTML")).toBe(markup);
+    expect(await page.inputValue("#key")).toBe(SECRET);
+    await dispose();
+  });
+
+  it.skipIf(!chromiumAvailable)("covers a loaded secret in the final screenshot too", async () => {
+    const secrets = [{ name: "API_TOKEN", value: SECRET }];
+    const { ctx, dispose } = createStepContext({ config: baseConfig(), evidenceDir, env: {}, secrets, stepTitle: "a step" });
+    const page = await ctx.page();
+    await page.setContent(secretPage);
+    await page.fill("#key", SECRET);
+    const result = await dispose();
+
+    const final = result.evidence.screenshots.find((shot) => shot.file.startsWith("final"));
+    expect(final).toBeDefined();
+    expect(await redPixels(await readFile(path.join(evidenceDir, final!.file)))).toBe(0);
+  });
 });
