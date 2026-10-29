@@ -419,7 +419,9 @@ describe("compares", () => {
       const from = tc.draw(gs.integers({ minValue: 0, maxValue: line.length }));
       const to = tc.draw(gs.integers({ minValue: from, maxValue: line.length }));
       const globbed = lines.map((entry, at) => (at === index ? `${line.slice(0, from)}[..]${line.slice(to)}` : entry)).join("\n");
-      tc.assume(globbed.replaceAll("[..]", "").trim() !== "");
+      // A generated line that is exactly "..." is a stand-in too, and a text
+      // of stand-ins alone is refused, so it is not one this property covers.
+      tc.assume(globbed.split("\n").some((entry) => entry !== "..." && entry.replaceAll("[..]", "").trim() !== ""));
       expect(holds(await compare("fits-text", text, globbed))).toBe(true);
     }));
 
