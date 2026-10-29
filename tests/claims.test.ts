@@ -2071,6 +2071,15 @@ describe("a broken fits-text names how far the expected text fit, and where it s
   });
 });
 
+describe("an each line counts the items it read", () => {
+  it("says 1 item for one item and n items for any other number, none included", () =>
+    hegel.testAsync(async (tc) => {
+      const names = tc.draw(gs.arrays(gs.sampledFrom(["aki", "kei"]), { maxSize: 4 }));
+      const record = await judgeOne({ actual: "users", each: { claims: [{ compare: "equal", expected: "name" }] } }, { name: "aki" }, { users: names });
+      expect(claimLine(record as ClaimEachRecord)).toContain(`each of observe:users (${names.length === 1 ? "1 item" : `${names.length} items`})`);
+    }));
+});
+
 describe("a broken has-fields names the first expected field that does not fit", () => {
   it("names nothing for an expected object that fits", () =>
     hegel.test((tc) => {

@@ -130,6 +130,10 @@ just until 0.1.
 
 ### Fixed
 
+- **An `each` line counts one item as `1 item`.** The claim line of an
+  `each` over one item read `(1 items)` in the run summary and the
+  failure message; it now reads `(1 item)`, as a `has-fields` line
+  already did for an array of one.
 - **A Chromium page's requests carry a `traceparent` on Chromium 141
   too.** The DevTools filter that stamps a page's requests named the
   `EventSource` resource type, and Chromium 141.0.7390.37 refuses the

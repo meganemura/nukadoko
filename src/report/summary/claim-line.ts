@@ -50,7 +50,7 @@ function itemDeclarationText(entry: ClaimItemDeclaration): string {
 function eachText(record: ClaimEachRecord): string {
   const selected = record.each.selected === record.each.items ? "" : `, ${record.each.selected} selected`;
   const where = record.each.where === undefined ? "" : ` where ${record.each.where.map(itemDeclarationText).join(" and ")}`;
-  return `each of ${record.actual_from} (${record.each.items} items${selected})${where}: ${record.each.claims.map(itemDeclarationText).join(" and ")}`;
+  return `each of ${record.actual_from} (${itemCount(record.each.items)}${selected})${where}: ${record.each.claims.map(itemDeclarationText).join(" and ")}`;
 }
 
 function isEach(record: ClaimComparisonRecord | ClaimEachRecord): record is ClaimEachRecord {
