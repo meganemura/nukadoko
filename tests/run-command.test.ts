@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
@@ -7,19 +8,26 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createObservedCollector } from "../src/context/observed.js";
 import { runCommand } from "../src/index.js";
-import { withProcessRecording } from "../src/context/run-command.js";
-import { copyFixtureToTempDir, createCaptureSink, createEmptyTempDir, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
+import { signalCommandGroups, withProcessRecording } from "../src/context/run-command.js";
+import { parseProcStat } from "../src/process-group/process-group.js";
+import { copyFixtureToTempDir, createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot, sourceNodeArgs, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: `runCommand`'s own result (exit code, output, stdin,
 // environment, the two cases it rejects) and the `observed.processes` it
 // adds to a step record: one entry per call in call order, recorded for a
 // typed step, a part, and a compat step, redacted, and absent when no
 // process ran; and what each process printed, kept as redacted files beside
-// the step record.
+// the step record. Inside a step on POSIX, each process runs in a process
+// group of its own: its entry says whether the group still ran when it
+// closed, a timeout stops the whole group, and a signal passed on reaches
+// every process of it.
 
 const node = process.execPath;
 // The script the secret-argument fixture step runs.
 const PRINT_ARGUMENT = "process.stdout.write(process.argv[1]); process.stderr.write(process.argv[1])";
+// What a process run inside a step records of its group: nothing on
+// Windows, which has no such group.
+const grouped = process.platform === "win32" ? {} : { group: "ended" };
 
 describe("runCommand result", () => {
   it("resolves a nonzero exit with its code and both streams", async () => {
@@ -154,6 +162,96 @@ describe("runCommand result", () => {
   });
 });
 
+/** A process's group and whether it still runs, from /proc on Linux. */
+function procStat(pid: number): { readonly state: string; readonly pgrp: number } | undefined {
+  try {
+    return parseProcStat(readFileSync(`/proc/${pid}/stat`, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+function running(pid: number): boolean {
+  const stat = procStat(pid);
+  return stat !== undefined && stat.state !== "Z" && stat.state !== "X";
+}
+
+// A helper that keeps running in the leader's group, with output of its own.
+const LEAVE_HELPER = "const h = require('child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore' }); h.unref(); process.stdout.write(String(h.pid))";
+// A leader that never ends, and a helper that holds its output open.
+const HANG_WITH_HELPER = "const h = require('child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'inherit' }); process.stdout.write(String(h.pid)); setTimeout(() => {}, 30000)";
+const PRINT_GROUP = "process.stdout.write(require('fs').readFileSync('/proc/self/stat', 'utf8'))";
+
+describe.runIf(process.platform !== "win32")("a process group of its own", () => {
+  const started: number[] = [];
+  afterEach(() => {
+    for (const pid of started.splice(0)) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // Gone already.
+      }
+    }
+  });
+
+  it.runIf(process.platform === "linux")("leads a group of its own inside a step, and stays in the caller's outside one", async () => {
+    const ownGroup = procStat(process.pid)!.pgrp;
+    const outside = parseProcStat((await runCommand(node, ["-e", PRINT_GROUP])).stdout)!;
+    expect(outside.pgrp).toBe(ownGroup);
+    const inside = await withProcessRecording(createObservedCollector(), () => runCommand(node, ["-e", PRINT_GROUP]));
+    const pid = Number(inside.stdout.split(" ")[0]);
+    expect(parseProcStat(inside.stdout)!.pgrp).toBe(pid);
+  });
+
+  it("records group ended when nothing it started still runs", async () => {
+    const observed = createObservedCollector();
+    await withProcessRecording(observed, () => runCommand(node, ["-e", "require('child_process').spawnSync(process.execPath, ['-e', ''])"]));
+    expect(observed.snapshot().processes?.[0]?.group).toBe("ended");
+  });
+
+  it("records group running when a process it started still runs in its group", async () => {
+    const observed = createObservedCollector();
+    const result = await withProcessRecording(observed, () => runCommand(node, ["-e", LEAVE_HELPER]));
+    started.push(Number(result.stdout));
+    expect(observed.snapshot().processes?.[0]?.group).toBe("running");
+  });
+
+  it("stops every process of the group at the timeout, a helper that holds the output open included", async () => {
+    const dir = await createEmptyTempDir();
+    try {
+      const observed = createObservedCollector({ outputDir: () => dir });
+      await expect(withProcessRecording(observed, () => runCommand(node, ["-e", HANG_WITH_HELPER], { timeout: 500 }))).rejects.toThrow(
+        `runCommand: ${node} did not exit within 500 ms and was stopped with SIGTERM`,
+      );
+      const helper = Number(readFileSync(path.join(dir, "process-1.stdout.txt"), "utf8"));
+      started.push(helper);
+      expect(running(helper)).toBe(false);
+      expect(observed.snapshot().processes?.[0]).toMatchObject({ signal: "SIGTERM", timed_out: true, group: "ended" });
+    } finally {
+      await removeTempDir(dir);
+    }
+  });
+
+  it("passes a signal on to every process of a group whose leader still runs", async () => {
+    const dir = await createEmptyTempDir();
+    try {
+      const ready = path.join(dir, "ready");
+      const trap = (who: string) => `process.on('SIGINT', () => { process.stdout.write('${who} SIGINT;'); process.exit(0); });`;
+      const helper = `${trap("helper")} require('fs').writeFileSync(${JSON.stringify(ready)}, ''); setTimeout(() => {}, 30000)`;
+      const leader = `${trap("leader")} require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify(helper)}], { stdio: 'inherit' }); setTimeout(() => {}, 30000)`;
+      const observed = createObservedCollector();
+      const done = withProcessRecording(observed, () => runCommand(node, ["-e", leader], { timeout: 20_000 }));
+      while (!existsSync(ready)) await new Promise((resolve) => setTimeout(resolve, 10));
+      signalCommandGroups("SIGINT");
+      const result = await done;
+      expect(result.stdout.split(";").filter((part) => part !== "").sort()).toEqual(["helper SIGINT", "leader SIGINT"]);
+      expect(observed.snapshot().processes?.[0]?.group).toBe("ended");
+    } finally {
+      await removeTempDir(dir);
+    }
+  });
+});
+
 describe("observed.processes", () => {
   it(
     "has one entry per call, in call order, whether the calls overlap or not",
@@ -228,8 +326,8 @@ describe("observed.processes on a step record", () => {
     // The files under the working directory are measured, but this test
     // runs in the repository root, where other tests write at the same time.
     expect(processes.map(({ duration_ms: _ms, files: _files, ...rest }) => rest)).toEqual([
-      { command: [node, "-e", "process.exit(3)"], cwd: process.cwd(), exit_code: 3, env: { inherited: true } },
-      { command: [node, "-e", "process.stdout.write('hello')"], cwd: process.cwd(), exit_code: 0, stdout: "process-2.stdout.txt", env: { inherited: true } },
+      { command: [node, "-e", "process.exit(3)"], cwd: process.cwd(), exit_code: 3, ...grouped, env: { inherited: true } },
+      { command: [node, "-e", "process.stdout.write('hello')"], cwd: process.cwd(), exit_code: 0, ...grouped, stdout: "process-2.stdout.txt", env: { inherited: true } },
     ]);
     // The first process printed nothing, so it names no file.
     expect(await readFile(path.join(rootDir, stepRecord.evidence.dir, "process-2.stdout.txt"), "utf8")).toBe("hello");
@@ -276,4 +374,57 @@ describe("observed.processes on a step record", () => {
     expect(record.observed.processes.map((entry: { exit_code: number }) => entry.exit_code)).toEqual([3, 0]);
     expect(await readFile(path.join(rootDir, record.evidence.dir, record.observed.processes[1].stdout), "utf8")).toBe("hello");
   });
+});
+
+// A signal to the process that runs the steps cannot be sent to this
+// vitest process, so `src/cli.ts` runs as a child under nukadoko's own
+// loader. The signal goes to its pid alone, as `kill` sends it, so only
+// the handler passing it on reaches the command. No wait here has a
+// deadline of its own: the test's timeout bounds a hang.
+describe.runIf(process.platform !== "win32")("a signal to nukadoko while a step runs a command", () => {
+  let rootDir: string;
+  let dir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("run-command-project");
+    dir = await createEmptyTempDir();
+  });
+
+  afterEach(async () => {
+    const pids = existsSync(path.join(dir, "pids")) ? readFileSync(path.join(dir, "pids"), "utf8").split("\n").filter((line) => line !== "") : [];
+    for (const pid of pids) {
+      try {
+        process.kill(Number(pid), "SIGKILL");
+      } catch {
+        // Gone already.
+      }
+    }
+    await removeTempDir(rootDir);
+    await removeTempDir(dir);
+  });
+
+  it(
+    "reaches the command and the helper in its process group",
+    async () => {
+      await writeFile(path.join(rootDir, "features", "run-command.feature"), ["Feature: f", "", "  Scenario: s", "    Given a step runs a command until a signal stops it", ""].join("\n"));
+      const nuka = spawn(process.execPath, [...sourceNodeArgs, path.join(repoRoot, "src", "cli.ts"), "run"], {
+        cwd: rootDir,
+        stdio: ["ignore", "ignore", "pipe"],
+        env: { ...process.env, SIGNAL_DIR: dir },
+      });
+      let stderr = "";
+      nuka.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString("utf8")));
+      const closed = new Promise<number | null>((resolve) => nuka.once("close", (code) => resolve(code)));
+      let exited = false;
+      void closed.then(() => (exited = true));
+      while (!existsSync(path.join(dir, "ready"))) {
+        expect(exited, stderr).toBe(false);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      process.kill(nuka.pid!, "SIGTERM");
+      expect(await closed).toBe(143);
+      expect(readFileSync(path.join(dir, "signals.txt"), "utf8").split("\n").filter((line) => line !== "").sort()).toEqual(["helper SIGTERM", "leader SIGTERM"]);
+    },
+    120_000,
+  );
 });

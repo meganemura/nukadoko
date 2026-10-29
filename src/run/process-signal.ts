@@ -1,4 +1,5 @@
 import { constants } from "node:os";
+import { signalCommandGroups } from "../context/run-command.js";
 import { exitProcess } from "./project-exit.js";
 
 // Responsibility: SIGINT, SIGTERM, and SIGHUP handling for the process that owns
@@ -13,6 +14,12 @@ import { exitProcess } from "./project-exit.js";
 // listeners. A normal return must do that: the test runner calls `runCli`
 // in-process, and a listener left behind would exit that process on the
 // next SIGINT.
+//
+// Each signal also goes, at once and before any teardown, to every
+// `runCommand` process a step still runs in a process group of its own
+// (src/context/run-command.ts): a terminal sends its Ctrl-C or hangup to
+// its foreground group, which such a process left, so without this the
+// signal would reach nukadoko alone.
 //
 // A record of how the process ended (`setExitRecord`) runs right before
 // each exit this handler makes, after the teardown, and synchronously:
@@ -85,6 +92,7 @@ export function installProcessSignalHandlers(): ProcessSignal {
   };
 
   const onSignal = (signal: NodeJS.Signals): void => {
+    signalCommandGroups(signal);
     if (exiting) {
       exitRecorded(signal);
     }

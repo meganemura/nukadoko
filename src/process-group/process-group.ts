@@ -2,8 +2,10 @@ import { readdirSync, readFileSync } from "node:fs";
 
 // Responsibility: tell whether a POSIX process group still has a running
 // member, so a world's stop gives the whole group its grace period after
-// SIGTERM instead of killing it the moment the leader exits. Boundary:
-// signalling the group, and when to, is src/program/world.ts's.
+// SIGTERM instead of killing it the moment the leader exits, and a step's
+// `runCommand` process can say whether it left anything running.
+// Boundary: signalling a group, and when to, is its owner's
+// (src/program/world.ts, src/context/run-command.ts).
 //
 // `kill(-pgid, 0)` answers for every member, a zombie included: a member
 // that exited and that no parent has reaped yet. Under a PID 1 that never

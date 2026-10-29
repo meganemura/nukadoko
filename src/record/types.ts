@@ -462,6 +462,11 @@ export interface ProcessEntry {
   /** `true` when `runCommand`'s own `timeout` stopped the process. Present
    * only then. */
   readonly timed_out?: true;
+  /** Whether a process of its process group still ran when it closed:
+   * `"ended"` when none did, so nothing it started can send the world
+   * another request, `"running"` when one did. Present only for a process
+   * run inside a step on POSIX, where it gets a group of its own. */
+  readonly group?: "ended" | "running";
   readonly duration_ms: number;
   /** What changed under `cwd` between the spawn and the close. Present
    * only for a process run inside a step. */

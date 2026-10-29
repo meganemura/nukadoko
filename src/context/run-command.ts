@@ -9,6 +9,7 @@ import { withoutChannelRecording } from "./channels.js";
 import { type EnvDifference, envDifference } from "./env-difference.js";
 import { diffSnapshots, takeSnapshot } from "./file-snapshot.js";
 import { windowsSpawnPlan } from "./windows-command.js";
+import { groupAlive } from "../process-group/process-group.js";
 import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
 
 // Responsibility: `runCommand`, the exported helper a step uses to run a
@@ -84,6 +85,23 @@ import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.j
 // step that spreads `process.env` into `env`) is inherited, not the
 // step's choice, and is replaced. The entry's `env` is the step's choice,
 // so the value nukadoko set is its `traceparent`.
+//
+// Inside a step on POSIX, the child starts in a process group of its own
+// (`detached`), so its close can tell whether anything it started still
+// runs: once the process has closed and no process of its group is left
+// (src/process-group/process-group.ts), nothing it started can send the
+// world another request, and the entry says so (`group`). A process that
+// leaves the group (`setsid`, as a daemon does) is out of that sight. The
+// group of its own also takes the child out of the terminal's foreground
+// group, so a terminal's Ctrl-C no longer reaches it. The signal handler of
+// the process that runs the steps passes each signal on to every group
+// whose leader has not closed (`signalCommandGroups`), and `timeout` stops
+// the whole group. A group whose leader has closed is never signalled:
+// once it has no process left, its number can name another process's
+// group. Outside a step the child stays in the caller's group, as before:
+// nothing is recorded there, and a script that calls runCommand has no
+// handler that would pass a signal on. Windows has no such group, so an
+// entry there has no `group`.
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
@@ -113,6 +131,30 @@ export function withProcessRecording<T>(recorder: ProcessRecorder, fn: () => T):
   return scope().run(recorder, fn);
 }
 
+const GROUPS_KEY = Symbol.for("nukadoko.runCommand.groups");
+
+/** The process group of each `runCommand` child started in one of its
+ * own whose leader has not closed, by the leader's pid. On `globalThis`
+ * for the reason the scope is: every copy of this module adds to it, and
+ * one handler signals them all. */
+function openGroups(): Set<number> {
+  const holder = globalThis as { [GROUPS_KEY]?: Set<number> };
+  holder[GROUPS_KEY] ??= new Set<number>();
+  return holder[GROUPS_KEY];
+}
+
+/** Executor-only: sends `signal` to the process group of every
+ * `runCommand` child whose leader has not closed (module header). */
+export function signalCommandGroups(signal: NodeJS.Signals): void {
+  for (const pgid of openGroups()) {
+    try {
+      process.kill(-pgid, signal);
+    } catch {
+      // The group is gone already: nothing is left to signal.
+    }
+  }
+}
+
 export interface RunCommandOptions {
   /** The working directory. Defaults to `process.cwd()`. */
   cwd?: string;
@@ -123,10 +165,11 @@ export interface RunCommandOptions {
    * stdin is closed at once, so a program that reads stdin sees its end
    * instead of waiting forever. */
   input?: string;
-  /** Milliseconds before the child is stopped with SIGTERM. `runCommand`
-   * then throws, because a program that never finished has no exit code
-   * for a step to assert on. At most 2147483647 (src/timer/max-delay.ts):
-   * a larger one is refused before the program starts. */
+  /** Milliseconds before the child is stopped with SIGTERM, inside a step
+   * on POSIX with every process of its group. `runCommand` then throws,
+   * because a program that never finished has no exit code for a step to
+   * assert on. At most 2147483647 (src/timer/max-delay.ts): a larger one
+   * is refused before the program starts. */
   timeout?: number;
   /** Secrets the step holds, by name. Each value is written as
    * `{{secret.NAME}}` in the recorded `command`, with the same rules as a
@@ -189,6 +232,8 @@ export async function runCommand(
     process.platform === "win32"
       ? windowsSpawnPlan(command, args, env)
       : { file: command, args: [...args], verbatim: false };
+  // A group of its own only where it is measured (module header).
+  const grouped = finish !== undefined && process.platform !== "win32";
 
   return new Promise((resolvePromise, rejectPromise) => {
     const child = withoutChannelRecording(() =>
@@ -197,8 +242,11 @@ export async function runCommand(
         env,
         stdio: ["pipe", "pipe", "pipe"],
         windowsVerbatimArguments: plan.verbatim,
+        detached: grouped,
       }),
     );
+    const leader = grouped ? child.pid : undefined;
+    if (leader !== undefined) openGroups().add(leader);
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let timedOut = false;
@@ -216,6 +264,14 @@ export async function runCommand(
                 "error",
                 () => child.kill(),
               );
+            } else if (leader !== undefined) {
+              // What the program started goes with it, or a child that
+              // holds the output pipe keeps `close` from ever coming.
+              try {
+                process.kill(-leader, "SIGTERM");
+              } catch {
+                // The group is gone already: nothing is left to stop.
+              }
             } else {
               child.kill("SIGTERM");
             }
@@ -236,6 +292,7 @@ export async function runCommand(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (leader !== undefined) openGroups().delete(leader);
       rejectPromise(error);
     });
 
@@ -244,6 +301,11 @@ export async function runCommand(
       settled = true;
       clearTimeout(timer);
       const durationMs = Math.round(performance.now() - startedAt);
+      let group: "ended" | "running" | undefined;
+      if (leader !== undefined) {
+        openGroups().delete(leader);
+        group = groupAlive(leader) ? "running" : "ended";
+      }
       const secrets = Object.entries(options.redact ?? {}).map(([name, value]) => ({ name, value }));
       const files = before === undefined ? undefined : diffSnapshots(before, takeSnapshot(cwd, unwatched));
       const out = Buffer.concat(stdout).toString("utf8");
@@ -254,6 +316,7 @@ export async function runCommand(
         exit_code: code,
         ...(signal !== null ? { signal } : {}),
         ...(timedOut ? { timed_out: true as const } : {}),
+        ...(group === undefined ? {} : { group }),
         duration_ms: durationMs,
         ...(files === undefined ? {} : { files }),
         env: recordedEnv(envDifference(process.env, options.env), secrets),

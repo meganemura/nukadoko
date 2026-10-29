@@ -27,6 +27,9 @@ import {
 // of a chained step came from.
 
 const node = process.execPath;
+// What a process run inside a step records of its group: nothing on
+// Windows, which has no such group.
+const grouped = process.platform === "win32" ? {} : { group: "ended" };
 
 let server: Server;
 let rootDir: string;
@@ -85,6 +88,7 @@ describe("a step record's observed", () => {
           command: [node, "-e", "require('node:fs').copyFileSync('reply.json', 'copy.json')"],
           cwd: dir,
           exit_code: 0,
+          ...grouped,
           duration_ms: expect.any(Number),
           files: { added: ["copy.json"], changed: [], removed: [] },
           env: { inherited: true },
@@ -171,6 +175,7 @@ describe("an action a step started after its record was written", () => {
       command: [node, "-e", "process.stdout.write('late')"],
       cwd,
       exit_code: 0,
+      ...grouped,
       duration_ms: expect.any(Number),
       files: { added: [], changed: [], removed: [] },
       env: { inherited: true },
