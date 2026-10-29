@@ -390,6 +390,17 @@ just until 0.1.
   reason. The summary gives every base pair one heading, `base → head`,
   which counts each criterion once, and lists a criterion whose lines are
   the same in several environments once, naming them.
+- **Against the base, `paths` compares the criteria that did not
+  change too.** A code change under unchanged criteria is the case a
+  person most needs to read before turning it on, and no cell of the base
+  shows it. Where both program files name `{events}` for an environment,
+  the base world now also runs, once, each row whose head cell there is
+  required and ran and that no base cell runs, for `paths` alone. Such an
+  execution is no cell: it gets no proof runs, the table and the verdicts
+  never read it, so `table` is the same, byte for byte, as without it,
+  and its `scenarios` entry carries `for_paths` with what it came to in
+  a cell's words. Its scenario line on stderr ends with `(for paths)`. It
+  costs about one more pass of head's rows at the base.
 
 ### Changed
 

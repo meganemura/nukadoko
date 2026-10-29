@@ -195,6 +195,10 @@ export interface RunScenario {
    * `line`, are where it ran, in that world's own feature file, which for
    * the old world is the ref's. */
   readonly row?: { readonly feature: string; readonly line: number };
+  /** Present for an execution the base world ran for `paths` alone, which
+   * is no cell of the table: what it came to, in a cell's words, since no
+   * cell holds it. */
+  readonly for_paths?: Pick<RunPathExecution, "outcome" | "line">;
   /** How the claims of the scenario's claim steps came out, counted once
    * per claim (an `each` is one claim). `unobserved` and `unjudged` are
    * present only above 0. A claim step that did not run counts nothing.

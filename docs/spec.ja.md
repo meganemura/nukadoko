@@ -2562,7 +2562,7 @@ step が world の `env` を読むのは、ファイルの読み込み時では�
 
 world は、1 つのプログラムに対する run の 1 回の pass です。
 run は選んだ environment ごとに 1 つの world を、run を始めた tree から起動します。
-`--base` のもとでは、base の tree か old の tree に走らせるセルがある environment ごとに、もう 1 つの world を起動します(「断定」を参照)。
+`--base` のもとでは、base の tree か old の tree に走らせるセルがある environment、または base の world に `paths` のために走らせる行がある environment ごとに、もう 1 つの world を起動します(「断定」を参照)。
 pass のすべての scenario は同じプログラムに届くので、ある scenario が書いた状態は、そのあとの scenario にも残ります。
 状態を読む scenario は、まずその状態を自分で作り、自分が作ったものだけを claim で確かめます。
 
@@ -3195,7 +3195,8 @@ run サマリは、各要素に「Flags」の下の 1 行を付けます:
 
 run は、各受け入れ基準の 2 つの側の step の実行経路を比べます。
 変更を全員に有効にしようとする人が、もう一方の側でプログラムが何を違うふうにしたかを読めるようにするためです。
-`nuka run --base` のもとでは、各 environment の base の world と head の world が組になり、base の world がそこで走らせた行を比べます(「断定」を参照)。
+`nuka run --base` のもとでは、各 environment の base の world と head の world が組になり、base の world がそこで走らせた行を比べます。
+両方のプログラムのファイルが `{events}` を名指すなら、それはそこで head のセルが required で走ったすべての行です(「断定」を参照)。
 また、run の 2 つの environment が宣言する `conditions` がちょうど 1 つの condition だけ違うとき、その 2 つが組になります。
 `run.json` の `paths` は、組ごとに 1 つの要素を持ち、基点との組が先に来ます:
 
@@ -3206,8 +3207,17 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
     "a": { "world": "base", "environment": "reorder-on" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 1, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 1 },
+    "counts": { "changed": 2, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 0 },
     "criteria": [
+      {
+        "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed",
+        "a": { "scenario_record_id": "scn-20261029-225441-w8hc", "outcome": "pass" },
+        "b": { "scenario_record_id": "scn-20261029-225435-t3mv", "outcome": "pass" },
+        "steps": [
+          { "line": 4, "text": "the client gets \"/rooms/7\"", "ran": "both", "gaps": { "a": [], "b": [] }, "open": [],
+            "changed": [{ "kind": "error", "class": "CacheMiss", "handled": true, "a": { "at_least": 0, "at_most": 0 }, "b": { "at_least": 1, "at_most": 1 } }] }
+        ]
+      },
       {
         "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed",
         "a": { "scenario_record_id": "scn-20261029-225440-n2kq", "outcome": "pass" },
@@ -3218,7 +3228,7 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
         ]
       }
     ],
-    "not_compared": [{ "feature": "features/orders.feature", "line": 3, "reason": "did not run at the base" }]
+    "not_compared": []
   },
   {
     "between": { "kind": "condition", "name": "quick_reorder", "a": false, "b": true },
@@ -3257,6 +3267,7 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
   old の world は基点の feature ファイルを走らせるので、側にはなりません。
   `--repeat` と証明の実行は実行を増やすので、a 側と b 側は、それぞれそのセルの最初の実行から読みます。
   受け入れ基準の `a` と `b` は、その実行と、そのセルの `outcome` と `line` を名指します。
+  base が実行経路のためだけに走らせた行では、セルの代わりにその `for_paths` を名指します。
 - a 側と b 側の数は、それぞれ範囲です。
   実行経路に欠けが無い step では `[n, n + maybe]`、欠けがあれば `[n, 上限なし]` です。
   形式の 2 つの事実が、それを狭めます。
@@ -3300,8 +3311,10 @@ run サマリは、「Removed criteria」のあとの「Changed paths」の下�
 ```text
 ### base → head
 
-1 criterion compared: 1 changed. 1 criterion did not run at the base, so its path was not compared.
+2 criteria compared: 2 changed.
 
+- `features/orders.feature:3` a room page reads the room, in `reorder-off`, `reorder-on`
+  - line 4 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1
 - `features/orders.feature:6` a score is placed, in `reorder-off`, `reorder-on`
   - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1
 
@@ -4073,6 +4086,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   部分実行はデバッグの結果であり、レビュアーが feature が通ったと読むべきものではありません(「レビュー」を参照)。
 - `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` と、そのセルの役割である `role`(`required` か `control` で、「断定」を参照)を持ちます。
   `--base` のもとでは、base か old の world の実行は `world`(`base` か `old`)と、それがセルである head の行の `feature` と `line` を持つ `row` を持ちます。
+  base が `paths` のためだけに走らせた実行はセルではなく、`for_paths` も持ちます(「断定」を参照)。
   old の実行自身の `feature` と `line` は基点のもので、その step は `step` を名指しません。
   head の語彙がそれを結び付けたのではないからです。
   `counts`、Allure の result、messages ストリーム、表を除くサマリのどの節も、head の実行だけを読みます。
@@ -4379,6 +4393,18 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
   基点が必須とする environment を head のプログラムのファイルがもう持たないとき、その old のセルは理由とともに `·` で、行は `moved` です。
   基点にプログラムのファイルが無いときは、old の world の environment は head のものです。
 - 必須の head のセルが通らなかった行は、どちらでも走りません。
+
+実行経路だけは例外です。
+変わっていない受け入れ基準のもとでのコードの変更こそ、全員に有効にする前に人がいちばん見る必要があるもので、どのセルもそれを示さないからです。
+ある environment について head のプログラムのファイルと基点のものがどちらも `{events}` を名指すとき、base の world は、そこで head のセルが required で走った行のうち、base のセルが走らせないものを、失敗した行も含めて 1 回ずつ走らせます。
+`run.json` の `paths` がそれを比べられるようにするためです(「実行イベント」を参照)。
+この実行はセルではありません。
+証明の実行は無く、表と断定はそれを読まず、表はそれが無いときとバイト単位で同じです。
+これは `for_paths` を持つ `scenarios` のエントリで、`for_paths` は、それが何になったかをセルの言葉で言います。
+`outcome` と、通らなかったものの `line` です。
+stderr のその scenario の行は `(for paths)` で終わります。
+費用は、基点での head の行のおよそ 1 回分の pass です。
+プログラムのファイルが `{events}` を名指さない基点は、その world に比べる実行経路が無いので、どれも走らせません。
 
 **セル。**
 セルは、その実行がどうなったかです:

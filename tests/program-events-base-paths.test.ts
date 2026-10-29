@@ -10,8 +10,12 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, r
 // base, and head, whose server also reports a handled cache miss on a
 // room's page and an audit row on each score, and whose feature file adds
 // a criterion. Both program files name `{events}`, in two environments.
-// Each environment's base world is paired with its head world, so the new
-// criterion, which the base runs, shows the audit row head writes.
+// Each environment's base world is paired with its head world. The new
+// criterion is a cell of the base and shows the audit row head writes.
+// The two criteria that did not change are no cells of the base, so the
+// base runs them for paths alone: the room's path shows the cache miss,
+// and the audit's Then fails at the base once, with no proof run, while
+// the table is what it would be without those executions.
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" } });
@@ -31,7 +35,9 @@ const PROGRAM = [
   "",
 ].join("\n");
 
+// Lines 3, 6, and 10 of the feature file.
 const ROOM = ["  Scenario: a room page reads the room", '    When the client gets "/rooms/7"', ""];
+const AUDIT = ["  Scenario: a score is audited", '    When the client posts to "/scores"', '    Then "audit_log" was written 1 time', ""];
 const SCORE = ["  Scenario: a score is placed", '    When the client posts to "/scores"', '    Then "scores" was written 1 time', ""];
 const feature = (...scenarios: string[][]): string => ["Feature: Rooms and scores", "", ...scenarios.flat()].join("\n");
 
@@ -47,16 +53,26 @@ function headServer(source: string): string {
     .replace(score, `${score}    emit({ trace, kind: "db", id: newId(), parent: id, table: "audit_log", op: "insert", rows: 1, committed: true });\n`);
 }
 
+const AUDITED = {
+  line: 7,
+  text: 'the client posts to "/scores"',
+  ran: "both",
+  changed: [{ kind: "db", table: "audit_log", op: "insert", a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } }],
+  open: [],
+  gaps: { a: [], b: [] },
+};
+
 interface Comparison {
   readonly between: { readonly kind: string };
   readonly a: { readonly world: string; readonly environment: string };
   readonly unread: string | null;
-  readonly criteria: readonly { readonly line: number; readonly result: string; readonly steps?: unknown }[];
+  readonly criteria: readonly { readonly line: number; readonly result: string; readonly a: unknown; readonly steps?: unknown }[];
   readonly not_compared: readonly { readonly line: number; readonly reason: string }[];
 }
 
 describe("the paths of each environment's base world against its head world", () => {
   let rootDir: string;
+  let stderr: string;
 
   beforeAll(async () => {
     rootDir = await copyFixtureToTempDir("events-project");
@@ -65,24 +81,53 @@ describe("the paths of each environment's base world against its head world", ()
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
-    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM));
+    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, AUDIT));
     git(rootDir, "init", "-q", "-b", "main");
     git(rootDir, "add", "-A");
     git(rootDir, "commit", "-q", "-m", "base");
     git(rootDir, "branch", "base-branch");
     const server = path.join(rootDir, "app", "server.mjs");
     writeFileSync(server, headServer(readFileSync(server, "utf8")));
-    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, SCORE));
+    writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, AUDIT, SCORE));
     git(rootDir, "add", "-A");
     git(rootDir, "commit", "-q", "-m", "head");
-    await runCli(["run", "--base", "base-branch"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+    const sink = createCaptureSink();
+    await runCli(["run", "--base", "base-branch"], { rootDir, stdout: createCaptureSink(), stderr: sink });
+    stderr = sink.text();
   }, 180_000);
 
   afterAll(async () => {
     await removeTempDir(rootDir);
   });
 
-  it("pairs each environment's base with its head, and compares the new criterion the base ran", () => {
+  it("runs the criteria that did not change at the base for paths alone, as no cells and with no proof run", () => {
+    const run = latestRunJson(rootDir) as {
+      table: { rows: { line: number; cells: { world: string }[] }[] };
+      scenarios: { line: number; world?: string; environment: string; for_paths?: unknown }[];
+    };
+    expect(run.table.rows.map((row) => [row.line, row.cells.map((cell) => cell.world)])).toEqual([
+      [3, ["head", "head"]],
+      [6, ["head", "head"]],
+      [10, ["head", "head", "base", "base"]],
+    ]);
+    const atBase = run.scenarios.filter((scenario) => scenario.world === "base").map((scenario) => [scenario.line, scenario.environment, scenario.for_paths]);
+    expect(atBase).toHaveLength(6);
+    expect(atBase).toEqual(
+      expect.arrayContaining([
+        [3, "reorder-off", { outcome: "pass" }],
+        [3, "reorder-on", { outcome: "pass" }],
+        [6, "reorder-off", { outcome: "fail", line: 8 }],
+        [6, "reorder-on", { outcome: "fail", line: 8 }],
+        [10, "reorder-off", undefined],
+        [10, "reorder-on", undefined],
+      ]),
+    );
+    expect(stderr).toContain("base reorder-off  features/events.feature:3  a room page reads the room  (for paths)\n");
+    expect(stderr).not.toContain("features/events.feature:10  a score is placed  (for paths)");
+    expect(stderr).not.toContain("proof run");
+  });
+
+  it("pairs each environment's base with its head, and compares every criterion head ran", () => {
     const run = latestRunJson(rootDir) as { paths: Comparison[] };
     const base = run.paths.filter((comparison) => comparison.between.kind === "base");
     expect(base.map((comparison) => [comparison.a, comparison.unread])).toEqual([
@@ -90,18 +135,24 @@ describe("the paths of each environment's base world against its head world", ()
       [{ world: "base", environment: "reorder-on" }, null],
     ]);
     for (const comparison of base) {
-      expect(comparison.criteria.map((criterion) => [criterion.line, criterion.result])).toEqual([[6, "changed"]]);
+      expect(comparison.criteria.map((criterion) => [criterion.line, criterion.result])).toEqual([
+        [3, "changed"],
+        [6, "changed"],
+        [10, "changed"],
+      ]);
       expect(comparison.criteria[0]!.steps).toEqual([
         {
-          line: 7,
-          text: 'the client posts to "/scores"',
+          line: 4,
+          text: 'the client gets "/rooms/7"',
           ran: "both",
-          changed: [{ kind: "db", table: "audit_log", op: "insert", a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } }],
+          changed: [{ kind: "error", class: "CacheMiss", handled: true, a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } }],
           open: [],
           gaps: { a: [], b: [] },
         },
       ]);
-      expect(comparison.not_compared).toEqual([{ feature: "features/events.feature", line: 3, reason: "did not run at the base" }]);
+      expect(comparison.criteria[1]).toMatchObject({ a: { outcome: "fail", line: 8 }, steps: [AUDITED] });
+      expect(comparison.criteria[2]).toMatchObject({ steps: [{ ...AUDITED, line: 11 }] });
+      expect(comparison.not_compared).toEqual([]);
     }
   });
 
@@ -111,10 +162,14 @@ describe("the paths of each environment's base world against its head world", ()
     expect(summary.slice(start, summary.indexOf("### `reorder-off` → `reorder-on` (`quick_reorder` false → true)"))).toEqual([
       "### base → head",
       "",
-      "1 criterion compared: 1 changed. 1 criterion did not run at the base, so its path was not compared.",
+      "3 criteria compared: 3 changed.",
       "",
-      "- `features/events.feature:6` a score is placed, in `reorder-off`, `reorder-on`",
+      "- `features/events.feature:3` a room page reads the room, in `reorder-off`, `reorder-on`",
+      '  - line 4 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1',
+      "- `features/events.feature:6` a score is audited, in `reorder-off`, `reorder-on`",
       '  - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1',
+      "- `features/events.feature:10` a score is placed, in `reorder-off`, `reorder-on`",
+      '  - line 11 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1',
       "",
     ]);
   });

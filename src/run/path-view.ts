@@ -26,7 +26,8 @@ import type {
 //
 // A pair is two sides of one criterion. Under `nuka run --base`, each
 // environment's base world is paired with its head world, for the rows
-// whose head cell there is required and ran. Otherwise it is two head
+// whose head cell there is required and ran: the base world runs each of
+// them, as a cell or, when it is no cell, for paths alone. Otherwise it is two head
 // environments whose declared `conditions` differ in exactly one
 // condition: the fixture's `reorder-off` and `reorder-on` make one. The
 // base world runs head's pickle too, since its tree holds head's features
@@ -114,12 +115,13 @@ function sameRow(scenario: RunScenario, row: RunTableRow, side: RunPathSide): bo
 }
 
 /** A side's first execution of a row, with what its cell came to, or
- * `undefined` when the side did not run the row. */
+ * what it came to itself when the base ran it for paths alone and no cell
+ * holds it; `undefined` when the side did not run the row. */
 function sideOf(document: ComparedDocument, row: RunTableRow, side: RunPathSide): { readonly scenario: RunScenario; readonly execution: RunPathExecution } | undefined {
   const scenario = document.scenarios.find((entry) => sameRow(entry, row, side));
-  const cell = row.cells.find((entry) => entry.world === side.world && entry.environment === side.environment);
-  if (scenario === undefined || cell === undefined) return undefined;
-  return { scenario, execution: { scenario_record_id: scenario.scenario_record_id, outcome: cell.outcome, ...(cell.line === undefined ? {} : { line: cell.line }) } };
+  const came = row.cells.find((entry) => entry.world === side.world && entry.environment === side.environment) ?? scenario?.for_paths;
+  if (scenario === undefined || came === undefined) return undefined;
+  return { scenario, execution: { scenario_record_id: scenario.scenario_record_id, outcome: came.outcome, ...(came.line === undefined ? {} : { line: came.line }) } };
 }
 
 /** Whether a pair compares a row: against the base, where the row's head

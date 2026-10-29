@@ -6,7 +6,7 @@ import type { TraceGap } from "../src/execution-events/tally.js";
 import type { RunDocument, RunEnvironment, RunPathComparison, RunScenario, RunStep, RunWorld } from "../src/record/run-result.js";
 import { comparePaths } from "../src/run/path-view.js";
 import { renderRunSummary } from "../src/run/run-summary.js";
-import { buildTable, executionOutcome } from "../src/run/verdict-table.js";
+import { buildTable, executionOutcome, foldCell } from "../src/run/verdict-table.js";
 
 // Responsibility: run.json's `paths` (src/run/path-view.ts) and the run
 // summary's "Changed paths" section, from literal run.json documents.
@@ -148,7 +148,8 @@ interface BaseCriterion extends Criterion {
 }
 
 /** A run under `--base`, its table built as `nuka run` builds it: a base
- * cell only where a new or changed row passed at head. */
+ * cell only where a new or changed row passed at head. An unchanged row
+ * the base ran is an execution for paths alone, with `for_paths`. */
 function baseDocumentOf(
   criteria: readonly BaseCriterion[],
   environments: readonly RunEnvironment[] = [OFF, ON],
@@ -160,7 +161,9 @@ function baseDocumentOf(
       const side = criterion.base[environment.name];
       if (side === undefined) return [];
       const scenario = scenarioOf(criterion, environment.name, side);
-      return [{ ...scenario, scenario_record_id: `scn-base-${environment.name}-${criterion.line}`, world: "base", row: { feature: FEATURE, line: criterion.line } }];
+      const { outcome, line } = foldCell([executionOutcome(scenario, () => true)]);
+      const forPaths = criterion.change === "unchanged" ? { for_paths: { outcome, ...(line === undefined ? {} : { line }) } } : {};
+      return [{ ...scenario, scenario_record_id: `scn-base-${environment.name}-${criterion.line}`, world: "base", row: { feature: FEATURE, line: criterion.line }, ...forPaths }];
     }),
   );
   const scenarios = [...head.scenarios, ...atBase];
@@ -426,6 +429,30 @@ describe("comparePaths against the base", () => {
     );
     const none = [OFF, ON].flatMap((environment) => [world(environment.name, "unnamed"), world(environment.name, "unnamed", "base")]);
     expect(comparePaths(baseDocumentOf([placed()], [OFF, ON], none))).toEqual([]);
+  });
+
+  it("reads a row the base ran for paths alone from what its execution came to, since no cell holds it", () => {
+    const room: BaseCriterion = {
+      ...opened(),
+      steps: 2,
+      sides: { "reorder-off": { paths: [whole(), whole({ entries: [{ kind: "error", class: "CacheMiss", handled: true, count: 1 }] })] }, "reorder-on": { paths: [whole(), whole()] } },
+      base: { "reorder-off": { paths: [whole()] }, "reorder-on": { paths: [whole(), whole()] } },
+    };
+    const document = baseDocumentOf([room]);
+    expect(document.table.rows[0]!.cells.map((cell) => cell.world)).toEqual(["head", "head"]);
+    const [off, on] = comparePaths(document);
+    expect(off!.criteria).toEqual([
+      {
+        feature: FEATURE,
+        line: 7,
+        name: "an order is opened",
+        result: "changed",
+        a: { scenario_record_id: "scn-base-reorder-off-7", outcome: "broke", line: 8 },
+        b: { scenario_record_id: "scn-reorder-off-7", outcome: "pass" },
+        steps: [{ line: 9, text: "step 2", ran: "b" }],
+      },
+    ]);
+    expect(on).toMatchObject({ counts: { changed: 0, open: 0, same_so_far: 0, same: 1, not_compared: 0 }, criteria: [{ line: 7, result: "same", a: { outcome: "pass" } }] });
   });
 
   it("reads a base world that did not start in an environment as each of its criteria not run at the base", () => {

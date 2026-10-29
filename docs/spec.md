@@ -3228,7 +3228,8 @@ A step reads the world's `env` when it runs, from `process.env` or the
 A world is one pass of a run against one program.
 A run starts one world for each environment it selects, of the tree it
 was started in, and under `--base` one more for each environment where
-the base tree or the old tree has a cell to run (see "Verdicts").
+the base tree or the old tree has a cell to run, or the base world a row
+to run for `paths` (see "Verdicts").
 Every scenario of the pass reaches the same program, so the state one
 scenario writes is there for the scenarios after it; a scenario that
 reads state creates it first and claims only on what it created.
@@ -4080,8 +4081,9 @@ The run compares the steps' paths of two sides of each criterion, so a
 person about to turn a change on for everyone reads what the program did
 differently on the other side.
 Under `nuka run --base`, each environment's base world and its head
-world are a pair, for the rows the base world ran there (see
-"Verdicts").
+world are a pair, for the rows the base world ran there: where both
+program files name `{events}`, every row whose head cell there is
+required and ran (see "Verdicts").
 And when two environments of a run declare `conditions` that differ in
 exactly one condition, the two are a pair.
 `run.json`'s `paths` holds one entry per pair, the base pairs first:
@@ -4093,8 +4095,17 @@ exactly one condition, the two are a pair.
     "a": { "world": "base", "environment": "reorder-on" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 1, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 1 },
+    "counts": { "changed": 2, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 0 },
     "criteria": [
+      {
+        "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed",
+        "a": { "scenario_record_id": "scn-20261029-225441-w8hc", "outcome": "pass" },
+        "b": { "scenario_record_id": "scn-20261029-225435-t3mv", "outcome": "pass" },
+        "steps": [
+          { "line": 4, "text": "the client gets \"/rooms/7\"", "ran": "both", "gaps": { "a": [], "b": [] }, "open": [],
+            "changed": [{ "kind": "error", "class": "CacheMiss", "handled": true, "a": { "at_least": 0, "at_most": 0 }, "b": { "at_least": 1, "at_most": 1 } }] }
+        ]
+      },
       {
         "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed",
         "a": { "scenario_record_id": "scn-20261029-225440-n2kq", "outcome": "pass" },
@@ -4105,7 +4116,7 @@ exactly one condition, the two are a pair.
         ]
       }
     ],
-    "not_compared": [{ "feature": "features/orders.feature", "line": 3, "reason": "did not run at the base" }]
+    "not_compared": []
   },
   {
     "between": { "kind": "condition", "name": "quick_reorder", "a": false, "b": true },
@@ -4149,7 +4160,8 @@ exactly one condition, the two are a pair.
   The old world runs the ref's feature file, so it is never a side.
   A side is read from its cell's first execution, since `--repeat` and
   proof runs add more: a criterion's `a` and `b` name that execution,
-  with its cell's `outcome` and `line`.
+  with its cell's `outcome` and `line`, or, for a row the base ran for
+  paths alone, with its `for_paths`.
 - A count on a side is a range: `[n, n + maybe]` for a step whose path
   has no gap, and `[n, unbounded]` under any gap.
   Two facts of the format narrow that.
@@ -4215,8 +4227,10 @@ words both sides share, so a reader is not sent to it first:
 ```text
 ### base → head
 
-1 criterion compared: 1 changed. 1 criterion did not run at the base, so its path was not compared.
+2 criteria compared: 2 changed.
 
+- `features/orders.feature:3` a room page reads the room, in `reorder-off`, `reorder-on`
+  - line 4 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1
 - `features/orders.feature:6` a score is placed, in `reorder-off`, `reorder-on`
   - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1
 
@@ -5150,7 +5164,9 @@ to act on the run without opening another file:
   finished, with the `environment` it ran in and the `role` of its cell,
   `required` or `control` (see "Verdicts"). Under `--base`, an execution
   of the base or the old world has `world` (`base` or `old`) and `row`,
-  the `feature` and `line` of the head row it is a cell of; an old
+  the `feature` and `line` of the head row it is a cell of, and one the
+  base ran for `paths` alone, which is no cell, has `for_paths` too
+  (see "Verdicts"); an old
   execution's own `feature` and `line` are the ref's, and its steps name
   no `step`, since head's vocabulary did not bind them. `counts`, the
   Allure results, the messages stream, and every summary section but the
@@ -5596,6 +5612,23 @@ head passed:
   When the ref has no program file, the old world's environments are
   head's.
 - A row whose required head cell did not pass runs in neither.
+
+Paths are the one exception, since a code change under criteria that did
+not change is what a person most needs to see before it is turned on for
+everyone, and no cell shows it.
+Where head's program file and the base's both name `{events}` for an
+environment, the base world also runs, once, each row whose head cell
+there is required and ran, a failed one included, that no base cell runs,
+so that `run.json`'s `paths` compares it (see "Execution events").
+Such an execution is no cell: it gets no proof runs, the table and the
+verdicts never read it, and the table is the same, byte for byte, as it is
+without it.
+It is a `scenarios` entry with `for_paths`, which says what it came to
+in a cell's words: `outcome`, and the `line` of one that did not pass.
+Its scenario line on stderr ends with `(for paths)`.
+It costs about one more pass of head's rows at the base, and a base whose
+program file names no `{events}` runs none of them, since its world has
+no path to compare.
 
 **Cells.** A cell is what its executions came to:
 

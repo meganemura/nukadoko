@@ -784,6 +784,11 @@
       "note": "nuka run --base のもとで、environment の base の world(a 側)と head の world(b 側)の組。`between` の `{ \"kind\": \"base\" }` はコードスパンで英語のまま。サマリの見出し `base → head` も英語のまま"
     },
     {
+      "en": ["for paths (an execution of the base world)", "for_paths"],
+      "ja": "実行経路のためだけの実行",
+      "note": "変わっていない受け入れ基準の行を、base の world が run.json の paths のためだけに 1 回走らせた実行。セルではなく、証明の実行も無く、表と断定は読まない。フィールド `for_paths` と stderr の `(for paths)` はコードスパンで英語のまま"
+    },
+    {
       "en": ["premise (of a pair)"],
       "ja": "前提",
       "note": "environment の組が切り替える condition。flag の側が違うことは前提であって変化ではないので、組の見出しが名指し、違いには並べない"

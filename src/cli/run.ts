@@ -10,8 +10,8 @@ import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
-import type { Program } from "../config/program-schema.js";
-import { placeholderRefusal } from "../program/placeholders.js";
+import type { Program, ProgramRecipe } from "../config/program-schema.js";
+import { namesPlaceholder, placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
@@ -48,7 +48,7 @@ import {
   type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
-import { buildTable, executionOutcome, foldHeadCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
+import { buildTable, executionOutcome, foldCell, foldHeadCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
 import type { FlagEvaluation, ServedRequest } from "../execution-events/format.js";
 import type { ListedPlaces } from "../execution-events/lists.js";
@@ -240,7 +240,12 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // them, one environment at a time, against a world built from that tree
 // (src/run/tree-pass.ts). Their records are run.json entries with
 // `world`, keyed to the head row they are a cell of, and the trees are
-// removed before run.json is written.
+// removed before run.json is written. Where both program files name
+// `{events}`, the base world also runs, once and for run.json's `paths`
+// alone, each row whose head cell is required and ran and that no base
+// cell runs, so a criterion that did not change still shows what the code
+// change did to its path. Such an entry carries `for_paths` and is no
+// cell, so the table, the proof runs, and the verdicts never read it.
 
 /** The `nuka check` codes that mean a step's pattern did not build at all
  * (src/check/binding-check.ts's own classification of a pattern error, plus
@@ -331,6 +336,19 @@ export interface RunRunOptions {
    * stdout and stderr, a worker's lines the parent relays included;
    * absent when the streams are not the process's. */
   redactProjectOutput?: (secrets: SecretSet) => void;
+}
+
+/** Whether a world of this recipe writes execution events: nukadoko
+ * serves it, and its program file names {events} (src/program/world.ts). */
+function writesEvents(recipe: ProgramRecipe | null): boolean {
+  return recipe !== null && recipe.reach.kind === "serve" && namesPlaceholder(recipe, "events");
+}
+
+/** What an execution the base ran for paths alone came to, in a cell's
+ * words, since no cell holds it. */
+function forPathsOf(execution: RunScenario, inThen: (index: number) => boolean): NonNullable<RunScenario["for_paths"]> {
+  const { outcome, line } = foldCell([executionOutcome(execution, inThen)]);
+  return { outcome, ...(line === undefined ? {} : { line }) };
 }
 
 /** The step records row, when the run wrote a scenario. Scenarios have no
@@ -1055,8 +1073,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         passIndexes.forEach((index, position) => {
           const judged = withAfterWorldStop(runScenarios[index]!, (step, key) => recountedAt.get(placeKey(position, step, key)));
           if (judged === runScenarios[index]) return;
-          runScenarios[index] = judged;
           const cell = cellOf[index]!;
+          if (cell.key === null) {
+            runScenarios[index] = { ...judged, for_paths: forPathsOf(judged, cell.inThen) };
+            return;
+          }
+          runScenarios[index] = judged;
           const outcomes = [...(cellOutcomes.get(cell.key) ?? [])];
           outcomes[cell.at] = executionOutcome(judged, cell.inThen);
           cellOutcomes.set(cell.key, outcomes);
@@ -1196,8 +1218,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const flagEvaluations = new Map<string, readonly FlagEvaluation[]>();
     // Each entry's cell, and its execution's place among the cell's
     // outcomes, by the entry's index: the world's stop can judge an entry
-    // again (stopWorld).
-    const cellOf: { readonly key: string; readonly at: number; readonly inThen: (index: number) => boolean }[] = [];
+    // again (stopWorld). An execution the base ran for paths alone has no
+    // cell (`key: null`).
+    const cellOf: { readonly key: string | null; readonly at: number; readonly inThen: (index: number) => boolean }[] = [];
     // The requests each execution's steps sent that a `request` line
     // reports, the same way, for run.json's `routes`.
     const requestsServed = new Map<string, readonly ServedRequest[]>();
@@ -1207,11 +1230,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // ends: a later scenario of the same run must not draw the same id.
     const emptyEvidenceDirs: string[] = [];
     // A record of the base or the old world (`tree`): a cell of the row
-    // `row` names, whose lines are where it ran in its tree. Its step names
-    // are head's only in the base world, whose mapping is head's; it gets
-    // no rerun line, since a rerun runs head.
+    // `row` names, whose lines are where it ran in its tree, or, with
+    // `forPaths`, an execution of that row the base ran for run.json's
+    // `paths` alone, which no cell holds. Its step names are head's only in
+    // the base world, whose mapping is head's; it gets no rerun line, since
+    // a rerun runs head.
     interface TreeRecord {
       readonly world: "base" | "old";
+      readonly forPaths?: true;
       readonly row: { readonly feature: string; readonly line: number };
       readonly stepLine: (index: number) => number | null;
       readonly inThen: (index: number) => boolean;
@@ -1246,15 +1272,20 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // rerun line: the reruns a reader is offered are of failures.
       const role = roleOf(row.feature, row.line, record.environment);
       const { do: rerun, ...withoutRerun } = built;
-      const entry: RunScenario =
+      const placed: RunScenario =
         tree === undefined
           ? { ...(role === "control" || rerun === undefined ? withoutRerun : built), role }
           : { ...withoutRerun, role, world: tree.world, row: { feature: row.feature, line: row.line } };
+      const entry = tree?.forPaths === true ? { ...placed, for_paths: forPathsOf(placed, inThen) } : placed;
       runScenarios.push(entry);
-      const key = cellKey(row.feature, row.line, record.environment, tree?.world ?? "head");
-      const outcomes = cellOutcomes.get(key) ?? [];
-      cellOf.push({ key, at: outcomes.length, inThen });
-      cellOutcomes.set(key, [...outcomes, executionOutcome(entry, inThen)]);
+      if (tree?.forPaths === true) {
+        cellOf.push({ key: null, at: -1, inThen });
+      } else {
+        const key = cellKey(row.feature, row.line, record.environment, tree?.world ?? "head");
+        const outcomes = cellOutcomes.get(key) ?? [];
+        cellOf.push({ key, at: outcomes.length, inThen });
+        cellOutcomes.set(key, [...outcomes, executionOutcome(entry, inThen)]);
+      }
       if (entry.evidence === undefined) emptyEvidenceDirs.push(path.join(rootDir, record.evidence.dir));
       stdout.write(`${JSON.stringify(entry)}\n`);
     };
@@ -1736,9 +1767,20 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // A signal ends the run, so no tree world starts after it.
           if (signals.interrupted) break;
           const targets: TreeTarget[] = [];
+          // The rows the base world would run for paths alone: every one
+          // whose head cell here is required and ran, and that no cell of
+          // the base already runs.
+          const forPaths: TreeTarget[] = [];
           for (const { feature, pickle } of flatPickles) {
-            const key = criterionKey(feature.relativePath, pickle.location?.line ?? 0);
-            if (!(planned.get(key)?.[world] ?? []).includes(environment)) continue;
+            const line = pickle.location?.line ?? 0;
+            const key = criterionKey(feature.relativePath, line);
+            if (!(planned.get(key)?.[world] ?? []).includes(environment)) {
+              const ran = (cellOutcomes.get(cellKey(feature.relativePath, line, environment))?.length ?? 0) > 0;
+              if (world === "base" && ran && roleOf(feature.relativePath, line, environment) === "required") {
+                forPaths.push({ feature: feature.relativePath, line, serial: serialOf(feature.gherkinDocument), forPaths: true });
+              }
+              continue;
+            }
             if (world === "base") {
               targets.push({ feature: feature.relativePath, line: pickle.location?.line ?? 0, serial: serialOf(feature.gherkinDocument) });
             } else {
@@ -1748,7 +1790,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               targets.push({ feature: at.feature, line: at.line, serial: document === undefined ? false : serialOf(document) });
             }
           }
-          if (targets.length === 0) continue;
+          if (targets.length === 0 && forPaths.length === 0) continue;
           const pass = world === "base" ? passes.find((entry) => entry.resolvedEnv.name === environment)! : await oldPassOf(environment);
           if (typeof pass === "string") {
             leaveNotRun(world, environment, pass);
@@ -1760,14 +1802,24 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               const baseProgram = (await loadProgram(tree.root))?.program ?? null;
               recipe = resolveEnvironment(config, baseProgram, environment, !implicitDefault).program;
             } catch (error) {
-              leaveNotRun(
-                world,
-                environment,
-                projectRelativeText(`the base tree's program file does not give this environment: ${error instanceof Error ? error.message : String(error)}`, rootDir),
-              );
+              // A row the base was to run for paths alone is no cell, so
+              // only a planned cell needs the reason.
+              if (targets.length > 0) {
+                leaveNotRun(
+                  world,
+                  environment,
+                  projectRelativeText(`the base tree's program file does not give this environment: ${error instanceof Error ? error.message : String(error)}`, rootDir),
+                );
+              }
               continue;
             }
           }
+          // Paths are compared only where both sides write execution
+          // events: a base that names no {events} would run a pass for
+          // nothing to compare.
+          if (writesEvents(pass.resolvedEnv.program) && writesEvents(recipe)) targets.push(...forPaths);
+          if (targets.length === 0) continue;
+          const pathRows = new Set(forPaths.map((target) => criterionKey(target.feature, target.line)));
           let started: StartedWorld | null = null;
           if (recipe !== null) {
             const abort = new AbortController();
@@ -1809,6 +1861,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               if (world === "base") {
                 noteRecord(record, {
                   world,
+                  ...(pathRows.has(criterionKey(record.feature, record.line)) ? { forPaths: true as const } : {}),
                   row: { feature: record.feature, line: record.line },
                   stepLine: pickleLines.get(criterionKey(record.feature, record.line)) ?? (() => null),
                   inThen: inThenOf(record.feature, record.line),

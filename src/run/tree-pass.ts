@@ -15,8 +15,9 @@ import { parseWorkerEnvelope, type HeadSecretSources, type WorkerEnvelope, type 
 export type { HeadSecretSources } from "./worker-protocol.js";
 
 // Responsibility: one pass of `nuka run --base` in the base or the old tree
-// (docs/spec.md "Verdicts"): the cells of one world and environment, run in
-// worker processes started in the tree, then their proof runs. Boundary:
+// (docs/spec.md "Verdicts"): the cells of one world and environment, and
+// the base world's rows for paths alone, run in worker processes started
+// in the tree, then the cells' proof runs. Boundary:
 // which cells a pass runs, the world it runs against, and what the records
 // mean are the caller's (src/cli/run.ts, src/run/verdict-table.ts); this
 // module runs the targets it is given and hands each record on.
@@ -51,6 +52,9 @@ export interface TreeTarget {
   readonly line: number;
   /** The feature file carries `@nukadoko:serial`, so it runs alone. */
   readonly serial: boolean;
+  /** The base world runs it for run.json's `paths` alone: no cell, no
+   * proof runs, and a scenario line that says so. */
+  readonly forPaths?: true;
 }
 
 export interface TreePassOptions {
@@ -152,6 +156,7 @@ export async function runTreePass(options: TreePassOptions): Promise<TreePassRes
     }
   };
 
+  const forPaths = new Set(options.targets.filter((target) => target.forPaths === true).map((target) => `${target.feature}:${target.line}`));
   const handle = (envelope: WorkerEnvelope, proofRound: boolean, seen: Set<string>): void => {
     if (envelope.kind === "note") return relay(envelope.text);
     if (envelope.kind === "not-run") {
@@ -163,7 +168,7 @@ export async function runTreePass(options: TreePassOptions): Promise<TreePassRes
       return;
     }
     if (envelope.kind === "scenario-started") {
-      if (!proofRound) progress.write(`${label(world, environment)}  ${envelope.feature}:${envelope.line}  ${envelope.name}\n`);
+      if (!proofRound) progress.write(`${label(world, environment)}  ${envelope.feature}:${envelope.line}  ${envelope.name}${forPaths.has(`${envelope.feature}:${envelope.line}`) ? "  (for paths)" : ""}\n`);
       return;
     }
     const { record, stepLines, notes } = envelope;
