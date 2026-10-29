@@ -67,6 +67,17 @@ need more than a glance.
    once the step itself passes under `do`, not as the first thing tried
    after a failure.
 
+## Reading a broken claim
+
+```text
+claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+```
+
+The actual value and its source, the compare, the expected value and its
+source. The step fails with `claim_broken`, and the run summary lists
+every claim under "Claims" with its outcome. A broken claim is fixed in
+the implementation or by asking the person, never by a weaker compare.
+
 ## Reading a step record as a timeline
 
 Read the failed step's own step record as one timeline rather than a bag of

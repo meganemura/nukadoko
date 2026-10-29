@@ -150,17 +150,6 @@ what each reading read (past 40, the first, the last, and the change
 points). A claim step whose `observe` reaches `page`, `context`, or
 `pageAs` states `poll`, as `{ timeout_ms }` or `false` (`claim-poll-unstated`).
 
-## Reading a broken claim
-
-```text
-claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
-```
-
-The actual value and its source, the compare, the expected value and its
-source. The step fails with `claim_broken`, and the run summary lists
-every claim under "Claims" with its outcome. A broken claim is fixed in
-the implementation or by asking the person, never by a weaker compare.
-
 **One step per claim, or the expected value in the line?** Let the
 sentence a non-engineer agreed to decide: "the total is {expected:int}"
 carries its value, so it is one step; "is in trial" and "is not in
