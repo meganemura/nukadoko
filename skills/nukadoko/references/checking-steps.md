@@ -145,8 +145,9 @@ boolean literal is refused when the actual value comes from `observe`,
 since `{ visible: true }` is the judgment made in code. For a yes or no in
 the sentence, return the word it uses (`outcome: "accepted" | "refused"`,
 `examples/workflow.md`), or the measurement behind it. Give every `args`
-and `returns` field a `.describe()`, so `nuka describe` connects a
-criterion's wording to the field that answers it.
+and `returns` field of a step you write or rewrite a `.describe()`, so
+`nuka describe` connects a criterion's wording to the field that answers
+it; a note on a step you are not changing is a report.
 
 `poll: { timeout_ms }` runs `observe` again every 100 ms until every claim
 holds on two readings in a row, then judges the last reading once (a poll

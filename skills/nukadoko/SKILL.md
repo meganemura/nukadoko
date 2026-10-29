@@ -116,5 +116,5 @@ code (`references/scenario-rules.md`, "How this file grows").
   prompt that gives a different budget overrides the three.
 - Don't hand-edit a step record or a run summary: it was measured, and
   editing it turns it back into an unmeasured account.
-- Don't act on the notes `nuka check` prints unasked: report them
-  (`references/maintenance.md`).
+- Don't act unasked on a note about a step you are not writing:
+  report it (`references/maintenance.md`).

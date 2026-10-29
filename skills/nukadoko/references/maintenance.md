@@ -21,9 +21,11 @@ it is. When the finding ends with `; <path>.js stands for
 renamed or deleted under an import that still names it: point the import
 in the file it names at the new file, or remove it.
 
-Report what the notes say and stop there. Each note is about something the
-user chose, so acting on one without being asked replaces their choice
-with yours. Two shapes come up often enough to name here; the rest of
+Report what the notes say and stop there. A note on a step you are
+writing or rewriting anyway falls under the rules for writing it
+(`checking-steps.md`): a `schema-field-undescribed` field gets its
+`.describe()`. Every other note is about something the user chose, so
+acting on one without being asked replaces their choice with yours. Two shapes come up often enough to name here; the rest of
 this file is what each note actually means. A step nothing binds any
 more is usually a deletion someone forgot to finish, and a fixture
 nothing names is usually setup that outlived the scenario that needed it.

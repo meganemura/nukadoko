@@ -112,6 +112,12 @@ just until 0.1.
   command-line tool that runs ignored build output needs a program file
   with `build` for `--base`, named wherever a tool's configuration names
   `nukadoko.config.ts`.
+- **The skill no longer gives two answers for a note on a step being
+  rewritten.** `SKILL.md` said not to act on a note unasked, and
+  `checking-steps.md` said to describe every field, so a
+  `schema-field-undescribed` note on a Then under rewrite read both ways.
+  The rule to describe each field now covers a step you write or
+  rewrite, and the rule on notes covers the steps you are not changing.
 
 ## 0.22.0 — 2026-10-28
 
