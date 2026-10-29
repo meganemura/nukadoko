@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration } from "../src/record/types.js";
-import { withMeasured, type ChannelText, type MeasuredContext } from "../src/run/measured.js";
+import { holdsNumber, withMeasured, type ChannelText, type MeasuredContext } from "../src/run/measured.js";
 import { expectedOriginOf, type ExpectedOrigin, type JudgedClaim } from "../src/step/evaluate-claims.js";
 
 // Responsibility: which recorded channel holds each side of a claim
@@ -19,7 +19,7 @@ const channels: Record<string, readonly ChannelText[]> = {
   [PRODUCER]: [
     { channel: "observed.processes[0].exit_code", number: 0 },
     { channel: "observed.processes[0].stdout", text: "v1" },
-    { channel: "observed.processes[1].exit_code", number: 0 },
+    { channel: "observed.processes[1].stdout", text: "v1" },
   ],
 };
 
@@ -39,6 +39,45 @@ function judged(record: ClaimComparisonRecord | ClaimEachRecord, rawActual: unkn
   return { record, rawActual, fromKey, expectedOrigins };
 }
 
+describe("a number more than one channel holds", () => {
+  const exitedOne = (stdout: string): MeasuredContext => ({
+    ...context,
+    channelsOf: () => [
+      { channel: "observed.processes[0].stdout", text: stdout },
+      { channel: "observed.processes[0].exit_code", number: 1 },
+    ],
+  });
+
+  it("names no channel when the output writes the number too, and the exit code when it does not", () => {
+    const [lineNumber] = withMeasured([judged(comparison(1), 1, "violations", [])], exitedOne('{"violations":[{"rule":"bypass","line":1}]}\n'));
+    expect(lineNumber).toMatchObject({ measured: null });
+    const [exitCode] = withMeasured([judged(comparison(1), 1, "exitCode", [])], exitedOne('{"violations":[{"rule":"bypass","line":12}]}\n'));
+    expect(exitCode).toMatchObject({ measured: { step_record_id: PRODUCER, channel: "observed.processes[0].exit_code" } });
+  });
+
+  it("names no channel when two exit codes hold the number", () => {
+    const [claim] = withMeasured([judged(comparison(0), 0, "exitCode", [])], {
+      ...context,
+      channelsOf: () => [
+        { channel: "observed.processes[0].exit_code", number: 0 },
+        { channel: "observed.processes[1].exit_code", number: 0 },
+      ],
+    });
+    expect(claim).toMatchObject({ measured: null });
+  });
+
+  it("holdsNumber finds a number written on its own, and never one inside a longer number or a word", () =>
+    hegel.test((tc) => {
+      const n = tc.draw(gs.integers({ minValue: -50, maxValue: 50 }));
+      const before = tc.draw(gs.sampledFrom(["", " ", ":", "[", "(", "line "]));
+      const after = tc.draw(gs.sampledFrom(["", " ", ",", "]", "\n", " file"]));
+      expect(holdsNumber({ channel: "c", text: `${before}${n}${after}` }, n)).toBe(true);
+      const glued = tc.draw(gs.sampledFrom([`${n}7`, `${n}.5`, `v${n}`, `${n}x`, `7${Math.abs(n)}`]));
+      expect(holdsNumber({ channel: "c", text: `${before}${glued}${after}` }, n)).toBe(false);
+      expect(holdsNumber({ channel: "c", number: n }, n)).toBe(true);
+    }));
+});
+
 describe("expected_measured", () => {
   it("skips the channel the actual value matched, so a constant equal to it is none, and finds another channel with the same content", () => {
     const [onlyOne] = withMeasured([judged(comparison(0), 0, "exitCode", [{ fromKey: "wanted" }])], {
@@ -46,8 +85,11 @@ describe("expected_measured", () => {
       channelsOf: () => [{ channel: "observed.processes[0].exit_code", number: 0 }],
     });
     expect(onlyOne).toMatchObject({ measured: { step_record_id: PRODUCER, channel: "observed.processes[0].exit_code" }, expected_measured: null });
-    const [another] = withMeasured([judged(comparison(0), 0, "exitCode", [{ fromKey: "wanted" }])], context);
-    expect(another).toMatchObject({ expected_measured: { step_record_id: PRODUCER, channel: "observed.processes[1].exit_code" } });
+    const [another] = withMeasured([judged(comparison("v1"), "v1", "out", [{ fromKey: "wanted" }])], context);
+    expect(another).toMatchObject({
+      measured: { step_record_id: PRODUCER, channel: "observed.processes[0].stdout" },
+      expected_measured: { step_record_id: PRODUCER, channel: "observed.processes[1].stdout" },
+    });
   });
 
   it("looks in the claim step's own record for an expected value observe read", () => {

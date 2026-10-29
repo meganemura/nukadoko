@@ -1729,6 +1729,9 @@ claim step の record には、次の固有のフィールドがあります(「
 形は `{ "step_record_id", "channel" }` で、チャネルはその step record の中のパスです。
 プロセスの `observed.processes[0].stdout`、`.stderr`、`.exit_code`、レスポンスの `http.jsonl[1].response_body`、`.status`、変わったファイルの `observed.files[0].content` があります。
 終了コードとステータスは数値とだけ一致し、ステータス 0(レスポンスのない request)はチャネルになりません。
+同じ record の別のチャネルも持つ数値は、どのチャネルも名指ししません。
+別のチャネルとは、同じ値の 2 つ目の終了コードやステータス、またはテキストの中にそれだけで書かれた数値(終了コード 1 の隣の JSON レポートにある `"line":1` など)です。
+中身からはどれが値の出所かを見分けられず、誤っているかもしれない出所より `null` のほうが偽りが少ないからです。
 `from` の値を読む claim は値を返した step の record だけを探し、`observe` を読む claim は claim step 自身の record だけを探します。
 その値を持つチャネルがないときは `null` です。
 これは値がどこから来たかについての情報であり、claim の条件になることはありません。

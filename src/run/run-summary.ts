@@ -575,7 +575,7 @@ function renderClaims(document: RunDocument): string[] {
     "",
     "## Claims",
     "",
-    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`." +
+    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does, or when another channel holds the same number). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`." +
       (anyControl ? " An entry marked `control` is a control's: a claim it broke is evidence that the scenario tells the behaviour apart, not a failure." : ""),
     "",
     ...sorted.flatMap((entry) => entry.lines),

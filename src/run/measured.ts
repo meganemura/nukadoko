@@ -13,7 +13,12 @@ import { deepEqual, type ExpectedOrigin, type JudgedClaim } from "../step/evalua
 // holds with its content: a process's stdout, stderr, and exit code, an
 // HTTP response's status and body, and a changed file's content. A number
 // channel (an exit code, a status) matches only a number, so a constant
-// `0` in step code is not taken for an exit code. `measured` is
+// `0` in step code is not taken for an exit code. A number that another
+// channel of the same record also holds (a second exit code, or the
+// number written in an output, such as a line number in a JSON report
+// beside an exit code of the same value) names no channel: content alone
+// cannot tell which one the value came from, and `null` says less than a
+// source that may be false. `measured` is
 // information for a reader of the record, never a condition of the claim,
 // so a channel that cannot be read is skipped without a word.
 //
@@ -106,6 +111,15 @@ function sameContent(raw: unknown, channel: ChannelText, secrets: SecretSet): bo
   }
 }
 
+/** Whether a channel holds `n` as a whole: a number channel that is `n`,
+ * or a text with `n` written as a number of its own (`"line":1`, `1 file`),
+ * not as part of another (`12`, `1.5`, `v1`). Pure. */
+export function holdsNumber(channel: ChannelText, n: number): boolean {
+  if ("number" in channel) return channel.number === n;
+  const written = String(n).replace(/[.+-]/g, (char) => `\\${char}`);
+  return new RegExp(`(?<![\\w.-])${written}(?![\\w.])`).test(channel.text);
+}
+
 /** Where a claim's raw actual value was measured, given the claim step's
  * own channels and a way to read the channels of the step record a `from`
  * key was filled from. */
@@ -136,8 +150,11 @@ export function withMeasured(judged: readonly JudgedClaim[], context: MeasuredCo
   const channelFor = (recordId: string | null, raw: unknown, skip: MeasuredChannel | null = null): MeasuredChannel | null => {
     if (recordId === null) return null;
     const skipped = (channel: ChannelText): boolean => skip !== null && skip.step_record_id === recordId && skip.channel === channel.channel;
-    const match = channelsOf(recordId).find((channel) => !skipped(channel) && sameContent(raw, channel, context.secrets));
-    return match === undefined ? null : { step_record_id: recordId, channel: match.channel };
+    const channels = channelsOf(recordId).filter((channel) => !skipped(channel));
+    const match = channels.find((channel) => sameContent(raw, channel, context.secrets));
+    if (match === undefined) return null;
+    if (typeof raw === "number" && channels.some((channel) => channel !== match && holdsNumber(channel, raw))) return null;
+    return { step_record_id: recordId, channel: match.channel };
   };
   // A claim that read nothing has no expected value to have measured
   // either, and an origin of `null` is a value the feature states.

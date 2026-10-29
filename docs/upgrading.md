@@ -59,6 +59,11 @@ This part does not change release to release.
   key. A step `nuka check` refused as `claim-compares-itself` for this
   shape passes now, when `observe` reads no other key that holds the
   actual value.
+- **`measured` is `null` for a number another channel of the record
+  also holds.** The run summary prints `measured: none` where it used to
+  name one of those channels, which may not have been the source. No
+  step file changes; a reader that relied on the named channel reads the
+  value from the step record itself.
 
 ## 0.21.0 to 0.22.0
 

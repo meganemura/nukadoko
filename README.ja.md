@@ -243,7 +243,7 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 
 ## Claims
 
-Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`.
+Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does, or when another channel holds the same number). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`.
 
 - `features/greet.feature:6` the output says "Hi, Ada!"
   - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken; measured: observed.processes[0].stdout of step-20261024-123634-plgs
@@ -1174,7 +1174,7 @@ environment はそれでも `nukadoko.program.ts` の設定にすぎません。
   record は偽のことを述べません(各ラベルは値が本当に来た場所を名指しし、示す値は比較した値そのものです)。
   また、record の読み手に見えない方法で claim を成り立たせることは、拒否するか成り立たないものにします。
   読み手に見える方法は読み手に委ね、record がそれを示します。
-  run サマリは各 claim を文の下に、比較、出所、そして記録されたどのチャネルにも値がないときの `measured: none` とともに出力します。
+  run サマリは各 claim を文の下に、比較、出所、そして記録されたどのチャネルにも値がないとき(または同じ数値を別のチャネルも持つとき)の `measured: none` とともに出力します。
   `measured: none` は定数がとる姿です。
   また、どの claim も判定しなかった scenario をすべて並べます。
   基準が `equal` を意味していたのに `contains-text` で十分か、`observe` が文の名指すものを読んでいるかは、PR レビューに委ねられます。

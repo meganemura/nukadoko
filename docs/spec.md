@@ -2168,6 +2168,11 @@ channel is a path inside that step record: a process's
 `http.jsonl[1].response_body` or `.status`, or a changed file's
 `observed.files[0].content`. An exit code or a status matches only a
 number, and a status of 0 (a request with no response) is no channel. A
+number that another channel of the same record also holds, a second
+exit code or status of that value or the number written on its own in a
+text (`"line":1` in a JSON report beside an exit code of 1), names no
+channel: content cannot tell which of them the value came from, and
+`null` says less than a source that may be false. A
 claim that reads a `from` value looks in the producing step's record
 alone; a claim that reads `observe` looks in the claim step's own alone.
 It is `null` when no channel holds that value. It is information about

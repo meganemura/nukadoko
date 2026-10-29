@@ -25,6 +25,12 @@ just until 0.1.
   reading it throws, and the step is `unobserved`. A second `from` key
   that holds the same value is still refused, and the finding now says to
   take that key out of `from`.
+- **`measured` no longer names a channel that only happens to hold the
+  same number.** A claim on a line number of 1 read out of a JSON report
+  named `observed.processes[0].exit_code` because the program exited 1.
+  A number that another channel of the same record also holds (a second
+  exit code or status, or the number written on its own in an output)
+  now gives `measured: null`, the run summary's `measured: none`.
 
 ### Added
 

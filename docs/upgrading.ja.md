@@ -49,6 +49,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   そのキーを読む `observe` は throw し、step は `unobserved` になります。
   必要なものは別のキーから読んでください。
   この形のために `nuka check` が `claim-compares-itself` として拒否していた step は、actual の値を持つ別のキーを `observe` が読まなければ、いまは通ります。
+- **同じ record の別のチャネルも持つ数値の `measured` は `null` になります。**
+  run サマリは、以前はそのうちの 1 つのチャネル(値の出所とは限りません)を名指ししていたところに `measured: none` を出力します。
+  step ファイルの変更は要りません。
+  名指しされたチャネルに頼っていた読み手は、値を step record そのものから読んでください。
 
 ## 0.21.0 から 0.22.0 へ
 
