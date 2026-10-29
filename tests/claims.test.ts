@@ -438,8 +438,34 @@ describe("compares", () => {
         reason: "fits-text has an expected text of only whitespace, ... lines, and [..], which almost every text holds",
       });
     }
-    expect(holds(await compare("fits-text", "a\r\nb", "a\nb"))).toBe(false);
-    expect(holds(await compare("fits-text", "a\r\nb\r\n", "a\r\nb\r"))).toBe(true);
+  });
+
+  it("fits-text reads a line break written \\r\\n as one written \\n, on either side, and any other \\r as a character", () =>
+    hegel.test((tc) => {
+      const have = tc.draw(gs.arrays(gs.text({ alphabet: "ab", maxSize: 3 }), { maxSize: 5 }));
+      const want = tc.draw(gs.arrays(expectedLine, { maxSize: 4 }));
+      const breakAt = () => tc.draw(gs.sampledFrom(["\n", "\r\n"]));
+      const final = tc.draw(gs.booleans());
+      const broken = (lines: readonly string[]) => `${lines.map((line, index) => (index === 0 ? line : `${breakAt()}${line}`)).join("")}${final ? breakAt() : ""}`;
+      const plain = (lines: readonly string[]) => `${lines.join("\n")}${final ? "\n" : ""}`;
+      expect(textFit(broken(have), broken(want))).toEqual(textFit(plain(have), plain(want)));
+      tc.assume(have.length > 0);
+      expect(textFit(`${have.join("\n")}\r`, have.join("\n")).fits).toBe(false);
+    }));
+
+  it("fits-text judges a 200000-line text in a time linear in its lines when the expected text has no ... line or one", () => {
+    const have = Array.from({ length: 200_000 }, (_, index) => `line ${index} of the log`);
+    const actual = have.join("\n");
+    const changed = [...have.slice(0, 999), "line 999 of another log"];
+    const started = performance.now();
+    expect(textFit(actual, have.slice(0, 1000).join("\n"))).toEqual({ fits: false, fitted: 1000, at: 1001, actual: "line 1000 of the log" });
+    expect(textFit(actual, changed.join("\n"))).toEqual({ fits: false, fitted: 999, expected: "line 999 of another log", at: 1000, actual: "line 999 of the log" });
+    expect(textFit(actual, ["line 0 of the log", "...", ...have.slice(-1000)].join("\n")).fits).toBe(true);
+    expect(textFit(actual, ["...", ...have.slice(500, 1500)].join("\n"))).toEqual({ fits: false, fitted: 1001, at: 1501, actual: "line 1500 of the log" });
+    // Walking every actual line for each expected line took 25 seconds
+    // here; one walk takes milliseconds, so a loaded machine stays far
+    // inside the bound.
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it("has-fields compares two objects and names the other types it was given", async () => {
@@ -1803,4 +1829,13 @@ describe("an expected value a compare can never judge as the sentence means it",
       expect(claimsProblem([claim], literalShape("the result reads"))).toContain("never an object, so has-fields always breaks");
       expect(claimsProblem([{ ...claim, expected_view: "json" }], literalShape("the result reads"))).toBeNull();
     }));
+
+  it("refuses fits-text whose expected text a step returned or observe read, and takes one the sentence states", () => {
+    const observed = { ...literalShape("the build prints done"), hasObserve: true };
+    const stands = 'fits-text reads each "..." line and each "[..]" of its expected text as a stand-in';
+    expect(claimsProblem([{ actual: "result", compare: "fits-text", expected: { observe: "printed" } }], observed)).toContain(stands);
+    expect(claimsProblem([{ actual: "printed", compare: "fits-text", expected: { from: "result.out" } }], observed)).toContain(stands);
+    expect(claimsProblem([{ actual: "result", compare: "fits-text", expected: "out" }], literalShape("the build prints"))).toBeNull();
+    expect(claimsProblem([{ actual: "result", compare: "fits-text", expected: { literal: "done" } }], literalShape("the build prints done"))).toBeNull();
+  });
 });

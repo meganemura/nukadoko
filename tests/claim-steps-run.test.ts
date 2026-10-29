@@ -2253,6 +2253,16 @@ export default defineStep({
       step("the body reads", "fields: z.string(), said: z.string()", `{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "lines" }`),
       'claims[0].expected reads args.fields through expected_view lines, which makes an array, never an object, so has-fields always breaks. Read the docstring as JSON with expected_view: "json"',
     ],
+    [
+      "fits-text with an expected text an earlier step returned",
+      step("the output is the same", "said: z.string()", `{ actual: "printed", compare: "fits-text", expected: { from: "said" } }`),
+      'claims[0].expected reads { from: "said" }, a value a step returned, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal',
+    ],
+    [
+      "fits-text with an expected text observe read",
+      step("the output is the same", "said: z.string()", `{ actual: "said", compare: "fits-text", expected: { observe: "printed" } }`),
+      'claims[0].expected reads { observe: "printed" }, a value observe read, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal',
+    ],
   ])("refuses %s", async (_name, source, message) => {
     const rootDir = await project({
       "features/steps/claim.ts": source,

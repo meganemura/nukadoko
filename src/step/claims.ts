@@ -623,6 +623,19 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
         : `reads args.${claim.expected} through expected_view ${view}, which makes ${article(VIEW_MAKES[view]!)}`;
     throw new InvalidClaimError(`${label}.expected ${what}, never an object, so has-fields always breaks. Read the docstring as JSON with expected_view: "json"`);
   },
+  // The stand-ins are read in the expected text wherever it came from, so
+  // an expected text a program wrote is a template nobody stated: a first
+  // run that printed a "..." line lets a second run print any lines there.
+  "fits-text": (label, claim) => {
+    const expected = claim.expected;
+    if (typeof expected !== "object" || expected === null || literalOf(expected) !== null) return;
+    const source = "from" in expected ? ["from", "a value a step returned"] : "observe" in expected ? ["observe", "a value observe read"] : null;
+    if (source === null) return;
+    const [key, what] = source;
+    throw new InvalidClaimError(
+      `${label}.expected reads { ${key}: ${describe((expected as Record<string, unknown>)[key!])} }, ${what}, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal`,
+    );
+  },
 };
 
 function article(word: string): string {

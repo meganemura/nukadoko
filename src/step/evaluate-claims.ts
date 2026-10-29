@@ -165,31 +165,38 @@ export const ANY_LINES = "...";
  * in that one line. */
 export const ANY_TEXT = "[..]";
 
-/** A text's lines: split at each "\n", with one final empty line dropped,
- * so the newline a program prints last does not count as a line. A "\r"
- * stays in its line, so a text written with "\r\n" fits only an expected
- * text written the same way. Pure. */
+/** A text's lines: split at each "\n" or "\r\n", with one final empty line
+ * dropped, so the newline a program prints last does not count as a line.
+ * A program on Windows ends its lines with "\r\n", and a docstring's lines
+ * end with "\n" wherever the feature file was written, so the two breaks
+ * read the same; any other "\r" stays in its line. Pure. */
 export function fitLines(text: string): readonly string[] {
-  const lines = text.split("\n");
+  const lines = text.split(/\r?\n/);
   if (lines.at(-1) === "") lines.pop();
   return lines;
 }
 
 /** Whether `line` fits the expected line `pattern`, where each `[..]`
- * stands for any characters. The first part is a prefix, the last a
- * suffix, and each part between is found leftmost after the one before
- * it, which is enough when a stand-in matches anything: a later find
- * never needs an earlier part placed further right. No backtracking, so a
- * line costs time in its length, whatever an expected line holds. Pure. */
+ * stands for any characters. Pure. */
 export function lineFits(pattern: string, line: string): boolean {
-  const parts = pattern.split(ANY_TEXT);
-  if (parts.length === 1) return pattern === line;
+  return partsFit(pattern.split(ANY_TEXT), line);
+}
+
+/** Whether `line` fits an expected line already split at each `[..]`. The
+ * first part is a prefix, the last a suffix, and each part between is found
+ * leftmost after the one before it, which is enough when a stand-in matches
+ * anything: a later find never needs an earlier part placed further right.
+ * No backtracking, so a line costs time in its length, whatever an expected
+ * line holds. */
+function partsFit(parts: readonly string[], line: string): boolean {
+  if (parts.length === 1) return parts[0] === line;
   const first = parts[0]!;
   const last = parts.at(-1)!;
   if (line.length < first.length + last.length || !line.startsWith(first) || !line.endsWith(last)) return false;
   let at = first.length;
   const end = line.length - last.length;
-  for (const part of parts.slice(1, -1)) {
+  for (let index = 1; index < parts.length - 1; index += 1) {
+    const part = parts[index]!;
     const found = line.indexOf(part, at);
     if (found === -1 || found + part.length > end) return false;
     at = found + part.length;
@@ -207,45 +214,48 @@ export type TextFit =
   | { readonly fits: true }
   | { readonly fits: false; readonly fitted: number; readonly expected?: string; readonly at: number; readonly actual?: string };
 
+/** The actual lines the expected lines so far can end just before: every
+ * index from `from` on, which a `...` line makes, or the indexes in `at`,
+ * ascending, which any other line makes. */
+type Reach = { readonly from: number } | { readonly at: readonly number[] };
+
 /** Whether `expected` fits `actual` line by line: a line that is exactly
  * `...` takes any run of actual lines, `[..]` any characters inside one
  * line, and every other character matches itself, until both texts are
  * used up. The run judges with this function and the run summary names
  * where it stopped fitting with it, so the two never disagree.
  *
- * It walks the expected lines once, keeping the set of actual lines each
- * prefix of the expected text can end at: a `...` line widens that set
- * to every later line, and any other line moves each member one line on
- * where the line fits. That costs the expected lines times the actual
- * lines at most, where trying each way a `...` could split the text
- * would cost a power of the number of `...` lines. Pure. */
+ * It walks the expected lines once and tries each against the actual
+ * lines it can start at alone. A `...` line opens every later line, and
+ * the next line tries each of them once; any other line moves each place
+ * it fits one line on, so without a `...` there is at most one place and
+ * the cost is linear in the expected lines. Trying each way a `...` could
+ * split the text would cost a power of the number of `...` lines, and
+ * walking every actual line for each expected line took 25 seconds on a
+ * 200000-line output. Pure. */
 export function textFit(actual: string, expected: string): TextFit {
   const have = fitLines(actual);
-  const want = fitLines(expected);
-  // reach[j]: the expected lines so far can end just before actual line j.
-  let reach: boolean[] = have.map(() => false).concat(false);
-  reach[0] = true;
-  let earliest = 0;
-  for (const [index, pattern] of want.entries()) {
-    const next: boolean[] = reach.map(() => false);
-    if (pattern === ANY_LINES) {
-      let open = false;
-      for (let j = 0; j < next.length; j += 1) {
-        open ||= reach[j]!;
-        next[j] = open;
-      }
-    } else {
-      for (let j = 0; j < have.length; j += 1) {
-        if (reach[j] && lineFits(pattern, have[j]!)) next[j + 1] = true;
-      }
+  const lines = fitLines(expected);
+  const want = lines.map((line) => (line === ANY_LINES ? null : line.split(ANY_TEXT)));
+  let reach: Reach = { at: [0] };
+  for (const [index, parts] of want.entries()) {
+    const earliest: number = "from" in reach ? reach.from : reach.at[0]!;
+    if (parts === null) {
+      reach = { from: earliest };
+      continue;
     }
-    const first = next.indexOf(true);
-    if (first === -1) return { fits: false, fitted: index, expected: pattern, at: earliest + 1, ...(have[earliest] === undefined ? {} : { actual: have[earliest] }) };
-    reach = next;
-    earliest = first;
+    const next: number[] = [];
+    const tryAt = (j: number): void => {
+      if (j < have.length && partsFit(parts, have[j]!)) next.push(j + 1);
+    };
+    if ("from" in reach) for (let j = reach.from; j < have.length; j += 1) tryAt(j);
+    else for (const j of reach.at) tryAt(j);
+    if (next.length === 0) return { fits: false, fitted: index, expected: lines[index]!, at: earliest + 1, ...(have[earliest] === undefined ? {} : { actual: have[earliest] }) };
+    reach = { at: next };
   }
-  if (reach[have.length]) return { fits: true };
-  const left = reach.lastIndexOf(true);
+  if ("from" in reach) return { fits: true };
+  const left = reach.at.at(-1)!;
+  if (left === have.length) return { fits: true };
   return { fits: false, fitted: want.length, at: left + 1, actual: have[left]! };
 }
 

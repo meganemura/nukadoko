@@ -1905,13 +1905,15 @@ an object and the claim would break on every line.
 `fits-text` compares two texts, and lets a docstring state a program's
 output whose times, sizes, and paths change on each run without each
 changing part becoming a claim of its own. Both texts are split into
-lines at each `\n`, and one final empty line on each side is dropped, so
-the newline a program prints last does not count. A `\r` is a character
-like any other. An expected line that is exactly `...` stands for any
-run of actual lines, none included. Inside any other expected line,
-`[..]` stands for any run of characters within that one line, and every
-other character matches itself. The claim holds when the expected lines
-take up the whole actual text:
+lines at each `\n` or `\r\n`, and one final empty line on each side is
+dropped, so the newline a program prints last does not count, and a
+program on Windows that ends its lines with `\r\n` fits a docstring
+written anywhere. A `\r` anywhere else is an ordinary character. An
+expected line that is exactly `...` always stands for any run of actual
+lines, none included; no escape makes it a literal line of three dots.
+Inside any other expected line, `[..]` stands for any run of characters
+within that one line, and every other character matches itself. The
+claim holds when the expected lines take up the whole actual text:
 
 ```gherkin
 Then the build prints
@@ -1922,10 +1924,19 @@ Then the build prints
   """
 ```
 
-Judging walks the expected lines once and keeps the actual lines each
-part of the expected text can end at, so an expected text with many
-`...` lines costs its lines times the actual lines, never a number of
-tries that grows with each `...`.
+The expected text is a template, so it comes from the sentence: a
+docstring, a capture, or a literal. `defineStep` refuses a `fits-text`
+claim whose expected value is `{ from }` or `{ observe }`, since a value a
+program wrote is read for stand-ins too: a first run that printed
+`step 1`, `...`, and `step 3` would let a second run print any lines
+between them.
+
+Judging walks the expected lines once and tries each against only the
+actual lines it can start at. A `...` line opens every later line, and
+any other line moves each place it fits one line on, so an expected text
+with no `...` costs time linear in its lines, one with many costs its
+lines times the actual lines at most, and neither costs a number of tries
+that grows with each `...`.
 
 `is-a` lets a sentence name the kind of a value it cannot state, such
 as an id or a time the system generated: "the order id is a UUID". The
