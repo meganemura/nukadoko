@@ -4637,7 +4637,11 @@ The two commands meet through files in the state directory, each with
 one writer. `walk.lock` holds the run's pid and is created only when it
 does not exist; a lock whose pid is dead is taken over. `walk.json` holds
 the walk's state (`starting`, `running`, `paused`, or `ended`), and only
-the run writes it, whole, renamed into place. An answer is
+the run writes it, whole, renamed into place. Only a missing `walk.json`
+means no walk: a `nuka step` call reads through one it cannot read (on
+Windows a read can meet the file while the run renames over it) until
+its `--timeout`, and then refuses with `unexpected-error`, naming the
+file. An answer is
 `<run_dir>/answers/<n>.json`, which `nuka step` creates only when it does
 not exist and never rewrites, and which the run looks for every 100 ms.
 Because the file name is the pause, an answer can only move the pause the

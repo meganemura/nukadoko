@@ -3668,6 +3668,8 @@ walk は 1 つの scenario の 1 回の実行です。
 `walk.lock` は run の pid を持ち、存在しないときにだけ作られます。
 pid が死んでいる lock は引き継がれます。
 `walk.json` は walk の状態(`starting`、`running`、`paused`、`ended`)を持ち、run だけがそれを丸ごと書いて、所定の場所へ rename します。
+walk がないことを意味するのは、`walk.json` がないときだけです。
+`nuka step` の呼び出しは、読めない `walk.json`(Windows では、run がファイルを rename で置き換えている最中に読むことがあります)を `--timeout` まで読み直し、それでも読めなければ、そのファイルを名指して `unexpected-error` で拒否します。
 答えは `<run_dir>/answers/<n>.json` です。
 `nuka step` はこれを存在しないときにだけ作って書き直さず、run は 100 ms ごとにこれを探します。
 ファイル名が一時停止の番号なので、答えが動かせるのは、その人に見せた一時停止だけです。

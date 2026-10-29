@@ -136,17 +136,24 @@ function replaceFile(filePath: string, text: string): void {
 
 const WALK_STATES = new Set(["starting", "running", "paused", "ended"]);
 
+/** walk.json as one read found it: a walk, no file (`null`), or a file
+ * this read could not use, with why. */
+type WalkRead = { readonly state: WalkState | null } | { readonly unreadable: string };
+
 // walk.json has one writer, this module, so a reader checks only the
-// fields every state carries and trusts the rest. A file that does not
-// parse is one this reader cannot use, which is the same to it as none.
-function readWalkState(filePath: string): WalkState | null {
+// fields every state carries and trusts the rest. Only a missing file
+// means no walk. Any other failure is a moment to read through: on
+// Windows a read can meet the file while the run renames over it, and a
+// walk read as none would refuse an answer at once.
+function readWalkState(filePath: string): WalkRead {
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(filePath, "utf8"));
-  } catch {
-    return null;
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return { state: null };
+    return { unreadable: error instanceof Error ? error.message : String(error) };
   }
-  if (typeof parsed !== "object" || parsed === null) return null;
+  if (typeof parsed !== "object" || parsed === null) return { unreadable: "it holds no JSON object" };
   const value = parsed as Record<string, unknown>;
   const valid =
     typeof value["state"] === "string" &&
@@ -155,7 +162,24 @@ function readWalkState(filePath: string): WalkState | null {
     Number.isInteger(value["pid"]) &&
     typeof value["target"] === "string" &&
     typeof value["started_at"] === "string";
-  return valid ? (parsed as WalkState) : null;
+  return valid ? { state: parsed as WalkState } : { unreadable: "it holds no walk state" };
+}
+
+// The number the next walk gets: one past every walk this project
+// recorded, in walk.json or as a reported end, so a walk.json lost or
+// unreadable cannot give a new walk the number of one whose end a
+// `nuka step` call already printed.
+function nextWalkNumber(dir: string): number {
+  const stored = readWalkState(path.join(dir, STATE_FILE));
+  let last = "state" in stored && stored.state !== null ? stored.state.number : 0;
+  try {
+    for (const name of readdirSync(path.join(dir, REPORTED_DIR))) {
+      if (/^\d+$/.test(name)) last = Math.max(last, Number(name));
+    }
+  } catch {
+    // No walk's end was reported yet.
+  }
+  return last + 1;
 }
 
 // The lock holds the pid of the process that took it. A holder that is not
@@ -248,7 +272,7 @@ export function openWalk(options: {
     };
   }
   let state = startWalk({
-    number: (readWalkState(statePath)?.number ?? 0) + 1,
+    number: nextWalkNumber(dir),
     pid: process.pid,
     target: options.target,
     started_at: new Date().toISOString(),
@@ -408,11 +432,21 @@ export async function runStepCall(options: {
   const isAlive = options.isAlive ?? processIsAlive;
   const dir = stateDirOf(rootDir, options.stateDir);
   const statePath = path.join(dir, STATE_FILE);
-  const read = (): WalkSeen => seeWalk(readWalkState(statePath), isAlive);
-  const target = callTarget(call, read(), (walk) => endReported(dir, walk));
   const deadline = Date.now() + options.timeoutMs;
+  // Fixed by the first read that finds walk.json readable, or finds none.
+  let target: number | undefined;
   for (;;) {
-    const seen = read();
+    const read = readWalkState(statePath);
+    if ("unreadable" in read) {
+      if (Date.now() >= deadline) {
+        const seconds = Math.round(options.timeoutMs / 1000);
+        throw new Error(`${path.posix.join(options.stateDir.split(path.sep).join("/"), STATE_FILE)} could not be read for ${seconds}s: ${read.unreadable}`);
+      }
+      await sleep(POLL_MS);
+      continue;
+    }
+    const seen = seeWalk(read.state, isAlive);
+    target ??= callTarget(call, seen, (walk) => endReported(dir, walk));
     const decision = stepDecision(call, target, seen, answersOf(rootDir, seen, target));
     if (decision.kind === "write-answer") {
       if (call.kind === "answer") writeAnswer(rootDir, decision.runDir, call.pause, call.answer);

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -272,6 +272,37 @@ describe("nuka run --step and nuka step", () => {
 
       expect((await nukaStep(rootDir, "stop", "1", "--walk", "2")).code).toBe(1);
       await second.closed;
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "reads through a walk.json it cannot read for a moment, and names the file when it never can",
+    async () => {
+      const run = nukaRun(rootDir, ["features/order.feature:3", "--step"]);
+      await nukaStep(rootDir, "wait", ...FIRST_WAIT);
+      const statePath = path.join(rootDir, ".nukadoko", "walk.json");
+      const whole = readFileSync(statePath, "utf8");
+
+      // On Windows a reader can meet the file while the run replaces it.
+      // Here the file does not parse for 600 ms, then holds the pause again.
+      writeFileSync(statePath, whole.slice(0, 10));
+      const restored = settle(600).then(() => writeFileSync(statePath, whole));
+      const answered = await nukaStep(rootDir, "next", "1", "--walk", "1");
+      await restored;
+      expect(answered.code).toBe(0);
+      expect(answered.stdout).toMatch(/^walk 1 paused after step 2\/3/);
+
+      const pausedAt2 = readFileSync(statePath, "utf8");
+      writeFileSync(statePath, "{");
+      const unreadable = await nukaStepJson(rootDir, "wait", "--walk", "1", "--timeout", "1");
+      expect(unreadable.code).toBe(2);
+      expect(unreadable.document["findings"][0]).toMatchObject({ severity: "refused", code: "unexpected-error" });
+      expect(unreadable.document["findings"][0]["message"]).toContain(".nukadoko/walk.json could not be read for 1s");
+      writeFileSync(statePath, pausedAt2);
+
+      await nukaStep(rootDir, "stop", "2", "--walk", "1");
+      await run.closed;
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );
