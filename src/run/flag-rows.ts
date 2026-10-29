@@ -1,5 +1,6 @@
-import { EVENT_KINDS, type FlagEvaluation } from "../execution-events/format.js";
+import type { FlagEvaluation } from "../execution-events/format.js";
 import type { ListedFlag } from "../execution-events/lists.js";
+import { byGate } from "../execution-events/path.js";
 import type { RunFlagRow, RunScenario, RunTable } from "../record/run-result.js";
 import { countsOf, criteriaByPlace } from "./place-criteria.js";
 
@@ -36,23 +37,6 @@ export interface FlagRowsInput {
   /** Each environment whose flags list was read, with the list, in the
    * run's order; none when no world read one. */
   readonly listed?: readonly { readonly environment: string; readonly flags: readonly ListedFlag[] }[];
-}
-
-const FORMAT_GATES: readonly string[] = EVENT_KINDS.flag.gate.values;
-
-// The format's gates first, in its order, then a word it does not define,
-// then `null`, so a reader that looks for `boolean` finds it first.
-function gateOrder(gate: string | null): [number, string] {
-  if (gate === null) return [FORMAT_GATES.length + 1, ""];
-  const known = FORMAT_GATES.indexOf(gate);
-  return [known === -1 ? FORMAT_GATES.length : known, gate];
-}
-
-/** The order of a cell's `gates`, which the run summary keeps too. */
-export function byGate(a: string | null, b: string | null): number {
-  const [rankA, wordA] = gateOrder(a);
-  const [rankB, wordB] = gateOrder(b);
-  return rankA - rankB || (wordA < wordB ? -1 : wordA > wordB ? 1 : 0);
 }
 
 function byText(a: string, b: string): number {

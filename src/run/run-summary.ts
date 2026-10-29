@@ -1,13 +1,13 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_PROOF_RUNS } from "../condition/condition.js";
+import { byGate } from "../execution-events/path.js";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
 import { RED_VERDICTS, type RunClaim, type RunDocument, type RunRoute, type RunScenario, type RunTableCell, type RunTableRow, type RunWorld } from "../record/run-result.js";
 import type { MeasuredChannel } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
-import { byGate } from "./flag-rows.js";
 import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
 import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 
