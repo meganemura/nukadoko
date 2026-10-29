@@ -183,7 +183,9 @@ green on the base branch says: the scenario does not say what the report
 says (`skills/nukadoko/references/verdicts.md`). When the program writes
 `flag` execution events, run.json's `flags` names the side each cell's
 steps got: a control listed only under the side with the fix never ran the
-side without it.
+side without it. When the two environments' `conditions` differ in that one
+switch alone, run.json's `paths` and the summary's "Changed paths" say what
+the program did differently, step by step, on the side with the fix.
 
 ## 7. Prototypes and plan steps
 

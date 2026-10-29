@@ -1,6 +1,6 @@
 import type { CountRange } from "./count.js";
 import { EVENT_KINDS, flagOf, requestOf, type EventKindName, type ReadableLine, type ServedRequest } from "./format.js";
-import { createTraceTally, type GapWord, type TallyInputs, type TraceGap } from "./tally.js";
+import { createTraceTally, type TallyInputs, type TraceGap } from "./tally.js";
 
 // Responsibility: a step's coarse execution path, what one trace's lines
 // say the program did, counted by what each line did and no finer: a
@@ -151,6 +151,12 @@ export function pathKeyOf(line: ReadableLine): PathKey | undefined {
   return Object.fromEntries([["kind", kind], ...spec.fields.map((field) => [field, line.object[field]])]) as PathKey;
 }
 
+/** The key alone of an entry, without its count and gates. */
+function keyOnly(entry: PathKey): PathKey {
+  const fields: readonly string[] = PATH_KINDS[entry.kind].fields;
+  return Object.fromEntries([["kind", entry.kind], ...fields.map((field) => [field, (entry as unknown as Readonly<Record<string, unknown>>)[field]])]) as PathKey;
+}
+
 /** The key of a served request. */
 export function requestKey(request: ServedRequest): PathKey {
   return { kind: "request", method: request.method, route: request.route, status: request.status };
@@ -206,20 +212,26 @@ export function countOf(path: StepPath, key: PathKey): number {
   return path.entries.find((entry) => pathKeyText(entry) === text)?.count ?? 0;
 }
 
-/** Every key `path` holds, its requests' included, in entry order. */
-export function keysOf(path: StepPath): PathKey[] {
+/** Every key the paths hold, their requests' included, once each, in
+ * entry order. */
+export function keysOf(...paths: readonly StepPath[]): PathKey[] {
   const keys = new Map<string, PathKey>();
-  for (const key of [...path.entries, ...path.requests.map(requestKey)]) keys.set(pathKeyText(key), key);
+  for (const path of paths) for (const key of [...path.entries.map(keyOnly), ...path.requests.map(requestKey)]) keys.set(pathKeyText(key), key);
   return [...keys.values()].sort(byPathKey);
+}
+
+/** What PATH_KINDS says of a kind, apart from its fields. */
+export function kindRule(kind: PathKind): Omit<PathKindSpec<EventKindName>, "fields"> {
+  return PATH_KINDS[kind];
 }
 
 /** The gaps that leave a count on `path` unbounded: the trace's, except
  * that a step that sent nothing and has no line has none (module
  * header). */
-export function boundingGaps(path: StepPath): readonly GapWord[] {
+export function boundingGaps(path: StepPath): readonly TraceGap[] {
   const empty = path.entries.length === 0 && path.requests.length === 0 && path.maybe === 0;
   if (empty && path.open.length === 1 && path.open[0]!.gap === "no-requests") return [];
-  return path.open.map((gap) => gap.gap);
+  return path.open;
 }
 
 /** The range the count of `key` on `path` lies in: `[n, n + maybe]` when
@@ -229,7 +241,7 @@ export function boundingGaps(path: StepPath): readonly GapWord[] {
 export function rangeOn(path: StepPath, key: PathKey): CountRange {
   const count = countOf(path, key);
   const gaps = boundingGaps(path);
-  const bounded = gaps.length === 0 || (key.kind === "request" && gaps.every((gap) => gap === "jobs-pending"));
+  const bounded = gaps.length === 0 || (key.kind === "request" && gaps.every(({ gap }) => gap === "jobs-pending"));
   const range = { at_least: count, at_most: bounded ? count + path.maybe : null };
   if (PATH_KINDS[key.kind].compare === "count") return range;
   return { at_least: Math.min(1, range.at_least), at_most: Math.min(1, range.at_most ?? 1) };

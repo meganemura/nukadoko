@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GROUP_FIELDS } from "../execution-events/counted.js";
 import type { EventKindName } from "../execution-events/format.js";
+import { PATH_KIND_ORDER, PATH_KINDS, type PathKind } from "../execution-events/path.js";
 import { GAP_WORDS } from "../execution-events/tally.js";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { RunDocument } from "../record/run-result.js";
@@ -175,6 +176,20 @@ const eventsRead = z.looseObject({
   truncated: z.literal(true).optional(),
 });
 
+// A step's path (src/execution-events/path.ts): the summary counts by
+// kind what a step that ran on one side only did there.
+const pathKind = z.enum(PATH_KIND_ORDER as unknown as [PathKind, ...PathKind[]]);
+const pathValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const pathKey = z.looseObject({ kind: pathKind }).refine((key) => PATH_KINDS[key.kind].fields.every((field) => pathValue.safeParse((key as Record<string, unknown>)[field]).success), {
+  message: "an entry of a path holds each field its kind keeps",
+});
+const stepPath = z.looseObject({
+  requests: z.array(z.looseObject({ method: z.string(), route: z.string().nullable(), status: z.number().int() })),
+  entries: z.array(z.intersection(pathKey, z.looseObject({ count: z.number().int().min(1) }))),
+  maybe: z.number().int().min(0),
+  open: z.array(eventsGap),
+});
+
 const step = z.looseObject({
   line: z.number().int().nullable(),
   text: z.string(),
@@ -194,6 +209,7 @@ const step = z.looseObject({
   observation: z.enum(["observed", "unobserved"]).optional(),
   attempts: z.number().int().optional(),
   events_read: z.record(z.string(), eventsRead).optional(),
+  path: stepPath.optional(),
 });
 
 const declared = z.looseObject({
@@ -346,6 +362,44 @@ const route = z.looseObject({
 // its routes list was read.
 const worldList = z.union([z.looseObject({ entries: count, error: z.null() }), z.looseObject({ entries: z.null(), error: z.string() })]);
 
+// run.json's `paths` (src/run/path-view.ts): the summary reads each
+// pair's sides and counts, and each criterion's steps and differences.
+const pathSide = z.looseObject({ world: worldName, environment: z.string() });
+const pathExecution = z
+  .looseObject({ scenario_record_id: z.string(), outcome: z.enum(["pass", "fail", "broke", "stopped", "flaky", "not-run"]), line: z.number().int().optional() })
+  .refine((side) => side.outcome === "pass" || side.outcome === "not-run" || side.line !== undefined, { message: "a side that did not pass names the line it stopped at", path: ["line"] });
+const pathDifference = z.intersection(pathKey, z.looseObject({ a: countRange, b: countRange }));
+const pathStep = z.union([
+  z.looseObject({
+    line: z.number().int().nullable(),
+    text: z.string(),
+    ran: z.literal("both"),
+    changed: z.array(pathDifference),
+    open: z.array(pathDifference),
+    gaps: z.looseObject({ a: z.array(eventsGap), b: z.array(eventsGap) }),
+  }),
+  z.looseObject({ line: z.number().int().nullable(), text: z.string(), ran: z.enum(["a", "b"]) }),
+]);
+const pathComparison = z.looseObject({
+  between: z.looseObject({ kind: z.literal("condition"), name: z.string(), a: z.union([z.boolean(), z.string(), z.null()]), b: z.union([z.boolean(), z.string(), z.null()]) }),
+  a: pathSide,
+  b: pathSide,
+  unread: z.string().nullable(),
+  counts: z.looseObject({ changed: count, open: count, same: count, not_compared: count }),
+  criteria: z.array(
+    z.looseObject({
+      feature: z.string(),
+      line: z.number().int(),
+      name: z.string(),
+      result: z.enum(["changed", "open", "same"]),
+      a: pathExecution,
+      b: pathExecution,
+      steps: z.array(pathStep).optional(),
+    }),
+  ),
+  not_compared: z.array(z.looseObject({ feature: z.string(), line: z.number().int(), reason: z.string() })),
+});
+
 const document = z.looseObject({
   command: z.literal("run"),
   nukadoko: z.string(),
@@ -406,6 +460,7 @@ const document = z.looseObject({
   table,
   flags: z.array(flagRow).optional(),
   routes: z.array(route).optional(),
+  paths: z.array(pathComparison).optional(),
   walk: z
     .looseObject({
       pauses: z.array(

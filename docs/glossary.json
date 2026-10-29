@@ -757,6 +757,26 @@
       "en": ["entry (of a path)", "entries"],
       "ja": "項目",
       "note": "実行経路の、種類とフィールドの値の組 1 つと、それを報告した行の数。断定の表の行とも実行イベントの行とも別なので、行 と書かない"
+    },
+    {
+      "en": ["pair (of environments, compared)", "pair of sides"],
+      "ja": "組",
+      "note": "run.json の `paths` の要素 1 つが比べる 2 つの側。`conditions` がちょうど 1 つ違う 2 つの environment"
+    },
+    {
+      "en": ["side a", "side b", "side (of a comparison of paths)"],
+      "ja": "a 側 / b 側",
+      "note": "組の 2 つの側。フィールド `a` と `b` はコードスパンで英語のまま。flag の 側(`side`)とは別の語なので、側 だけで書かず a 側、b 側 と書く"
+    },
+    {
+      "en": ["changed (a path)", "open (a path)", "the same (a path)"],
+      "ja": "変わった / 決まらない / 同じ",
+      "note": "実行経路の比較の結果。決まらない は、欠けた行がまだ届きうるので変化とも同じとも言えないこと。値 `changed`、`open`、`same` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["premise (of a pair)"],
+      "ja": "前提",
+      "note": "environment の組が切り替える condition。flag の側が違うことは前提であって変化ではないので、組の見出しが名指し、違いには並べない"
     }
   ],
   "keep_english": [

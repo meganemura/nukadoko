@@ -6,7 +6,8 @@ import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
 import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStatus, ScenarioStepStatus, ScenarioStop } from "./scenario-record.js";
 import type { CountRange } from "../execution-events/count.js";
-import type { StepPath } from "../execution-events/path.js";
+import type { PathKey, StepPath } from "../execution-events/path.js";
+import type { TraceGap } from "../execution-events/tally.js";
 import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
@@ -447,6 +448,81 @@ export interface RunRouteCell extends RunPlaceCell {
   readonly statuses: readonly number[];
 }
 
+/** run.json's `paths`: one entry per pair of sides whose steps' paths
+ * the run compared (src/run/path-view.ts), so a reader about to turn a
+ * change on for everyone reads what the program did differently on one
+ * side than on the other. Evidence, not a verdict. */
+export interface RunPathComparison {
+  /** What the two sides differ in: two environments of the run whose
+   * declared `conditions` differ in `name` alone, `a` holding the
+   * value where it is `false` or not declared (`null`). */
+  readonly between: { readonly kind: "condition"; readonly name: string; readonly a: boolean | string | null; readonly b: boolean | string | null };
+  readonly a: RunPathSide;
+  readonly b: RunPathSide;
+  /** Why no criterion of the pair was compared, such as a side whose
+   * world wrote no execution events; `null` when they were. */
+  readonly unread: string | null;
+  /** The criteria by `result`, and those not compared. */
+  readonly counts: { readonly changed: number; readonly open: number; readonly same: number; readonly not_compared: number };
+  /** Each criterion compared, in the table's row order. */
+  readonly criteria: readonly RunPathCriterion[];
+  /** Each criterion not compared, with why, in the table's row order. */
+  readonly not_compared: readonly { readonly feature: string; readonly line: number; readonly reason: string }[];
+}
+
+/** One side of a comparison: a world and an environment. */
+export interface RunPathSide {
+  readonly world: RunWorldName;
+  readonly environment: string;
+}
+
+/** A criterion whose two sides' executions were compared step by step. */
+export interface RunPathCriterion {
+  readonly feature: string;
+  readonly line: number;
+  readonly name: string;
+  /** `changed` when a step has a decided difference or ran on one side
+   * only, `open` when every difference is one a side's missing lines
+   * could still close, `same` otherwise. */
+  readonly result: "changed" | "open" | "same";
+  /** The execution each side is read from, its cell's first, with the
+   * cell's outcome. */
+  readonly a: RunPathExecution;
+  readonly b: RunPathExecution;
+  /** The steps with a difference, in the scenario's order; absent for a
+   * `same` criterion. */
+  readonly steps?: readonly RunPathStep[];
+}
+
+export interface RunPathExecution {
+  readonly scenario_record_id: string;
+  readonly outcome: RunCellOutcome;
+  /** The line `fail`, `broke`, `stopped`, and `flaky` name. */
+  readonly line?: number;
+}
+
+/** A step of a compared criterion, aligned by its line in head's feature
+ * file. */
+export type RunPathStep =
+  | {
+      readonly line: number | null;
+      readonly text: string;
+      readonly ran: "both";
+      /** Entries whose two counts cannot be equal. */
+      readonly changed: readonly RunPathDifference[];
+      /** Entries whose counts differ or may, where a side's missing lines
+       * could still make them equal. */
+      readonly open: readonly RunPathDifference[];
+      /** The gaps that leave each side's counts unbounded. */
+      readonly gaps: { readonly a: readonly TraceGap[]; readonly b: readonly TraceGap[] };
+    }
+  /** The step ran on this side only, since the other side's execution
+   * stopped before it. What it did is the step's own `path`. */
+  | { readonly line: number | null; readonly text: string; readonly ran: "a" | "b" };
+
+/** One entry of a step's path, with the range of its count on each side. */
+export type RunPathDifference = PathKey & { readonly a: CountRange; readonly b: CountRange };
+
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
 export interface RunEnvironment {
   readonly name: string;
@@ -608,6 +684,9 @@ export type RunFields = {
   /** Present only when a routes list of a head world was read: one entry
    * per method and route (`RunRoute`). */
   readonly routes?: readonly RunRoute[];
+  /** Present only when the run compared the steps' paths of a pair of
+   * sides (`RunPathComparison`). */
+  readonly paths?: readonly RunPathComparison[];
   /** Present only for a run started with `nuka run --step`: each pause,
    * and how it was answered. Between steps the world and the browser were
    * open to anything, so a reader or a gate tells such a run apart by

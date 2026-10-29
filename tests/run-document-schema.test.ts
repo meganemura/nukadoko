@@ -160,6 +160,62 @@ describe("parseRunDocument", () => {
       expect("problem" in result && result.problem).toContain(path.startsWith("worlds") ? segments.slice(0, 3).join(".") : `${path}: `);
     }));
 
+  it("reads the paths a summary lists, and refuses a comparison without any one field it reads", () =>
+    hegel.test((tc) => {
+      const comparison = {
+        between: { kind: "condition", name: "quick_reorder", a: false, b: true },
+        a: { world: "head", environment: "reorder-off" },
+        b: { world: "head", environment: "reorder-on" },
+        unread: null,
+        counts: { changed: 1, open: 0, same: 0, not_compared: 0 },
+        criteria: [
+          {
+            feature: "features/a.feature",
+            line: 3,
+            name: "a",
+            result: "changed",
+            a: { scenario_record_id: "scn-1", outcome: "broke", line: 4 },
+            b: { scenario_record_id: "scn-2", outcome: "pass" },
+            steps: [
+              {
+                line: 4,
+                text: "a reorder",
+                ran: "both",
+                changed: [{ kind: "request", method: "POST", route: "/reorders", status: 201, a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } }],
+                open: [],
+                gaps: { a: [], b: [{ gap: "jobs-pending", job_ids: ["j1"] }] },
+              },
+            ],
+          },
+        ],
+        not_compared: [],
+      };
+      expect(parseRunDocument(JSON.stringify({ ...VALID, paths: [comparison] }))).toEqual({ document: { ...VALID, paths: [comparison] } });
+      const path = tc.draw(
+        gs.sampledFrom([
+          "between",
+          "between.name",
+          "a.environment",
+          "unread",
+          "counts.open",
+          "criteria",
+          "criteria.0.result",
+          "criteria.0.a.line",
+          "criteria.0.steps.0.changed.0.route",
+          "criteria.0.steps.0.changed.0.b",
+          "criteria.0.steps.0.gaps.b",
+          "not_compared",
+        ]),
+      );
+      const broken = structuredClone(comparison) as Record<string, unknown>;
+      const segments = path.split(".");
+      let parent = broken;
+      for (const segment of segments.slice(0, -1)) parent = parent[segment] as Record<string, unknown>;
+      delete parent[segments[segments.length - 1]!];
+      const result = parseRunDocument(JSON.stringify({ ...VALID, paths: [broken] }));
+      expect("problem" in result && result.problem).toContain("paths.0.");
+    }));
+
   it("reads a claim step's events readings and a count judged again at the world's stop, and refuses an outcome no count judgment gives", () => {
     const reading = {
       of: { step_record_id: "s1", step: "a", line: 4 },

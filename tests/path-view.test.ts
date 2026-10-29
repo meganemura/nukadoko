@@ -1,0 +1,362 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import { describe, expect, it } from "vitest";
+import type { PathKey, StepPath } from "../src/execution-events/path.js";
+import type { TraceGap } from "../src/execution-events/tally.js";
+import type { RunDocument, RunEnvironment, RunPathComparison, RunScenario, RunStep, RunWorld } from "../src/record/run-result.js";
+import { comparePaths } from "../src/run/path-view.js";
+import { renderRunSummary } from "../src/run/run-summary.js";
+import { buildTable, executionOutcome } from "../src/run/verdict-table.js";
+
+// Responsibility: run.json's `paths` (src/run/path-view.ts) and the run
+// summary's "Changed paths" section, from literal run.json documents.
+// Two environments whose conditions differ in one make a pair; what one
+// side's steps did is compared with the other's step by step, a count a
+// side's missing lines could still reach is open and never a change, and
+// a flag's side is the pair's premise, never a change. The comparison
+// reads as its mirror when the two sides trade places.
+
+const FEATURE = "features/orders.feature";
+
+/** A side of one criterion: the path of each step that ran, in order.
+ * When fewer steps ran than the criterion has, the last one failed. */
+interface Side {
+  readonly paths: readonly (StepPath | undefined)[];
+}
+
+interface Criterion {
+  readonly line: number;
+  readonly name: string;
+  readonly steps: number;
+  /** By environment name. */
+  readonly sides: Readonly<Record<string, Side>>;
+}
+
+const OFF: RunEnvironment = { name: "reorder-off", target_version: null, conditions: { quick_reorder: false } };
+const ON: RunEnvironment = { name: "reorder-on", target_version: null, conditions: { quick_reorder: true } };
+
+/** A head world that read its events file, or one at a `url` (`null`),
+ * or one whose program file names no `{events}` (`"unnamed"`). */
+function world(name: string, events: null | "unnamed" | "read" = "read"): RunWorld {
+  const read = { file: null, lines: 0, owned: 0, late: 0, unowned: 0, unreadable: 0, undefined_kinds: {} };
+  return { name, tree: "head", url: "http://127.0.0.1:4100", commands: [], timings: {}, log: null, error: null, ...(events === "unnamed" ? {} : { events: events === "read" ? read : null }) };
+}
+
+function scenarioOf(criterion: Criterion, environment: string, side: Side): RunScenario {
+  const steps = Array.from({ length: criterion.steps }, (_, index): RunStep => {
+    const ran = index < side.paths.length;
+    const failed = ran && index === side.paths.length - 1 && side.paths.length < criterion.steps;
+    const path = side.paths[index];
+    return {
+      line: criterion.line + 1 + index,
+      text: `step ${index + 1}`,
+      step: "a-step",
+      status: failed ? "failed" : ran ? "passed" : "skipped",
+      step_record_id: ran ? `stp-${environment}-${criterion.line}-${index}` : null,
+      record: ran ? `steps/stp-${environment}-${criterion.line}-${index}` : null,
+      ...(failed ? { error: { kind: "claim_broken" as const, message: "broken" } } : {}),
+      ...(path === undefined ? {} : { path }),
+    };
+  });
+  const failed = side.paths.length < criterion.steps;
+  return {
+    scenario_record_id: `scn-${environment}-${criterion.line}`,
+    feature: FEATURE,
+    line: criterion.line,
+    scenario: criterion.name,
+    environment,
+    status: failed ? "failed" : "passed",
+    started_at: "2026-10-29T12:00:00.000Z",
+    finished_at: "2026-10-29T12:00:01.000Z",
+    steps,
+    hooks: [],
+  };
+}
+
+function documentOf(criteria: readonly Criterion[], environments: readonly RunEnvironment[] = [OFF, ON], worlds: readonly RunWorld[] = environments.map((environment) => world(environment.name))): RunDocument {
+  const scenarios = criteria.flatMap((criterion) => environments.flatMap((environment) => (criterion.sides[environment.name] === undefined ? [] : [scenarioOf(criterion, environment.name, criterion.sides[environment.name]!)])));
+  const table = buildTable({
+    criteria: criteria.map((criterion) => ({ feature: FEATURE, line: criterion.line, name: criterion.name, tags: [] })),
+    environments: environments.map((environment) => ({ name: environment.name, conditions: environment.conditions })),
+    outcomes: (feature, line, environment) => scenarios.filter((entry) => entry.feature === feature && entry.line === line && entry.environment === environment).map((entry) => executionOutcome(entry, () => true)),
+    notRunReason: () => undefined,
+    proofRuns: 2,
+    leftOut: 0,
+  });
+  return {
+    schema_version: 4,
+    nukadoko: "0.24.0",
+    command: "run",
+    verdict: "passed",
+    findings: [],
+    run_id: "run-20261029-120000-abcd",
+    started_at: "2026-10-29T12:00:00.000Z",
+    finished_at: "2026-10-29T12:01:00.000Z",
+    commit: null,
+    environments,
+    worlds,
+    selection: "full",
+    counts: { scenarios: 0, passed: 0, failed: 0, not_run: 0, controls: 0, controls_not_run: 0 },
+    scenarios,
+    table,
+  };
+}
+
+const whole = (rest: Partial<StepPath> = {}): StepPath => ({ requests: [], entries: [], maybe: 0, open: [], ...rest });
+
+const KEYS: readonly PathKey[] = [
+  { kind: "error", class: "CacheMiss", handled: true },
+  { kind: "db", table: "rooms", op: "update" },
+  { kind: "db", table: "scores", op: "insert" },
+  { kind: "http", method: "POST", origin: "https://mail.example.test", path: "/v1/send", status: 202 },
+  { kind: "job", name: "ScoreRecalcJob", phase: "enqueue" },
+  { kind: "flag", name: "quick_reorder", side: "on" },
+  { kind: "flag", name: "quick_reorder", side: "off" },
+];
+const REQUESTS = [
+  { method: "POST", route: "/reorders", status: 201 },
+  { method: "POST", route: "/reorders", status: 403 },
+] as const;
+const GAPS: readonly TraceGap[] = [{ gap: "jobs-pending", job_ids: ["3f2a9c41"] }, { gap: "no-lines" }, { gap: "unreadable", lines: 1 }];
+
+const stepPath: gs.Generator<StepPath> = gs
+  .tuples(
+    gs.arrays(gs.tuples(gs.integers({ minValue: 0, maxValue: KEYS.length - 1 }), gs.integers({ minValue: 1, maxValue: 3 })), { maxSize: 4 }),
+    gs.arrays(gs.integers({ minValue: 0, maxValue: REQUESTS.length - 1 }), { maxSize: 3 }),
+    gs.integers({ minValue: 0, maxValue: 2 }),
+    gs.arrays(gs.integers({ minValue: 0, maxValue: GAPS.length - 1 }), { maxSize: 2 }),
+  )
+  .map(([entries, requests, maybe, gaps]) =>
+    whole({
+      entries: [...new Map(entries.map(([key, count]) => [key, { ...KEYS[key]!, count }])).values()],
+      requests: requests.map((index) => REQUESTS[index]!),
+      maybe,
+      open: [...new Set(gaps)].sort().map((index) => GAPS[index]!),
+    }),
+  );
+
+function compare(off: Side, on: Side, steps = Math.max(off.paths.length, on.paths.length)): RunPathComparison {
+  const [comparison] = comparePaths(documentOf([{ line: 3, name: "a reorder goes through", steps, sides: { "reorder-off": off, "reorder-on": on } }]));
+  return comparison!;
+}
+
+describe("comparePaths", () => {
+  it("reads as its mirror when the two sides trade places", () =>
+    hegel.test((tc) => {
+      const one = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 3 }));
+      const other = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 3 }));
+      const steps = Math.max(one.length, other.length);
+      const forward = compare({ paths: one }, { paths: other }, steps).criteria[0]!;
+      const backward = compare({ paths: other }, { paths: one }, steps).criteria[0]!;
+      expect(backward.result).toBe(forward.result);
+      const mirrored = (forward.steps ?? []).map((step) =>
+        step.ran === "both"
+          ? { ...step, changed: step.changed.map((d) => ({ ...d, a: d.b, b: d.a })), open: step.open.map((d) => ({ ...d, a: d.b, b: d.a })), gaps: { a: step.gaps.b, b: step.gaps.a } }
+          : { ...step, ran: step.ran === "a" ? "b" : "a" },
+      );
+      expect(backward.steps ?? []).toEqual(mirrored);
+    }));
+
+  it("never reads a count a side's missing lines could still reach as a change, and never lists a flag's side between two environments", () =>
+    hegel.test((tc) => {
+      const steps = tc.draw(gs.integers({ minValue: 1, maxValue: 3 }));
+      const one = tc.draw(gs.arrays(stepPath, { minSize: steps, maxSize: steps }));
+      const other = tc.draw(gs.arrays(stepPath, { minSize: steps, maxSize: steps }));
+      for (const step of compare({ paths: one }, { paths: other }).criteria[0]!.steps ?? []) {
+        if (step.ran !== "both") continue;
+        for (const difference of [...step.changed, ...step.open]) expect(difference.kind).not.toBe("flag");
+        for (const { a, b } of step.changed) expect((a.at_most !== null && a.at_most < b.at_least) || (b.at_most !== null && b.at_most < a.at_least)).toBe(true);
+        for (const { a, b } of step.open) {
+          expect((a.at_most === null || a.at_most >= b.at_least) && (b.at_most === null || b.at_most >= a.at_least)).toBe(true);
+          expect(a.at_most === a.at_least && b.at_most === b.at_least && a.at_least === b.at_least).toBe(false);
+        }
+      }
+    }));
+
+  it("finds nothing changed between a path and itself, and nothing at all when the path is whole", () =>
+    hegel.test((tc) => {
+      const paths = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 3 }));
+      const criterion = compare({ paths }, { paths }).criteria[0]!;
+      expect(criterion.result).not.toBe("changed");
+      if (paths.every((path) => path.open.length === 0 && path.maybe === 0)) expect(criterion).not.toHaveProperty("steps");
+    }));
+
+  it("compares two environments by their steps, names a step that ran on one side only, and keeps the flag out", () => {
+    const off = [whole({ requests: [REQUESTS[1]], entries: [{ kind: "flag", name: "quick_reorder", side: "off", count: 1, gates: ["boolean"] }] })];
+    const on = [
+      whole({ requests: [REQUESTS[0]], entries: [{ kind: "flag", name: "quick_reorder", side: "on", count: 1, gates: ["boolean"] }] }),
+      whole({ requests: [{ method: "POST", route: "/scores", status: 303 }], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }] }),
+    ];
+    expect(compare({ paths: off }, { paths: on })).toEqual({
+      between: { kind: "condition", name: "quick_reorder", a: false, b: true },
+      a: { world: "head", environment: "reorder-off" },
+      b: { world: "head", environment: "reorder-on" },
+      unread: null,
+      counts: { changed: 1, open: 0, same: 0, not_compared: 0 },
+      criteria: [
+        {
+          feature: FEATURE,
+          line: 3,
+          name: "a reorder goes through",
+          result: "changed",
+          a: { scenario_record_id: "scn-reorder-off-3", outcome: "broke", line: 4 },
+          b: { scenario_record_id: "scn-reorder-on-3", outcome: "pass" },
+          steps: [
+            {
+              line: 4,
+              text: "step 1",
+              ran: "both",
+              changed: [
+                { kind: "request", method: "POST", route: "/reorders", status: 201, a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } },
+                { kind: "request", method: "POST", route: "/reorders", status: 403, a: { at_least: 1, at_most: 1 }, b: { at_least: 0, at_most: 0 } },
+              ],
+              open: [],
+              gaps: { a: [], b: [] },
+            },
+            { line: 5, text: "step 2", ran: "b" },
+          ],
+        },
+      ],
+      not_compared: [],
+    });
+  });
+
+  it("leaves a count open while a job is pending, and keeps a request exact, since every request line is in", () => {
+    const pending = whole({ requests: [REQUESTS[0]], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }], open: [GAPS[0]!] });
+    const done = whole({ requests: [REQUESTS[0]], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }, { kind: "db", table: "rankings", op: "update", count: 1 }] });
+    const criterion = compare({ paths: [pending] }, { paths: [done] }).criteria[0]!;
+    expect(criterion.result).toBe("open");
+    expect(criterion.steps).toEqual([
+      {
+        line: 4,
+        text: "step 1",
+        ran: "both",
+        changed: [],
+        open: [
+          { kind: "db", table: "rankings", op: "update", a: { at_least: 0, at_most: null }, b: { at_least: 1, at_most: 1 } },
+          { kind: "db", table: "scores", op: "insert", a: { at_least: 1, at_most: null }, b: { at_least: 1, at_most: 1 } },
+        ],
+        gaps: { a: [GAPS[0]], b: [] },
+      },
+    ]);
+  });
+
+  it("pairs every two environments whose conditions differ in exactly one, the side without it first", () => {
+    const other: RunEnvironment = { name: "reorder-v2", target_version: null, conditions: { quick_reorder: true, layout: "v2" } };
+    const paths = [whole()];
+    const document = documentOf([{ line: 3, name: "a reorder goes through", steps: 1, sides: { "reorder-on": { paths }, "reorder-off": { paths }, "reorder-v2": { paths } } }], [ON, OFF, other]);
+    expect(comparePaths(document).map((comparison) => [comparison.between, comparison.a.environment, comparison.b.environment])).toEqual([
+      [{ kind: "condition", name: "quick_reorder", a: false, b: true }, "reorder-off", "reorder-on"],
+      [{ kind: "condition", name: "layout", a: null, b: "v2" }, "reorder-on", "reorder-v2"],
+    ]);
+  });
+
+  it("says once why a pair was not read, and gives no pair when neither side read events", () => {
+    const criterion = { line: 3, name: "a reorder goes through", steps: 1, sides: { "reorder-off": { paths: [whole()] }, "reorder-on": { paths: [undefined] } } };
+    const atUrl = comparePaths(documentOf([criterion], [OFF, ON], [world("reorder-off"), world("reorder-on", null)]));
+    expect(atUrl).toEqual([
+      {
+        between: { kind: "condition", name: "quick_reorder", a: false, b: true },
+        a: { world: "head", environment: "reorder-off" },
+        b: { world: "head", environment: "reorder-on" },
+        unread: "world reorder-on runs at http://127.0.0.1:4100, which nukadoko did not start, so it read no execution events there",
+        counts: { changed: 0, open: 0, same: 0, not_compared: 0 },
+        criteria: [],
+        not_compared: [],
+      },
+    ]);
+    expect(comparePaths(documentOf([criterion], [OFF, ON], [world("reorder-off", "unnamed"), world("reorder-on", "unnamed")]))).toEqual([]);
+  });
+
+  it("names a criterion that did not run on a side as not compared", () => {
+    const document = documentOf([{ line: 3, name: "a reorder goes through", steps: 1, sides: { "reorder-on": { paths: [whole()] } } }]);
+    expect(comparePaths(document)[0]).toMatchObject({ counts: { changed: 0, open: 0, same: 0, not_compared: 1 }, criteria: [], not_compared: [{ feature: FEATURE, line: 3, reason: "did not run in reorder-off" }] });
+  });
+});
+
+describe("the Changed paths section of the summary", () => {
+  const section = (document: RunDocument): string[] => {
+    const lines = renderRunSummary({ ...document, paths: comparePaths(document) }).split("\n");
+    const start = lines.indexOf("## Changed paths");
+    const end = lines.findIndex((line, index) => index > start && line.startsWith("## "));
+    return start === -1 ? [] : lines.slice(start, end === -1 ? undefined : end);
+  };
+
+  it("lists each changed or open criterion, errors first, then writes, and an open one after every changed one", () => {
+    const reorder: Criterion = {
+      line: 3,
+      name: "a reorder goes through",
+      steps: 2,
+      sides: {
+        "reorder-off": { paths: [whole({ requests: [REQUESTS[1]] })] },
+        "reorder-on": { paths: [whole({ requests: [REQUESTS[0]] }), whole({ requests: [{ method: "POST", route: "/scores", status: 303 }], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }, { kind: "job", name: "ScoreRecalcJob", phase: "enqueue", count: 1 }] })] },
+      },
+    };
+    const receipt: Criterion = {
+      line: 7,
+      name: "a receipt goes out",
+      steps: 1,
+      sides: {
+        "reorder-off": { paths: [whole({ entries: [{ kind: "db", table: "receipts", op: "insert", count: 2 }] })] },
+        "reorder-on": { paths: [whole({ entries: [{ kind: "db", table: "receipts", op: "insert", count: 1 }], open: [GAPS[0]!] })] },
+      },
+    };
+    const opened: Criterion = { line: 10, name: "an order is opened", steps: 1, sides: { "reorder-off": { paths: [whole({ requests: [REQUESTS[0]] })] }, "reorder-on": { paths: [whole({ requests: [REQUESTS[0]] })] } } };
+    const rooms: Criterion = {
+      line: 13,
+      name: "a room is closed",
+      steps: 1,
+      sides: {
+        "reorder-off": { paths: [whole({ entries: [{ kind: "db", table: "rooms", op: "update", count: 1 }] })] },
+        "reorder-on": { paths: [whole({ entries: [{ kind: "error", class: "CacheMiss", handled: true, count: 1 }, { kind: "db", table: "rooms", op: "update", count: 2 }] })] },
+      },
+    };
+    expect(section(documentOf([reorder, receipt, opened, rooms]))).toEqual([
+      "## Changed paths",
+      "",
+      "Each criterion below did something else on one side than on the other, or may have, step by step, as the program's execution events report it. " +
+        "A count that a side's missing lines could still reach is listed as open, never as a change. " +
+        "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes.",
+      "",
+      "### `reorder-off` → `reorder-on` (`quick_reorder` false → true)",
+      "",
+      "4 criteria compared: 2 changed, 1 open, 1 the same.",
+      "",
+      "- `features/orders.feature:13` a room is closed",
+      "  - line 14 `step 1`: errors `CacheMiss` handled 0 → 1; writes `rooms` update 1 → 2",
+      "- `features/orders.feature:3` a reorder goes through",
+      "  - line 4 `step 1`: requests `POST /reorders` 403 → 201",
+      "  - line 5 ran only in `reorder-on`, since `reorder-off` stopped at line 4 (`broke@4`): 1 write, 1 job, 1 request",
+      "- `features/orders.feature:7` a receipt goes out",
+      "  - line 8 `step 1`: open, since `reorder-on` is not whole (`jobs-pending` 1 job): writes `receipts` insert 2 → 1 or more",
+      "",
+    ]);
+  });
+
+  it("lists at most 20 criteria of a pair and points to run.json for the rest", () => {
+    const criteria = Array.from({ length: 23 }, (_, index): Criterion => ({
+      line: 3 + index * 3,
+      name: `criterion ${index}`,
+      steps: 1,
+      sides: { "reorder-off": { paths: [whole({ requests: [REQUESTS[1]] })] }, "reorder-on": { paths: [whole({ requests: [REQUESTS[0]] })] } },
+    }));
+    const lines = section(documentOf(criteria));
+    expect(lines.filter((line) => line.startsWith("- `"))).toHaveLength(20);
+    expect(lines.at(-2)).toBe("- and 3 more in run.json's `paths`");
+  });
+
+  it("says why a pair was not compared, and why a criterion was not", () => {
+    const unread = documentOf([{ line: 3, name: "a reorder goes through", steps: 1, sides: { "reorder-off": { paths: [whole()] }, "reorder-on": { paths: [undefined] } } }], [OFF, ON], [world("reorder-off"), world("reorder-on", null)]);
+    expect(section(unread).slice(4)).toEqual([
+      "### `reorder-off` → `reorder-on` (`quick_reorder` false → true)",
+      "",
+      "Not compared: world reorder-on runs at http://127.0.0.1:4100, which nukadoko did not start, so it read no execution events there.",
+      "",
+    ]);
+    const missing = documentOf([
+      { line: 3, name: "a reorder goes through", steps: 1, sides: { "reorder-on": { paths: [whole()] } } },
+      { line: 6, name: "an order is opened", steps: 1, sides: { "reorder-on": { paths: [whole()] }, "reorder-off": { paths: [whole()] } } },
+    ]);
+    expect(section(missing)[6]).toBe("1 criterion compared: 1 the same. 1 criterion did not run in reorder-off, so its path was not compared.");
+  });
+});

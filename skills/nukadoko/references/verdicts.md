@@ -36,20 +36,21 @@ it (`<n> criteria not run`). A control never turns the run red. Tag only what th
 on the switch, and write the Then so it would fail on the other side: a
 When that errors there proves nothing.
 
-When the program writes `flag` lines to `{events}`
-(`references/program.md`), run.json's `flags` has one row per flag and
-side the head steps' lines named: the side the program got, not the one
-`conditions` declares. Each row lists the criteria that evaluated the
-flag on that side, with the row's `verdict` and the cells there (with
-the `gates` the lines named), and `counts` them by verdict; a criterion
-seen on the side only in controls counts as `controls`, because its
-verdict is about another side. The run summary gives each row one line
-under "Flags". Read it before a flag is turned on for
-everyone: `failed` on the `on` side is a criterion that does not hold
-with the flag on, and a control listed only under the side its environment
-does not declare never ran the side it was meant to. Join a row with the
-program's own record of the flag by `name` and `side`. The row is
-evidence; whether to turn the flag on is the person's to decide.
+When the program writes `flag` lines to `{events}` (`references/program.md`),
+run.json's `flags` has one row per flag and side the head steps' lines named:
+the side the program got, not the one `conditions` declares. Each row lists
+the criteria that evaluated the flag on that side, with the row's `verdict`
+and the cells there (with the `gates` the lines named), and `counts` them by
+verdict; a criterion seen on the side only in controls counts as `controls`,
+because its verdict is about another side. The summary gives each row a line
+under "Flags". Read it before a flag is turned on for everyone: `failed` on
+the `on` side is a criterion that does not hold with the flag on, and a
+control listed only under the side its environment does not declare never ran
+the side it was meant to. Join a row with the program's own record of the flag
+by `name` and `side`. Two environments whose `conditions` differ in one get
+run.json's `paths` too: each criterion's steps compared by what the program
+did (`changed`, `open` while a side's lines may still come, `same`), under
+"Changed paths". Both are evidence; turning the flag on is the person's call.
 
 ## Where no step looked
 

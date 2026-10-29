@@ -4076,6 +4076,102 @@ The run summary gives each row one line under "Flags":
 - `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
 ```
 
+When two environments of a run declare `conditions` that differ in
+exactly one condition, the run compares their steps' paths, criterion by
+criterion, so a person about to turn the switch on for everyone reads
+what the program did differently on the other side.
+`run.json`'s `paths` holds one entry per such pair:
+
+```json
+"paths": [
+  {
+    "between": { "kind": "condition", "name": "quick_reorder", "a": false, "b": true },
+    "a": { "world": "head", "environment": "reorder-off" },
+    "b": { "world": "head", "environment": "reorder-on" },
+    "unread": null,
+    "counts": { "changed": 1, "open": 1, "same": 4, "not_compared": 0 },
+    "criteria": [
+      {
+        "feature": "features/orders.feature", "line": 18, "name": "a reorder goes through", "result": "changed",
+        "a": { "scenario_record_id": "scn-20261029-211959-i4q4", "outcome": "broke", "line": 19 },
+        "b": { "scenario_record_id": "scn-20261029-212001-me8v", "outcome": "pass" },
+        "steps": [
+          { "line": 19, "text": "customer \"kim\" reorders order 7", "ran": "both", "gaps": { "a": [], "b": [] }, "open": [],
+            "changed": [
+              { "kind": "request", "method": "POST", "route": "/reorders", "status": 201, "a": { "at_least": 0, "at_most": 0 }, "b": { "at_least": 1, "at_most": 1 } },
+              { "kind": "request", "method": "POST", "route": "/reorders", "status": 403, "a": { "at_least": 1, "at_most": 1 }, "b": { "at_least": 0, "at_most": 0 } }
+            ] },
+          { "line": 20, "text": "the client posts to \"/scores\"", "ran": "b" }
+        ]
+      }
+    ],
+    "not_compared": []
+  }
+]
+```
+
+- `between` names the one condition, with its value on each side.
+  Side `a` is the environment where it is `false` or not declared
+  (`null`) while the other's is `true`, and otherwise the earlier one in
+  `environments`.
+- Both sides run head's pickle from one feature file, so steps align by
+  their line.
+  A side is read from its cell's first execution, since `--repeat` and
+  proof runs add more: a criterion's `a` and `b` name that execution,
+  with its cell's `outcome` and `line`.
+- A count on a side is a range: `[n, n + maybe]` for a step whose path
+  has no gap, and `[n, unbounded]` under any gap.
+  Two facts of the format narrow that.
+  Under `jobs-pending` alone every request line is in, since a request's
+  line is written after its own work, so a request count stays bounded.
+  A step that sent the world nothing and has no line has an exact empty
+  path.
+  A flag counts as seen or not.
+- Two counts are the same when both are exact and equal, `changed` when
+  their ranges cannot meet, and `open` otherwise.
+  So a count a side's missing lines could still reach never reads as a
+  change, and one no missing line can reach still does.
+  `gaps` names each side's gaps for the step.
+- A criterion's `result` is `changed` when a step has a changed entry
+  or ran on one side only, `open` when every difference is open, and
+  `same` otherwise.
+  A step with `ran: "a"` or `"b"` ran on that side alone, since the
+  other side's execution stopped before it; what it did is that step's
+  own `path`.
+  `steps` holds only the steps with a difference, and a `same`
+  criterion has none.
+- A flag's side is what a pair of environments switches, not a change,
+  so no `flag` entry is compared there: the summary's heading names the
+  condition.
+- `not_compared` names each criterion that was not, with why, such as
+  `did not run in reorder-off`.
+- `unread` says why no criterion of the pair was compared, such as a
+  side's world at a `url`, whose events nukadoko does not read.
+  A pair whose two worlds read no events gives no entry, and `paths` is
+  absent when no pair was compared.
+- The comparison is evidence, not a verdict: no finding gates on it.
+  It reads `run.json`'s own fields, so it can be made again from a
+  `run.json` alone.
+
+The run summary gives each pair a heading under "Changed paths", after
+"Removed criteria", with a count line, and lists each criterion whose
+path changed or is open, at most 20 per pair.
+A criterion is ranked by the highest kind among its changed entries and
+what its one-side steps did, in the order errors, writes, outgoing
+calls, jobs, requests, flags, and then by the table's order:
+
+```text
+### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
+
+6 criteria compared: 1 changed, 1 open, 4 the same.
+
+- `features/orders.feature:18` a reorder goes through
+  - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201
+  - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request
+- `features/orders.feature:10` a parked score is placed
+  - line 11 `the client posts to "/scores?park=1"`: open, since neither side is whole (`reorder-off`: `jobs-pending` 1 job; `reorder-on`: `jobs-pending` 1 job): writes `scores` insert 1 or more → 1 or more; jobs `ScoreRecalcJob` enqueue 1 or more → 1 or more
+```
+
 What this does not reach, in one list:
 
 - A line a step's own code writes to the file reads as the program's.
@@ -4089,6 +4185,11 @@ What this does not reach, in one list:
 - A line a process of the program writes after the world stopped, such
   as a worker that outlives the stop, is in no file: the stop's pass has
   read the file, and the file is removed.
+- A path counts what each line did and no finer: not a read, a row's
+  ids, an actor, whether a write persisted, where a write ran (in the
+  request or in a job), or the order of requests beyond their counts.
+  A comparison of paths reads a side from its cell's first execution,
+  even when the executions of a side under `--repeat` disagree.
 
 #### A claim on a count of events
 
@@ -6735,6 +6836,10 @@ holds:
   version, the run id, and the start and finish times;
 - under `--base`, "Removed criteria": each removed criterion's location
   and name, and its sentences at the ref in a `gherkin` block;
+- "Changed paths", when run.json has `paths`: a heading per pair that
+  names what it switches, a count line, and each criterion whose path
+  changed or is open, at most 20 per pair, with each step's differences
+  (see "Execution events");
 - "Flags", when run.json has `flags`: one line per flag and side, with
   how many criteria evaluated it there, their counts by verdict,
   `only in controls` for the ones seen there only in controls, and each

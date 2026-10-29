@@ -355,6 +355,25 @@ just until 0.1.
   requests of these paths in place of folds of their own, and their
   rows are the same. The field is additive, so no `schema_version`
   changes.
+- **run.json and the run summary say what the program did differently
+  between two environments.** When two environments of a run declare
+  `conditions` that differ in exactly one condition, run.json's new
+  `paths` compares their steps' paths criterion by criterion, steps
+  aligned by their line, each side read from its cell's first execution.
+  A count on a side is a range, as a count claim's is: two counts are
+  the same when both are exact and equal, `changed` when their ranges
+  cannot meet, and `open` otherwise, so a count a side's missing lines
+  could still reach never reads as a change. A step one side never
+  reached, since its execution stopped before it, makes its criterion
+  `changed`. A flag's side is what the pair switches, so no flag entry
+  is compared there. A pair one of whose worlds read no events says so
+  in `unread`, and a criterion that did not run on a side is listed in
+  `not_compared` with why. The run summary's new "Changed paths"
+  section gives each pair a heading that names the condition, a count
+  line, and up to 20 changed or open criteria, ranked errors, writes,
+  outgoing calls, jobs, requests, then flags, each with its steps'
+  differences. The comparison is evidence, not a verdict: no finding
+  gates on it. The field is additive, so no `schema_version` changes.
 
 ### Changed
 

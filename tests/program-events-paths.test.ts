@@ -1,15 +1,18 @@
+import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: each step's coarse execution path in run.json, end to
 // end, against tests/fixtures/events-project served in two environments
 // that declare the two sides of the flag `quick_reorder`. The world's
 // stop folds the path over every line of the step's trace, so the
 // receipt's job, which performs after its step's record was written,
-// counts in its step's path, and that path is whole.
+// counts in its step's path, and that path is whole. The two
+// environments' conditions differ in one, so run.json's `paths` compares
+// their steps' paths, and the run summary lists what changed.
 
 const FEATURE = [
   "Feature: Rooms, scores, and orders",
@@ -68,22 +71,23 @@ interface ScenarioFacts {
   readonly steps: readonly StepFacts[];
 }
 
-describe("each step's path in run.json", () => {
+describe("each step's path in run.json, and the paths of two environments compared", () => {
   let rootDir: string;
+  let exitCode: number;
 
-  beforeEach(async () => {
+  // One run serves every test here: it starts two worlds.
+  beforeAll(async () => {
     rootDir = await copyFixtureToTempDir("events-project");
     await writeFile(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
     await writeFile(path.join(rootDir, FILE), FEATURE);
-  });
+    exitCode = await runCli(["run"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+  }, 120_000);
 
-  afterEach(async () => {
+  afterAll(async () => {
     await removeTempDir(rootDir);
   });
 
-  it("counts what each step's trace did, its late lines included, and leaves out the reads", async () => {
-    const exitCode = await runCli(["run"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
-
+  it("counts what each step's trace did, its late lines included, and leaves out the reads", () => {
     expect(exitCode).toBe(0);
     const run = latestRunJson(rootDir) as { scenarios: ScenarioFacts[] };
     const step = (environment: string, line: number): StepFacts => {
@@ -132,5 +136,63 @@ describe("each step's path in run.json", () => {
       maybe: 0,
       open: [],
     });
+  });
+
+  it("compares the two environments' paths step by step, with the flag they switch as the premise, and the summary lists what changed", () => {
+    const run = latestRunJson(rootDir) as { paths: { counts: unknown; criteria: { line: number; result: string; steps?: unknown }[] }[] };
+    expect(run.paths).toHaveLength(1);
+    const [pair] = run.paths;
+    expect(pair).toMatchObject({
+      between: { kind: "condition", name: "quick_reorder", a: false, b: true },
+      a: { world: "head", environment: "reorder-off" },
+      b: { world: "head", environment: "reorder-on" },
+      unread: null,
+      counts: { changed: 1, open: 1, same: 4, not_compared: 0 },
+      not_compared: [],
+    });
+    expect(pair!.criteria.map((criterion) => [criterion.line, criterion.result])).toEqual([
+      [3, "same"],
+      [6, "same"],
+      [10, "open"],
+      [14, "same"],
+      [18, "changed"],
+      [22, "same"],
+    ]);
+    expect(pair!.criteria.find((criterion) => criterion.line === 18)!.steps).toEqual([
+      {
+        line: 19,
+        text: 'customer "kim" reorders order 7',
+        ran: "both",
+        changed: [
+          { kind: "request", method: "POST", route: "/reorders", status: 201, a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } },
+          { kind: "request", method: "POST", route: "/reorders", status: 403, a: { at_least: 1, at_most: 1 }, b: { at_least: 0, at_most: 0 } },
+        ],
+        open: [],
+        gaps: { a: [], b: [] },
+      },
+      { line: 20, text: 'the client posts to "/scores"', ran: "b" },
+    ]);
+
+    const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
+    const start = summary.indexOf("## Changed paths");
+    expect(summary.slice(start, summary.indexOf("## Flags"))).toEqual([
+      "## Changed paths",
+      "",
+      "Each criterion below did something else on one side than on the other, or may have, step by step, as the program's execution events report it. " +
+        "A count that a side's missing lines could still reach is listed as open, never as a change. " +
+        "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes.",
+      "",
+      "### `reorder-off` → `reorder-on` (`quick_reorder` false → true)",
+      "",
+      "6 criteria compared: 1 changed, 1 open, 4 the same.",
+      "",
+      "- `features/events.feature:18` a reorder goes through",
+      '  - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201',
+      "  - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request",
+      "- `features/events.feature:10` a parked score is placed",
+      '  - line 11 `the client posts to "/scores?park=1"`: open, since neither side is whole (`reorder-off`: `jobs-pending` 1 job; `reorder-on`: `jobs-pending` 1 job): ' +
+        "writes `scores` insert 1 or more → 1 or more; jobs `ScoreRecalcJob` enqueue 1 or more → 1 or more",
+      "",
+    ]);
   });
 });

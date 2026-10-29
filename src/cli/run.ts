@@ -53,6 +53,7 @@ import { readCriterionTags, roleIn, type CellRole } from "../condition/condition
 import type { FlagEvaluation, ServedRequest } from "../execution-events/format.js";
 import type { ListedPlaces } from "../execution-events/lists.js";
 import { flagRows } from "../run/flag-rows.js";
+import { comparePaths } from "../run/path-view.js";
 import { routeRows } from "../run/route-rows.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
 import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.js";
@@ -1412,20 +1413,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         return routes === undefined ? [] : [{ environment: pass.resolvedEnv.name, routes }];
       });
       const routes = listedRoutes.length === 0 ? undefined : routeRows({ scenarios: runScenarios, table, served: (id) => requestsServed.get(id) ?? [], listed: listedRoutes });
+      const environments = passes.map((pass) => ({
+        name: pass.resolvedEnv.name,
+        // Unlike a scenario record, run.json is not redacted as a whole,
+        // and a version probe can answer with a secret value.
+        target_version: pass.targetVersion === undefined ? null : redactString(pass.targetVersion, pass.secrets),
+        base_url: worlds.find((world) => world.tree === "head" && world.name === pass.resolvedEnv.name)?.url ?? null,
+        ...(pass.resolvedEnv.conditions === undefined ? {} : { conditions: pass.resolvedEnv.conditions }),
+      }));
+      const paths = comparePaths({ scenarios: runScenarios, table, environments, worlds });
       const fields: RunFields = {
         run_id: runId,
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
         started_at: invocationStartedAt.toISOString(),
         finished_at: new Date().toISOString(),
         commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean },
-        environments: passes.map((pass) => ({
-          name: pass.resolvedEnv.name,
-          // Unlike a scenario record, run.json is not redacted as a whole,
-          // and a version probe can answer with a secret value.
-          target_version: pass.targetVersion === undefined ? null : redactString(pass.targetVersion, pass.secrets),
-          base_url: worlds.find((world) => world.tree === "head" && world.name === pass.resolvedEnv.name)?.url ?? null,
-          ...(pass.resolvedEnv.conditions === undefined ? {} : { conditions: pass.resolvedEnv.conditions }),
-        })),
+        environments,
         // Each world's record is redacted with its own values already.
         worlds,
         selection,
@@ -1435,6 +1438,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         table,
         ...(flags.length === 0 ? {} : { flags }),
         ...(routes === undefined ? {} : { routes }),
+        ...(paths.length === 0 ? {} : { paths }),
         ...(walk === undefined ? {} : { walk: walk.record() }),
       };
       // The gate: red when the run failed outside the table, or when a row

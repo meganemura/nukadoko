@@ -3193,6 +3193,82 @@ run サマリは、各要素に「Flags」の下の 1 行を付けます:
 - `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
 ```
 
+run の 2 つの environment が宣言する `conditions` がちょうど 1 つの condition だけ違うとき、run はその 2 つの step の実行経路を、受け入れ基準ごとに比べます。
+そのスイッチを全員に有効にしようとする人が、もう一方の側でプログラムが何を違うふうにしたかを読めるようにするためです。
+`run.json` の `paths` は、そうした組ごとに 1 つの要素を持ちます:
+
+```json
+"paths": [
+  {
+    "between": { "kind": "condition", "name": "quick_reorder", "a": false, "b": true },
+    "a": { "world": "head", "environment": "reorder-off" },
+    "b": { "world": "head", "environment": "reorder-on" },
+    "unread": null,
+    "counts": { "changed": 1, "open": 1, "same": 4, "not_compared": 0 },
+    "criteria": [
+      {
+        "feature": "features/orders.feature", "line": 18, "name": "a reorder goes through", "result": "changed",
+        "a": { "scenario_record_id": "scn-20261029-211959-i4q4", "outcome": "broke", "line": 19 },
+        "b": { "scenario_record_id": "scn-20261029-212001-me8v", "outcome": "pass" },
+        "steps": [
+          { "line": 19, "text": "customer \"kim\" reorders order 7", "ran": "both", "gaps": { "a": [], "b": [] }, "open": [],
+            "changed": [
+              { "kind": "request", "method": "POST", "route": "/reorders", "status": 201, "a": { "at_least": 0, "at_most": 0 }, "b": { "at_least": 1, "at_most": 1 } },
+              { "kind": "request", "method": "POST", "route": "/reorders", "status": 403, "a": { "at_least": 1, "at_most": 1 }, "b": { "at_least": 0, "at_most": 0 } }
+            ] },
+          { "line": 20, "text": "the client posts to \"/scores\"", "ran": "b" }
+        ]
+      }
+    ],
+    "not_compared": []
+  }
+]
+```
+
+- `between` は、違う 1 つの condition と、a 側と b 側での値を名指します。
+  a 側は、もう一方が `true` のときにそれが `false` か宣言されていない(`null`)environment で、そうでなければ `environments` で先に来るほうです。
+- 2 つの側はどちらも、1 つの feature ファイルから head の pickle を実行します。
+  そのため、step はその行で揃えます。
+  `--repeat` と証明の実行は実行を増やすので、a 側と b 側は、それぞれそのセルの最初の実行から読みます。
+  受け入れ基準の `a` と `b` は、その実行と、そのセルの `outcome` と `line` を名指します。
+- a 側と b 側の数は、それぞれ範囲です。
+  実行経路に欠けが無い step では `[n, n + maybe]`、欠けがあれば `[n, 上限なし]` です。
+  形式の 2 つの事実が、それを狭めます。
+  リクエストの行はそのリクエスト自身の仕事のあとに書かれるので、欠けが `jobs-pending` だけなら、リクエストの行はすべてそろっていて、リクエストの数には上限があります。
+  world に何も送らず行も 1 つも無い step の実行経路は、ちょうど空です。
+  flag は、見えたか見えなかったかで数えます。
+- 2 つの数は、どちらもちょうどの数で等しいとき同じで、範囲が重なりえないとき `changed`、それ以外は `open` です。
+  そのため、欠けた行がまだ届きうる数は変化として読まれず、欠けた行が届きえない数は変化として読まれます。
+  `gaps` は、その step での a 側と b 側の欠けを名指します。
+- 受け入れ基準の `result` は、step に変わった項目があるか、片側だけで走った step があれば `changed`、違いがすべて `open` なら `open`、それ以外は `same` です。
+  `ran: "a"` の step は、b 側の実行がその前に止まったので、a 側だけで走りました(`"b"` はその逆です)。
+  その step がしたことは、その step 自身の `path` にあります。
+  `steps` は違いのある step だけを持ち、`same` の受け入れ基準は持ちません。
+- flag の側は、environment の組が切り替えるもので、変化ではありません。
+  そのため、そこでは `flag` の項目を比べず、サマリの見出しが condition を名指します。
+- `not_compared` は、比べなかった受け入れ基準を、`did not run in reorder-off` のような理由とともに名指します。
+- `unread` は、組のどの受け入れ基準も比べなかった理由を言います。
+  nukadoko が実行イベントを読まない `url` の world が一方の側にある場合などです。
+  2 つの world がどちらも実行イベントを読まなかった組は要素にならず、比べた組が無いとき `paths` はありません。
+- 比較は証拠であって判定ではなく、どの finding もそれで止めません。
+  `run.json` 自身のフィールドだけを読むので、`run.json` だけからもう一度同じ比較ができます。
+
+run サマリは、「Removed criteria」のあとの「Changed paths」の下で、各組に見出しと数の行を付け、実行経路が変わったか `open` の受け入れ基準を、組ごとに 20 まで並べます。
+受け入れ基準の順は、変わった項目と、片側だけで走った step がしたことのうち、いちばん上の種類で決めます。
+種類の順は errors、writes、outgoing calls、jobs、requests、flags で、そのあとは表の順です:
+
+```text
+### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
+
+6 criteria compared: 1 changed, 1 open, 4 the same.
+
+- `features/orders.feature:18` a reorder goes through
+  - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201
+  - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request
+- `features/orders.feature:10` a parked score is placed
+  - line 11 `the client posts to "/scores?park=1"`: open, since neither side is whole (`reorder-off`: `jobs-pending` 1 job; `reorder-on`: `jobs-pending` 1 job): writes `scores` insert 1 or more → 1 or more; jobs `ScoreRecalcJob` enqueue 1 or more → 1 or more
+```
+
 この仕組みが届かないものを、1 つの一覧にまとめます:
 
 - step 自身のコードがファイルに書いた行は、プログラムのものとして読まれます。
@@ -3203,6 +3279,9 @@ run サマリは、各要素に「Flags」の下の 1 行を付けます:
 - `url` の world と、`{events}` が名指すファイルではない場所に行を書くプログラムには届きません。
 - world が止まったあとにプログラムのプロセスが書く行(止めたあとも残る、ジョブを実行するプロセスなど)は、どのファイルにも入りません。
   止めるときの読みはもうファイルを読み終えていて、ファイルは消されるからです。
+- 実行経路は、各行がしたことを数え、それより細かくはしません。
+  読み取り、行の id、actor、書き込みが永続したか、書き込みがどこで走ったか(リクエストの中かジョブの中か)、数を超えたリクエストの順は数えません。
+  実行経路の比較は、`--repeat` の下で a 側や b 側の実行どうしが食い違っても、それぞれをそのセルの最初の実行から読みます。
 
 #### 実行イベントの数についての claim
 
@@ -5174,6 +5253,8 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world ごとの 1 行(「実行イベント」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--base` のもとでは「Removed criteria」。
   消えた各受け入れ基準の場所と名前、そして基点での文を `gherkin` のブロックで載せます。
+- run.json が `paths` を持つときは「Changed paths」。
+  組ごとに、それが切り替えるものを名指す見出しと数の行を付け、実行経路が変わったか `open` の受け入れ基準を 20 まで、各 step の違いと一緒に載せます(「実行イベント」を参照)。
 - run.json が `flags` を持つときは「Flags」。
   flag と側の組ごとに 1 行で、そこで flag を評価した受け入れ基準の数、断定ごとの数、その側で対照にしか現れなかったものの `only in controls`、行が名指した各ゲート(ゲートを名指さなかった行は `none named`)を載せます。
   そのあとに、flag の唯一の側には `only this side was evaluated` を、どの一覧も宣言しない側には `no flags list that was read declares this side` を続けます。

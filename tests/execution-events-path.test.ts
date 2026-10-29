@@ -189,7 +189,7 @@ describe("rangeOn", () => {
       for (const [key, lines] of keys) {
         const range = rangeOn(found, key);
         expect(range.at_least).toBe(lines);
-        const bounded = gaps.length === 0 || (key.kind === "request" && gaps.every((gap) => gap === "jobs-pending"));
+        const bounded = gaps.length === 0 || (key.kind === "request" && gaps.every(({ gap }) => gap === "jobs-pending"));
         expect(range.at_most).toBe(bounded ? lines + found.maybe : null);
       }
       const flag = rangeOn(found, { kind: "flag", name: "quick_reorder", side: "on" });
@@ -203,7 +203,7 @@ describe("rangeOn", () => {
     expect(boundingGaps(empty)).toEqual([]);
     expect(rangeOn(empty, { kind: "db", table: "scores", op: "insert" })).toEqual({ at_least: 0, at_most: 0 });
     const lined = fold([text(["enqueue", 0]), text(["perform", 0])], []);
-    expect(boundingGaps(lined)).toEqual(["no-requests"]);
+    expect(boundingGaps(lined)).toEqual([{ gap: "no-requests" }]);
     expect(rangeOn(lined, { kind: "job", name: "ScoreRecalcJob", phase: "perform" })).toEqual({ at_least: 1, at_most: null });
   });
 

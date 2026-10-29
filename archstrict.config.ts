@@ -317,6 +317,7 @@ export default {
         "execute-typed-step.ts",
         "flag-rows.ts",
         "route-rows.ts",
+        "path-view.ts",
         "match-step.ts",
         "probe-git.ts",
         "verdict-table.ts",
