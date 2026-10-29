@@ -20,7 +20,9 @@ just until 0.1.
   "fields", expected_view: "json" }`. An expected object with no field,
   at any depth, breaks the claim and names where it sits, since every
   object holds it, and a `where` claim that overlaps an item claim cannot
-  use the compare. A broken `has-fields` line in the run summary and the
+  use the compare. `defineStep` refuses a literal expected value, and a
+  sentence key read without `expected_view: "json"`: neither is ever an
+  object, so the claim could only break. A broken `has-fields` line in the run summary and the
   failure message ends with the first expected field that does not fit,
   with its path and both sides (`; first field that does not fit at
   owner.name: actual "aki", expected "kei"`).

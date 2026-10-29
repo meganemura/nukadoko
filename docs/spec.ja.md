@@ -1551,6 +1551,10 @@ docstring は `expected_view` を通して JSON として claim に届きます�
 claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
 ```
 
+期待値が literal である `has-fields` の claim と、`expected_view: "json"` なしで文のキーを読む `has-fields` の claim は、`defineStep` が拒否します。
+literal は語か数値で、行がキーを埋めるのは capture の値、docstring のテキスト、表のセルです。
+どちらもオブジェクトにはならないので、claim はどの行でも成り立たなくなるからです。
+
 `fits-text` は 2 つのテキストを比べ、実行のたびに時刻、大きさ、パスが変わるプログラムの出力を、変わる部分ごとに claim を分けずに docstring で述べられるようにします。
 両方のテキストを `\n` ごとに行に分け、それぞれの側で最後の空行を 1 つだけ除きます。
 そのため、プログラムが最後に出力する改行は数えません。

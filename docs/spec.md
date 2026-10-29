@@ -1896,6 +1896,12 @@ an equal one. A docstring reaches the claim as JSON through
 claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
 ```
 
+`defineStep` refuses a `has-fields` claim whose expected value is a
+literal, or a sentence key read without `expected_view: "json"`. A
+literal is a word or a number, and a line fills a key with a capture's
+value, the docstring's text, or the table's cells, so neither is ever
+an object and the claim would break on every line.
+
 `fits-text` compares two texts, and lets a docstring state a program's
 output whose times, sizes, and paths change on each run without each
 changing part becoming a claim of its own. Both texts are split into

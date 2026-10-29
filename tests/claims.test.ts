@@ -1064,7 +1064,9 @@ describe("where", () => {
     const actual = segments.slice(0, split).join(".");
     const at = segments.slice(split).join(".");
     const view = tc.draw(gs.sampledFrom([undefined, "text", "json"] as const));
-    return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected };
+    // defineStep refuses has-fields on a sentence key it does not read as JSON.
+    const read = compare === "has-fields" ? { expected_view: "json" as const } : {};
+    return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected, ...read };
   }
 
   const decides = ["equal", "has-same-items", "has-fields", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
@@ -1122,7 +1124,7 @@ describe("where", () => {
     // The reference is how an agent learns which where clauses check
     // refuses; a compare missing from its list reads as one the run judges.
     const refused = CLAIM_COMPARES.filter((compare) =>
-      (claimsProblem([{ actual: "result", each: { where: [{ actual: "a", compare, expected: "least" }], claims: [{ actual: "a", compare: "at-least", expected: "least" }] } }], shape) ?? "").includes("so where selects the items by the value the claim then judges"),
+      (claimsProblem([{ actual: "result", each: { where: [{ actual: "a", compare, expected: "least", ...(compare === "has-fields" ? { expected_view: "json" } : {}) }], claims: [{ actual: "a", compare: "at-least", expected: "least" }] } }], shape) ?? "").includes("so where selects the items by the value the claim then judges"),
     );
     const reference = readFileSync(path.join(repoRoot, "skills/nukadoko/references/checking-steps.md"), "utf8").replace(/\s+/g, " ");
     const listed = /is refused with ([^.]*?), and breaks the claim where it implies it/.exec(reference)?.[1];
@@ -1787,4 +1789,18 @@ describe("a broken has-fields names the first expected field that does not fit",
     expect(fieldsDifference(body, { tags: ["x"] })).toBe("first field that does not fit at tags: actual 2 items, expected 1 item");
     expect(fieldsDifference(body, { tags: ["x", "z"] })).toBe('first field that does not fit at tags.1: actual "y", expected "z"');
   });
+});
+
+describe("an expected value a compare can never judge as the sentence means it", () => {
+  it("refuses has-fields with any literal, and with a sentence key read as anything but JSON", () =>
+    hegel.test((tc) => {
+      const literal = tc.draw(patternWords).join(" ");
+      expect(claimsProblem([{ actual: "result", compare: "has-fields", expected: { literal } }], literalShape(`the result is ${literal}`))).toContain(
+        "which is never an object, and has-fields compares two objects, so the claim always breaks",
+      );
+      const view = tc.draw(gs.sampledFrom([undefined, "text", "lines", "comma-list"] as const));
+      const claim = { actual: "result", compare: "has-fields", expected: "fields", ...(view === undefined ? {} : { expected_view: view }) };
+      expect(claimsProblem([claim], literalShape("the result reads"))).toContain("never an object, so has-fields always breaks");
+      expect(claimsProblem([{ ...claim, expected_view: "json" }], literalShape("the result reads"))).toBeNull();
+    }));
 });

@@ -587,6 +587,48 @@ function checkExpected(label: string, expected: unknown, compare: unknown, shape
   throw new InvalidClaimError(`${label}.expected must have exactly one of from, literal, observe; got ${describe(keys)}`);
 }
 
+/** What a claim's view or expected_view always makes, by its JSON type:
+ * the view reads a string, and gives this or a reason. */
+const VIEW_MAKES: Readonly<Record<(typeof CLAIM_VIEWS)[number], "string" | "array" | null>> = {
+  text: "string",
+  lines: "array",
+  "comma-list": "array",
+  json: null,
+};
+
+function literalOf(expected: unknown): { readonly literal: unknown } | null {
+  return typeof expected === "object" && expected !== null && "literal" in expected ? (expected as { literal: unknown }) : null;
+}
+
+/** The refusals a compare adds to the expected value it may take, by
+ * compare: an expected value the compare always breaks on, or one that
+ * states nothing. Each holds only what can end one way, so the run would
+ * meet the same thing on every line. A compare with no row adds none. */
+const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<string, unknown>) => void>> = {
+  // A literal is a word or a number, and a sentence key holds a capture's
+  // value, a docstring, or a table's cells, so only JSON read from the
+  // line can be the object has-fields compares with.
+  "has-fields": (label, claim) => {
+    const literal = literalOf(claim.expected);
+    if (literal !== null) {
+      throw new InvalidClaimError(
+        `${label}.expected is the literal ${describe(literal.literal)}, which is never an object, and has-fields compares two objects, so the claim always breaks. Take the expected object from the docstring, read as JSON with expected_view: "json"`,
+      );
+    }
+    if (typeof claim.expected !== "string" || claim.expected_view === "json") return;
+    const view = claim.expected_view as (typeof CLAIM_VIEWS)[number] | undefined;
+    const what =
+      view === undefined
+        ? `is args.${claim.expected}, which a line fills with a capture's value, the docstring's text, or the table's cells`
+        : `reads args.${claim.expected} through expected_view ${view}, which makes ${article(VIEW_MAKES[view]!)}`;
+    throw new InvalidClaimError(`${label}.expected ${what}, never an object, so has-fields always breaks. Read the docstring as JSON with expected_view: "json"`);
+  },
+};
+
+function article(word: string): string {
+  return /^[aeiou]/.test(word) ? `an ${word}` : `a ${word}`;
+}
+
 function checkComparison(label: string, claim: Record<string, unknown>, shape: ClaimStepShape, where: Where, actualFromObserve: boolean): void {
   if (claim.each !== undefined) {
     throw new InvalidClaimError(`${label} has each, which a claim inside each cannot have`);
@@ -599,6 +641,7 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   }
   checkExpected(label, claim.expected, claim.compare, shape, actualFromObserve);
   checkExpectedView(label, claim, shape);
+  COMPARE_SIDES[claim.compare as ClaimCompare]?.(label, claim);
 }
 
 /** Whether a top-level claim's `actual` reads observe: its first segment

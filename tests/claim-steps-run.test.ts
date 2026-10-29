@@ -2220,3 +2220,46 @@ export default defineStep({
     ]);
   });
 });
+
+describe("a claim its compare could never judge as the sentence means it, refused at import", () => {
+  /** A claim step that observes a body and an output, and reads a key of
+   * the step that answers, so a claim can name either side. */
+  const step = (pattern: string, args: string, claim: string) => `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "${pattern}",
+  args: z.object({ ${args} }),
+  from: { said: [answer, "out"] },
+  observe() {
+    return { body: { id: 1 }, printed: "a" };
+  },
+  claims: [${claim}] as any,
+});
+`;
+
+  it.each([
+    [
+      "has-fields with a literal",
+      step("the body is done", "said: z.string()", `{ actual: "body", compare: "has-fields", expected: { literal: "done" } }, { actual: "said", compare: "equal", expected: { observe: "printed" } }`),
+      'claims[0].expected is the literal "done", which is never an object, and has-fields compares two objects, so the claim always breaks. Take the expected object from the docstring, read as JSON with expected_view: "json"',
+    ],
+    [
+      "has-fields with a sentence key read as it is",
+      step("the body reads", "fields: z.string(), said: z.string()", `{ actual: "body", compare: "has-fields", expected: "fields" }`),
+      'claims[0].expected is args.fields, which a line fills with a capture\'s value, the docstring\'s text, or the table\'s cells, never an object, so has-fields always breaks. Read the docstring as JSON with expected_view: "json"',
+    ],
+    [
+      "has-fields with a sentence key read as lines",
+      step("the body reads", "fields: z.string(), said: z.string()", `{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "lines" }`),
+      'claims[0].expected reads args.fields through expected_view lines, which makes an array, never an object, so has-fields always breaks. Read the docstring as JSON with expected_view: "json"',
+    ],
+  ])("refuses %s", async (_name, source, message) => {
+    const rootDir = await project({
+      "features/steps/claim.ts": source,
+      "features/t.feature": feature("When the app answers", `Then ${/pattern: "([^"]*)"/.exec(source)![1]}`),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain(`defineStep ${message}.`);
+  });
+});

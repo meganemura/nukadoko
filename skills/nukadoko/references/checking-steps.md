@@ -125,8 +125,8 @@ any depth, each array whole), `fits-text` (line by line; a line `...` is any
 lines, `[..]` any text in its line), `is-a` (a kind: `string`, `number`,
 `integer`, `boolean`, `list`, `object`, `null`, `uuid`, `date`, `timestamp`,
 `url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A
-docstring claims the few fields of a large response as JSON (`expected_view:
-"json"`) with `has-fields`, and output whose times change each run with
+docstring claims the few fields of a large response with `has-fields`, only as
+JSON (`expected_view: "json"`), and output whose times change each run with
 `fits-text`. Two values of different JSON types break the claim (`is-a` aside),
 and so does an expected value nearly every value holds (a blank text, a pattern
 that matches `""`, an object with no field, only `...` and `[..]`). Each side
