@@ -36,7 +36,8 @@ walk 1 paused after step 1/4 (passed): the shopper opens the cart
 ran out before the walk paused: run it again. A run that refused (it
 selected more than one scenario, say) never pauses: its own output
 names the refusal, and a wait shows the walk ended before its scenario
-ran, or ends in `walk-not-found` when the wait started after that end.
+ran. A wait reports each end once; after that it waits for the next
+walk, and `nuka step wait --walk <w>` shows that walk again.
 
 ## 2. Gather one step
 

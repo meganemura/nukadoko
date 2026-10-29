@@ -1,6 +1,6 @@
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
-import { answerCommand, runStepCall, type StepCall, type StepCallResult, type WalkFound } from "../run/walk-files.js";
+import { answerCommand, runStepCall, walkStanding, type StepCall, type StepCallResult, type WalkFound } from "../run/walk-files.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { REFUSED_EXIT_CODE, RefusalError, formatEnvelope, refusalOf, refuse, withHint } from "./refusal.js";
 
@@ -35,9 +35,7 @@ function joined(runDir: string, relative: string): string {
 // What a person reads at a pause: where the step is, what it recorded, the
 // views of the pages it left open, and the two answers.
 function walkText(seen: WalkFound, fields: Readonly<Record<string, unknown>>): string {
-  if (seen.state === "gone") {
-    return `walk ${seen.last.number} is gone: its nuka run --step process (pid ${seen.last.pid}) ended without recording how\n`;
-  }
+  if (seen.state === "gone") return `walk ${seen.last.number} ${walkStanding(seen)}\n`;
   if (seen.state === "paused") {
     const { pause, run_dir: runDir, scenario, world } = seen;
     const lines = [
@@ -56,17 +54,8 @@ function walkText(seen: WalkFound, fields: Readonly<Record<string, unknown>>): s
     return `${lines.join("\n")}\n`;
   }
   if (seen.state === "ended") {
-    const { end } = seen;
-    const head =
-      end.how === "interrupted"
-        ? `walk ${seen.number} ended: interrupted by ${end.signal}, exit ${end.exit_code}`
-        : end.how === "not-run"
-          ? `walk ${seen.number} ended before its scenario ran, exit ${end.exit_code}`
-          : end.stopped !== undefined
-            ? `walk ${seen.number} ended: stopped after step ${end.stopped.after_step}${end.stopped.line === null ? "" : ` (line ${end.stopped.line})`}, exit ${end.exit_code}`
-            : `walk ${seen.number} ended: the run finished, exit ${end.exit_code}`;
-    const run = end.how === "finished" && seen.run_dir !== undefined ? [`  run: ${seen.run_dir}/run.json`] : [];
-    return `${[head, ...run].join("\n")}\n`;
+    const run = seen.end.how === "finished" && seen.run_dir !== undefined ? [`  run: ${seen.run_dir}/run.json`] : [];
+    return `${[`walk ${seen.number} ${walkStanding(seen)}`, ...run].join("\n")}\n`;
   }
   const after = seen.state === "running" ? seen.after : 0;
   return `walk ${seen.number} is running ${after === 0 ? "its first step" : `the step after pause ${after}`}\n  do: ${String(fields["do"])}\n`;

@@ -3678,8 +3678,12 @@ pid が死んでいる lock は引き継がれます。
 同じ答えをもう一度送ると、その後に起きたことを表示します。
 同じ一時停止への別の答えは `pause-answered` で、walk がいない一時停止への答えは `pause-not-current` で拒否されます。
 `nuka step wait` は walk が一時停止するか終わるまで待ち、何も答えません。
-前の walk が終わっているのを見つけた wait は次の walk を待ちます。
-1 つも始まらなければ、前の walk を名指して `walk-not-found` で拒否されます。
+`--walk` を付けない wait は、ある `nuka step` の呼び出しがその walk の終わり方を表示するまで、いちばん新しい walk を対象にします。
+そのため、誰も見ないうちに終わった walk(拒否、シグナル、kill)も 1 回は報告されます。
+その後の wait は次の walk を待ち、1 つも始まらなければ、前の walk とその終わり方を名指して `walk-not-found` で拒否されます。
+`nuka step` はこの事実を state ディレクトリの `walks-reported/<n>` として残します。
+これは `nuka step` だけが 1 回だけ作る空のファイルです。
+`--walk <n>` を付けた wait は、前に何が報告されていても walk n を報告します。
 `nuka step` の各呼び出しが待つのは最長で `--timeout` 秒です(既定は 90 で、ホストがフォアグラウンドのコマンドに与える 2 分より短くしてあります)。
 それを過ぎると、walk を `running` として表示し、同じ呼び出しを `do` に載せます。
 
@@ -5335,9 +5339,11 @@ nuka step wait [--walk <n>] [--timeout <s>] [--json]
                               stands: the step, its record, the views of
                               the open pages, the world, and the answers.
                               At a pause it answers nothing. A wait that
-                              finds the last walk ended waits for the
-                              next one (walk-not-found when none starts);
-                              --walk waits for that walk alone
+                              names no walk reports the newest walk until
+                              a nuka step call has printed how it ended,
+                              and then waits for the next one
+                              (walk-not-found, naming the last walk, when
+                              none starts); --walk reports that walk alone
 nuka step next <pause> --walk <n> [--timeout <s>] [--json]
                               answer the pause the person saw, of the walk
                               --walk names (required): run the next step,

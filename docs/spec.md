@@ -4648,9 +4648,15 @@ is, and moves nothing. A call made twice writes nothing the second time: the
 same answer again prints what followed it, another answer to that pause
 is refused with `pause-answered`, and an answer to a pause the walk is
 not at with `pause-not-current`. `nuka step wait` waits until the walk
-pauses or ends, and answers nothing. A wait that finds the last walk
-ended waits for the next one, and is refused with `walk-not-found`,
-naming the last walk, when none starts. Each `nuka step` call waits at
+pauses or ends, and answers nothing. Without `--walk`, a wait is about
+the newest walk until a `nuka step` call has printed how that walk
+ended, so a walk that ended before anyone looked (a refusal, a signal, a
+kill) is still reported once; after that, a wait waits for the next walk,
+and is refused with `walk-not-found`, naming the last walk and how it
+ended, when none starts. `nuka step` keeps that fact as
+`walks-reported/<n>` in the state directory, an empty file it creates
+once and only it writes. With `--walk <n>`, a wait reports walk n
+whatever was reported before. Each `nuka step` call waits at
 most `--timeout` seconds (default 90, under the two minutes a host gives
 a foreground command); after that it prints the walk as `running`, with
 the same call as its `do`.
@@ -6643,9 +6649,11 @@ nuka step wait [--walk <n>] [--timeout <s>] [--json]
                               stands: the step, its record, the views of
                               the open pages, the world, and the answers.
                               At a pause it answers nothing. A wait that
-                              finds the last walk ended waits for the
-                              next one (walk-not-found when none starts);
-                              --walk waits for that walk alone
+                              names no walk reports the newest walk until
+                              a nuka step call has printed how it ended,
+                              and then waits for the next one
+                              (walk-not-found, naming the last walk, when
+                              none starts); --walk reports that walk alone
 nuka step next <pause> --walk <n> [--timeout <s>] [--json]
                               answer the pause the person saw, of the walk
                               --walk names (required): run the next step,

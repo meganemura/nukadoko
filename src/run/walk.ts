@@ -153,11 +153,8 @@ export function waitCommand(walk: number): string {
 
 /** walk.json as `nuka step` reads it. A walk whose process is gone without
  * recording its end is `gone`: killed, or crashed. `none`: no walk was
- * ever recorded, or the walk a call is about was replaced. */
-export type WalkSeen =
-  | WalkState
-  | { readonly state: "gone"; readonly last: WalkState }
-  | { readonly state: "none"; readonly last: WalkState | null };
+ * ever recorded in the project. */
+export type WalkSeen = WalkState | { readonly state: "gone"; readonly last: WalkState } | { readonly state: "none" };
 
 /** A walk `nuka step` can report on: anything but `none`. */
 export type WalkFound = Exclude<WalkSeen, { readonly state: "none" }>;
@@ -165,7 +162,7 @@ export type WalkFound = Exclude<WalkSeen, { readonly state: "none" }>;
 /** What `nuka step` sees in walk.json: a live state whose pid is not
  * alive reads as `gone`. */
 export function seeWalk(stored: WalkState | null, isAlive: (pid: number) => boolean): WalkSeen {
-  if (stored === null) return { state: "none", last: null };
+  if (stored === null) return { state: "none" };
   if (stored.state !== "ended" && !isAlive(stored.pid)) return { state: "gone", last: stored };
   return stored;
 }
@@ -182,14 +179,45 @@ export type StepCall =
   | { readonly kind: "answer"; readonly walk: number; readonly pause: number; readonly answer: WalkAnswer };
 
 /** The walk one `nuka step` call is about, fixed when the call starts. A
- * wait that names no walk and finds the previous walk over waits for the
- * next one, which a `nuka run --step` started just before it has not
- * recorded yet. */
-export function callTarget(call: StepCall, atStart: WalkSeen): number {
+ * wait that names no walk is about the newest walk until some `nuka step`
+ * call has reported how that walk ended (`endReported`), and about the
+ * next walk after that, which a `nuka run --step` started just before the
+ * wait may not have recorded yet. So a walk that ended before anyone
+ * looked (a refusal, a signal, a kill) is still reported, and an end is
+ * not reported in place of the walk that follows it. */
+export function callTarget(call: StepCall, atStart: WalkSeen, endReported: (walk: number) => boolean): number {
   if (call.kind === "answer") return call.walk;
   if (call.walk !== undefined) return call.walk;
-  const number = atStart.state === "none" ? (atStart.last?.number ?? 0) : numberOf(atStart);
-  return atStart.state === "none" || atStart.state === "ended" || atStart.state === "gone" ? number + 1 : number;
+  if (atStart.state === "none") return 1;
+  const number = numberOf(atStart);
+  const over = atStart.state === "ended" || atStart.state === "gone";
+  return over && endReported(number) ? number + 1 : number;
+}
+
+/** How a walk stands, after its number: "ended: interrupted by SIGTERM,
+ * exit 143", "is at pause 2". The text output and the refusals that name
+ * a walk share it. */
+export function walkStanding(seen: WalkFound): string {
+  if (seen.state === "gone") return `is gone: its nuka run --step process (pid ${seen.last.pid}) ended without recording how`;
+  if (seen.state === "paused") return `is at pause ${seen.pause.pause}`;
+  if (seen.state === "running") return seen.after === 0 ? "is running its first step" : `is running the step after pause ${seen.after}`;
+  if (seen.state === "starting") return "is starting";
+  const { end } = seen;
+  if (end.how === "interrupted") return `ended: interrupted by ${end.signal}, exit ${end.exit_code}`;
+  if (end.how === "not-run") return `ended before its scenario ran, exit ${end.exit_code}`;
+  if (end.stopped !== undefined) {
+    return `ended: stopped after step ${end.stopped.after_step}${end.stopped.line === null ? "" : ` (line ${end.stopped.line})`}, exit ${end.exit_code}`;
+  }
+  return `ended: the run finished, exit ${end.exit_code}`;
+}
+
+/** The message of a wait that found no walk to report before its time ran
+ * out: which walk it waited for, and the last walk there is and how it
+ * stands, so the caller is not told that nothing ran. */
+export function nothingStartedMessage(call: Extract<StepCall, { readonly kind: "wait" }>, seconds: number, seen: WalkSeen): string {
+  const waited = call.walk === undefined ? `no new walk started within ${seconds}s` : `walk ${call.walk} did not start within ${seconds}s`;
+  if (seen.state === "none") return `${waited}, and this project has recorded no walk`;
+  return `${waited}; the last walk, walk ${numberOf(seen)}, ${walkStanding(seen)}`;
 }
 
 /** The refusals of `nuka step` itself: it did nothing. */

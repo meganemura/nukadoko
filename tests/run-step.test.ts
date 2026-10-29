@@ -521,6 +521,31 @@ describe("nuka run --step and nuka step", () => {
   );
 
   it(
+    "reports a walk that ended before the wait started, once, and then waits for the next walk",
+    async () => {
+      const run = nukaRun(rootDir, ["features/order.feature", "--step"]);
+      expect((await run.closed).code).toBe(2);
+
+      const ended = await nukaStep(rootDir, "wait", "--timeout", "5");
+      expect(ended.code).toBe(1);
+      expect(ended.stdout).toBe("walk 1 ended before its scenario ran, exit 2\n");
+      expect(ended.stderr).toContain("step-needs-one-scenario");
+
+      // That end was reported, so a wait now waits for the next walk, and
+      // names the last walk and how it ended when none starts.
+      const next = await nukaStepJson(rootDir, "wait", "--timeout", "0");
+      expect(next.code).toBe(2);
+      expect(next.document["findings"][0]).toMatchObject({ code: "walk-not-found" });
+      expect(next.document["findings"][0]["message"]).toContain("the last walk, walk 1, ended before its scenario ran, exit 2");
+      expect(next.document).toMatchObject({ walk: "none", last: { number: 1, state: "ended" } });
+
+      // A wait that names the walk reports it however often it was reported.
+      expect(await nukaStep(rootDir, "wait", "--walk", "1")).toEqual(ended);
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it(
     "refuses a second walk while one is live in the project",
     async () => {
       const first = nukaRun(rootDir, ["features/order.feature:3", "--step"]);
@@ -547,6 +572,11 @@ describe("nuka run --step and nuka step", () => {
       const closed = await run.closed;
       expect(stoppedBy("SIGTERM", closed.code, closed.signal)).toBe(true);
 
+      // No nuka step saw that end yet, so a wait reports it.
+      const wait = await nukaStep(rootDir, "wait", "--timeout", "5");
+      expect(wait.code).toBe(1);
+      expect(wait.stdout).toBe("walk 1 ended: interrupted by SIGTERM, exit 143\n");
+
       const answer = await nukaStep(rootDir, "next", "1", "--walk", "1");
       expect(answer.code).toBe(1);
       expect(answer.stdout).toBe("walk 1 ended: interrupted by SIGTERM, exit 143\n");
@@ -562,6 +592,10 @@ describe("nuka run --step and nuka step", () => {
       await nukaStep(rootDir, "wait", ...FIRST_WAIT);
       killed.child.kill("SIGKILL");
       await killed.closed;
+
+      const wait = await nukaStep(rootDir, "wait", "--timeout", "5");
+      expect(wait.code).toBe(1);
+      expect(wait.stdout).toMatch(/^walk 1 is gone: its nuka run --step process \(pid \d+\) ended without recording how\n$/);
 
       const answer = await nukaStep(rootDir, "next", "1", "--walk", "1");
       expect(answer.code).toBe(1);

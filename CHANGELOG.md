@@ -39,7 +39,10 @@ just until 0.1.
   step's. The run refuses more than one execution
   (`step-needs-one-scenario`) and a second walk in the project
   (`walk-in-progress`); `nuka step` reports a walk a signal ended as
-  interrupted, and one whose run was killed as gone (`walk-gone`).
+  interrupted, and one whose run was killed as gone (`walk-gone`). A
+  wait reports the newest walk until some `nuka step` call has printed
+  how it ended, so a walk that ended before the wait started is still
+  shown once.
   `run.json`'s `walk` lists the pauses and their answers, and the run
   summary says the run was walked, which is not the run a reviewer
   approves. The nukadoko skill's `references/reviewing.md` walks a real

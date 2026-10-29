@@ -168,7 +168,7 @@ describe("seeWalk", () => {
       const seen = seeWalk(state, () => alive);
       if (state.state === "ended" || alive) expect(seen).toBe(state);
       else expect(seen).toEqual({ state: "gone", last: state });
-      expect(seeWalk(null, () => alive)).toEqual({ state: "none", last: null });
+      expect(seeWalk(null, () => alive)).toEqual({ state: "none" });
     }));
 });
 
@@ -241,7 +241,7 @@ describe("stepDecision", () => {
       const answers = new Map(tc.draw(gs.arrays(gs.tuples(gs.integers({ minValue: 0, maxValue: STEPS + 1 }), gs.sampledFrom(["next", "stop"] as const)), { maxSize: 4 })));
       const walk = tc.draw(gs.integers({ minValue: 1, maxValue: START.number + 2 }));
       const call: StepCall = { kind: "answer", walk, pause: tc.draw(gs.integers({ minValue: 1, maxValue: STEPS })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
-      const decision = stepDecision(call, callTarget(call, seen), seen, answers);
+      const decision = stepDecision(call, callTarget(call, seen, () => false), seen, answers);
       if (walk === START.number) {
         expect(decision).not.toMatchObject({ code: "walk-not-current" });
         if (seen.state === "gone") expect(decision).toEqual({ kind: "report", seen });
@@ -251,20 +251,36 @@ describe("stepDecision", () => {
       if (decision.kind === "refuse") expect(decision.message).toContain(`this answer is for walk ${walk}, and the walk in this project is walk ${START.number}`);
     }));
 
-  it("makes a wait wait for a walk that is running or not recorded yet, and report one that paused, ended, or is gone", () =>
+  it("makes a wait that names no walk report the newest walk once it pauses, or once it is over unless its end was reported, and wait otherwise", () =>
     hegel.test((tc) => {
       const states = walkThrough(tc.draw(gs.arrays(events, { maxSize: 12 })));
       const state = states.at(-1)!;
       const alive = tc.draw(gs.booleans());
+      const reported = tc.draw(gs.booleans());
       const seen = seeWalk(state, () => alive);
-      const target = callTarget({ kind: "wait" }, seen);
+      const target = callTarget({ kind: "wait" }, seen, () => reported);
       const decision = stepDecision({ kind: "wait" }, target, seen, new Map());
-      if (seen.state === "paused") expect(decision).toEqual({ kind: "report", seen });
+      const over = seen.state === "ended" || seen.state === "gone";
+      if (seen.state === "paused" || (over && !reported)) expect(decision).toEqual({ kind: "report", seen });
       else expect(decision).toEqual({ kind: "wait" });
+      expect(callTarget({ kind: "wait" }, { state: "none" }, () => reported)).toBe(1);
       // A later walk, once it pauses, is what any wait reports.
       const next = { ...walkTo(1, "next", "paused").seen, number: START.number + 1 };
       expect(stepDecision({ kind: "wait" }, target, startWalk({ ...START, number: START.number + 1 }), new Map())).toEqual({ kind: "wait" });
       expect(stepDecision({ kind: "wait" }, target, next, new Map())).toEqual({ kind: "report", seen: next });
+    }));
+
+  it("makes a wait that names a walk report that walk whatever was reported, wait for one not recorded yet, and refuse one a later walk replaced", () =>
+    hegel.test((tc) => {
+      const states = walkThrough(tc.draw(gs.arrays(events, { maxSize: 12 })));
+      const seen = seeWalk(states.at(-1)!, () => tc.draw(gs.booleans()));
+      const walk = tc.draw(gs.integers({ minValue: 1, maxValue: START.number + 2 }));
+      const call = { kind: "wait", walk } as const;
+      const decision = stepDecision(call, callTarget(call, seen, () => true), seen, new Map());
+      if (walk > START.number) expect(decision).toEqual({ kind: "wait" });
+      else if (walk < START.number) expect(decision).toMatchObject({ kind: "refuse", code: "walk-not-current", do: `nuka step wait --walk ${START.number}` });
+      else if (seen.state === "starting" || seen.state === "running") expect(decision).toEqual({ kind: "wait" });
+      else expect(decision).toEqual({ kind: "report", seen });
     }));
 });
 

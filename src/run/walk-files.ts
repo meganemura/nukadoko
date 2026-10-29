@@ -4,6 +4,7 @@ import type { PageView, RunWalk, RunWalkPause } from "../record/run-result.js";
 import {
   advanceWalk,
   callTarget,
+  nothingStartedMessage,
   pauseLines,
   seeWalk,
   startWalk,
@@ -35,6 +36,7 @@ import {
 //   <stateDir>/walk.json            the run, replaced whole (written aside, then renamed)
 //   <run_dir>/answers/<n>.json      nuka step, created exclusively, never rewritten
 //   <run_dir>/pauses/<n>/           the run: the views, and the open pages' requests
+//   <stateDir>/walks-reported/<n>   nuka step, created exclusively once it printed how walk n ended
 //
 // A process that holds the lock and is gone (a crash, a SIGKILL) leaves a
 // walk.json that is not ended and a pid that is not alive: a reader sees
@@ -43,10 +45,11 @@ import {
 // and `process.kill(pid, 0)` answers the same on Windows.
 
 export type { Pause, StepCall, StepRefusalCode, StepReport, WalkAnswer, WalkEnd, WalkFound, WalkRun, WalkScenario, WalkState };
-export { answerCommand, restartCommand, waitCommand } from "./walk.js";
+export { answerCommand, restartCommand, waitCommand, walkStanding } from "./walk.js";
 
 const LOCK_FILE = "walk.lock";
 const STATE_FILE = "walk.json";
+const REPORTED_DIR = "walks-reported";
 const POLL_MS = 100;
 
 /** What run-scenario.ts knows of a step once it and its AfterStep hooks
@@ -357,6 +360,23 @@ function answersOf(rootDir: string, seen: WalkSeen, target: number): Map<number,
   return answers;
 }
 
+// One empty file per walk whose end a `nuka step` call printed: a wait
+// that names no walk reports the newest walk until then, and waits for the
+// next one after. Created exclusively, so two calls that print the same end
+// leave one file.
+function endReported(dir: string, walk: number): boolean {
+  return existsSync(path.join(dir, REPORTED_DIR, String(walk)));
+}
+
+function markEndReported(dir: string, walk: number): void {
+  mkdirSync(path.join(dir, REPORTED_DIR), { recursive: true });
+  try {
+    writeFileSync(path.join(dir, REPORTED_DIR, String(walk)), "", { flag: "wx" });
+  } catch (error) {
+    if (errorCode(error) !== "EEXIST") throw error;
+  }
+}
+
 function writeAnswer(rootDir: string, runDir: string, pause: number, answer: WalkAnswer): void {
   const dir = answersDir(rootDir, runDir);
   mkdirSync(dir, { recursive: true });
@@ -386,9 +406,10 @@ export async function runStepCall(options: {
 }): Promise<StepCallResult> {
   const { rootDir, call } = options;
   const isAlive = options.isAlive ?? processIsAlive;
-  const statePath = path.join(stateDirOf(rootDir, options.stateDir), STATE_FILE);
+  const dir = stateDirOf(rootDir, options.stateDir);
+  const statePath = path.join(dir, STATE_FILE);
   const read = (): WalkSeen => seeWalk(readWalkState(statePath), isAlive);
-  const target = callTarget(call, read());
+  const target = callTarget(call, read(), (walk) => endReported(dir, walk));
   const deadline = Date.now() + options.timeoutMs;
   for (;;) {
     const seen = read();
@@ -397,19 +418,24 @@ export async function runStepCall(options: {
       if (call.kind === "answer") writeAnswer(rootDir, decision.runDir, call.pause, call.answer);
       continue;
     }
-    if (decision.kind === "report") return { kind: "report", report: stepReport(decision.seen, call), seen: decision.seen };
+    if (decision.kind === "report") {
+      const { seen: reported } = decision;
+      if (reported.state === "gone") markEndReported(dir, reported.last.number);
+      if (reported.state === "ended") markEndReported(dir, reported.number);
+      return { kind: "report", report: stepReport(reported, call), seen: reported };
+    }
     if (decision.kind === "refuse") {
       return { kind: "refuse", code: decision.code, message: decision.message, ...(decision.do === undefined ? {} : { do: decision.do }) };
     }
     if (Date.now() >= deadline) {
       // The walk the call is about, still on its way to a pause.
       if (seen.state !== "none" && seen.state !== "gone" && seen.number >= target) return { kind: "report", report: stepReport(seen, call), seen };
-      const seconds = Math.round(options.timeoutMs / 1000);
       return {
         kind: "refuse",
         code: "walk-not-found",
-        message: `no walk started within ${seconds}s: nuka step waits for the walk a nuka run --step records, and none was recorded`,
-        fields: { walk: "none", last: seen.state === "none" ? seen.last : seen.state === "gone" ? seen.last : seen },
+        // Only a wait gets here: an answer is decided from the first read.
+        message: nothingStartedMessage(call.kind === "wait" ? call : { kind: "wait" }, Math.round(options.timeoutMs / 1000), seen),
+        fields: { walk: "none", last: seen.state === "none" ? null : seen.state === "gone" ? seen.last : seen },
       };
     }
     await sleep(POLL_MS);
