@@ -36,8 +36,13 @@ const claimOutcome = z.enum(["held", "broken", "unobserved", "unjudged"]);
 
 const measuredChannel = z.looseObject({ step_record_id: z.string(), channel: z.string() });
 
+const countRange = z.looseObject({ at_least: z.number().int(), at_most: z.number().int().nullable() });
+
+const eventsGap = z.looseObject({ gap: z.enum(GAP_WORDS) });
+
 const comparisonClaim = z.looseObject({
   actual: z.unknown().optional(),
+  actual_range: countRange.optional(),
   actual_from: z.string(),
   view: z.string().optional(),
   at: z.string().optional(),
@@ -49,6 +54,9 @@ const comparisonClaim = z.looseObject({
   outcome: claimOutcome,
   reason: z.string().optional(),
   measured: measuredChannel.nullable().optional(),
+  after_world_stop: z
+    .looseObject({ lines: z.number().int(), range: countRange, outcome: z.enum(["held", "broken", "unjudged"]), reason: z.string() })
+    .optional(),
 });
 
 const itemDeclaration = z.looseObject({
@@ -136,10 +144,26 @@ const observed = z.looseObject({
       process_spans: z.array(z.string()).optional(),
       process_requests: z.number().int().optional(),
       whole: z.boolean(),
-      open: z.array(z.looseObject({ gap: z.enum(GAP_WORDS) })),
+      open: z.array(eventsGap),
     })
     .nullable()
     .optional(),
+});
+
+const eventsRead = z.looseObject({
+  of: z.looseObject({ step_record_id: z.string(), step: z.string(), line: z.number().int().nullable() }).nullable(),
+  trace_id: z.string().nullable(),
+  count: z.looseObject({ kind: z.string() }),
+  range: countRange,
+  whole: z.boolean(),
+  open: z.array(eventsGap),
+  maybe: z.record(z.string(), z.number().int()),
+  lines: z.number().int(),
+  unreadable: z.number().int(),
+  unowned: z.number().int(),
+  file: z.string().nullable(),
+  waited_ms: z.number(),
+  truncated: z.literal(true).optional(),
 });
 
 const step = z.looseObject({
@@ -160,6 +184,7 @@ const step = z.looseObject({
   claims: z.array(z.union([eachClaim, comparisonClaim])).optional(),
   observation: z.enum(["observed", "unobserved"]).optional(),
   attempts: z.number().int().optional(),
+  events_read: z.record(z.string(), eventsRead).optional(),
 });
 
 const declared = z.looseObject({

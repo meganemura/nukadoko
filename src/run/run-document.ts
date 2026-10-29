@@ -235,6 +235,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
             ...(stepRecord.observation === undefined ? {} : { observation: stepRecord.observation }),
             ...(stepRecord.attempts === undefined ? {} : { attempts: stepRecord.attempts }),
           }),
+      ...(stepRecord?.events_read === undefined ? {} : { events_read: stepRecord.events_read }),
     };
   });
   const stepRecords = record.steps.map((entry) => (entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null)));

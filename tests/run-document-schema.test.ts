@@ -133,6 +133,47 @@ describe("parseRunDocument", () => {
       expect("problem" in result && result.problem).toContain(`flags.0.${path}: `);
     }));
 
+  it("reads a claim step's events readings and a count judged again at the world's stop, and refuses an outcome no count judgment gives", () => {
+    const reading = {
+      of: { step_record_id: "s1", step: "a", line: 4 },
+      trace_id: "0af7651916cd43dd8448eb211c80319c",
+      count: { kind: "db", op: "insert" },
+      range: { at_least: 0, at_most: null },
+      whole: false,
+      open: [{ gap: "jobs-pending", job_ids: ["3f2a9c41"] }],
+      maybe: { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 },
+      lines: 1,
+      unreadable: 0,
+      unowned: 0,
+      file: "events-read.jsonl",
+      waited_ms: 12,
+    };
+    const claim = (outcome: string) => ({
+      actual_range: { at_least: 0, at_most: null },
+      actual_from: "events:writes",
+      compare: "equal",
+      expected: 0,
+      expected_from: "literal:nothing",
+      expected_text: "nothing",
+      outcome: "unjudged",
+      measured: { step_record_id: "s2", channel: "events_read.writes" },
+      after_world_stop: { lines: 3, range: { at_least: 1, at_most: 1 }, outcome, reason: "2 lines arrived after the claim" },
+    });
+    const withStep = (outcome: string) => ({
+      ...VALID,
+      scenarios: [
+        {
+          ...VALID.scenarios[0],
+          steps: [...VALID.scenarios[0]!.steps, { line: 5, text: "nothing", step: "b", status: "failed", step_record_id: "s2", record: "steps/s2", events_read: { writes: reading }, claims: [claim(outcome)] }],
+        },
+      ],
+    });
+    expect(parseRunDocument(JSON.stringify(withStep("broken")))).toHaveProperty("document");
+    const refused = parseRunDocument(JSON.stringify(withStep("unobserved")));
+    // A claim is one of two shapes, so the refusal names the claim.
+    expect("problem" in refused && refused.problem).toContain("scenarios.0.steps.1.claims.0: ");
+  });
+
   it("refuses another schema version before it reads a field", () => {
     expect(parseRunDocument(JSON.stringify({ schema_version: 2 }))).toEqual({ problem: "has schema_version 2, and this release reads 4" });
     expect(parseRunDocument("[")).toEqual({ problem: "does not parse as JSON: Unexpected end of JSON input" });

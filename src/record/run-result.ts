@@ -4,7 +4,8 @@ import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
 import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStatus, ScenarioStepStatus, ScenarioStop } from "./scenario-record.js";
-import type { ClaimReadingValue, ClaimRecord, ErrorKind, ObservedCounts } from "./types.js";
+import type { CountRange } from "../execution-events/count.js";
+import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
 // own directory, `<stateDir>/runs/<run_id>/`, and what `nuka run --json`
@@ -91,6 +92,9 @@ export interface RunStep {
   readonly observation?: "observed" | "unobserved";
   /** A claim step's `attempts`, copied from its step record. */
   readonly attempts?: number;
+  /** A claim step's readings of execution events, copied from its step
+   * record. */
+  readonly events_read?: Readonly<Record<string, EventsReadRecord>>;
 }
 
 /** A step's late lines of the program's log. */
@@ -120,7 +124,23 @@ export interface RunEventsLate {
  * `actual_bytes` or `expected_bytes` holds the whole value's size; the
  * step record keeps the value whole. An item claim of `each` is cut the
  * same way. */
-export type RunClaim = ClaimRecord & { readonly actual_bytes?: number; readonly expected_bytes?: number };
+export type RunClaim = ClaimRecord & { readonly actual_bytes?: number; readonly expected_bytes?: number; readonly after_world_stop?: RunAfterWorldStop };
+
+/** A claim on a count of execution events, judged again once the world
+ * stopped, over every line of the producer's trace the program wrote:
+ * present only when lines of that trace arrived after the claim was
+ * judged. When `outcome` is not the claim's own, the claim was judged on
+ * lines that were still on their way, and the run marks the cell
+ * `broke`. */
+export interface RunAfterWorldStop {
+  /** The readable lines of the trace, all of them. */
+  readonly lines: number;
+  readonly range: CountRange;
+  readonly outcome: "held" | "broken" | "unjudged";
+  /** How many lines arrived after the claim, and, for `unjudged`, why
+   * the count still answers nothing. */
+  readonly reason: string;
+}
 
 /** The longest claim value, as JSON, that run.json carries whole. */
 export const CLAIM_VALUE_MAX_BYTES = 1024;
