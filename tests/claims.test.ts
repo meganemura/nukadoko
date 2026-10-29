@@ -54,7 +54,15 @@ import {
   type Reading,
 } from "../src/step/evaluate-claims.js";
 import { readAt, snapshot } from "../src/step/snapshot.js";
-import { claimLine, equalDifference, fieldsDifference, fitsDifference, presentFieldDifference } from "../src/report/summary/claim-line.js";
+import {
+  claimLine,
+  equalDifference,
+  fieldsDifference,
+  fitsDifference,
+  presentFieldDifference,
+  sameItemsDifference,
+  unpairedItems,
+} from "../src/report/summary/claim-line.js";
 
 // Responsibility: the judging rules of a claim (docs/spec.md "Claims") as
 // properties over drawn values: each compare against its negation, a
@@ -2090,6 +2098,68 @@ describe("a broken equal names where its two values first differ", () => {
     expect(equalDifference([1, 2], [1, 2, 3])).toBe("first difference at 2: actual nothing, expected 3");
     expect(equalDifference("short", "shirt")).toBeNull();
     expect(equalDifference(1, 2)).toBeNull();
+  });
+});
+
+/** Items that often repeat, one object among them in two key orders,
+ * which the compares count as one item. */
+const listItems = gs.sampledFrom<unknown>(["a", "b", 1, null, ["a", 1], { id: 1, name: "a" }, { name: "a", id: 1 }]);
+const itemLists = gs.arrays(listItems, { maxSize: 6 });
+
+/** `items` in an order the test case draws. */
+function reordered(tc: hegel.TestCase, items: readonly unknown[]): unknown[] {
+  const keys = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: 100 }), { minSize: items.length, maxSize: items.length }));
+  return items.map((item, index) => ({ item, key: keys[index]! })).sort((a, b) => a.key - b.key).map((entry) => entry.item);
+}
+
+function withoutIndexes(items: readonly unknown[], indexes: readonly number[]): unknown[] {
+  return items.filter((_, index) => !indexes.includes(index));
+}
+
+function validIndexes(indexes: readonly number[], items: readonly unknown[]): boolean {
+  return new Set(indexes).size === indexes.length && indexes.every((index) => Number.isInteger(index) && index >= 0 && index < items.length);
+}
+
+const TABLE_HEADER = ["id", "name", "qty"];
+const LAMP = ["1", "lamp", "1"];
+const MUG = ["2", "mug", "4"];
+const DESK = ["3", "desk", "1"];
+const CHAIR = ["4", "chair", "2"];
+
+describe("a broken has-same-items names the items the two lists do not share", () => {
+  it("names no item exactly when the compare holds", () =>
+    hegel.testAsync(async (tc) => {
+      const actual = tc.draw(itemLists);
+      const expected = tc.draw(gs.booleans()) ? reordered(tc, actual) : tc.draw(itemLists);
+      const unpaired = unpairedItems(actual, expected)!;
+      const held = holds(await compare("has-same-items", actual, expected));
+      expect(unpaired.missing.length === 0 && unpaired.extra.length === 0).toBe(held);
+      expect(sameItemsDifference(actual, expected) === null).toBe(held);
+    }));
+
+  it("names each item by its index on its own side, and what it leaves has the same items, with none left that could pair", () =>
+    hegel.test((tc) => {
+      const actual = tc.draw(itemLists);
+      const expected = tc.draw(itemLists);
+      const { missing, extra } = unpairedItems(actual, expected)!;
+      expect(validIndexes(missing, expected)).toBe(true);
+      expect(validIndexes(extra, actual)).toBe(true);
+      expect(sameItems(withoutIndexes(actual, extra), withoutIndexes(expected, missing))).toBe(true);
+      expect(missing.some((index) => extra.some((other) => deepEqual(expected[index], actual[other])))).toBe(false);
+    }));
+
+  it("names the row a table does not share, each duplicate on its own, and counts the items past the first three", () => {
+    expect(sameItemsDifference([TABLE_HEADER, LAMP, MUG, CHAIR, DESK], [TABLE_HEADER, LAMP, MUG, DESK])).toBe('1 actual item is extra: ["4","chair","2"] (item 3)');
+    expect(sameItemsDifference(["a", "a", "b"], ["a", "b", "b"])).toBe('1 expected item is missing: "b" (item 1); 1 actual item is extra: "a" (item 1)');
+    expect(sameItemsDifference([1, 2], [5, 4, 3, 2, 1, 0])).toBe("4 expected items are missing: 5 (item 0), 4 (item 1), 3 (item 2), and 1 more");
+    expect(sameItemsDifference([{ id: 1, name: "a" }], [{ name: "a", id: 1 }])).toBeNull();
+  });
+
+  it("pairs two long lists that share their start and end, and names nothing past the pairs it may compare", () => {
+    const rows = Array.from({ length: 600 }, (_, index) => ({ id: index }));
+    const inserted = [...rows.slice(0, 300), { id: -1 }, ...rows.slice(300)];
+    expect(sameItemsDifference(inserted, rows)).toBe('1 actual item is extra: {"id":-1} (item 300)');
+    expect(sameItemsDifference([{ id: -1 }, ...rows], [...rows, { id: -2 }])).toBeNull();
   });
 });
 

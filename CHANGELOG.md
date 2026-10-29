@@ -271,6 +271,17 @@ just until 0.1.
   `0`, compared with `equal` alone (or `not-equal` alone right after
   `not`), as `no` does. `nuka scaffold --then` writes a literal for each
   of the three words.
+- **A broken `has-same-items` line names the items the two lists do not
+  share.** It ended with the outcome alone, so a reader compared the two
+  lists by eye. It now names the expected items that no actual item
+  pairs with and the actual items that no expected item pairs with,
+  paired as the compare pairs them, so a duplicate counts, each with its
+  value and its index on its own side, the first three of each and how
+  many more (`; 1 actual item is extra: ["4","chair","2"] (item 3)`).
+  The failure message, the run summary, the Allure step, and the
+  messages stream's exception all carry it. Two lists whose part between
+  the items equal in place at their start and their end makes more than
+  250,000 pairs of items get the line without it.
 
 ### Fixed
 

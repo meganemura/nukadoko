@@ -76,9 +76,13 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 ```
 
 The actual value and its source, the compare, the expected value and its
-source. The step fails with `claim_broken`, and the run summary lists
-every claim under "Claims" with its outcome. A broken claim is fixed in
-the implementation or by asking the person, never by a weaker compare.
+source, then where the two part. A broken `has-same-items` names the
+expected items that are missing and the actual items that are extra,
+each with its index on its own side (`; 1 actual item is extra:
+["4","chair","2"] (item 3)`). The step fails with `claim_broken`, and
+the run summary lists every claim under "Claims" with its outcome. A
+broken claim is fixed in the implementation or by asking the person,
+never by a weaker compare.
 
 A claim on a count of execution events ends with what the count counted,
 grouped by what each line reports, whatever the outcome:

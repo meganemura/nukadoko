@@ -1929,6 +1929,10 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 成り立たない `has-fields` の行も同じように、合わない最初の期待するフィールドで終わります。
 そのパスと、それぞれの側がそこに持つものが続き、実際のオブジェクトにないフィールドは `nothing`、長さの違う配列は両方の長さです(`; first field that does not fit at tags: actual 2 items, expected 1 item`)。
 成り立たない `lacks-field` の行は、オブジェクトが持つフィールドとその値で終わります(`; field "password" is present and holds null`)。
+成り立たない `has-same-items` の行は、2 つの配列が共有しない要素で終わり、要素はこの比較と同じように組にされます。
+どの実際の要素とも組にならない期待する要素は missing、どの期待する要素とも組にならない実際の要素は extra です。
+それぞれ数を示し、最初の 3 つの要素を値とその側での番号とともに示し、残りの数を続けます(`; 1 actual item is extra: ["4","chair","2"] (item 3)`)。
+始まりと終わりで同じ位置どうし等しい要素を除いた部分が、25 万を超える要素の組になる 2 つの配列では、この部分はありません。
 成り立たない `fits-text` の行は、期待するテキストがどこまで合ったかと、そのあとで何にも合わない最初の期待する行で終わり、止まった場所の実際の行が続きます。
 実際のテキストの終わりを越えたときは `nothing` です。
 期待する行がすべて合ったときは、余った最初の実際の行を名指しします(`; expected lines 1 to 2 fit, and expected line 3 fits nothing from actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`)。

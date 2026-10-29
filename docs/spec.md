@@ -2473,7 +2473,15 @@ field that does not fit: its path, and what each side holds there,
 array of another length (`; first field that does not fit at tags:
 actual 2 items, expected 1 item`). A broken `lacks-field` ends with the
 field the object holds and its value (`; field "password" is present and
-holds null`). A broken `fits-text` ends with how
+holds null`). A broken `has-same-items` ends with the items the two
+lists do not share, paired as the compare pairs them: an expected item
+that pairs with no actual item is missing, and an actual item that pairs
+with no expected item is extra. Each kind gives its count, then its
+first three items, each with its value and its index on its own side,
+then how many more (`; 1 actual item is extra: ["4","chair","2"] (item
+3)`). Two lists whose part between the items equal in place at their
+start and their end makes more than 250,000 pairs of items end without
+it. A broken `fits-text` ends with how
 far the expected text fit and the first expected line that fits nothing
 after that, with the actual line where it stopped, or `nothing` past the
 end; when every expected line fits, it names the first actual line left

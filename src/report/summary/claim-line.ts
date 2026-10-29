@@ -1,7 +1,7 @@
 import { describeRange } from "../../execution-events/count.js";
 import { describeCounted } from "../../execution-events/counted.js";
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
-import { fieldMisfit, textFit } from "../../step/evaluate-claims.js";
+import { deepEqual, fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 
 // Responsibility: one claim record as one line of plain text, the words
 // every reader of a claim sees (docs/spec.md "Claims"): the run summary,
@@ -11,7 +11,8 @@ import { fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 // written; it does not judge anything. Where it names the place two values
 // part under a compare that matches by shape (has-fields, fits-text), it
 // asks the matcher the claim was judged with, so the line cannot name a
-// place the judging did not.
+// place the judging did not, and where it names the items two lists do
+// not share, it pairs them with the equality the compare judged with.
 
 /** A value longer than this is cut in a line; the record keeps it whole. */
 const VALUE_TEXT_LIMIT = 120;
@@ -205,11 +206,90 @@ export function presentFieldDifference(actual: unknown, expected: unknown): stri
   return `field ${JSON.stringify(expected)} is present and holds ${valueText(actual[expected])}`;
 }
 
+/** The pairs of items a line may compare to name the items two lists do
+ * not share, past the items equal in place at their start and their end;
+ * past it, the line says what it says without them. Comparing 250,000
+ * pairs of rows of four fields took about 30 ms, and a line is written
+ * once for each surface that shows it. */
+const ITEM_PAIRS_LIMIT = 250_000;
+
+/** The items a line shows of each list it names, before it counts the
+ * rest. */
+const LISTED_ITEMS = 3;
+
+/** The items two lists do not share, by index: `missing` indexes the
+ * expected list, and `extra` the actual list. */
+export interface UnsharedItems {
+  readonly missing: readonly number[];
+  readonly extra: readonly number[];
+}
+
+function indexesFrom(start: number, end: number): number[] {
+  return Array.from({ length: end - start }, (_, offset) => start + offset);
+}
+
+/** How many items at the start of two lists are equal in place, and
+ * then how many at their end, so the work of pairing the rest grows with
+ * the part where the two differ, not with their length. */
+function sharedEnds(actual: readonly unknown[], expected: readonly unknown[]): { readonly start: number; readonly end: number } {
+  const shorter = Math.min(actual.length, expected.length);
+  let start = 0;
+  while (start < shorter && deepEqual(actual[start], expected[start])) start += 1;
+  let end = 0;
+  while (end < shorter - start && deepEqual(actual[actual.length - 1 - end], expected[expected.length - 1 - end])) end += 1;
+  return { start, end };
+}
+
+/** The items of two lists that pair with no equal item on the other
+ * side, a duplicate needing an item of its own, as `has-same-items`
+ * pairs them; `null` past `ITEM_PAIRS_LIMIT`. Pure. */
+export function unpairedItems(actual: readonly unknown[], expected: readonly unknown[]): UnsharedItems | null {
+  const { start, end } = sharedEnds(actual, expected);
+  const actualEnd = actual.length - end;
+  const expectedEnd = expected.length - end;
+  if ((actualEnd - start) * (expectedEnd - start) > ITEM_PAIRS_LIMIT) return null;
+  const missing = indexesFrom(start, expectedEnd);
+  const extra: number[] = [];
+  for (let index = start; index < actualEnd; index += 1) {
+    const at = missing.findIndex((other) => deepEqual(actual[index], expected[other]));
+    if (at === -1) extra.push(index);
+    else missing.splice(at, 1);
+  }
+  return { missing, extra };
+}
+
+/** `<value> (item <index>)` for the first few items, then how many more. */
+function listedItems(indexes: readonly number[], items: readonly unknown[]): string {
+  const shown = indexes.slice(0, LISTED_ITEMS).map((index) => `${valueText(items[index])} (item ${index})`);
+  const more = indexes.length - shown.length;
+  return more === 0 ? shown.join(", ") : `${shown.join(", ")}, and ${more} more`;
+}
+
+function unsharedText(unshared: UnsharedItems, actual: readonly unknown[], expected: readonly unknown[]): string | null {
+  const head = (indexes: readonly number[], side: string) => `${indexes.length} ${side} ${indexes.length === 1 ? "item is" : "items are"}`;
+  const parts = [
+    ...(unshared.missing.length === 0 ? [] : [`${head(unshared.missing, "expected")} missing: ${listedItems(unshared.missing, expected)}`]),
+    ...(unshared.extra.length === 0 ? [] : [`${head(unshared.extra, "actual")} extra: ${listedItems(unshared.extra, actual)}`]),
+  ];
+  return parts.length === 0 ? null : parts.join("; ");
+}
+
+/** The items a broken `has-same-items` claim's two lists do not share:
+ * the expected items no actual item pairs with, and the actual items no
+ * expected item pairs with, each with its index and its value; `null`
+ * when they share every item, or past `ITEM_PAIRS_LIMIT`. Pure. */
+export function sameItemsDifference(actual: unknown, expected: unknown): string | null {
+  if (!Array.isArray(actual) || !Array.isArray(expected)) return null;
+  const unpaired = unpairedItems(actual, expected);
+  return unpaired === null ? null : unsharedText(unpaired, actual, expected);
+}
+
 /** What a broken claim's line adds after its outcome, by compare: where
  * the two values part. A compare with no row adds nothing, since the two
  * values in the line already show why it broke. */
 const DIFFERENCES: Partial<Record<ClaimCompare, (actual: unknown, expected: unknown) => string | null>> = {
   equal: equalDifference,
+  "has-same-items": sameItemsDifference,
   "has-fields": fieldsDifference,
   "lacks-field": presentFieldDifference,
   "fits-text": fitsDifference,
