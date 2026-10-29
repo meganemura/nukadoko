@@ -2600,6 +2600,9 @@ BeforeAll と AfterAll はどの scenario の外でも、どの step や hook �
   ポップアップの最初のリクエストもヘッダなしで送られます。
   context がポップアップを知らせるとき、ポップアップはすでに読み込みを始めているからです。
   step が `context.newPage()` で開く page には、最初のリクエストから付きます。
+  DevTools のセッションが一時停止を求めるのは、ドキュメント、`fetch`、XMLHttpRequest です。
+  Chromium は EventSource を XMLHttpRequest として一時停止するので、フィルタは EventSource の種類を名指しません。
+  Chromium 141 はそれを名指すフィルタを拒み、拒まれると、その page のどのリクエストにもヘッダが付かなくなります。
 
 Playwright には page のリクエストにヘッダを足す方法が 2 つあり、どちらも計測したうえで退けました。
 計測には Chromium 149.0.7827.55 と Playwright 1.61.1 を使いました。

@@ -33,7 +33,12 @@ import { TRACEPARENT } from "./trace-context.js";
 // own, and the kinds page-http-log.ts writes to http.jsonl. Each paused
 // request costs a round trip to this process, 2 to 3 ms in the
 // measurement above, so a page's images, scripts, and stylesheets are left
-// out of the patterns.
+// out of the patterns. The patterns name no `EventSource` type: the Fetch
+// domain pauses a page's `fetch` and its EventSource as `XHR` (measured on
+// Chromium 141.0.7390.37 and 153.0.8010.12), and Chromium 141 refuses the
+// whole registration over that one name ("Unknown resource type in fetch
+// filter: 'EventSource'"), which left every request of every page
+// unstamped.
 //
 // Firefox and WebKit have no such protocol through Playwright, so their
 // page requests go without the header; the requests a step sends from its
@@ -69,8 +74,8 @@ export function fetchPatternsOf(origin: string): string[] {
   return [`${escape(origin)}/*`, ...below];
 }
 
-/** The resource types this module stamps (this file's own header). */
-const STAMPED_TYPES = ["Document", "Fetch", "XHR", "EventSource"] as const;
+/** The resource types the Fetch patterns name (this file's own header). */
+const STAMPED_TYPES = ["Document", "Fetch", "XHR"] as const;
 
 /** Starts stamping every page of `context`, the ones it has and the ones
  * it opens, and returns what attaches a page the caller opened, so the

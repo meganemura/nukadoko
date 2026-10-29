@@ -3243,6 +3243,11 @@ hook's boundary, so their requests go without a `traceparent`.
   loading when the context announces it.
   A page the step opens with `context.newPage()` is stamped from its
   first request.
+  The DevTools session asks to pause a document, a `fetch`, and an
+  XMLHttpRequest, and Chromium pauses an EventSource as an
+  XMLHttpRequest, so the filter names no EventSource type: Chromium
+  141 refuses a filter that names one, and the refusal would leave every
+  request of the page without the header.
 
 Playwright has two ways to add a header to a page's requests, and both
 were measured and refused.

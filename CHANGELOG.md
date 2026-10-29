@@ -7,6 +7,19 @@ just until 0.1.
 
 ## Unreleased
 
+### Fixed
+
+- **A Chromium page's requests carry a `traceparent` on Chromium 141
+  too.** The DevTools filter that stamps a page's requests named the
+  `EventSource` resource type, and Chromium 141.0.7390.37 refuses the
+  whole filter over it ("Unknown resource type in fetch filter:
+  'EventSource'"), so no page request was stamped and every step's
+  `observed.program_log.stamped` read `0`, with nothing to say why.
+  The filter now names a document, a `fetch`, and an XMLHttpRequest:
+  Chromium pauses a page's `fetch` and its EventSource as an
+  XMLHttpRequest (measured on 141 and 153), so an EventSource is still
+  stamped.
+
 ## 0.24.0 — 2026-10-29
 
 ### Added

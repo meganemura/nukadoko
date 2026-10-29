@@ -3,7 +3,7 @@ import { createServer, type RequestListener, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { chromium } from "playwright";
+import { type BrowserContext, chromium } from "playwright";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { fetchPatternsOf, stampPageRequests } from "../src/context/browser-trace.js";
@@ -58,6 +58,25 @@ interface Hit {
   readonly cookie: string | undefined;
 }
 
+// Makes the real session refuse Fetch.enable with `reason`, in
+// Playwright's words. Chromium 141.0.7390.37 refuses a filter that names
+// EventSource with "Unknown resource type in fetch filter: 'EventSource'";
+// a newer Chromium accepts it, so the test puts that refusal on its
+// session.
+function refuseFetchEnable(context: BrowserContext, refusal: (types: readonly string[]) => string | undefined): void {
+  const open = context.newCDPSession.bind(context);
+  context.newCDPSession = async (page) => {
+    const session = await open(page);
+    const send = session.send.bind(session);
+    session.send = (async (method: string, params?: { patterns?: { resourceType?: string }[] }) => {
+      const reason = method === "Fetch.enable" ? refusal((params?.patterns ?? []).map((pattern) => pattern.resourceType ?? "")) : undefined;
+      if (reason !== undefined) throw new Error(`cdpSession.send: Protocol error (Fetch.enable): ${reason}`);
+      return send(method as "Fetch.enable", params as never);
+    }) as typeof session.send;
+    return session;
+  };
+}
+
 function listen(handler: RequestListener): Promise<{ server: Server; origin: string }> {
   const server = createServer(handler);
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ server, origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}` })));
@@ -80,6 +99,12 @@ describe.skipIf(!chromiumAvailable)("a page's requests to the world", () => {
       } else if (req.url === "/image.svg") {
         res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "max-age=3600" });
         res.end('<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>');
+      } else if (req.url === "/live") {
+        res.writeHead(200, { "content-type": "text/html" });
+        res.end('<script>fetch("/api"); new EventSource("/events").onmessage = (event) => { document.title = event.data; };</script>');
+      } else if (req.url === "/events") {
+        res.writeHead(200, { "content-type": "text/event-stream" });
+        res.end("retry: 600000\ndata: live\n\n");
       } else if (req.method === "OPTIONS") {
         // Simple CORS only: a preflight is refused.
         res.writeHead(404);
@@ -170,6 +195,27 @@ describe.skipIf(!chromiumAvailable)("a page's requests to the world", () => {
       await opened.route("**/api", (route) => route.continue());
       await opened.evaluate((own) => fetch("/api", { headers: { traceparent: own } }), OWN);
       expect(hits.at(-1)).toEqual(expect.objectContaining({ path: "/api", traceparent: OWN }));
+    } finally {
+      await handle.dispose();
+    }
+  });
+
+  it("stamps a page's document, fetch, and EventSource on a Chromium that refuses EventSource in a Fetch filter", async () => {
+    const handle = createStepContext({ config: config(), baseURL: world.origin, evidenceDir, env: {}, stepTitle: "page step" });
+    try {
+      await handle.beginStep(path.join(evidenceDir, "one"), "one");
+      const page = await handle.ctx.page();
+      refuseFetchEnable(page.context(), (types) => (types.includes("EventSource") ? "Unknown resource type in fetch filter: 'EventSource'" : undefined));
+      const opened = await page.context().newPage();
+      await opened.goto("/live");
+      await opened.waitForFunction('document.title === "live"');
+      expect(hits.map((hit) => [hit.path, TRACEPARENT.test(hit.traceparent ?? "")]).sort()).toEqual([
+        ["/api", true],
+        ["/events", true],
+        ["/live", true],
+      ]);
+      expect((await handle.observedSnapshot()).unmeasured).toEqual([]);
+      await handle.endStep();
     } finally {
       await handle.dispose();
     }
