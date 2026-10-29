@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFiles, parseEnvFile } from "../context/env.js";
 import { skippedEnvFileLines } from "../env/parse-env-file.js";
+import { locateConfig } from "../config/config-presence.js";
 import { resolveConfigFileName } from "../config/load-config.js";
 import { PROGRAM_FILE_NAME, type LoadedProgram } from "../config/load-program.js";
 import type { NukadokoConfig } from "../config/schema.js";
@@ -110,7 +111,10 @@ export async function checkConfig(
   if (!existsSync(featuresRoot)) {
     // With no config file, featuresDir is the default, and a finding that
     // pointed at a config file would send the reader to a file that is not there.
+    // A config in a parent directory means this directory sits inside that
+    // project, and nuka init here would start a second project inside it.
     const hasConfigFile = existsSync(path.join(rootDir, configFile));
+    const parent = hasConfigFile ? null : locateConfig(rootDir);
     const steps = path.posix.join(config.featuresDir, "steps");
     errors.push({
       code: "features-dir-missing",
@@ -118,7 +122,9 @@ export async function checkConfig(
       file: hasConfigFile ? configFile : config.featuresDir,
       fix: hasConfigFile
         ? `Create ${steps} for the step files, or correct featuresDir in ${configFile}.`
-        : `Create ${steps} for the step files, or run nuka init to write a config file that names featuresDir.`,
+        : parent?.kind === "parent"
+          ? `Run nuka from the directory that holds ${path.relative(path.resolve(rootDir), parent.configPath).split(path.sep).join("/")}, the config this directory sits under.`
+          : `Create ${steps} for the step files, or run nuka init to write a config file that names featuresDir.`,
     });
   }
 

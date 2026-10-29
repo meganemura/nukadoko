@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -99,6 +99,25 @@ describe("nuka check", () => {
       expect(exitCode).toBe(1);
     } finally {
       await rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
+  it("points features-dir-missing at a parent directory's config, not at nuka init, when the directory sits under one", async () => {
+    const project = await mkdtemp(path.join(os.tmpdir(), "nukadoko-check-parent-config-"));
+    try {
+      await mkdir(path.join(project, ".git"));
+      await writeFile(path.join(project, "nukadoko.config.mts"), "export default {};\n");
+      const rootDir = path.join(project, "sub");
+      await mkdir(rootDir);
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
+      const report = bySeverity(stdout.text());
+      expect(report.errors.filter((issue: { code: string }) => issue.code === "features-dir-missing").map((issue: { file: string; fix: string }) => [issue.file, issue.fix])).toEqual([
+        ["features", "Run nuka from the directory that holds ../nukadoko.config.mts, the config this directory sits under."],
+      ]);
+      expect(exitCode).toBe(1);
+    } finally {
+      await rm(project, { recursive: true, force: true });
     }
   });
 

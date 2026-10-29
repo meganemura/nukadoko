@@ -90,7 +90,9 @@ This part does not change release to release.
   changes. Update a script that matched the old text.
 - **`features-dir-missing` in a directory with no config file names the
   directory as its file,** where it named `nukadoko.config.ts`, and its
-  fix says to run `nuka init`. The exit code is the same.
+  fix says to run `nuka init`. When a parent directory holds a config
+  file, the fix says to run nuka from that directory instead. The exit
+  code is the same.
 - **A broken `each` claim's summary line ends with the first broken
   item,** and the item lines of its failure message name the item's
   `id`, `name`, or `key` when it has one. A broken item result in the

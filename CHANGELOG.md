@@ -109,7 +109,9 @@ just until 0.1.
   there.** In a directory with no config file, the finding pointed at
   `nukadoko.config.ts` and asked to correct `featuresDir` in it. It now
   points at the missing directory and says to create it or to run
-  `nuka init`.
+  `nuka init`. When a parent directory holds a config file, the fix
+  says to run nuka from that directory instead, since `nuka init` would
+  start a second project inside it.
 - **A broken `each` claim names the item that broke and what it held.**
   The run summary's line, and the Allure step named by it, stated only
   the declaration (`counter equal "#1"`), not the `#2` the item held.
