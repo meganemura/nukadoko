@@ -2,15 +2,14 @@
 
 ## The shape
 
-A Then judges, and it does not judge in code. Its step declares `claims`
-in place of `run`: which value it reads, how it compares that value, and
-where the value it compares with comes from. nukadoko compares, and the
-step record keeps each claim with both values and where each came from.
-A typed Then never calls `expect` or `node:assert`. `defineStep` refuses a
-claim step that also declares `run`, `returns`, `mutates`, or `parts`.
-`nuka check` refuses a Then bound to a step that runs (`then-without-claims`)
-and a claim step in a Given or a When (`claims-outside-then`): a step
-that reads a value for a later Then is a When.
+A Then judges, and it does not judge in code. Its step declares `claims` in
+place of `run`: which value it reads, how it compares that value, and where the
+value it compares with comes from. nukadoko compares, and the step record keeps
+each claim with both values and where each came from. A typed Then never calls
+`expect` or `node:assert`. `defineStep` refuses a claim step that also declares
+`run`, `returns`, `mutates`, or `parts`. `nuka check` refuses a Then bound to a
+step that runs (`then-without-claims`) and a claim step in a Given or a When
+(`claims-outside-then`): a step that reads a value for a later Then is a When.
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -114,20 +113,23 @@ expected: "count" }`. `{ actual, each: { where?, claims } }` applies item
 claims to every item of an array (paths inside are relative to the item), and
 breaks when the array, or what `where` selects, is empty. A `where` claim whose
 path starts an item claim's, or the reverse, is refused with `equal`,
-`has-same-items`, `has-fields`, `has-item`, `matches`, `contains-text`,
-`starts-with-text`, or `ends-with-text`, and breaks the claim where it implies
-it.
+`has-same-items`, `has-fields`, `fits-text`, `has-item`, `matches`,
+`contains-text`, `starts-with-text`, or `ends-with-text`, and breaks the claim
+where it implies it.
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `starts-with-text`, `ends-with-text`, `has-item`,
 `has-same-items` (in any order), `has-fields` (the expected object's fields at
-any depth, each array whole; other fields are fine), `matches`, `greater-than`,
-`at-least`, `less-than`, `at-most`. `{ actual: "body", compare: "has-fields",
-expected: "fields", expected_view: "json" }` claims the few fields a docstring
-states of a large response. Two values of different JSON types break the claim,
-and so does an expected value nearly every value holds (blank under a text
-compare, a pattern that matches `""` under `matches`, an object with no field
-under `has-fields`). Each side is a plain JSON copy taken when its value
+any depth, each array whole; other fields are fine), `fits-text` (line by line;
+a line `...` is any lines, `[..]` any text in its line), `matches`,
+`greater-than`, `at-least`, `less-than`, `at-most`. Against a docstring,
+`fits-text` claims output whose times and paths change each run, and `{
+actual: "body", compare: "has-fields", expected: "fields", expected_view:
+"json" }` the few fields it states of a large response. Two values of
+different JSON types break the claim, and so does an expected value nearly
+every value holds (blank under a text compare, a pattern that matches `""`
+under `matches`, an object with no field under `has-fields`, only `...` and
+`[..]` under `fits-text`). Each side is a plain JSON copy taken when its value
 arrives, and `observe` gets a clone of its inputs; a `Date`, a bigint, `NaN`,
 an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the claim
 `unjudged` (return an ISO string or a number). Judging has the step's deadline:
@@ -161,10 +163,9 @@ what each reading read (past 40, the first, the last, and the change
 points). A claim step whose `observe` reaches `page`, `context`, or
 `pageAs` states `poll`, as `{ timeout_ms }` or `false` (`claim-poll-unstated`).
 
-**One step per claim, or the expected value in the line?** Let the
-sentence a non-engineer agreed to decide: "the total is {expected:int}"
-carries its value, so it is one step; "is in trial" and "is not in
-trial" read as two claims, so they are two steps.
+**One step per claim, or the expected value in the line?** Let the sentence a
+non-engineer agreed to decide: "the total is {expected:int}" carries its value,
+so it is one step; "is in trial" and "is not in trial" are two steps.
 
 ## `expect` in a step that runs
 
@@ -194,7 +195,6 @@ export default defineStep({
 });
 ```
 
-The pattern captures nothing, so the docstring binds to `expected`, the
-one required `args` key it leaves unfilled (see "Typed steps" in
-`docs/spec.md`). A key the step declares `from` for is spoken for the same
-way a captured key is.
+The pattern captures nothing, so the docstring binds to `expected`, the one
+required `args` key it leaves unfilled (see "Typed steps" in `docs/spec.md`). A
+key the step declares `from` for is spoken for the same way a captured key is.

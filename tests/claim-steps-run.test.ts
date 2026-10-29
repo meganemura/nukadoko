@@ -2152,4 +2152,28 @@ export default defineStep({
       expect.stringMatching(/ has-fields \{"status":"paid","owner":\{"name":"kei"\}\} \(sentence:fields as json\) broken; first field that does not fit at owner\.name: actual "aki", expected "kei"; measured: none$/),
     ]);
   });
+
+  it("fits-text holds for output whose times change when the docstring stands in for them, and names where a line stopped fitting", async () => {
+    const run = await holdsThenBreaks(
+      `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the build prints",
+  args: z.object({ expected: z.string() }),
+  observe() {
+    return { out: "built 3 files in " + (40 + (Date.now() % 7)) + "ms\\nwrote dist/a.js\\nwrote dist/b.js\\ndone\\n" };
+  },
+  claims: [{ actual: "out", compare: "fits-text", expected: "expected" }],
+});
+`,
+      ["Then the build prints", '  """', "  built [..] files in [..]ms", "  ...", "  done", '  """'],
+      ["Then the build prints", '  """', "  built [..] files in [..]ms", "  ...", "  wrote dist/c.js", "  done", '  """'],
+    );
+    expect(run.exitCode).toBe(1);
+    expect(run.claimLines).toEqual([
+      expect.stringMatching(/ fits-text "built \[\.\.\] files in \[\.\.\]ms\\+n\.\.\.\\+ndone" \(sentence:expected\) held; measured: none$/),
+      expect.stringMatching(
+        / \(sentence:expected\) broken; expected lines 1 to 2 fit, and expected line 3 fits nothing from actual line 2: actual "wrote dist\/a\.js", expected "wrote dist\/c\.js"; measured: none$/,
+      ),
+    ]);
+  });
 });

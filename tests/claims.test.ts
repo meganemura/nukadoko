@@ -31,6 +31,9 @@ import {
   evaluateClaims,
   fieldlessObject,
   fieldMisfit,
+  fitLines,
+  lineFits,
+  textFit,
   jsonType,
   judgingBudget,
   pollReadings,
@@ -45,7 +48,7 @@ import {
   type Reading,
 } from "../src/step/evaluate-claims.js";
 import { readAt, snapshot } from "../src/step/snapshot.js";
-import { equalDifference, fieldsDifference } from "../src/report/summary/claim-line.js";
+import { equalDifference, fieldsDifference, fitsDifference } from "../src/report/summary/claim-line.js";
 
 // Responsibility: the judging rules of a claim (docs/spec.md "Claims") as
 // properties over drawn values: each compare against its negation, a
@@ -165,6 +168,7 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "has-item",
   "has-same-items",
   "has-fields",
+  "fits-text",
   "matches",
   "greater-than",
   "at-least",
@@ -352,6 +356,89 @@ describe("compares", () => {
       expect(holds(await compare("has-fields", { items, n: 1 }, { items: other }))).toBe(deepEqual(items, other));
       if (items.length !== other.length) expect(fieldMisfit({ items }, { items: other })).toEqual({ kind: "length", path: ["items"], actual: items.length, expected: other.length });
     }));
+
+  /** Whether `want` fits `have` by trying every number of lines each
+   * `...` could take, with each other line as an anchored regular
+   * expression: slow, and plainly what fits-text means. */
+  function fitsByTrying(want: readonly string[], have: readonly string[]): boolean {
+    if (want.length === 0) return have.length === 0;
+    const [line, ...rest] = want as [string, ...string[]];
+    if (line === "...") return Array.from({ length: have.length + 1 }, (_, taken) => taken).some((taken) => fitsByTrying(rest, have.slice(taken)));
+    const pattern = new RegExp(`^${line.split("[..]").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^]*")}$`);
+    return have.length > 0 && pattern.test(have[0]!) && fitsByTrying(rest, have.slice(1));
+  }
+
+  const actualLine = gs.text({ alphabet: "ab\r", maxSize: 3 });
+  const expectedLine = gs.oneOf<string>(
+    gs.just("..."),
+    gs.text({ alphabet: "ab", maxSize: 3 }),
+    gs.composite((tc) => `${tc.draw(gs.text({ alphabet: "ab", maxSize: 2 }))}[..]${tc.draw(gs.text({ alphabet: "ab", maxSize: 2 }))}`),
+  );
+
+  it("fits-text agrees with trying every way the ... lines could split the actual text", () =>
+    hegel.test((tc) => {
+      const have = tc.draw(gs.arrays(actualLine, { maxSize: 5 }));
+      const want = tc.draw(gs.arrays(expectedLine, { maxSize: 4 }));
+      const actual = `${have.join("\n")}${tc.draw(gs.sampledFrom(["", "\n"]))}`;
+      const expected = `${want.join("\n")}${tc.draw(gs.sampledFrom(["", "\n"]))}`;
+      expect(textFit(actual, expected).fits).toBe(fitsByTrying(fitLines(expected), fitLines(actual)));
+    }));
+
+  it("fits-text holds for any text against itself, and against it with a run of lines replaced by ... or a part of a line by [..]", () =>
+    hegel.testAsync(async (tc) => {
+      const lines = tc.draw(gs.arrays(gs.text({ alphabet: "ab .", minSize: 1, maxSize: 6 }), { minSize: 1, maxSize: 6 }));
+      const text = lines.join("\n");
+      expect(textFit(text, text).fits).toBe(true);
+      const start = tc.draw(gs.integers({ minValue: 0, maxValue: lines.length }));
+      const end = tc.draw(gs.integers({ minValue: start, maxValue: lines.length }));
+      expect(textFit(text, [...lines.slice(0, start), "...", ...lines.slice(end)].join("\n")).fits).toBe(true);
+      const index = tc.draw(gs.integers({ minValue: 0, maxValue: lines.length - 1 }));
+      const line = lines[index]!;
+      const from = tc.draw(gs.integers({ minValue: 0, maxValue: line.length }));
+      const to = tc.draw(gs.integers({ minValue: from, maxValue: line.length }));
+      const globbed = lines.map((entry, at) => (at === index ? `${line.slice(0, from)}[..]${line.slice(to)}` : entry)).join("\n");
+      tc.assume(globbed.replaceAll("[..]", "").trim() !== "");
+      expect(holds(await compare("fits-text", text, globbed))).toBe(true);
+    }));
+
+  it("fits-text without ... or [..] holds exactly when the lines are equal, a final newline on either side aside", () =>
+    hegel.test((tc) => {
+      const have = tc.draw(gs.arrays(actualLine, { maxSize: 4 }));
+      const want = tc.draw(gs.booleans()) ? [...have] : tc.draw(gs.arrays(actualLine, { maxSize: 4 }));
+      const actual = `${have.join("\n")}${tc.draw(gs.sampledFrom(["", "\n"]))}`;
+      const expected = `${want.join("\n")}${tc.draw(gs.sampledFrom(["", "\n"]))}`;
+      expect(textFit(actual, expected).fits).toBe(deepEqual(fitLines(actual), fitLines(expected)));
+    }));
+
+  it("[..] takes any characters between the fixed parts of a line, and never takes a line break", () =>
+    hegel.test((tc) => {
+      const parts = tc.draw(gs.arrays(gs.text({ alphabet: "ab", maxSize: 2 }), { minSize: 2, maxSize: 4 }));
+      const fillers = parts.map(() => tc.draw(gs.text({ alphabet: "abc", maxSize: 3 })));
+      const line = parts.map((part, index) => (index === 0 ? part : `${fillers[index]}${part}`)).join("");
+      expect(lineFits(parts.join("[..]"), line)).toBe(true);
+      tc.assume(parts.slice(1).join("") !== "");
+      expect(textFit(`${parts[0]}\n${parts.slice(1).join("")}`, parts.join("[..]")).fits).toBe(false);
+    }));
+
+  it("fits-text judges a 2000-line text against an expected text of many ... lines in well under a second", () => {
+    const actual = Array.from({ length: 2000 }, (_, index) => `line ${index} of the log, took ${index % 97}ms`).join("\n");
+    const expected = Array.from({ length: 200 }, (_, index) => `...\nline ${index * 10} of the log, took [..]ms`).join("\n");
+    const started = performance.now();
+    expect(textFit(actual, expected)).toMatchObject({ fits: false, fitted: 400 });
+    expect(textFit(actual, `${expected}\n...`).fits).toBe(true);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it("fits-text reads two strings, and breaks on an expected text of only whitespace, ... lines, and [..]", async () => {
+    expect(await compare("fits-text", ["a"], "a")).toEqual({ reason: "fits-text reads two strings, and compares an array with a string" });
+    for (const expected of ["", "\n", "...", "...\n[..]\n  ", " [..] \n..."]) {
+      expect(await compare("fits-text", "anything", expected)).toEqual({
+        reason: "fits-text has an expected text of only whitespace, ... lines, and [..], which almost every text holds",
+      });
+    }
+    expect(holds(await compare("fits-text", "a\r\nb", "a\nb"))).toBe(false);
+    expect(holds(await compare("fits-text", "a\r\nb\r\n", "a\r\nb\r"))).toBe(true);
+  });
 
   it("has-fields compares two objects and names the other types it was given", async () => {
     expect(await compare("has-fields", [{ id: 1 }], { id: 1 })).toEqual({ reason: "has-fields compares two objects, and compares an array with an object" });
@@ -887,14 +974,14 @@ describe("where", () => {
     return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected };
   }
 
-  const decides = ["equal", "has-same-items", "has-fields", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
+  const decides = ["equal", "has-same-items", "has-fields", "fits-text", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
   const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
 
   it("sorts every compare into one that a where clause may not use on an overlapping place, or one the run judges", () => {
     expect([...decides, ...leaves].sort()).toEqual([...CLAIM_COMPARES].sort());
   });
 
-  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
+  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, fits-text, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
     hegel.test((tc) => {
       const wherePath = tc.draw(segmentsGen);
       const itemPath = tc.draw(gs.booleans()) ? [...wherePath, ...tc.draw(segmentsGen)].slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: 4 }))) : tc.draw(segmentsGen);
@@ -1571,6 +1658,24 @@ describe("a broken equal names where its two values first differ", () => {
     expect(equalDifference([1, 2], [1, 2, 3])).toBe("first difference at 2: actual nothing, expected 3");
     expect(equalDifference("short", "shirt")).toBeNull();
     expect(equalDifference(1, 2)).toBeNull();
+  });
+});
+
+describe("a broken fits-text names how far the expected text fit, and where it stopped", () => {
+  it("names nothing for a text that fits", () =>
+    hegel.test((tc) => {
+      const text = tc.draw(gs.text({ alphabet: "ab\n", maxSize: 8 }));
+      expect(fitsDifference(text, text)).toBeNull();
+    }));
+
+  it("names the expected lines that fit, the first that fits nothing, and the actual line where it stopped", () => {
+    const out = "built 3 files in 41ms\nwrote dist/a.js\nwrote dist/b.js\ndone\n";
+    expect(fitsDifference(out, "built [..] files in [..]ms\n...\nwrote dist/c.js\ndone")).toBe(
+      'expected lines 1 to 2 fit, and expected line 3 fits nothing from actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"',
+    );
+    expect(fitsDifference(out, "built 2 files in [..]ms\n...")).toBe('expected line 1 fits nothing from actual line 1: actual "built 3 files in 41ms", expected "built 2 files in [..]ms"');
+    expect(fitsDifference(out, "built [..]\nwrote dist/a.js\nwrote dist/b.js\ndone\nexit 0")).toBe('expected lines 1 to 4 fit, and expected line 5 fits nothing from actual line 5: actual nothing, expected "exit 0"');
+    expect(fitsDifference(out, "built [..]\nwrote dist/a.js")).toBe('every expected line fits, and actual line 3 is left over: actual "wrote dist/b.js"');
   });
 });
 

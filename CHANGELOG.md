@@ -24,6 +24,22 @@ just until 0.1.
   failure message ends with the first expected field that does not fit,
   with its path and both sides (`; first field that does not fit at
   owner.name: actual "aki", expected "kei"`).
+- **A claim can state a program's output whose parts change each run.**
+  `fits-text` splits both texts into lines (one final newline on each
+  side does not count) and holds when the expected lines take up the
+  whole actual text: an expected line that is exactly `...` stands for
+  any run of lines, none included, and `[..]` inside any other line
+  stands for any characters within that line. A docstring such as
+  `built [..] files in [..]ms` then `...` then `done` claims the build's
+  output without one claim per stable line. Judging keeps, for each
+  expected line, the actual lines it can end at, so many `...` lines
+  never make it slow. An expected text with nothing but whitespace
+  outside its `...` lines and `[..]` breaks the claim, and a `where`
+  claim that overlaps an item claim cannot use the compare. A broken
+  `fits-text` line ends with how far the expected text fit and where it
+  stopped (`; expected lines 1 to 2 fit, and expected line 3 fits
+  nothing from actual line 2: actual "wrote dist/a.js", expected "wrote
+  dist/c.js"`).
 
 ### Fixed
 

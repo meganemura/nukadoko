@@ -1869,6 +1869,8 @@ and 256 keeps a margin of six times; the reason names the limit
 expected text), `has-item` (the array has an item equal to the expected value),
 `has-same-items` (two arrays hold the same items in any order),
 `has-fields` (the actual object holds every field of the expected one),
+`fits-text` (the actual text fits the expected one line by line, with
+stand-ins for the parts that change),
 `matches` (the expected text, as a regular expression, matches),
 `greater-than`, `at-least`, `less-than`, and `at-most`. Equality is
 structural over JSON values: object key order does not count, and `0`
@@ -1893,6 +1895,31 @@ an equal one. A docstring reaches the claim as JSON through
 claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
 ```
 
+`fits-text` compares two texts, and lets a docstring state a program's
+output whose times, sizes, and paths change on each run without each
+changing part becoming a claim of its own. Both texts are split into
+lines at each `\n`, and one final empty line on each side is dropped, so
+the newline a program prints last does not count. A `\r` is a character
+like any other. An expected line that is exactly `...` stands for any
+run of actual lines, none included. Inside any other expected line,
+`[..]` stands for any run of characters within that one line, and every
+other character matches itself. The claim holds when the expected lines
+take up the whole actual text:
+
+```gherkin
+Then the build prints
+  """
+  built [..] files in [..]ms
+  ...
+  done
+  """
+```
+
+Judging walks the expected lines once and keeps the actual lines each
+part of the expected text can end at, so an expected text with many
+`...` lines costs its lines times the actual lines, never a number of
+tries that grows with each `...`.
+
 Both sides are plain JSON before any compare runs: `null`, a boolean, a
 string, a finite number (an integer no larger than
 `Number.MAX_SAFE_INTEGER`), an array with no holes and no other keys, or
@@ -1915,7 +1942,8 @@ text of only whitespace or nothing; under
 an expected object with no field, at the top or at any depth, breaks the
 same way, since every object holds it, and the reason names where it
 sits: `has-fields has an expected object with no field at items.0, which
-every object holds`.
+every object holds`. Under `fits-text`, an expected text with nothing but
+whitespace outside its `...` lines and its `[..]` breaks too.
 
 `matches` tests the regular expression on a worker thread, which nukadoko
 starts outside the step's recorded actions. A regular expression cannot be
@@ -1950,7 +1978,7 @@ followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
 and `{ at: "a.b" }` read one path, and a `view` on either side does not
 separate them: it reads the same value another way. A `where` claim
 that overlaps an item claim and compares with `equal`,
-`has-same-items`, `has-fields`, `contains-text`,
+`has-same-items`, `has-fields`, `fits-text`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `matches`, or `has-item` is refused at import. It selects the items by
 the value the item claim then judges, or by a part of it the claim cannot
 be told apart from, so "every item" would read as "every item that
@@ -2253,7 +2281,12 @@ there. A broken `has-fields` ends the same way with the first expected
 field that does not fit: its path, and what each side holds there,
 `nothing` for a field the actual object lacks, or both lengths for an
 array of another length (`; first field that does not fit at tags:
-actual 2 items, expected 1 item`). One line per broken claim, with the first item that broke under an `each`
+actual 2 items, expected 1 item`). A broken `fits-text` ends with how
+far the expected text fit and the first expected line that fits nothing
+after that, with the actual line where it stopped, or `nothing` past the
+end; when every expected line fits, it names the first actual line left
+over (`; expected lines 1 to 2 fit, and expected line 3 fits nothing from
+actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`). One line per broken claim, with the first item that broke under an `each`
 on the line below it, named by its index and its `identity` when it has one.
 A claim nukadoko could not judge fails the step with `claim_unjudged`
 instead, and its line starts `claim unjudged:`. The run summary lists

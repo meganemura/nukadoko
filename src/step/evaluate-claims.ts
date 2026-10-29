@@ -157,6 +157,105 @@ export function fieldlessObject(value: unknown, path: readonly string[] = []): r
   return null;
 }
 
+/** An expected line under `fits-text` that stands for any run of actual
+ * lines, none included. */
+export const ANY_LINES = "...";
+
+/** Inside any other expected line, a stand-in for any run of characters
+ * in that one line. */
+export const ANY_TEXT = "[..]";
+
+/** A text's lines: split at each "\n", with one final empty line dropped,
+ * so the newline a program prints last does not count as a line. A "\r"
+ * stays in its line, so a text written with "\r\n" fits only an expected
+ * text written the same way. Pure. */
+export function fitLines(text: string): readonly string[] {
+  const lines = text.split("\n");
+  if (lines.at(-1) === "") lines.pop();
+  return lines;
+}
+
+/** Whether `line` fits the expected line `pattern`, where each `[..]`
+ * stands for any characters. The first part is a prefix, the last a
+ * suffix, and each part between is found leftmost after the one before
+ * it, which is enough when a stand-in matches anything: a later find
+ * never needs an earlier part placed further right. No backtracking, so a
+ * line costs time in its length, whatever an expected line holds. Pure. */
+export function lineFits(pattern: string, line: string): boolean {
+  const parts = pattern.split(ANY_TEXT);
+  if (parts.length === 1) return pattern === line;
+  const first = parts[0]!;
+  const last = parts.at(-1)!;
+  if (line.length < first.length + last.length || !line.startsWith(first) || !line.endsWith(last)) return false;
+  let at = first.length;
+  const end = line.length - last.length;
+  for (const part of parts.slice(1, -1)) {
+    const found = line.indexOf(part, at);
+    if (found === -1 || found + part.length > end) return false;
+    at = found + part.length;
+  }
+  return true;
+}
+
+/** How far an expected text fits an actual one under `fits-text`. When it
+ * does not, `fitted` counts the expected lines that fit from the first,
+ * `expected` is the next expected line, which fits nothing from actual
+ * line `at` (1-based) on, and `actual` is that line; `expected` is absent
+ * when every expected line fit and actual lines are left over from `at`.
+ * An `actual` that is absent is past the end of the actual text. */
+export type TextFit =
+  | { readonly fits: true }
+  | { readonly fits: false; readonly fitted: number; readonly expected?: string; readonly at: number; readonly actual?: string };
+
+/** Whether `expected` fits `actual` line by line: a line that is exactly
+ * `...` takes any run of actual lines, `[..]` any characters inside one
+ * line, and every other character matches itself, until both texts are
+ * used up. The run judges with this function and the run summary names
+ * where it stopped fitting with it, so the two never disagree.
+ *
+ * It walks the expected lines once, keeping the set of actual lines each
+ * prefix of the expected text can end at: a `...` line widens that set
+ * to every later line, and any other line moves each member one line on
+ * where the line fits. That costs the expected lines times the actual
+ * lines at most, where trying each way a `...` could split the text
+ * would cost a power of the number of `...` lines. Pure. */
+export function textFit(actual: string, expected: string): TextFit {
+  const have = fitLines(actual);
+  const want = fitLines(expected);
+  // reach[j]: the expected lines so far can end just before actual line j.
+  let reach: boolean[] = have.map(() => false).concat(false);
+  reach[0] = true;
+  let earliest = 0;
+  for (const [index, pattern] of want.entries()) {
+    const next: boolean[] = reach.map(() => false);
+    if (pattern === ANY_LINES) {
+      let open = false;
+      for (let j = 0; j < next.length; j += 1) {
+        open ||= reach[j]!;
+        next[j] = open;
+      }
+    } else {
+      for (let j = 0; j < have.length; j += 1) {
+        if (reach[j] && lineFits(pattern, have[j]!)) next[j + 1] = true;
+      }
+    }
+    const first = next.indexOf(true);
+    if (first === -1) return { fits: false, fitted: index, expected: pattern, at: earliest + 1, ...(have[earliest] === undefined ? {} : { actual: have[earliest] }) };
+    reach = next;
+    earliest = first;
+  }
+  if (reach[have.length]) return { fits: true };
+  const left = reach.lastIndexOf(true);
+  return { fits: false, fitted: want.length, at: left + 1, actual: have[left]! };
+}
+
+/** Whether an expected text states nothing beyond its stand-ins: every
+ * character outside `...` lines and `[..]` is whitespace, so nearly
+ * every text fits it. Pure. */
+export function onlyStandIns(expected: string): boolean {
+  return fitLines(expected).every((line) => line === ANY_LINES || line.split(ANY_TEXT).join("").trim() === "");
+}
+
 /** The value after `view`, or why the view could not apply. A view reads a
  * snapshot, and what it makes of one is a snapshot too: the JSON a text
  * parses to is held to the same depth limit. */
@@ -271,6 +370,15 @@ export async function compareValues(
       if ("reason" in tested || "stopped" in tested) return tested;
       if (tested.matchesEmpty) return { reason: `matches has a pattern that matches the empty string, so every string holds it` };
       return { holds: tested.holds };
+    }
+    case "fits-text": {
+      if (actualType !== "string" || expectedType !== "string") {
+        return { reason: `fits-text reads two strings, and compares ${article(actualType)} with ${article(expectedType)}` };
+      }
+      if (onlyStandIns(expected as string)) {
+        return { reason: "fits-text has an expected text of only whitespace, ... lines, and [..], which almost every text holds" };
+      }
+      return { holds: textFit(actual as string, expected as string).fits };
     }
     case "has-item": {
       if (actualType !== "array") return { reason: `has-item reads an array, and the actual value is ${article(actualType)}` };

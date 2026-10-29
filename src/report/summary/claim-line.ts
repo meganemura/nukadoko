@@ -1,5 +1,5 @@
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
-import { fieldMisfit } from "../../step/evaluate-claims.js";
+import { fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 
 // Responsibility: one claim record as one line of plain text, the words
 // every reader of a claim sees (docs/spec.md "Claims"): the run summary,
@@ -7,9 +7,9 @@ import { fieldMisfit } from "../../step/evaluate-claims.js";
 // the cucumber-messages exception. One function, so the four never
 // describe the same claim differently. It reads a record that is already
 // written; it does not judge anything. Where it names the place two values
-// part under a compare that matches by shape (has-fields), it asks the
-// matcher the claim was judged with, so the line cannot name a place the
-// judging did not.
+// part under a compare that matches by shape (has-fields, fits-text), it
+// asks the matcher the claim was judged with, so the line cannot name a
+// place the judging did not.
 
 /** A value longer than this is cut in a line; the record keeps it whole. */
 const VALUE_TEXT_LIMIT = 120;
@@ -176,12 +176,26 @@ export function fieldsDifference(actual: unknown, expected: unknown): string | n
   }
 }
 
+/** How far a broken `fits-text` claim's expected text fit, and the first
+ * expected line that fits nothing after that, with the actual line where
+ * it stopped, found by the matcher the claim was judged with; `null` when
+ * the two fit, or for a value that is not a text. Pure. */
+export function fitsDifference(actual: unknown, expected: unknown): string | null {
+  if (typeof actual !== "string" || typeof expected !== "string") return null;
+  const fit = textFit(actual, expected);
+  if (fit.fits) return null;
+  if (fit.expected === undefined) return `every expected line fits, and actual line ${fit.at} is left over: actual ${sideText(fit.actual)}`;
+  const fitted = fit.fitted === 0 ? "" : fit.fitted === 1 ? "expected line 1 fits, and " : `expected lines 1 to ${fit.fitted} fit, and `;
+  return `${fitted}expected line ${fit.fitted + 1} fits nothing from actual line ${fit.at}: actual ${sideText(fit.actual)}, expected ${valueText(fit.expected)}`;
+}
+
 /** What a broken claim's line adds after its outcome, by compare: where
  * the two values part. A compare with no row adds nothing, since the two
  * values in the line already show why it broke. */
 const DIFFERENCES: Partial<Record<ClaimCompare, (actual: unknown, expected: unknown) => string | null>> = {
   equal: equalDifference,
   "has-fields": fieldsDifference,
+  "fits-text": fitsDifference,
 };
 
 function differenceText(record: ClaimComparisonRecord | ClaimEachRecord): string {

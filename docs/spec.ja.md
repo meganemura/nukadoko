@@ -1531,7 +1531,7 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 
 #### 比較
 
-`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
 `has-same-items` は各要素を、もう一方の側の等しい要素 1 つと組にします。
@@ -1551,6 +1551,26 @@ docstring は `expected_view` を通して JSON として claim に届きます�
 claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
 ```
 
+`fits-text` は 2 つのテキストを比べ、実行のたびに時刻、大きさ、パスが変わるプログラムの出力を、変わる部分ごとに claim を分けずに docstring で述べられるようにします。
+両方のテキストを `\n` ごとに行に分け、それぞれの側で最後の空行を 1 つだけ除きます。
+そのため、プログラムが最後に出力する改行は数えません。
+`\r` はほかと同じ 1 つの文字です。
+ちょうど `...` である期待する行は、0 行を含む任意の数の実際の行を表します。
+それ以外の期待する行の中では、`[..]` がその 1 行の中の任意の文字の並びを表し、ほかの文字はそれ自身に一致します。
+期待する行が実際のテキスト全体を使い切るとき、claim は成り立ちます。
+
+```gherkin
+Then the build prints
+  """
+  built [..] files in [..]ms
+  ...
+  done
+  """
+```
+
+判定は期待する行を 1 度だけたどり、期待するテキストの各部分が終わりうる実際の行を残していきます。
+そのため、`...` の行が多い期待するテキストでも、かかる手間は期待する行の数と実際の行の数の積までで、`...` ごとに増える数の試行にはなりません。
+
 どの比較の前でも、両辺は素の JSON です。
 つまり `null`、真偽値、文字列、有限の数値(整数なら `Number.MAX_SAFE_INTEGER` 以下)、穴も他のキーもない配列、プロトタイプが `Object.prototype` か `null` で自分のプロパティがすべて文字列キーの列挙可能なデータプロパティであるオブジェクトです。
 それ以外(`Date`、`Map`、bigint、`NaN`、`undefined` の要素、getter、クラスのインスタンス、`Proxy`)では claim は `unjudged` になり、理由がそれが何でどこにあるかを名指しします(`observe:when is a Date, which is not plain JSON, so the claim was not judged`)。
@@ -1562,6 +1582,7 @@ JSON の型が違う 2 つの値の比較では、claim は成り立たず、両
 `contains-text`、`starts-with-text`、`ends-with-text` では空白だけか空のテキスト、`matches` では空文字列に一致する pattern です。
 `has-fields` では、フィールドを持たない期待するオブジェクトも、最上位でもどの深さでも、どのオブジェクトも持つので同じように成り立ちません。
 理由はそれがある場所を名指しします(`has-fields has an expected object with no field at items.0, which every object holds`)。
+`fits-text` では、`...` の行と `[..]` の外に空白しかない期待するテキストも成り立ちません。
 
 `matches` は正規表現を worker スレッドで試します。
 nukadoko はこのスレッドを step の記録される操作の外で起動します。
@@ -1588,7 +1609,7 @@ pattern には残り時間を与え、残りが無いときに与えることは
 読むパスは `actual` に `at` を続けたものです。
 したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読みます。
 どちらかの側の `view` は、同じ値を別の形で読むだけなので、2 つを分けません。
-要素の claim と重なり、`equal`、`has-same-items`、`has-fields`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
+要素の claim と重なり、`equal`、`has-same-items`、`has-fields`、`fits-text`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
 要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
 
 重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。
@@ -1790,6 +1811,9 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 その場所は、テキストなら行か文字、配列やオブジェクトの中ならキーと番号のパスで、それぞれの側がそこに持つものも続きます。
 成り立たない `has-fields` の行も同じように、合わない最初の期待するフィールドで終わります。
 そのパスと、それぞれの側がそこに持つものが続き、実際のオブジェクトにないフィールドは `nothing`、長さの違う配列は両方の長さです(`; first field that does not fit at tags: actual 2 items, expected 1 item`)。
+成り立たない `fits-text` の行は、期待するテキストがどこまで合ったかと、そのあとで何にも合わない最初の期待する行で終わり、止まった場所の実際の行が続きます。
+実際のテキストの終わりを越えたときは `nothing` です。
+期待する行がすべて合ったときは、余った最初の実際の行を名指しします(`; expected lines 1 to 2 fit, and expected line 3 fits nothing from actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`)。
 成り立たない claim ごとに 1 行で、`each` では最初に成り立たなかった要素がその下に続きます。
 その要素は、番号と、あれば `identity` で名指しされます。
 nukadoko が判定できなかった claim は、代わりに `claim_unjudged` で step を落とし、その行は `claim unjudged:` で始まります。
