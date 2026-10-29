@@ -110,7 +110,10 @@ describe("nuka report on a run.json with one field deleted or null", () => {
         side: "on",
         criteria: [{ feature: first.feature, line: first.line, name: first.scenario, verdict: "held", cells: [{ environment: "default", role: "required", outcome: "pass", gates: ["actor", null] }] }],
         counts: { held: 1, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 },
+        listed_in: ["default"],
+        only_side_evaluated: true,
       },
+      { name: "quick_reorder", side: "off", criteria: [], counts: { held: 0, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 }, listed_in: ["default"] },
     ];
     // What a program's lists add: a head world that read one list and
     // not the other, a route a step requested, and a request the program

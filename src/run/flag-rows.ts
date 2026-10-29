@@ -1,4 +1,5 @@
 import { EVENT_KINDS, type FlagEvaluation } from "../execution-events/format.js";
+import type { ListedFlag } from "../execution-events/lists.js";
 import type { RunFlagRow, RunScenario, RunTable } from "../record/run-result.js";
 import { countsOf, criteriaByPlace } from "./place-criteria.js";
 
@@ -15,6 +16,16 @@ import { countsOf, criteriaByPlace } from "./place-criteria.js";
 // a declaration, and a scenario can switch a flag for one actor inside a
 // world declared off, so one execution can evaluate both sides, and then
 // its criterion stands in both rows.
+//
+// When a head world read the program's flags list (docs/spec.md "Lists"),
+// every side it declares has a row, so a side no criterion evaluated
+// stands beside the ones that were, with no criterion; and every row
+// names the environments whose list declares its side, so a side the
+// lines named and no list declares is told apart. With no list read, the
+// rows are only what the lines named, as they were before lists. A flag
+// whose lines named one side alone marks that row, since a reader about
+// to turn the flag on would otherwise read the other side's absence as
+// nothing to see there.
 
 export interface FlagRowsInput {
   /** Every execution of the run. */
@@ -22,6 +33,9 @@ export interface FlagRowsInput {
   readonly table: Pick<RunTable, "rows">;
   /** The flags an execution's steps evaluated, by its scenario record id. */
   readonly evaluated: (scenarioRecordId: string) => readonly FlagEvaluation[];
+  /** Each environment whose flags list was read, with the list, in the
+   * run's order; none when no world read one. */
+  readonly listed?: readonly { readonly environment: string; readonly flags: readonly ListedFlag[] }[];
 }
 
 const FORMAT_GATES: readonly string[] = EVENT_KINDS.flag.gate.values;
@@ -45,17 +59,49 @@ function byText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/** One row per flag and side the head executions' flag lines name, by
- * flag name and then side; `[]` when they name none. Pure. */
+const keyOf = ({ name, side }: { readonly name: string; readonly side: string }): string => JSON.stringify([name, side]);
+
+/** One row per flag and side the head executions' flag lines name, and
+ * per side a read flags list declares, by flag name and then side; `[]`
+ * when there is neither. Pure. */
 export function flagRows(input: FlagRowsInput): RunFlagRow[] {
-  const sides = criteriaByPlace({
+  const evaluated = criteriaByPlace({
     scenarios: input.scenarios,
     table: input.table,
     visits: (id) => input.evaluated(id).map(({ name, side, gate }) => ({ place: { name, side }, detail: gate })),
-    keyOf: ({ name, side }) => JSON.stringify([name, side]),
+    keyOf,
     cellOf: (gates) => ({ gates: [...new Set(gates)].sort(byGate) }),
   });
-  return [...sides.values()]
-    .sort((a, b) => byText(a.place.name, b.place.name) || byText(a.place.side, b.place.side))
-    .flatMap(({ place, criteria }) => (criteria.length === 0 ? [] : [{ name: place.name, side: place.side, criteria, counts: countsOf(criteria) }]));
+  const listed = input.listed ?? [];
+  const sides = new Map<string, { readonly name: string; readonly side: string; readonly listedIn: string[] }>();
+  for (const { place, criteria } of evaluated.values()) {
+    if (criteria.length > 0) sides.set(keyOf(place), { ...place, listedIn: [] });
+  }
+  for (const { environment, flags } of listed) {
+    for (const flag of flags) {
+      for (const side of flag.sides) {
+        const key = keyOf({ name: flag.name, side });
+        const entry = sides.get(key) ?? { name: flag.name, side, listedIn: [] };
+        sides.set(key, entry);
+        if (!entry.listedIn.includes(environment)) entry.listedIn.push(environment);
+      }
+    }
+  }
+  const sidesEvaluated = new Map<string, number>();
+  for (const { place, criteria } of evaluated.values()) {
+    if (criteria.length > 0) sidesEvaluated.set(place.name, (sidesEvaluated.get(place.name) ?? 0) + 1);
+  }
+  return [...sides.entries()]
+    .sort(([, a], [, b]) => byText(a.name, b.name) || byText(a.side, b.side))
+    .map(([key, { name, side, listedIn }]): RunFlagRow => {
+      const criteria = evaluated.get(key)?.criteria ?? [];
+      return {
+        name,
+        side,
+        criteria,
+        counts: countsOf(criteria),
+        ...(listed.length === 0 ? {} : { listed_in: listedIn }),
+        ...(criteria.length > 0 && sidesEvaluated.get(name) === 1 ? { only_side_evaluated: true as const } : {}),
+      };
+    });
 }

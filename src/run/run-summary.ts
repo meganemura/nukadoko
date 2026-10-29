@@ -482,28 +482,45 @@ function programWord(text: string): string {
 
 // One line per flag and side of run.json's `flags`, for the person who
 // decides whether to turn a flag on: its counts, and the gates its lines
-// named. The criteria themselves are the table's rows above, so the line
-// does not repeat them.
+// named, or that no criterion evaluated a side the program's flags list
+// declares. The criteria themselves are the table's rows above, so the
+// line does not repeat them. A side alone of its flag says so, and a
+// world whose flags list was not read is named, so a side missing from
+// these lines is never read as one the program does not have.
 function renderFlags(document: RunDocument): string[] {
   const rows = document.flags ?? [];
-  if (rows.length === 0) return [];
+  const unread = (document.worlds ?? []).filter(
+    (world) => (world.tree === undefined || world.tree === "head") && world.lists?.flags?.error !== undefined && world.lists.flags.error !== null,
+  );
+  if (rows.length === 0 && unread.length === 0) return [];
   const lines = rows.map((row) => {
+    const flag = `- ${codeSpan(programWord(row.name))} ${codeSpan(programWord(row.side))}`;
+    if (row.criteria.length === 0) return `${flag}, no criterion's steps evaluated it on this side`;
     const counts = FLAG_VERDICTS.filter((verdict) => row.counts[verdict] > 0).map((verdict) => `${row.counts[verdict]} ${verdict}`);
     if (row.counts.controls > 0) counts.push(`${row.counts.controls} only in controls`);
     const gates = [...new Set(row.criteria.flatMap((criterion) => criterion.cells.flatMap((cell) => cell.gates)))].sort(byGate);
     const named = gates.map((gate) => (gate === null ? "none named" : codeSpan(programWord(gate))));
     const counted = counts.length === 0 ? "" : `: ${counts.join(", ")}`;
-    const tail = named.length === 0 ? "" : `; gates ${named.join(", ")}`;
-    return `- ${codeSpan(programWord(row.name))} ${codeSpan(programWord(row.side))}, ${countOf(row.criteria.length, "criterion", "criteria")}${counted}${tail}`;
+    const tail = [
+      ...(named.length === 0 ? [] : [`gates ${named.join(", ")}`]),
+      ...(row.only_side_evaluated === true ? ["only this side was evaluated"] : []),
+      ...(row.listed_in !== undefined && row.listed_in.length === 0 ? ["no flags list that was read declares this side"] : []),
+    ];
+    return `${flag}, ${countOf(row.criteria.length, "criterion", "criteria")}${counted}${tail.map((part) => `; ${part}`).join("")}`;
   });
   return [
     "",
     "## Flags",
     "",
-    "Each line counts the criteria whose steps evaluated the flag on the side the program's lines named, by their verdict in the table.",
-    "One seen on that side only in controls is counted apart, since its verdict is about another side.",
-    "",
+    ...(rows.length === 0
+      ? []
+      : [
+          "Each line counts the criteria whose steps evaluated the flag on the side the program's lines named, by their verdict in the table.",
+          "One seen on that side only in controls is counted apart, since its verdict is about another side.",
+          "",
+        ]),
     ...lines,
+    ...unread.map((world) => `- World ${codeSpan(programWord(world.name))} read no flags list (\`program-list-unread\` under Findings), so a side of a flag its steps never evaluated may not stand here.`),
   ];
 }
 

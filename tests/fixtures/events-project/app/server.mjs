@@ -33,7 +33,8 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // for. `/orders/:id?as=` evaluates it for that person and answers
 // `reorder` or `plain`, or `missing` for order 404; `/reorders?as=`
 // answers 201 only where it is on. `/receipts` enqueues a job the worker
-// performs 600 ms later, which evaluates the flag itself.
+// performs 600 ms later, which evaluates the flag itself. `/greeting`
+// evaluates `greeting_style`, a flag app/list.mjs does not list.
 const jobs = process.env.JOBS_DIR;
 mkdirSync(jobs, { recursive: true });
 fork(new URL("./worker.mjs", import.meta.url).pathname);
@@ -103,6 +104,8 @@ createServer(async (req, res) => {
     emit({ trace, kind: "flag", id: newId(), parent: id, name: "quick_reorder", side, gate });
     if (url.pathname === "/reorders") status = side === "on" ? 201 : 403;
     else body = url.pathname === "/orders/404" ? "missing" : side === "on" ? "reorder" : "plain";
+  } else if (url.pathname === "/greeting") {
+    emit({ trace, kind: "flag", id: newId(), parent: id, name: "greeting_style", side: "formal", gate: "manual" });
   } else if (url.pathname === "/switches") {
     switchedOn.add(url.searchParams.get("as") ?? "");
   } else if (url.pathname === "/receipts") {

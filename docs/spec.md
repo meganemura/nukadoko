@@ -3978,6 +3978,19 @@ criteria ran on each side and what their rows came to:
   by name and then side.
   `flags` is absent when they name none, so a run of a program that
   reports no flag reads as it did before.
+- When a head world reads the program's flags list (see "Lists"), every
+  side it declares has a row too, and a side no criterion evaluated has
+  one with no `criteria`, so a reader finds the sides no step reached
+  beside the ones that were.
+  Each row then has `listed_in`, each environment whose list declares
+  that side, in the run's order; it is empty for a side the lines named
+  and no list declares.
+  With no flags list read, no row has `listed_in`, and the rows are what
+  the lines named.
+- `only_side_evaluated: true` marks the row of a flag's one side when
+  the criteria evaluated no other side of it: a reader about to turn the
+  flag on learns that the other side was never run, whether or not a list
+  declares it.
 - `criteria` holds each criterion whose head executions evaluated the
   flag on that side, in the table's row order, with its row's `verdict`
   and the cells those executions belong to, in the table's column order:
@@ -5021,9 +5034,10 @@ to act on the run without opening another file:
   `proof_runs` is `--proof-runs`, what the `runs` of a control and of a
   base cell are measured against. It is the table the run summary draws.
 - `flags`, present only when a head step's lines of the program's
-  execution events name a flag, has one row per flag and side: the
-  criteria that evaluated it there, with their verdicts and cells, and
-  their counts (see "Execution events").
+  execution events name a flag or a head world's flags list declares
+  one, has one row per flag and side: the criteria that evaluated it
+  there, with their verdicts and cells, and their counts, and, with a
+  list, where its side is declared (see "Execution events").
 - `routes`, present only when a head world read a routes list, has one
   entry per method and route a list or a head step's `request` line
   names: its handlers, the environments whose list holds it, the
@@ -6674,9 +6688,13 @@ holds:
 - "Flags", when run.json has `flags`: one line per flag and side, with
   how many criteria evaluated it there, their counts by verdict,
   `only in controls` for the ones seen there only in controls, and each
-  gate its lines named, `none named` for a line that named none (see
-  "Execution events"); a control character in the program's text is
-  written as its `\u` escape, so a name cannot end the line;
+  gate its lines named, `none named` for a line that named none, then
+  `only this side was evaluated` for a flag's only side, and `no flags
+  list that was read declares this side` for a side no list declares; a
+  declared side no criterion evaluated says so instead; and each world
+  whose flags list was not read (see "Execution events"); a control
+  character in the program's text is written as its `\u` escape, so a
+  name cannot end the line;
 - "Routes", when run.json has `routes` or a head world's routes list
   was not read: how many of the listed routes head steps requested; the
   ones they never requested, apart from those whose handler a request

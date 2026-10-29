@@ -317,14 +317,17 @@ const table = z.looseObject({
 });
 
 // run.json's `flags` (src/run/flag-rows.ts): the summary reads each row's
-// flag and side, its counts, how many criteria it holds, and the gates of
-// their cells.
+// flag and side, its counts, how many criteria it holds, the gates of
+// their cells, and, when a flags list was read, where its side is listed
+// and whether it is the only side evaluated.
 const count = z.number().int().min(0);
 const flagRow = z.looseObject({
   name: z.string(),
   side: z.string(),
   criteria: z.array(z.looseObject({ cells: z.array(z.looseObject({ gates: z.array(z.string().nullable()) })) })),
   counts: z.looseObject({ held: count, proven: count, failed: count, unproven: count, moved: count, controls: count }),
+  listed_in: z.array(z.string()).optional(),
+  only_side_evaluated: z.literal(true).optional(),
 });
 
 // run.json's `routes` (src/run/route-rows.ts): the summary reads each

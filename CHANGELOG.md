@@ -314,6 +314,19 @@ just until 0.1.
   whose list was not read. With no routes list read, `routes` is absent,
   so a list that was not read never reads as one whose every route went
   unrequested. The field is additive, so no `schema_version` changes.
+- **run.json's `flags` names the sides no criterion evaluated.** When a
+  head world reads a flags list, every side it declares has a row, and a
+  side no criterion's steps evaluated has one with no `criteria`, so the
+  sides no step reached stand beside the ones that were. Each row then
+  has `listed_in`, each environment whose list declares the side, empty
+  for a side the lines named and no list declares. A flag whose criteria
+  evaluated one side alone marks that row `only_side_evaluated: true`,
+  list or not. The summary's "Flags" says `no criterion's steps evaluated
+  it on this side` for such a side, adds `only this side was evaluated`
+  and `no flags list that was read declares this side` where they hold,
+  and names each world whose flags list was not read. With no flags list
+  read, the rows are what the lines named, as before; the fields are
+  additive, so no `schema_version` changes.
 - **A broken `has-same-items` line names the items the two lists do not
   share.** It ended with the outcome alone, so a reader compared the two
   lists by eye. It now names the expected items that no actual item

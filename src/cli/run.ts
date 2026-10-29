@@ -951,7 +951,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // (src/program/world.ts).
     const headUrls = new Map<string, string>();
     // What each of head's worlds read of the program's lists, by
-    // environment, for run.json's `routes`.
+    // environment, for run.json's `flags` and `routes`.
     const listedPlaces = new Map<string, Partial<ListedPlaces>>();
     // Starts the pass's world, or reports why it did not start. `null`
     // when the tree has no program file: the pass runs with no world.
@@ -1398,7 +1398,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // scenario that passed, whose line says nothing failed.
       rows.push(...judgedEarlyFindings(runScenarios, conditionsOf));
       runFindings.push(...rows);
-      const flags = flagRows({ scenarios: runScenarios, evaluated: (id) => flagEvaluations.get(id) ?? [], table });
+      // Each environment whose flags list was read, in the run's order.
+      const listedFlags = passes.flatMap((pass) => {
+        const flags = listedPlaces.get(pass.resolvedEnv.name)?.flags;
+        return flags === undefined ? [] : [{ environment: pass.resolvedEnv.name, flags }];
+      });
+      const flags = flagRows({ scenarios: runScenarios, evaluated: (id) => flagEvaluations.get(id) ?? [], table, listed: listedFlags });
       // Each environment whose routes list was read, in the run's order.
       // With none, a run has no list to set its requests against, so it
       // has no `routes` at all, never one that reads as nothing listed.

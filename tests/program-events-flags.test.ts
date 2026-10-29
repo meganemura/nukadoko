@@ -15,6 +15,10 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, l
 // step's record. Each row counts its criteria by their table rows'
 // verdicts, and a criterion seen on a side only in controls apart from
 // them. Under --concurrency the world-stop pass reads every worker's lines.
+// With the program's flags list read, every side it declares has a row,
+// one no criterion evaluated included, and the only side of a flag the
+// lines named says so; a list that was not read leaves the rows as the
+// lines named them, and the summary names the world.
 
 const FEATURE = [
   "Feature: Reordering an order in one press",
@@ -140,6 +144,85 @@ describe("run.json's flags", () => {
 
     // `nuka report` reads the same document, flags included.
     expect("document" in parseRunDocument(latestRunJsonText(rootDir))).toBe(true);
+  });
+
+  describe("with the program's flags list", () => {
+    const ONE_SIDE = [
+      "Feature: One side of a flag",
+      "",
+      "  Scenario: a customer the switch was not turned on for opens an order",
+      '    When customer "lee" opens order 7',
+      "",
+      "  Scenario: a page evaluates a flag no list declares",
+      '    When the client gets "/greeting"',
+      "",
+    ].join("\n");
+    const ONE_SIDE_FILE = "features/one-side.feature";
+
+    beforeEach(async () => {
+      await writeFile(path.join(rootDir, ONE_SIDE_FILE), ONE_SIDE);
+    });
+
+    const withLists = (env = "") =>
+      PROGRAM.replace('JOBS_DIR: "{dir}/jobs",', `JOBS_DIR: "{dir}/jobs",${env}`).replace("  environments: {", '  lists: { flags: "node app/list.mjs flags {url}" },\n  environments: {');
+    // The items of the summary's "Flags", up to the next heading.
+    const flagLines = (): string[] => {
+      const lines = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
+      const start = lines.indexOf("## Flags");
+      const end = lines.findIndex((line, index) => index > start && line.startsWith("## "));
+      return lines.slice(start, end === -1 ? undefined : end).filter((line) => line.startsWith("- "));
+    };
+
+    it("gives each side the list declares a row, one no criterion evaluated included, and marks a flag's only side", async () => {
+      await writeFile(path.join(rootDir, "nukadoko.program.ts"), withLists());
+      expect(await runCli(["run", "--env", "reorder-off", ONE_SIDE_FILE], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
+
+      const declared = (name: string, side: string) => ({ name, side, criteria: [], counts: { held: 0, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 }, listed_in: ["reorder-off"] });
+      const held = (line: number, name: string, gates: readonly (string | null)[]) => [
+        { feature: ONE_SIDE_FILE, line, name, verdict: "held", cells: [{ environment: "reorder-off", role: "required", outcome: "pass", gates }] },
+      ];
+      const one = { held: 1, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 };
+      expect(latestRunJson(rootDir).flags).toEqual([
+        // The lines named a flag the list does not declare.
+        { name: "greeting_style", side: "formal", criteria: held(6, "a page evaluates a flag no list declares", ["manual"]), counts: one, listed_in: [], only_side_evaluated: true },
+        {
+          name: "quick_reorder",
+          side: "off",
+          criteria: held(3, "a customer the switch was not turned on for opens an order", ["boolean"]),
+          counts: one,
+          listed_in: ["reorder-off"],
+          only_side_evaluated: true,
+        },
+        declared("quick_reorder", "on"),
+        // The lines named a flag the list does not declare.
+        declared("slider_input", "off"),
+        declared("slider_input", "on"),
+      ]);
+      expect(flagLines()).toEqual([
+        "- `greeting_style` `formal`, 1 criterion: 1 held; gates `manual`; only this side was evaluated; no flags list that was read declares this side",
+        "- `quick_reorder` `off`, 1 criterion: 1 held; gates `boolean`; only this side was evaluated",
+        "- `quick_reorder` `on`, no criterion's steps evaluated it on this side",
+        "- `slider_input` `off`, no criterion's steps evaluated it on this side",
+        "- `slider_input` `on`, no criterion's steps evaluated it on this side",
+      ]);
+      expect("document" in parseRunDocument(latestRunJsonText(rootDir))).toBe(true);
+    });
+
+    it("leaves the rows as the lines named them when the list was not read, and names the world", async () => {
+      await writeFile(path.join(rootDir, "nukadoko.program.ts"), withLists(' LIST_MODE: "fail",'));
+      expect(await runCli(["run", "--env", "reorder-off", ONE_SIDE_FILE], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
+
+      const rows = latestRunJson(rootDir).flags as Record<string, unknown>[];
+      expect(rows.map((row) => [row.name, row.side, "listed_in" in row, row.only_side_evaluated])).toEqual([
+        ["greeting_style", "formal", false, true],
+        ["quick_reorder", "off", false, true],
+      ]);
+      expect(flagLines()).toEqual([
+        "- `greeting_style` `formal`, 1 criterion: 1 held; gates `manual`; only this side was evaluated",
+        "- `quick_reorder` `off`, 1 criterion: 1 held; gates `boolean`; only this side was evaluated",
+        "- World `reorder-off` read no flags list (`program-list-unread` under Findings), so a side of a flag its steps never evaluated may not stand here.",
+      ]);
+    });
   });
 
   it("reads the flag lines of every worker under --concurrency", async () => {

@@ -65,6 +65,10 @@ summary's "Routes" names the listed routes no step requested, apart from
 a PATCH whose handler a PUT reached, and the requests no list names. A
 world whose list was not read gives no `routes` and a
 `program-list-unread` warning: fix the command before reading a gap.
+With a flags list, `flags` has a row for every side it declares, with
+no `criteria` for a side no criterion evaluated, and `listed_in`;
+`only_side_evaluated: true` (the summary's "only this side was
+evaluated") marks a flag whose other sides never ran.
 Tell the person which routes no criterion requested; whether one needs a
 criterion is theirs to decide.
 

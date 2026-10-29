@@ -2,6 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import type { FlagEvaluation } from "../src/execution-events/format.js";
+import type { ListedFlag } from "../src/execution-events/lists.js";
 import type { RunScenario } from "../src/record/run-result.js";
 import { flagRows } from "../src/run/flag-rows.js";
 import { buildTable, type ExecutionOutcome } from "../src/run/verdict-table.js";
@@ -15,7 +16,11 @@ import { buildTable, type ExecutionOutcome } from "../src/run/verdict-table.js";
 // no line put there; a row's counts sum to its criteria; and a criterion
 // is counted under a verdict only where a required cell of it stands on
 // the row's side, so a control that broke there is never counted as
-// proof. The exact rows of a real run are tests/program-events-flags.test.ts's.
+// proof. With the program's flags lists read, every side a list declares
+// has exactly one row, naming each environment whose list declares it, a
+// row with no criterion is a declared side and nothing else, and the one
+// side of a flag that any criterion evaluated is marked as the only one.
+// The exact rows of a real run are tests/program-events-flags.test.ts's.
 
 const ENVIRONMENTS = [
   { name: "x-off", conditions: { x: false } },
@@ -64,7 +69,9 @@ const runGen = gs.composite((tc) => {
   return { tagged, executions };
 });
 
-function build(tagged: readonly boolean[], executions: readonly Execution[]) {
+type Listed = NonNullable<Parameters<typeof flagRows>[0]["listed"]>;
+
+function build(tagged: readonly boolean[], executions: readonly Execution[], listed?: Listed) {
   const table = buildTable({
     criteria: tagged.map((withX, index) => ({ feature: "features/f.feature", line: index + 1, name: `c${index}`, tags: withX ? ["@with:x"] : [] })),
     environments: ENVIRONMENTS,
@@ -84,8 +91,29 @@ function build(tagged: readonly boolean[], executions: readonly Execution[]) {
     ...(entry.world === undefined ? {} : { world: entry.world }),
   }));
   const evaluated = new Map(executions.map((entry) => [entry.id, entry.evaluations]));
-  return { table, rows: flagRows({ scenarios, evaluated: (id) => evaluated.get(id) ?? [], table }) };
+  return { table, rows: flagRows({ scenarios, evaluated: (id) => evaluated.get(id) ?? [], table, ...(listed === undefined ? {} : { listed }) }) };
 }
+
+const listedFlag = gs.composite(
+  (tc): ListedFlag => ({
+    name: tc.draw(gs.sampledFrom(["a", "b", "c"])),
+    sides: [...new Set(tc.draw(gs.arrays(gs.sampledFrom(["on", "off", "blue"]), { minSize: 1, maxSize: 3 })))],
+  }),
+);
+
+// Each environment's list or none, as a world reads one: a flag once,
+// with every side its lines declared.
+const listedGen = gs.composite((tc): Listed =>
+  ENVIRONMENTS.flatMap((environment) => {
+    if (!tc.draw(gs.booleans())) return [];
+    const flags = new Map<string, ListedFlag>();
+    for (const flag of tc.draw(gs.arrays(listedFlag, { maxSize: 3 }))) {
+      const sides = [...new Set([...(flags.get(flag.name)?.sides ?? []), ...flag.sides])];
+      flags.set(flag.name, { name: flag.name, sides });
+    }
+    return [{ environment: environment.name, flags: [...flags.values()] }];
+  }),
+);
 
 describe("run.json's flags", () => {
   it("puts every flag line of a head execution in one row per side, in one cell, with its gate", () =>
@@ -146,5 +174,36 @@ describe("run.json's flags", () => {
           }
         }
       }
+    }));
+
+  it("gives every side a read list declares one row, naming the environments that declare it, and marks a flag's only evaluated side", () =>
+    hegel.test((tc) => {
+      const { tagged, executions } = tc.draw(runGen);
+      const listed = tc.draw(listedGen);
+      const { rows: withoutLists } = build(tagged, executions);
+      const { rows } = build(tagged, executions, listed);
+      const keyOf = (row: { readonly name: string; readonly side: string }) => JSON.stringify([row.name, row.side]);
+      expect(new Set(rows.map(keyOf)).size).toBe(rows.length);
+      // What the lines put in the rows is the same with lists or without.
+      for (const row of withoutLists) {
+        const same = rows.find((candidate) => keyOf(candidate) === keyOf(row));
+        expect(same?.criteria).toEqual(row.criteria);
+        expect(row).not.toHaveProperty("listed_in");
+      }
+      for (const { environment, flags } of listed) {
+        for (const flag of flags) {
+          for (const side of flag.sides) expect(rows.find((row) => keyOf(row) === keyOf({ name: flag.name, side }))?.listed_in).toContain(environment);
+        }
+      }
+      for (const row of rows) {
+        const declaredBy = listed.filter(({ flags }) => flags.some((flag) => flag.name === row.name && flag.sides.includes(row.side))).map(({ environment }) => environment);
+        if (listed.length === 0) expect(row).not.toHaveProperty("listed_in");
+        else expect(row.listed_in).toEqual(declaredBy);
+        if (row.criteria.length === 0) expect(declaredBy.length).toBeGreaterThan(0);
+        const evaluatedSides = rows.filter((candidate) => candidate.name === row.name && candidate.criteria.length > 0).length;
+        expect(row.only_side_evaluated === true).toBe(row.criteria.length > 0 && evaluatedSides === 1);
+      }
+      const sorted = rows.map((row) => `${row.name}\u0000${row.side}`);
+      expect(sorted).toEqual([...sorted].sort());
     }));
 });

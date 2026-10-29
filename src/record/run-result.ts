@@ -346,6 +346,14 @@ export interface RunFlagRow {
    * on this side, in the table's row order. */
   readonly criteria: readonly RunFlagCriterion[];
   readonly counts: RunPlaceCounts;
+  /** Present when a head world's flags list was read: each environment
+   * whose list declares this side of the flag, in the run's order; empty
+   * for a side the lines named and no list declares. A row whose
+   * `criteria` is empty is a declared side no criterion evaluated. */
+  readonly listed_in?: readonly string[];
+  /** Present on the one side of a flag that any criterion's steps
+   * evaluated, when they evaluated no other side of it. */
+  readonly only_side_evaluated?: true;
 }
 
 /** A criterion of a row of run.json's `flags` or `routes`: the table
