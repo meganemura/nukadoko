@@ -345,42 +345,48 @@ export interface RunFlagRow {
   /** Each criterion with a head execution whose steps evaluated the flag
    * on this side, in the table's row order. */
   readonly criteria: readonly RunFlagCriterion[];
-  readonly counts: RunFlagCounts;
+  readonly counts: RunPlaceCounts;
 }
 
-/** A criterion of a flag row: the table row's identity and verdict, and
- * the head cells whose executions evaluated the flag on the row's side. */
-export interface RunFlagCriterion {
+/** A criterion of a row of run.json's `flags` or `routes`: the table
+ * row's identity and verdict, and the head cells whose executions reached
+ * the row's place (src/run/place-criteria.ts). */
+export interface RunPlaceCriterion<Cell extends RunPlaceCell> {
   readonly feature: string;
   readonly line: number;
   readonly name: string;
-  /** The table row's verdict, over all its cells, on every side. */
+  /** The table row's verdict, over all its cells, at every place. */
   readonly verdict: Exclude<RunRowVerdict, "removed">;
   /** In the table's column order. */
-  readonly cells: readonly RunFlagCell[];
+  readonly cells: readonly Cell[];
 }
 
-/** A head cell of a flag row's criterion, as the table holds it, with
- * the gates of its flag lines on the row's side. */
-export interface RunFlagCell {
+/** A head cell of a place's criterion, as the table holds it. */
+export interface RunPlaceCell {
   readonly environment: string;
   readonly role: "required" | "control";
   readonly outcome: RunCellOutcome;
   /** The line `fail`, `broke`, `stopped`, and `flaky` name. */
   readonly line?: number;
+}
+
+export type RunFlagCriterion = RunPlaceCriterion<RunFlagCell>;
+
+/** A head cell of a flag row's criterion, with the gates of its flag
+ * lines on the row's side. */
+export interface RunFlagCell extends RunPlaceCell {
   /** Each gate the cell's flag lines on this side name, once: the
    * format's gates in its order, then any other word, then `null` for a
    * line that named none. */
   readonly gates: readonly (string | null)[];
 }
 
-/** A flag row's criteria by the verdict of their table row, counted where
- * the criterion has a required cell on the row's side. A criterion whose
- * cells on the side are all controls is counted under `controls` alone:
- * its row's verdict rests on cells of another side, and a control that
- * broke is never proof (docs/spec.md "Verdicts"). The six counts sum to
- * the row's criteria. */
-export interface RunFlagCounts {
+/** A place's criteria by the verdict of their table row, counted where
+ * the criterion has a required cell at the place. A criterion whose cells
+ * there are all controls is counted under `controls` alone: its row's
+ * verdict rests on cells elsewhere, and a control that broke is never
+ * proof (docs/spec.md "Verdicts"). The six counts sum to the criteria. */
+export interface RunPlaceCounts {
   readonly held: number;
   readonly proven: number;
   readonly failed: number;
