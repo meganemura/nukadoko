@@ -294,6 +294,26 @@ just until 0.1.
   with no events file, the base and old worlds under `--base`, and
   `nuka do` read no list. docs/spec.md "Lists" gives the one-line
   command a Rails application prints its routes with.
+- **run.json names the routes no step requested.** When a head world
+  reads a routes list, run.json's new `routes` has one entry per method
+  and route that a list or a head step's `request` line names, ordered
+  by route and then method: its `handlers`, `listed_in` (each
+  environment whose list holds it, empty for a route no list names),
+  `requests` and `statuses` (every `request` line a head step owns,
+  late ones included, each in exactly one entry), and the `criteria`
+  that sent them with `counts` by verdict, by the rules of `flags`,
+  each cell with its own `requests` and `statuses`. The requests the
+  program matched to no route have the entry whose `route` is `null`.
+  A request counts the same in a Given as in a Then, and an entry says a
+  step requested the route, never that a claim read the answer. The run
+  summary's new "Routes" section counts the listed routes the steps
+  requested, names the ones no step requested apart from those whose
+  handler a request reached through another route (a PATCH beside the
+  PUT of one resource), counts the requests to a route the world's list
+  does not name and the ones no route matched, and names each world
+  whose list was not read. With no routes list read, `routes` is absent,
+  so a list that was not read never reads as one whose every route went
+  unrequested. The field is additive, so no `schema_version` changes.
 - **A broken `has-same-items` line names the items the two lists do not
   share.** It ended with the outcome alone, so a reader compared the two
   lists by eye. It now names the expected items that no actual item

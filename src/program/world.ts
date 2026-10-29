@@ -8,7 +8,7 @@ import { collectWorldEvents, EVENTS_WORLD_FILE_NAME, type Recount, type Recounte
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
-import type { FlagEvaluation } from "../execution-events/format.js";
+import type { FlagEvaluation, ServedRequest } from "../execution-events/format.js";
 import { parseList, type ListedPlaces, type ListKind } from "../execution-events/lists.js";
 import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldList, RunWorldName } from "../record/run-result.js";
 import { redactString } from "../secrets/redact.js";
@@ -98,7 +98,8 @@ import type { WorldView } from "./world-view.js";
 // before its first command runs. When the world stops, after the program
 // has, one pass over that file writes the world's redacted copy beside
 // `program.log` and each step's events that arrived after its record,
-// and reads the flags each trace evaluated (src/context/events-file.ts),
+// and reads the flags each trace evaluated and the requests it sent
+// (src/context/events-file.ts),
 // and the file is removed. The steps get
 // the world's env without any variable that names `{events}`, so no
 // step's code, and no process a step starts, can write to the file.
@@ -148,6 +149,10 @@ export interface WorldStop {
   /** One per recount the stop was given, in order, counted over every
    * line of the file. Empty when the world has no events file. */
   readonly recounted: readonly Recounted[];
+  /** The requests each trace of the world sent that a `request` line
+   * reports, by trace id, one per line, a late one included. Empty when
+   * the world has no events file. */
+  readonly requests: ReadonlyMap<string, readonly ServedRequest[]>;
 }
 
 export interface StartedWorld {
@@ -560,6 +565,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
             let eventsLate: ReadonlyMap<string, LateSlice> = new Map();
             let flags: ReadonlyMap<string, readonly FlagEvaluation[]> = new Map();
             let recounted: readonly Recounted[] = [];
+            let requests: ReadonlyMap<string, readonly ServedRequest[]> = new Map();
             if (events !== undefined) {
               try {
                 const copy = path.join(dir, EVENTS_WORLD_FILE_NAME);
@@ -568,6 +574,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
                 eventsLate = found.late;
                 flags = found.flags;
                 recounted = found.recounted;
+                requests = found.requests;
                 worldEvents = {
                   file: found.copied ? options.recordPath(copy) : null,
                   lines: found.lines,
@@ -587,6 +594,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               eventsLate,
               flags,
               recounted,
+              requests,
             };
           },
           record: () => record(null),

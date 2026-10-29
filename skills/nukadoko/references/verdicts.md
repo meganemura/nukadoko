@@ -51,6 +51,23 @@ does not declare never ran the side it was meant to. Join a row with the
 program's own record of the flag by `name` and `side`. The row is
 evidence; whether to turn the flag on is the person's to decide.
 
+## Where no step looked
+
+`lists` in the program file (`references/program.md`, docs/spec.md
+"Lists") names the routes and flags the program has, so run.json can
+name the places no step reached. With a routes list, `routes` has an
+entry per method and route a list or a head step's `request` line
+names: `requests` (0 for a route no step requested), `statuses`,
+`listed_in` (empty for a route no list names), `handlers`, and the
+criteria that sent them. A request is not a check: a Given's counts as a
+Then's, so a route with requests may still be one no claim reads. The
+summary's "Routes" names the listed routes no step requested, apart from
+a PATCH whose handler a PUT reached, and the requests no list names. A
+world whose list was not read gives no `routes` and a
+`program-list-unread` warning: fix the command before reading a gap.
+Tell the person which routes no criterion requested; whether one needs a
+criterion is theirs to decide.
+
 ## Compared with the base
 
 `nuka run --base <the base>` is the run a pull request carries. It

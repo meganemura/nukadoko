@@ -145,6 +145,24 @@ export function flagOf(line: ParsedLine): FlagEvaluation | undefined {
   return { name, side, gate: typeof gate === "string" ? gate : null };
 }
 
+/** What one `request` line says the program served: the method, the
+ * route that matched, `null` when none did, and the status. */
+export interface ServedRequest {
+  readonly method: string;
+  readonly route: string | null;
+  readonly status: number;
+}
+
+/** The request a `request` event reports, or `undefined` for any other
+ * line. */
+export function requestOf(line: ParsedLine): ServedRequest | undefined {
+  if (line.state !== "event" || line.kind !== "request") return undefined;
+  // The parser read each field in its type, or the line would not be an
+  // event.
+  const { method, route, status } = line.object as { readonly method: string; readonly route: string | null; readonly status: number };
+  return { method, route, status };
+}
+
 const TRACEPARENT = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/;
 const BARE_TRACE_ID = /^[0-9a-f]{32}$/;
 const ALL_ZEROS = /^0+$/;

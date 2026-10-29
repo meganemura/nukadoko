@@ -133,6 +133,33 @@ describe("parseRunDocument", () => {
       expect("problem" in result && result.problem).toContain(`flags.0.${path}: `);
     }));
 
+  it("reads the routes and the world lists a summary reads, and refuses an entry or a list without any one field it reads", () =>
+    hegel.test((tc) => {
+      const route = {
+        method: "PUT",
+        route: tc.draw(gs.sampledFrom(["/rooms/:id", null])),
+        handlers: ["rooms#update"],
+        listed_in: ["default"],
+        requests: 1,
+        statuses: [200],
+        criteria: [{ feature: "features/a.feature", line: 3, name: "a", verdict: "held", cells: [{ environment: "default", role: "required", outcome: "pass", requests: 1, statuses: [200] }] }],
+        counts: { held: 1, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 },
+      };
+      const world = { name: "default", url: "http://localhost:4000", lists: { routes: { entries: 7, error: null }, flags: { entries: null, error: "it exited with code 1" } } };
+      const whole = { ...VALID, worlds: [world], routes: [route] };
+      expect(parseRunDocument(JSON.stringify(whole))).toEqual({ document: whole });
+      const path = tc.draw(
+        gs.sampledFrom(["routes.0.method", "routes.0.route", "routes.0.handlers", "routes.0.listed_in", "routes.0.requests", "routes.0.criteria", "routes.0.criteria.0.cells.0.environment", "routes.0.criteria.0.cells.0.requests", "worlds.0.lists.routes.entries", "worlds.0.lists.flags.error"]),
+      );
+      const broken = structuredClone(whole) as Record<string, unknown>;
+      const segments = path.split(".");
+      let parent = broken;
+      for (const segment of segments.slice(0, -1)) parent = parent[segment] as Record<string, unknown>;
+      delete parent[segments[segments.length - 1]!];
+      const result = parseRunDocument(JSON.stringify(broken));
+      expect("problem" in result && result.problem).toContain(path.startsWith("worlds") ? segments.slice(0, 3).join(".") : `${path}: `);
+    }));
+
   it("reads a claim step's events readings and a count judged again at the world's stop, and refuses an outcome no count judgment gives", () => {
     const reading = {
       of: { step_record_id: "s1", step: "a", line: 4 },

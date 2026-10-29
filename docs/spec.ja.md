@@ -3432,6 +3432,65 @@ run は警告の `program-list-unread` を出し、コマンドと、行のと�
 - `error` は一覧を読まなかった理由で、そのとき `entries` は `null` です。
 - 一覧を 1 つも読まなかった world には、`lists` がありません。
 
+#### どの step もリクエストしなかったルート
+
+head の world がルートの一覧を読むと、`run.json` は `routes` を持ちます。
+一覧が名指すか、head の step の `request` の行が名指す、メソッドとルートの組ごとに 1 つの要素があります。
+そのため、どの step もリクエストしなかったルートが、リクエストしたものと並びます:
+
+```json
+"routes": [
+  {
+    "method": "PATCH",
+    "route": "/rooms/:id",
+    "handlers": ["rooms#update"],
+    "listed_in": ["default"],
+    "requests": 0,
+    "statuses": [],
+    "criteria": [],
+    "counts": { "held": 0, "proven": 0, "failed": 0, "unproven": 0, "moved": 0, "controls": 0 }
+  },
+  {
+    "method": "PUT",
+    "route": "/rooms/:id",
+    "handlers": ["rooms#update"],
+    "listed_in": ["default"],
+    "requests": 1,
+    "statuses": [200],
+    "criteria": [
+      {
+        "feature": "features/rooms.feature",
+        "line": 7,
+        "name": "a room is replaced",
+        "verdict": "held",
+        "cells": [{ "environment": "default", "role": "required", "outcome": "pass", "requests": 1, "statuses": [200] }]
+      }
+    ],
+    "counts": { "held": 1, "proven": 0, "failed": 0, "unproven": 0, "moved": 0, "controls": 0 }
+  }
+]
+```
+
+- `requests` は、head の step が持つ `request` の行のうち、そのメソッドとルートを名指すものを、遅れて届いた行も含めて数えます。
+  `flags` と同じ 1 回の読みで読みます。
+  `statuses` は、その行が名指す各ステータスを 1 回ずつ、小さい順に持ちます。
+  そうした行は、どれもちょうど 1 つの要素に入ります。
+- リクエストは、Given のものも Then のものも同じに数えます。
+  `request` の行が言うのは、プログラムがどのルートに一致させ、何を返したかで、step が返事について何かを claim したことではありません。
+  そのため要素が言うのはリクエストだけで、それ以上は言いません。
+  受け入れ基準がリクエストしたルートでも、どの claim も読んでいないことがあります。
+- `listed_in` は、一覧がそのルートを持つ各 environment を、run の順に名指します。
+  `listed_in` が空の要素は、プログラムの行が名指し、読んだどの一覧も名指さないルートです。
+  `route` が `null` の要素は、プログラムがどのルートにも一致させなかったリクエストを持ちます。
+- `handlers` は、同じコードを実行するルートをつなぎます。
+  どの step もリクエストしなかった PATCH のハンドラに PUT が届いているとき、それはどのリクエストもコードに届いていないルートと見分けられます。
+- `criteria` と `counts` は `flags` の規則(「実行イベント」を参照)に、側の代わりにルートを置いて従います。
+  各セルは、その実行の step の `requests` と `statuses` を持ちます。
+- 要素は、ルートの順(`null` のものが最後)、次にメソッドの順に並びます。
+- head のどの world もルートの一覧を読まなかったとき、`routes` はありません。
+  そのため、読めなかった一覧が、どのルートもリクエストされなかった一覧として読まれることはありません。
+  理由は world の `lists` と、警告の `program-list-unread` が言います。
+
 ### Ruby のプログラム
 
 ファイルは TypeScript で、コマンドはプロジェクトが実行するものなら何でも構いません。
@@ -3895,6 +3954,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
   run サマリが描く表はこれです。
 - `flags` は、プログラムの実行イベントのうち head の step の行が flag を名指すときだけあり、flag と側の組ごとに 1 つの要素を持ちます。
   要素は、その側で flag を評価した受け入れ基準を、その断定とセルとともに持ち、それを数えます(「実行イベント」を参照)。
+- `routes` は、head の world がルートの一覧を読んだときだけあり、一覧か head の step の `request` の行が名指すメソッドとルートの組ごとに 1 つの要素を持ちます。
+  要素は、そのハンドラ、一覧がそれを持つ environment、head の step が送ったリクエストとそのステータス、それを送った受け入れ基準を持ちます(「一覧」を参照)。
 - `counts` は、必須の head のセルの実行を数える `scenarios`、`passed`、`failed`、`stopped`(walk が中止したもので、`--step` の外では 0)と、`not-run` の必須の head のセルを数える `not_run` と、証明の実行を含めて head の対照の実行を数える `controls` と、`not-run` の head の対照のセルを数える `controls_not_run` を持ちます。
   対照はゲートするテストではなく証拠なので、別に数えます。
   base と old の実行は、表が読むものです。
@@ -5072,6 +5133,9 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   flag と側の組ごとに 1 行で、そこで flag を評価した受け入れ基準の数、断定ごとの数、その側で対照にしか現れなかったものの `only in controls`、行が名指した各ゲート(ゲートを名指さなかった行は `none named`)を載せます(「実行イベント」を参照)。
   プログラムのテキストの中の制御文字は `\u` のエスケープで書きます。
   名前が行を終わらせないようにするためです。
+- run.json が `routes` を持つとき、または head の world のルートの一覧を読まなかったときは「Routes」。
+  一覧のルートのうち head の step がリクエストした数、一度もリクエストしなかったルート(ハンドラに別のルートからリクエストが届いたものは分けます)、world の一覧が名指さないルートへのリクエストと、プログラムがどのルートにも一致させなかったリクエスト(それぞれの数とともに)、ルートの一覧を読まなかった各 world を載せます(「一覧」を参照)。
+  1 行が名指すルートは 20 までで、残りは数だけを書きます。
 - 「Claims」。
   claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。

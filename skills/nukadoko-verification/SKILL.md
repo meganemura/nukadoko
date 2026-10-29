@@ -207,6 +207,12 @@ side without it.
 - `nuka run --base <ref>`: which criteria changed since the map was last
   checked, and, when the steps changed, whether an unchanged one still
   means what it meant (a `moved` row says it does not).
+- `nuka run` with `lists` in the program file: the routes the program
+  has that no scenario requested ("Routes" in the summary, `routes` in
+  run.json; `skills/nukadoko/references/verdicts.md`). A route no
+  scenario requested is a place the map may be missing; a requested one
+  is not yet a checked one.
 
 What remains for a pass that drives the app by hand is the sub-features
-marked `no scenario`, and features missing from the map.
+marked `no scenario`, the routes no scenario requested, and features
+missing from the map.

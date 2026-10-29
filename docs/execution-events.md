@@ -176,6 +176,10 @@ trace.
 | `status` | integer | yes | The status code sent. |
 | `calls` | array of strings | no | The application functions the request ran through, as `path:line` of each definition, in the order of first call, each once, at most 200. |
 
+A program that also prints every route it has, in these same words
+(`method` and `route`), lets a reader find the routes no step
+requested: see "Lists" in [docs/spec.md](spec.md).
+
 ### `db`: one database statement
 
 | Field | Type | Required | Meaning |

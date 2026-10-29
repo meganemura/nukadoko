@@ -316,6 +316,7 @@ export default {
         "events-after-stop.ts",
         "execute-typed-step.ts",
         "flag-rows.ts",
+        "route-rows.ts",
         "match-step.ts",
         "probe-git.ts",
         "verdict-table.ts",

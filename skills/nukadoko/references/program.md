@@ -155,7 +155,7 @@ whole file, redacted, is in `worlds/<environment>/events.jsonl`; a world at a
 `url` has none, and `observed.events` is `null` there. A `flag` line, late or
 not, also puts its step's criterion in run.json's `flags`, under the side the
 line names (`references/verdicts.md`). `lists` names the routes and flags the
-program has, one JSON line each (docs/spec.md "Lists").
+program has (docs/spec.md "Lists"), so run.json names those no step reached.
 
 ## Claiming what the program did
 

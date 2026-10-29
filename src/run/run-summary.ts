@@ -3,7 +3,7 @@ import path from "node:path";
 import { DEFAULT_PROOF_RUNS } from "../condition/condition.js";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
-import { RED_VERDICTS, type RunClaim, type RunDocument, type RunScenario, type RunTableCell, type RunTableRow, type RunWorld } from "../record/run-result.js";
+import { RED_VERDICTS, type RunClaim, type RunDocument, type RunRoute, type RunScenario, type RunTableCell, type RunTableRow, type RunWorld } from "../record/run-result.js";
 import type { MeasuredChannel } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
@@ -507,6 +507,94 @@ function renderFlags(document: RunDocument): string[] {
   ];
 }
 
+// At most this many routes are named in one line of "Routes"; the rest
+// are counted, and run.json's `routes` names every one.
+const ROUTES_NAMED = 20;
+
+function routeName(route: Pick<RunRoute, "method" | "route">): string {
+  return codeSpan(programWord(route.route === null ? route.method : `${route.method} ${route.route}`));
+}
+
+function namedList(names: readonly string[]): string {
+  const shown = names.slice(0, ROUTES_NAMED).join(", ");
+  return names.length > ROUTES_NAMED ? `${shown}, and ${names.length - ROUTES_NAMED} more` : shown;
+}
+
+// The places of run.json's `routes` no step reached, for the reader who
+// asks where nobody looked (docs/spec.md "Lists"): the listed routes no
+// head step requested, split from those whose handler a request reached
+// through another route (PUT and PATCH of one resource), then the
+// requests the lists do not account for. A world whose list was not read
+// is named, so its routes are never read as unrequested. The routes that
+// were requested, with their criteria, are run.json's alone: a line each
+// would repeat the table.
+function renderRoutes(document: RunDocument): string[] {
+  const heads = (document.worlds ?? []).filter((world) => world.tree === undefined || world.tree === "head");
+  const unread = heads.filter((world) => world.lists?.routes?.error !== undefined && world.lists.routes.error !== null);
+  const routes = document.routes ?? [];
+  if (unread.length === 0 && document.routes === undefined) return [];
+  const read = new Set(heads.filter((world) => world.lists?.routes?.error === null).map((world) => world.name));
+  const listed = routes.filter((route) => route.listed_in.length > 0);
+  const requested = listed.filter((route) => route.requests > 0);
+  const through = new Map<string, RunRoute[]>();
+  for (const route of routes) {
+    if (route.requests === 0) continue;
+    for (const handler of route.handlers) through.set(handler, [...(through.get(handler) ?? []), route]);
+  }
+  const gaps: string[] = [];
+  const aliases: string[] = [];
+  for (const route of listed) {
+    if (route.requests > 0) continue;
+    const others = route.handlers.flatMap((handler) => through.get(handler) ?? []);
+    if (route.handlers.length > 0 && route.handlers.every((handler) => through.has(handler))) {
+      aliases.push(`${routeName(route)} through ${[...new Set(others.map(routeName))].join(", ")}`);
+    } else gaps.push(routeName(route));
+  }
+  // A request counts as one no list names only in a world whose list was
+  // read: in another, nothing says whether its program has the route.
+  const unlisted = routes.flatMap((route) => {
+    if (route.route === null) return [];
+    const requests = route.criteria.reduce(
+      (total, criterion) => total + criterion.cells.reduce((sum, cell) => sum + (read.has(cell.environment) && !route.listed_in.includes(cell.environment) ? cell.requests : 0), 0),
+      0,
+    );
+    return requests === 0 ? [] : [{ route, requests }];
+  });
+  const unmatched = routes.filter((route) => route.route === null && route.requests > 0);
+  const lists = read.size === 1 ? "the program's routes list names" : `the routes lists of ${read.size} worlds name`;
+  const lines = [
+    ...(document.routes === undefined
+      ? []
+      : [
+          `Head steps requested ${requested.length} of the ${countOf(listed.length, "route", "routes")} ${lists}.`,
+          "A request says which route the program matched, not that a step checked what it answered.",
+          "",
+        ]),
+    ...(gaps.length === 0 ? [] : [`- Never requested (${gaps.length}): ${namedList(gaps)}`]),
+    ...(aliases.length === 0 ? [] : [`- Never requested, though a route with its handler was (${aliases.length}): ${namedList(aliases)}`]),
+    ...(unlisted.length === 0
+      ? []
+      : [
+          `- ${countOf(
+            unlisted.reduce((total, { requests }) => total + requests, 0),
+            "request",
+            "requests",
+          )} to a route its world's list does not name: ${namedList(unlisted.map(({ route, requests }) => `${routeName(route)} ${requests}`))}`,
+        ]),
+    ...(unmatched.length === 0
+      ? []
+      : [
+          `- ${countOf(
+            unmatched.reduce((total, route) => total + route.requests, 0),
+            "request",
+            "requests",
+          )} the program matched to no route: ${namedList(unmatched.map((route) => `${routeName(route)} ${route.requests}`))}`,
+        ]),
+    ...unread.map((world) => `- World ${codeSpan(programWord(world.name))} read no routes list (\`program-list-unread\` under Findings), so none of its routes stands here.`),
+  ];
+  return ["", "## Routes", "", ...(lines.at(-1) === "" ? lines.slice(0, -1) : lines)];
+}
+
 // The item that names what a step started after its record was written
 // (docs/spec.md "Records"): those lines are in the step's own files, but
 // its record was already final, so this line is the one place that says
@@ -741,6 +829,7 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderCondition(document),
     ...renderRemoved(document),
     ...renderFlags(document),
+    ...renderRoutes(document),
     ...renderClaims(document),
     ...renderUnjudged(document),
     ...renderUnmeasured(document),

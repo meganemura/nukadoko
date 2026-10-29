@@ -395,6 +395,44 @@ export interface RunPlaceCounts {
   readonly controls: number;
 }
 
+/** run.json's `routes`: one entry per method and route that a routes
+ * list of a head world names or a `request` line of a head step names
+ * (docs/spec.md "Lists"), so a route no step requested stands beside the
+ * ones that were (src/run/route-rows.ts). A request line says which route
+ * the program matched, never that a step checked what it answered, so an
+ * entry claims requests and nothing more. */
+export interface RunRoute {
+  /** As the list and the lines name it, uppercase. */
+  readonly method: string;
+  /** The route's template; `null` for requests the program matched to
+   * no route. */
+  readonly route: string | null;
+  /** Each handler a list named for the route, once, in text order. */
+  readonly handlers: readonly string[];
+  /** Each environment whose routes list names the route, in the run's
+   * order; empty for a route no list that was read names. */
+  readonly listed_in: readonly string[];
+  /** How many `request` lines of head steps name the method and route,
+   * in every environment; 0 for a route no step requested. */
+  readonly requests: number;
+  /** Each status those lines name, once, ascending. */
+  readonly statuses: readonly number[];
+  /** Each criterion with a head execution whose steps sent such a
+   * request, in the table's row order. */
+  readonly criteria: readonly RunRouteCriterion[];
+  readonly counts: RunPlaceCounts;
+}
+
+export type RunRouteCriterion = RunPlaceCriterion<RunRouteCell>;
+
+/** A head cell of a route's criterion, with the requests its executions'
+ * steps sent to the route. */
+export interface RunRouteCell extends RunPlaceCell {
+  readonly requests: number;
+  /** Each status those requests got, once, ascending. */
+  readonly statuses: readonly number[];
+}
+
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
 export interface RunEnvironment {
   readonly name: string;
@@ -553,6 +591,9 @@ export type RunFields = {
   /** Present only when a `flag` line of a head step names a flag: one row
    * per flag and side (`RunFlagRow`). */
   readonly flags?: readonly RunFlagRow[];
+  /** Present only when a routes list of a head world was read: one entry
+   * per method and route (`RunRoute`). */
+  readonly routes?: readonly RunRoute[];
   /** Present only for a run started with `nuka run --step`: each pause,
    * and how it was answered. Between steps the world and the browser were
    * open to anything, so a reader or a gate tells such a run apart by

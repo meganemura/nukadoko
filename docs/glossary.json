@@ -745,7 +745,8 @@
       "note": "一覧の 1 つの箇所。フィールド `entries` はコードスパンで英語のまま"
     },
     { "en": ["route", "routes"], "ja": "ルート", "note": "リクエストを受けるパスのテンプレート(`/rooms/:id`)とメソッドの組。`request` の行の `route` フィールドはコードスパンで英語のまま" },
-    { "en": ["handler", "handlers"], "ja": "ハンドラ", "note": "ルートが実行するもの(`rooms#update`)。サーバ と同じく長音を付けない。フィールド名 `handler` はコードスパンで英語のまま" }
+    { "en": ["handler", "handlers"], "ja": "ハンドラ", "note": "ルートが実行するもの(`rooms#update`)。サーバ と同じく長音を付けない。フィールド名 `handler` はコードスパンで英語のまま" },
+    { "en": ["requested (a route)", "never requested", "no step requested"], "ja": "リクエストした / 一度もリクエストしなかった / どの step もリクエストしなかった", "note": "run.json の `routes` が言うこと。`request` の行が言うのはプログラムが一致させたルートで、step がその返事を claim で確かめたことではないので、「確かめた」「テストした」とは書かない" }
   ],
   "keep_english": [
     {

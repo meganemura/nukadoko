@@ -4366,6 +4366,74 @@ name.
 - `error` is why the list was not read, and `entries` is then `null`.
 - `lists` is absent from a world that read none.
 
+#### The routes no step requested
+
+When a head world reads a routes list, `run.json` gets `routes`: one
+entry per method and route that a list names or that a head step's
+`request` line names, so the routes no step requested stand among the
+ones that were:
+
+```json
+"routes": [
+  {
+    "method": "PATCH",
+    "route": "/rooms/:id",
+    "handlers": ["rooms#update"],
+    "listed_in": ["default"],
+    "requests": 0,
+    "statuses": [],
+    "criteria": [],
+    "counts": { "held": 0, "proven": 0, "failed": 0, "unproven": 0, "moved": 0, "controls": 0 }
+  },
+  {
+    "method": "PUT",
+    "route": "/rooms/:id",
+    "handlers": ["rooms#update"],
+    "listed_in": ["default"],
+    "requests": 1,
+    "statuses": [200],
+    "criteria": [
+      {
+        "feature": "features/rooms.feature",
+        "line": 7,
+        "name": "a room is replaced",
+        "verdict": "held",
+        "cells": [{ "environment": "default", "role": "required", "outcome": "pass", "requests": 1, "statuses": [200] }]
+      }
+    ],
+    "counts": { "held": 1, "proven": 0, "failed": 0, "unproven": 0, "moved": 0, "controls": 0 }
+  }
+]
+```
+
+- `requests` counts every `request` line a head step owns that names
+  the method and route, a late one included, read in the same pass as
+  `flags`, and `statuses` holds each status those lines name, once,
+  ascending.
+  Every such line is in exactly one entry.
+- A request counts the same in a Given as in a Then.
+  A `request` line says which route the program matched and what it
+  answered, never that a step claimed anything on the answer, so an
+  entry claims requests and nothing more: a route a criterion requested
+  may still be one no claim reads.
+- `listed_in` names each environment whose list holds the route, in the
+  run's order.
+  An entry whose `listed_in` is empty is a route the program's lines
+  named and no list that was read names, and the entry whose `route` is
+  `null` holds the requests the program matched to no route.
+- `handlers` joins the routes that run the same code: a PATCH no step
+  requested whose handler a PUT reached is told from a route whose code
+  no request reached.
+- `criteria` and `counts` follow the rules of `flags` (see "Execution
+  events"), with the route in place of the side, and each cell holds the
+  `requests` and `statuses` of its executions' steps.
+- The entries are in the order of their route, the `null` one last, and
+  then of their method.
+- `routes` is absent when no head world read a routes list, so a list
+  that was not read never reads as one whose every route went
+  unrequested; the world's `lists` and the `program-list-unread` warning
+  say why.
+
 ### A Ruby program
 
 The file is TypeScript, and the commands are whatever the project runs.
@@ -4956,6 +5024,11 @@ to act on the run without opening another file:
   execution events name a flag, has one row per flag and side: the
   criteria that evaluated it there, with their verdicts and cells, and
   their counts (see "Execution events").
+- `routes`, present only when a head world read a routes list, has one
+  entry per method and route a list or a head step's `request` line
+  names: its handlers, the environments whose list holds it, the
+  requests head steps sent it and their statuses, and the criteria that
+  sent them (see "Lists").
 - `counts` holds `scenarios`, `passed`, `failed`, and `stopped` (the ones
   a walk stopped, 0 outside `--step`), which count the
   executions of required head cells, and `not_run`, which counts the
@@ -6604,6 +6677,13 @@ holds:
   gate its lines named, `none named` for a line that named none (see
   "Execution events"); a control character in the program's text is
   written as its `\u` escape, so a name cannot end the line;
+- "Routes", when run.json has `routes` or a head world's routes list
+  was not read: how many of the listed routes head steps requested; the
+  ones they never requested, apart from those whose handler a request
+  reached through another route; the requests to a route the world's
+  list does not name, and the ones the program matched to no route, each
+  with its count; and each world that read no routes list (see "Lists").
+  A line names 20 routes at most and counts the rest;
 - "Claims", one entry per Then that declared claims: its location and
   sentence, its environment in a run of several, `control` for a
   control's, the number of readings when there was more than one, and under

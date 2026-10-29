@@ -50,8 +50,10 @@ import {
 } from "../run/progress-log.js";
 import { buildTable, executionOutcome, foldHeadCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
-import type { FlagEvaluation } from "../execution-events/format.js";
+import type { FlagEvaluation, ServedRequest } from "../execution-events/format.js";
+import type { ListedPlaces } from "../execution-events/lists.js";
 import { flagRows } from "../run/flag-rows.js";
+import { routeRows } from "../run/route-rows.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
 import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -948,6 +950,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // can tell a `url` function that answers the same for both trees
     // (src/program/world.ts).
     const headUrls = new Map<string, string>();
+    // What each of head's worlds read of the program's lists, by
+    // environment, for run.json's `routes`.
+    const listedPlaces = new Map<string, Partial<ListedPlaces>>();
     // Starts the pass's world, or reports why it did not start. `null`
     // when the tree has no program file: the pass runs with no world.
     // A start a signal aborted is no failure of the program's, and the
@@ -958,6 +963,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       if (started.ok) {
         redactOutput(started.view.secrets);
         if (started.view.url !== undefined) headUrls.set(pass.resolvedEnv.name, started.view.url);
+        listedPlaces.set(pass.resolvedEnv.name, started.lists);
         const record = started.record();
         for (const [kind, list] of Object.entries(record.lists ?? {})) {
           if (list.error === null) continue;
@@ -1000,7 +1006,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             ];
           }),
         );
-      const { exitedEarly, late, eventsLate, flags, recounted } = await world.stop(steps, recounts);
+      const { exitedEarly, late, eventsLate, flags, recounted, requests } = await world.stop(steps, recounts);
       worlds.push(world.record());
       // Read here, where every line of the world has its owner, so a flag
       // line that came after its step's record counts too.
@@ -1012,6 +1018,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             return traceId === undefined ? [] : (flags.get(traceId) ?? []);
           });
           if (evaluated.length > 0) flagEvaluations.set(scenario.scenario_record_id, [...(flagEvaluations.get(scenario.scenario_record_id) ?? []), ...evaluated]);
+        }
+      }
+      if (requests.size > 0) {
+        for (const scenario of runScenarios) {
+          if (!inWorld(scenario)) continue;
+          const sent = scenario.steps.flatMap((step) => {
+            const traceId = step.observed?.events?.trace_id;
+            return traceId === undefined ? [] : (requests.get(traceId) ?? []);
+          });
+          if (sent.length > 0) requestsServed.set(scenario.scenario_record_id, [...(requestsServed.get(scenario.scenario_record_id) ?? []), ...sent]);
         }
       }
       if (late.size > 0 || eventsLate.size > 0) {
@@ -1181,6 +1197,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // outcomes, by the entry's index: the world's stop can judge an entry
     // again (stopWorld).
     const cellOf: { readonly key: string; readonly at: number; readonly inThen: (index: number) => boolean }[] = [];
+    // The requests each execution's steps sent that a `request` line
+    // reports, the same way, for run.json's `routes`.
+    const requestsServed = new Map<string, readonly ServedRequest[]>();
     // A scenario's evidence directory is made before it runs, so its id is
     // taken on disk for every worker of the run, and most scenarios leave it
     // empty. Those are removed once the run is over, not when the scenario
@@ -1380,6 +1399,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       rows.push(...judgedEarlyFindings(runScenarios, conditionsOf));
       runFindings.push(...rows);
       const flags = flagRows({ scenarios: runScenarios, evaluated: (id) => flagEvaluations.get(id) ?? [], table });
+      // Each environment whose routes list was read, in the run's order.
+      // With none, a run has no list to set its requests against, so it
+      // has no `routes` at all, never one that reads as nothing listed.
+      const listedRoutes = passes.flatMap((pass) => {
+        const routes = listedPlaces.get(pass.resolvedEnv.name)?.routes;
+        return routes === undefined ? [] : [{ environment: pass.resolvedEnv.name, routes }];
+      });
+      const routes = listedRoutes.length === 0 ? undefined : routeRows({ scenarios: runScenarios, table, served: (id) => requestsServed.get(id) ?? [], listed: listedRoutes });
       const fields: RunFields = {
         run_id: runId,
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
@@ -1402,6 +1429,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         scenarios: runScenarios,
         table,
         ...(flags.length === 0 ? {} : { flags }),
+        ...(routes === undefined ? {} : { routes }),
         ...(walk === undefined ? {} : { walk: walk.record() }),
       };
       // The gate: red when the run failed outside the table, or when a row

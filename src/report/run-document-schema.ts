@@ -327,6 +327,22 @@ const flagRow = z.looseObject({
   counts: z.looseObject({ held: count, proven: count, failed: count, unproven: count, moved: count, controls: count }),
 });
 
+// run.json's `routes` (src/run/route-rows.ts): the summary reads each
+// entry's method and route, its handlers, where it is listed, its
+// requests, and the requests of each cell, by environment.
+const route = z.looseObject({
+  method: z.string(),
+  route: z.string().nullable(),
+  handlers: z.array(z.string()),
+  listed_in: z.array(z.string()),
+  requests: count,
+  criteria: z.array(z.looseObject({ cells: z.array(z.looseObject({ environment: z.string(), requests: count })) })),
+});
+
+// A world's `lists` (docs/spec.md "Lists"): the summary reads whether
+// its routes list was read.
+const worldList = z.union([z.looseObject({ entries: count, error: z.null() }), z.looseObject({ entries: z.null(), error: z.string() })]);
+
 const document = z.looseObject({
   command: z.literal("run"),
   nukadoko: z.string(),
@@ -368,6 +384,7 @@ const document = z.looseObject({
           })
           .nullable()
           .optional(),
+        lists: z.looseObject({ routes: worldList.optional(), flags: worldList.optional() }).optional(),
       }),
     )
     .optional(),
@@ -385,6 +402,7 @@ const document = z.looseObject({
   scenarios: z.array(scenario),
   table,
   flags: z.array(flagRow).optional(),
+  routes: z.array(route).optional(),
   walk: z
     .looseObject({
       pauses: z.array(

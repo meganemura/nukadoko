@@ -93,6 +93,8 @@ describe("the program file's lists", () => {
       routes: { entries: null, error: `lists.routes command node app/list.mjs routes ${world.url} exited with code 3` },
       flags: { entries: null, error: `lists.flags command node app/list.mjs flags ${world.url} exited with code 3` },
     });
+    // With no list read, nothing reads as a route no step requested.
+    expect(document).not.toHaveProperty("routes");
     const log = path.join(latestRunDir(rootDir), world.log);
     expect(readFileSync(log, "utf8")).toContain("the routes list is not ready");
     const logPath = path.relative(rootDir, log);
@@ -123,6 +125,7 @@ describe("the program file's lists", () => {
     expect((await run(rootDir)).exitCode).toBe(0);
     let [world] = latestRunJson(rootDir).worlds;
     expect(world).not.toHaveProperty("lists");
+    expect(latestRunJson(rootDir)).not.toHaveProperty("routes");
     expect(world.commands.map((command: { phase: string }) => command.phase)).toEqual(["serve"]);
     expect(world.timings).not.toHaveProperty("lists_ms");
 
@@ -153,6 +156,7 @@ describe("the program file's lists", () => {
 
       const [world] = latestRunJson(rootDir).worlds;
       expect(world).not.toHaveProperty("lists");
+      expect(latestRunJson(rootDir)).not.toHaveProperty("routes");
       expect(world.commands).toEqual([]);
       expect(listFindings(rootDir)).toEqual([]);
     });

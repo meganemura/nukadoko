@@ -112,6 +112,28 @@ describe("nuka report on a run.json with one field deleted or null", () => {
         counts: { held: 1, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 },
       },
     ];
+    // What a program's lists add: a head world that read one list and
+    // not the other, a route a step requested, and a request the program
+    // matched to no route.
+    document.worlds.push({
+      name: "default",
+      tree: "head",
+      url: "http://localhost:4000",
+      commands: [],
+      timings: {},
+      log: null,
+      error: null,
+      lists: { routes: { entries: 1, error: null }, flags: { entries: null, error: "lists.flags command node flags.mjs exited with code 1" } },
+    });
+    const routeCriteria = (status: number) => [
+      { feature: first.feature, line: first.line, name: first.scenario, verdict: "held", cells: [{ environment: "default", role: "required", outcome: "pass", requests: 1, statuses: [status] }] },
+    ];
+    const counted = { held: 1, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 };
+    document.routes = [
+      { method: "GET", route: "/rooms/:id", handlers: ["rooms#show"], listed_in: ["default"], requests: 1, statuses: [200], criteria: routeCriteria(200), counts: counted },
+      { method: "PATCH", route: "/rooms/:id", handlers: ["rooms#update"], listed_in: ["default"], requests: 0, statuses: [], criteria: [], counts: { ...counted, held: 0 } },
+      { method: "GET", route: null, handlers: [], listed_in: [], requests: 1, statuses: [404], criteria: routeCriteria(404), counts: counted },
+    ];
     base = document as Json;
   }, 120_000);
 
