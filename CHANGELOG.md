@@ -63,6 +63,13 @@ just until 0.1.
   always makes (`string` through `text`, `list` through `lines`), which
   states nothing; `nuka check` reports a line whose capture names no kind
   (`claim-kind-unknown`).
+- **The spec and the skill say how a sentence states exactly the fields
+  of a value.** `equal` on two objects already broke on a field that only
+  one side holds, a field set to `null` included, and named that field
+  (`; first difference at password: actual null, expected nothing`), so
+  a docstring read as JSON that states a whole response is claimed with
+  `equal`, and one that states some of its fields with `has-fields`. A
+  property test now holds the compare to it.
 
 - **Each step record holds what the program did inside the step.** A
   program file that names the new `{events}` placeholder

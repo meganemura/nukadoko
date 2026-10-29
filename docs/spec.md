@@ -1876,7 +1876,12 @@ kind the expected text names),
 `matches` (the expected text, as a regular expression, matches),
 `greater-than`, `at-least`, `less-than`, and `at-most`. Equality is
 structural over JSON values: object key order does not count, and `0`
-equals `-0`.
+equals `-0`. So `equal` on two objects states exactly their fields and no
+others: a field that only one side holds breaks it, a field set to `null`
+included, and the broken line names that field (`; first difference at
+password: actual null, expected nothing`). A sentence that states a whole
+response reads its docstring as JSON (`expected_view: "json"`) and claims
+it with `equal`; one that states some of its fields uses `has-fields`.
 `has-same-items` pairs each item with one equal item on the other
 side, so a duplicate counts: `["a", "a"]` against `["a"]` breaks, and a
 list that repeats a name the other lists once does not hold. The order

@@ -2,13 +2,13 @@
 
 ## The shape
 
-A Then judges, and it does not judge in code. Its step declares `claims` in
-place of `run`: which value it reads, how it compares that value, and where the
-value it compares with comes from. nukadoko compares, and the step record keeps
-each claim with both values and where each came from. A typed Then never calls
-`expect` or `node:assert`. `defineStep` refuses a claim step that also declares
-`run`, `returns`, `mutates`, or `parts`. `nuka check` refuses a Then bound to a
-step that runs (`then-without-claims`) and a claim step in a Given or a When
+A Then judges, never in code: its step declares `claims` in place of `run`,
+naming the value it reads, how it compares it, and where its expected value
+comes from. nukadoko compares, and the step record keeps each claim with both
+values and their sources. A typed Then never calls `expect` or `node:assert`.
+`defineStep` refuses a claim step that also declares `run`, `returns`,
+`mutates`, or `parts`. `nuka check` refuses a Then bound to a step that runs
+(`then-without-claims`) and a claim step in a Given or a When
 (`claims-outside-then`): a step that reads a value for a later Then is a When.
 
 ```ts
@@ -123,21 +123,22 @@ The compares: `equal` (structural), `not-equal`, `contains-text`,
 order), `has-fields` (the expected fields at any depth, each array whole),
 `fits-text` (line by line; a line `...` is any lines, `[..]` any text in its
 line), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
-`url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A
-docstring claims the few fields of a response with `has-fields`, only as JSON
-(`expected_view: "json"`), and output that changes each run with `fits-text`,
-never from `{ from }` or `{ observe }`. Two values of different JSON types
-break the claim (`is-a` aside), and so does an expected value nearly every
-value holds (a blank text, a pattern matching `""`, an object with no field,
-only `...` and `[..]`). Each side is a plain JSON copy, and `observe` gets a
-clone of its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a `Proxy`,
-or nesting past 256 levels leaves the claim `unjudged` (return an ISO string or
-a number). Each claim or item the step's deadline cuts off, a running `matches`
-included, is `unjudged`, with how many. `nuka check` reads each `from` path
-against the producer's `returns` (`claim-path-unknown`), reports a claim whose
-sides are one place (`claim-compares-itself`) and an `is-a` capture that names
-no kind (`claim-kind-unknown`), and refuses a parameter type with a transformer
-on an expected key (`claim-expected-transformed`).
+`url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A JSON
+docstring (`expected_view: "json"`) claims a whole response with `equal` (a
+field it leaves out breaks it, a `null` one too) or some of its fields with
+`has-fields`, which takes only that; output that changes each run takes
+`fits-text`, never `{ from }` or `{ observe }`. Two values of different JSON
+types break the claim (`is-a` aside), and so does an expected value nearly
+every value holds (a blank text, a pattern matching `""`, an object with no
+field, only `...` and `[..]`). Each side is a plain JSON copy, and `observe`
+gets a clone of its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a
+`Proxy`, or nesting past 256 levels leaves the claim `unjudged` (return an ISO
+string or a number). Each claim or item the step's deadline cuts off, a running
+`matches` included, is `unjudged`, with how many. `nuka check` reads each
+`from` path against the producer's `returns` (`claim-path-unknown`), reports a
+claim whose sides are one place (`claim-compares-itself`) and an `is-a` capture
+that names no kind (`claim-kind-unknown`), and refuses a parameter type with a
+transformer on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 
@@ -195,6 +196,5 @@ export default defineStep({
 });
 ```
 
-The pattern captures nothing, so the docstring binds to `expected`, the one
-required `args` key it leaves unfilled (see "Typed steps" in `docs/spec.md`). A
-key the step declares `from` for is spoken for the same way a captured key is.
+With no capture, the docstring binds to `expected`, the one required `args` key
+that no capture or `from` fills (see "Typed steps" in `docs/spec.md`).

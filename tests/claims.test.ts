@@ -194,6 +194,26 @@ describe("compares", () => {
       expect(holds(await compare("equal", a, b))).toBe(deepEqual(a, b));
     }));
 
+  it("equal on two objects states exactly their fields: a field only one side has breaks it, null included, and the line names that field", () =>
+    hegel.testAsync(async (tc) => {
+      const fields = tc.draw(
+        gs.composite((inner) => {
+          const object: Record<string, unknown> = {};
+          const count = inner.draw(gs.integers({ minValue: 0, maxValue: 3 }));
+          for (let i = 0; i < count; i += 1) object[inner.draw(gs.text({ alphabet: "ab", minSize: 1, maxSize: 2 }))] = inner.draw(jsonValues);
+          return object;
+        }),
+      );
+      const extra = tc.draw(gs.text({ alphabet: "c", minSize: 1, maxSize: 2 }));
+      const value = tc.draw(gs.oneOf<unknown>(gs.just(null), jsonValues));
+      const wider = { ...fields, [extra]: value };
+      const [actual, expected] = tc.draw(gs.booleans()) ? [wider, fields] : [fields, wider];
+      expect(holds(await compare("equal", actual, expected))).toBe(false);
+      expect(holds(await compare("equal", structuredClone(actual), actual))).toBe(true);
+      const side = (holder: Record<string, unknown>) => (Object.hasOwn(holder, extra) ? JSON.stringify(value) : "nothing");
+      expect(equalDifference(actual, expected)).toBe(`first difference at ${extra}: actual ${side(actual)}, expected ${side(expected)}`);
+    }));
+
   it("each order compare disagrees with its negation on every pair of numbers", () =>
     hegel.testAsync(async (tc) => {
       const [first, negation] = tc.draw(gs.sampledFrom(NEGATION_PAIRS.slice(1)));
