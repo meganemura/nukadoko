@@ -2115,3 +2115,41 @@ export default defineStep({
     }
   });
 });
+
+describe("the compares a sentence states a part of a value with, through a run", () => {
+  /** Runs one claim step against two scenarios, the first holding and
+   * the second broken, and gives the exit code and the claim lines under
+   * the summary's Claims. */
+  async function holdsThenBreaks(step: string, held: readonly string[], broken: readonly string[]) {
+    const scenario = (name: string, lines: readonly string[]) => [`  Scenario: ${name}`, ...lines.map((line) => `    ${line}`)];
+    const rootDir = await project({
+      "features/steps/claim.ts": step,
+      "features/t.feature": ["Feature: compares", ...scenario("holds", held), ...scenario("breaks", broken), ""].join("\n"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    return { exitCode: result.exitCode, claimLines: summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: ")) };
+  }
+
+  it("has-fields holds for the fields a docstring states of a larger response, and names the first field that does not fit", async () => {
+    const run = await holdsThenBreaks(
+      `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the order reads",
+  args: z.object({ fields: z.string() }),
+  observe() {
+    return { body: { id: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b", status: "paid", total: 12, lines: [{ sku: "a", qty: 1 }], owner: { name: "aki" } } };
+  },
+  claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
+});
+`,
+      ["Then the order reads", '  """', '  { "status": "paid", "lines": [{ "sku": "a" }] }', '  """'],
+      ["Then the order reads", '  """', '  { "status": "paid", "owner": { "name": "kei" } }', '  """'],
+    );
+    expect(run.exitCode).toBe(1);
+    expect(run.claimLines).toEqual([
+      expect.stringMatching(/ has-fields \{"status":"paid","lines":\[\{"sku":"a"\}\]\} \(sentence:fields as json\) held; measured: none$/),
+      expect.stringMatching(/ has-fields \{"status":"paid","owner":\{"name":"kei"\}\} \(sentence:fields as json\) broken; first field that does not fit at owner\.name: actual "aki", expected "kei"; measured: none$/),
+    ]);
+  });
+});

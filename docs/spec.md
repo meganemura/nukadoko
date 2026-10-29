@@ -1867,14 +1867,31 @@ and 256 keeps a margin of six times; the reason names the limit
 `equal`, `not-equal`, `contains-text` (the expected text is a substring),
 `starts-with-text` and `ends-with-text` (the text starts or ends with the
 expected text), `has-item` (the array has an item equal to the expected value),
-`has-same-items` (two arrays hold the same items in any order), `matches`
-(the expected text, as a regular expression, matches), `greater-than`,
-`at-least`, `less-than`, and `at-most`. Equality is structural over JSON
-values: object key order does not count, and `0` equals `-0`.
+`has-same-items` (two arrays hold the same items in any order),
+`has-fields` (the actual object holds every field of the expected one),
+`matches` (the expected text, as a regular expression, matches),
+`greater-than`, `at-least`, `less-than`, and `at-most`. Equality is
+structural over JSON values: object key order does not count, and `0`
+equals `-0`.
 `has-same-items` pairs each item with one equal item on the other
 side, so a duplicate counts: `["a", "a"]` against `["a"]` breaks, and a
 list that repeats a name the other lists once does not hold. The order
 compares read two numbers.
+
+`has-fields` compares two objects, and lets a sentence state the few
+fields of a large value it is about: the docstring of "the order reads"
+names the status and the total, and the response also holds an id and a
+time no sentence can know. An expected object fits an object that holds
+each of its fields with a value that fits, whatever other fields it
+holds, at every depth. An expected array fits an array of the same
+length whose items fit one by one, since an extra item makes another
+list rather than a detail left out. Any other expected value fits only
+an equal one. A docstring reaches the claim as JSON through
+`expected_view`:
+
+```ts
+claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
+```
 
 Both sides are plain JSON before any compare runs: `null`, a boolean, a
 string, a finite number (an integer no larger than
@@ -1894,7 +1911,11 @@ string is never equal to a number for the reason the claim states. An
 expected text that nearly every string holds breaks, wherever it came
 from: under `contains-text`, `starts-with-text`, or `ends-with-text`, a
 text of only whitespace or nothing; under
-`matches`, a pattern that matches the empty string.
+`matches`, a pattern that matches the empty string. Under `has-fields`,
+an expected object with no field, at the top or at any depth, breaks the
+same way, since every object holds it, and the reason names where it
+sits: `has-fields has an expected object with no field at items.0, which
+every object holds`.
 
 `matches` tests the regular expression on a worker thread, which nukadoko
 starts outside the step's recorded actions. A regular expression cannot be
@@ -1929,7 +1950,7 @@ followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
 and `{ at: "a.b" }` read one path, and a `view` on either side does not
 separate them: it reads the same value another way. A `where` claim
 that overlaps an item claim and compares with `equal`,
-`has-same-items`, `contains-text`,
+`has-same-items`, `has-fields`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `matches`, or `has-item` is refused at import. It selects the items by
 the value the item claim then judges, or by a part of it the claim cannot
 be told apart from, so "every item" would read as "every item that
@@ -2228,7 +2249,11 @@ A broken `equal` on a text that has more than one line or is too long
 to show whole, or on two arrays or two objects, ends with where the two
 values first differ: the line or the character of a text, the path of
 keys and indexes inside an array or an object, and what each side holds
-there. One line per broken claim, with the first item that broke under an `each`
+there. A broken `has-fields` ends the same way with the first expected
+field that does not fit: its path, and what each side holds there,
+`nothing` for a field the actual object lacks, or both lengths for an
+array of another length (`; first field that does not fit at tags:
+actual 2 items, expected 1 item`). One line per broken claim, with the first item that broke under an `each`
 on the line below it, named by its index and its `identity` when it has one.
 A claim nukadoko could not judge fails the step with `claim_unjudged`
 instead, and its line starts `claim unjudged:`. The run summary lists

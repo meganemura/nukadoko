@@ -103,36 +103,39 @@ export default defineStep({
 ## The actual value
 
 `actual` is a path whose first segment is a `from` key or a key `observe`
-returns, never a key the sentence fills (a `from` key hides an `observe` key
-of its name, so a step whose claims read no `observe` key is refused); a
-path reads own properties only (not `constructor`, not a getter). `view:
-"text"` trims the end (the newline a program prints last), `"lines"` also
-splits it into lines, `"json"` parses it, and `"comma-list"` splits it at
-commas; `at` then takes a path inside the viewed value, so parsing is data:
-`{ actual: "stdout", view: "json", at: "sections.git.0.dirty_count",
-compare: "equal", expected: "count" }`. `{ actual, each: { where?, claims }
-}` applies item claims to every item of an array (paths inside are relative
-to the item), and breaks when the array, or what `where` selects, is empty.
-A `where` claim whose path starts an item claim's, or the reverse, is
-refused with `equal`, `has-same-items`, `has-item`, `matches`,
-`contains-text`, `starts-with-text`, or `ends-with-text`, and breaks the
-claim where it implies it.
+returns, never a key the sentence fills (a `from` key hides an `observe` key of
+its name, so a step whose claims read no `observe` key is refused); a path
+reads own properties only (not `constructor`, not a getter). `view: "text"`
+trims the end (the newline a program prints last), `"lines"` also splits it
+into lines, `"json"` parses it, and `"comma-list"` splits it at commas; `at`
+then takes a path inside the viewed value, so parsing is data: `{ actual:
+"stdout", view: "json", at: "sections.git.0.dirty_count", compare: "equal",
+expected: "count" }`. `{ actual, each: { where?, claims } }` applies item
+claims to every item of an array (paths inside are relative to the item), and
+breaks when the array, or what `where` selects, is empty. A `where` claim whose
+path starts an item claim's, or the reverse, is refused with `equal`,
+`has-same-items`, `has-fields`, `has-item`, `matches`, `contains-text`,
+`starts-with-text`, or `ends-with-text`, and breaks the claim where it implies
+it.
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `starts-with-text`, `ends-with-text`, `has-item`,
-`has-same-items` (in any order), `matches`, `greater-than`, `at-least`,
-`less-than`, `at-most`. Two values of different JSON types break the claim,
-and so does an expected text every string holds (blank under a text compare,
-a pattern that matches `""` under `matches`). Each side is a plain JSON copy
-taken where the value comes from (when `observe` returns, when a producer
-returns), and `observe` gets a clone of its inputs; a `Date`, a bigint,
-`NaN`, an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the
-claim `unjudged` (return an ISO string or a number). Judging has the step's
-deadline: each claim or item not judged by then, a running `matches` pattern
-included, is `unjudged`, with how many. `nuka check` reads each `from` path
-against the producer's `returns` (`claim-path-unknown`), reports a claim
-whose sides are one place (`claim-compares-itself`), and refuses a parameter
-type with a transformer on an expected key (`claim-expected-transformed`).
+`has-same-items` (in any order), `has-fields` (the expected object's fields at
+any depth, each array whole; other fields are fine), `matches`, `greater-than`,
+`at-least`, `less-than`, `at-most`. `{ actual: "body", compare: "has-fields",
+expected: "fields", expected_view: "json" }` claims the few fields a docstring
+states of a large response. Two values of different JSON types break the claim,
+and so does an expected value nearly every value holds (blank under a text
+compare, a pattern that matches `""` under `matches`, an object with no field
+under `has-fields`). Each side is a plain JSON copy taken when its value
+arrives, and `observe` gets a clone of its inputs; a `Date`, a bigint, `NaN`,
+an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the claim
+`unjudged` (return an ISO string or a number). Judging has the step's deadline:
+each claim or item not judged by then, a running `matches` pattern included, is
+`unjudged`, with how many. `nuka check` reads each `from` path against the
+producer's `returns` (`claim-path-unknown`), reports a claim whose sides are
+one place (`claim-compares-itself`), and refuses a parameter type with a
+transformer on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 

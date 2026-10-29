@@ -29,6 +29,8 @@ import {
   compareValues,
   deepEqual,
   evaluateClaims,
+  fieldlessObject,
+  fieldMisfit,
   jsonType,
   judgingBudget,
   pollReadings,
@@ -43,7 +45,7 @@ import {
   type Reading,
 } from "../src/step/evaluate-claims.js";
 import { readAt, snapshot } from "../src/step/snapshot.js";
-import { equalDifference } from "../src/report/summary/claim-line.js";
+import { equalDifference, fieldsDifference } from "../src/report/summary/claim-line.js";
 
 // Responsibility: the judging rules of a claim (docs/spec.md "Claims") as
 // properties over drawn values: each compare against its negation, a
@@ -162,6 +164,7 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "ends-with-text",
   "has-item",
   "has-same-items",
+  "has-fields",
   "matches",
   "greater-than",
   "at-least",
@@ -300,6 +303,64 @@ describe("compares", () => {
       expect(holds(await compare("has-same-items", [...items, repeated], items))).toBe(false);
       expect(holds(await compare("has-same-items", items, [repeated, ...items]))).toBe(false);
     }));
+
+  /** `value` with some fields left out of each object, at every depth,
+   * and every array kept at its length: what a sentence states of a
+   * larger value. An object keeps at least one field when it has one. */
+  function someFields(tc: hegel.TestCase, value: unknown): unknown {
+    if (Array.isArray(value)) return value.map((item) => someFields(tc, item));
+    if (jsonType(value) !== "object") return value;
+    const entries = Object.entries(value as Record<string, unknown>);
+    const kept = entries.filter(() => tc.draw(gs.booleans()));
+    return Object.fromEntries((kept.length === 0 ? entries.slice(0, 1) : kept).map(([key, item]) => [key, someFields(tc, item)]));
+  }
+
+  const jsonObjects = jsonValues.filter((value) => jsonType(value) === "object");
+
+  it("has-fields holds for an object against any of its fields, at every depth, and breaks only on an expected object with no field", () =>
+    hegel.testAsync(async (tc) => {
+      const actual = tc.draw(jsonObjects);
+      const expected = someFields(tc, actual);
+      const empty = fieldlessObject(expected);
+      const result = await compare("has-fields", actual, expected);
+      if (empty === null) expect(holds(result)).toBe(true);
+      else expect(result).toEqual({ reason: `has-fields has an expected object with no field${empty.length === 0 ? "" : ` at ${empty.join(".")}`}, which every object holds` });
+    }));
+
+  it("has-fields holds whenever equal holds, and breaks where an expected field is missing or holds another value", () =>
+    hegel.testAsync(async (tc) => {
+      const { root, path } = tc.draw(rootWithPath);
+      tc.assume(fieldlessObject(root) === null);
+      expect(holds(await compare("has-fields", root, structuredClone(root)))).toBe(true);
+      const segments = path.split(".");
+      const changed = structuredClone(root);
+      let parent: any = changed;
+      for (const segment of segments.slice(0, -1)) parent = parent[segment];
+      parent[segments.at(-1)!] = "\u00a7 changed";
+      tc.assume(fieldlessObject(changed) === null);
+      expect(holds(await compare("has-fields", root, changed))).toBe(false);
+      expect(fieldMisfit(root, changed)).toMatchObject({ kind: "differs", path: segments, expected: "\u00a7 changed" });
+      const extra = { ...changed, "\u00a7": 1 };
+      expect(holds(await compare("has-fields", changed, extra))).toBe(false);
+      expect(fieldMisfit(changed, extra)).toEqual({ kind: "missing", path: ["\u00a7"], expected: 1 });
+    }));
+
+  it("has-fields reads an expected array as the whole list: its length and each item in order", () =>
+    hegel.testAsync(async (tc) => {
+      const items = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: 3 }), { maxSize: 4 }));
+      const other = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: 3 }), { maxSize: 4 }));
+      expect(holds(await compare("has-fields", { items, n: 1 }, { items: other }))).toBe(deepEqual(items, other));
+      if (items.length !== other.length) expect(fieldMisfit({ items }, { items: other })).toEqual({ kind: "length", path: ["items"], actual: items.length, expected: other.length });
+    }));
+
+  it("has-fields compares two objects and names the other types it was given", async () => {
+    expect(await compare("has-fields", [{ id: 1 }], { id: 1 })).toEqual({ reason: "has-fields compares two objects, and compares an array with an object" });
+    expect(await compare("has-fields", { id: 1 }, "x")).toEqual({ reason: "has-fields compares two objects, and compares an object with a string" });
+    expect(await compare("has-fields", { items: [{ id: 1 }] }, { items: [{}] })).toEqual({
+      reason: "has-fields has an expected object with no field at items.0, which every object holds",
+    });
+    expect(await compare("has-fields", { id: 1 }, {})).toEqual({ reason: "has-fields has an expected object with no field, which every object holds" });
+  });
 
   it("never holds across two JSON types, and names both types", () =>
     hegel.testAsync(async (tc) => {
@@ -826,10 +887,14 @@ describe("where", () => {
     return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected };
   }
 
-  const decides = ["equal", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
+  const decides = ["equal", "has-same-items", "has-fields", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
   const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
 
-  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
+  it("sorts every compare into one that a where clause may not use on an overlapping place, or one the run judges", () => {
+    expect([...decides, ...leaves].sort()).toEqual([...CLAIM_COMPARES].sort());
+  });
+
+  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
     hegel.test((tc) => {
       const wherePath = tc.draw(segmentsGen);
       const itemPath = tc.draw(gs.booleans()) ? [...wherePath, ...tc.draw(segmentsGen)].slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: 4 }))) : tc.draw(segmentsGen);
@@ -1506,5 +1571,22 @@ describe("a broken equal names where its two values first differ", () => {
     expect(equalDifference([1, 2], [1, 2, 3])).toBe("first difference at 2: actual nothing, expected 3");
     expect(equalDifference("short", "shirt")).toBeNull();
     expect(equalDifference(1, 2)).toBeNull();
+  });
+});
+
+describe("a broken has-fields names the first expected field that does not fit", () => {
+  it("names nothing for an expected object that fits", () =>
+    hegel.test((tc) => {
+      const value = tc.draw(jsonValues);
+      expect(fieldsDifference(value, structuredClone(value))).toBeNull();
+    }));
+
+  it("names a missing field, a value that differs, and an array of another length, each with its path and both sides", () => {
+    const body = { id: 7, owner: { name: "aki", note: "a\nb" }, tags: ["x", "y"] };
+    expect(fieldsDifference(body, { owner: { email: "a@example.com" } })).toBe('first field that does not fit at owner.email: actual nothing, expected "a@example.com"');
+    expect(fieldsDifference(body, { id: 7, owner: { name: "kei" } })).toBe('first field that does not fit at owner.name: actual "aki", expected "kei"');
+    expect(fieldsDifference(body, { owner: { note: "a\nc" } })).toBe('first field that does not fit at owner.note, line 2: actual "b", expected "c"');
+    expect(fieldsDifference(body, { tags: ["x"] })).toBe("first field that does not fit at tags: actual 2 items, expected 1 item");
+    expect(fieldsDifference(body, { tags: ["x", "z"] })).toBe('first field that does not fit at tags.1: actual "y", expected "z"');
   });
 });

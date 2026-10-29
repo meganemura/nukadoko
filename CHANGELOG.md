@@ -7,6 +7,24 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **A claim can state the few fields of a large value.** `has-fields`
+  holds when the actual object holds every field of the expected object
+  with a value that fits, at every depth, whatever other fields it holds:
+  an expected array fits an array of the same length whose items fit one
+  by one, and any other value fits an equal one. A Then whose sentence
+  states the status and the total of a response that also holds an id and
+  a time no longer splits into one claim per field, or claims less than
+  the docstring says: `{ actual: "body", compare: "has-fields", expected:
+  "fields", expected_view: "json" }`. An expected object with no field,
+  at any depth, breaks the claim and names where it sits, since every
+  object holds it, and a `where` claim that overlaps an item claim cannot
+  use the compare. A broken `has-fields` line in the run summary and the
+  failure message ends with the first expected field that does not fit,
+  with its path and both sides (`; first field that does not fit at
+  owner.name: actual "aki", expected "kei"`).
+
 ### Fixed
 
 - **A Chromium page's requests carry a `traceparent` on Chromium 141

@@ -1,11 +1,15 @@
-import type { ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
+import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
+import { fieldMisfit } from "../../step/evaluate-claims.js";
 
 // Responsibility: one claim record as one line of plain text, the words
 // every reader of a claim sees (docs/spec.md "Claims"): the run summary,
 // the step's failure message, the Allure step that carries the claim, and
 // the cucumber-messages exception. One function, so the four never
 // describe the same claim differently. It reads a record that is already
-// written; it does not judge anything.
+// written; it does not judge anything. Where it names the place two values
+// part under a compare that matches by shape (has-fields), it asks the
+// matcher the claim was judged with, so the line cannot name a place the
+// judging did not.
 
 /** A value longer than this is cut in a line; the record keeps it whole. */
 const VALUE_TEXT_LIMIT = 120;
@@ -139,18 +143,52 @@ export function equalDifference(actual: unknown, expected: unknown): string | nu
   const containers = (Array.isArray(actual) && Array.isArray(expected)) || (isPlainObject(actual) && isPlainObject(expected));
   if (!containers) return null;
   const found = differenceIn(actual, expected, []);
-  if (found === null) return null;
-  const { actual: there, expected: wanted } = found;
-  if (typeof there === "string" && typeof wanted === "string" && equalDifference(there, wanted) !== null) {
-    return `first difference at ${found.path.join(".")}, ${textDifference(there, wanted)}`;
-  }
-  return `first difference at ${found.path.join(".")}: actual ${sideText(found.actual)}, expected ${sideText(found.expected)}`;
+  return found === null ? null : `first difference at ${differenceAt(found.path, found.actual, found.expected)}`;
 }
 
+/** A path and what each side holds there, with the line or character
+ * where two texts differ when the values alone would not show it. */
+function differenceAt(path: readonly string[], actual: unknown, expected: unknown): string {
+  if (typeof actual === "string" && typeof expected === "string" && equalDifference(actual, expected) !== null) {
+    return `${path.join(".")}, ${textDifference(actual, expected)}`;
+  }
+  return `${path.join(".")}: actual ${sideText(actual)}, expected ${sideText(expected)}`;
+}
+
+function itemCount(count: number): string {
+  return count === 1 ? "1 item" : `${count} items`;
+}
+
+/** The first expected field a broken `has-fields` claim's actual object
+ * lacks or holds another value at, found by the matcher the claim was
+ * judged with; `null` when the two fit. Pure. */
+export function fieldsDifference(actual: unknown, expected: unknown): string | null {
+  const misfit = fieldMisfit(actual, expected);
+  if (misfit === null) return null;
+  const at = misfit.path.join(".");
+  switch (misfit.kind) {
+    case "missing":
+      return `first field that does not fit at ${at}: actual nothing, expected ${valueText(misfit.expected)}`;
+    case "length":
+      return `first field that does not fit at ${at}: actual ${itemCount(misfit.actual)}, expected ${itemCount(misfit.expected)}`;
+    case "differs":
+      return `first field that does not fit at ${differenceAt(misfit.path, misfit.actual, misfit.expected)}`;
+  }
+}
+
+/** What a broken claim's line adds after its outcome, by compare: where
+ * the two values part. A compare with no row adds nothing, since the two
+ * values in the line already show why it broke. */
+const DIFFERENCES: Partial<Record<ClaimCompare, (actual: unknown, expected: unknown) => string | null>> = {
+  equal: equalDifference,
+  "has-fields": fieldsDifference,
+};
+
 function differenceText(record: ClaimComparisonRecord | ClaimEachRecord): string {
-  if (isEach(record) || record.compare !== "equal" || record.outcome !== "broken" || record.reason !== undefined) return "";
-  if (!hasKey(record, "actual") || !hasKey(record, "expected")) return "";
-  const difference = equalDifference(record.actual, record.expected);
+  if (isEach(record) || record.outcome !== "broken" || record.reason !== undefined) return "";
+  const describe = DIFFERENCES[record.compare];
+  if (describe === undefined || !hasKey(record, "actual") || !hasKey(record, "expected")) return "";
+  const difference = describe(record.actual, record.expected);
   return difference === null ? "" : `; ${difference}`;
 }
 

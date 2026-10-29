@@ -610,6 +610,11 @@
       "en": ["view (of a page at a pause)", "views"],
       "ja": "ビュー",
       "note": "一時停止のときに開いている各ページについて取るスクリーンショットと ARIA スナップショットの組。ARIA スナップショットは Playwright の ariaSnapshot のことで、claim の スナップショット とは別のもの"
+    },
+    {
+      "en": ["fit", "fits", "does not fit"],
+      "ja": "合う / 合わない",
+      "note": "has-fields と fits-text で、期待値が実際の値にあてはまること。等しい(equal)とは別の語で、期待値が述べない部分(ほかのフィールド、... の行、[..])は数えない。比較の名前 `has-fields`、`fits-text` はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

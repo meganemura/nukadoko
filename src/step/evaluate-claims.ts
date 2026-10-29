@@ -99,6 +99,64 @@ export function sameItems(a: readonly unknown[], b: readonly unknown[]): boolean
   return true;
 }
 
+/** Where an expected object first fails to fit an actual one under
+ * `has-fields`: a field the actual value lacks, a value that differs, or
+ * an array of another length. `path` holds keys and indexes from the
+ * top. */
+export type FieldMisfit =
+  | { readonly kind: "missing"; readonly path: readonly string[]; readonly expected: unknown }
+  | { readonly kind: "differs"; readonly path: readonly string[]; readonly actual: unknown; readonly expected: unknown }
+  | { readonly kind: "length"; readonly path: readonly string[]; readonly actual: number; readonly expected: number };
+
+/** The first place, in the expected value's key order, where `expected`
+ * does not fit `actual`, or `null` when it fits. An expected object fits an
+ * object that holds each of its fields with a value that fits, whatever
+ * other fields it holds, so a sentence can state the few fields of a large
+ * response it is about. An expected array fits an array of the same length
+ * whose items fit one by one: an extra item is a different list, not a
+ * detail left out. Any other value fits only an equal one. The run judges
+ * with this function and the run summary names the misfit with it, so the
+ * two never disagree. Pure. */
+export function fieldMisfit(actual: unknown, expected: unknown, path: readonly string[] = []): FieldMisfit | null {
+  const expectedType = jsonType(expected);
+  if (expectedType === "object") {
+    if (jsonType(actual) !== "object") return { kind: "differs", path, actual, expected };
+    const have = actual as Record<string, unknown>;
+    for (const [key, value] of Object.entries(expected as Record<string, unknown>)) {
+      if (!Object.hasOwn(have, key)) return { kind: "missing", path: [...path, key], expected: value };
+      const found = fieldMisfit(have[key], value, [...path, key]);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  if (expectedType === "array") {
+    if (!Array.isArray(actual)) return { kind: "differs", path, actual, expected };
+    const want = expected as unknown[];
+    if (actual.length !== want.length) return { kind: "length", path, actual: actual.length, expected: want.length };
+    for (let index = 0; index < want.length; index += 1) {
+      const found = fieldMisfit(actual[index], want[index], [...path, String(index)]);
+      if (found !== null) return found;
+    }
+    return null;
+  }
+  return deepEqual(actual, expected) ? null : { kind: "differs", path, actual, expected };
+}
+
+/** The path of the first object with no field in `value`, at any depth and
+ * inside arrays too, or `null`. Under `has-fields` such an object fits every
+ * object, so it states nothing. Pure. */
+export function fieldlessObject(value: unknown, path: readonly string[] = []): readonly string[] | null {
+  const type = jsonType(value);
+  if (type !== "object" && type !== "array") return null;
+  const entries = type === "array" ? (value as unknown[]).map((item, index) => [String(index), item] as const) : Object.entries(value as Record<string, unknown>);
+  if (type === "object" && entries.length === 0) return path;
+  for (const [key, item] of entries) {
+    const found = fieldlessObject(item, [...path, key]);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 /** The value after `view`, or why the view could not apply. A view reads a
  * snapshot, and what it makes of one is a snapshot too: the JSON a text
  * parses to is held to the same depth limit. */
@@ -178,7 +236,8 @@ function budgetSpent(budget: JudgingBudget, notJudged: number, of: number, what:
  * JSON types never holds for the reason the claim states (a string is never
  * equal to a number), so it breaks with both types named. An expected text
  * every string holds (an empty or blank text, a pattern that matches the
- * empty string) breaks too. */
+ * empty string) breaks too, and so does an expected object with no field,
+ * which every object holds. */
 export async function compareValues(
   compare: ClaimCompare,
   actual: unknown,
@@ -226,6 +285,16 @@ export async function compareValues(
         return { reason: `has-same-items compares two arrays, and compares ${article(actualType)} with ${article(expectedType)}` };
       }
       return { holds: sameItems(actual as unknown[], expected as unknown[]) };
+    }
+    case "has-fields": {
+      if (actualType !== "object" || expectedType !== "object") {
+        return { reason: `has-fields compares two objects, and compares ${article(actualType)} with ${article(expectedType)}` };
+      }
+      const empty = fieldlessObject(expected);
+      if (empty !== null) {
+        return { reason: `has-fields has an expected object with no field${empty.length === 0 ? "" : ` at ${empty.join(".")}`}, which every object holds` };
+      }
+      return { holds: fieldMisfit(actual, expected) === null };
     }
     case "greater-than":
     case "at-least":
