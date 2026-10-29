@@ -1936,8 +1936,10 @@ import { Given, When, Then } from "nukadoko/compat";
   `AfterStep` は加えて `pickleStep`(直前に走った pickle step)と `testStepId`(その step の step record id)を受け取ります。
   この id は `testCaseStartedId` と同じ種類の身代わりです。
   executor がすでに持っている安定した id であり、cucumber-messages のストリームが後から割り当てる id ではありません。
-  この enum の他のメンバー(`PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS`)は決して一致しません。
-  nukadoko には、hook 自身の result が運びうる pending、skipped、undefined-step、ambiguous-match のいずれの概念もないからです。
+  `SKIPPED` が一致する場所は 1 つだけです。
+  walk が中止した scenario の `After` hook で、その scenario の step は全部は走っていません(「人と一緒の walk」を参照)。
+  この enum の他のメンバー(`PENDING`/`UNDEFINED`/`AMBIGUOUS`)は決して一致しません。
+  nukadoko には、hook 自身の result が運びうる pending、undefined-step、ambiguous-match のいずれの概念もないからです。
   移行した glue は、これらの値を比較する分岐を通らず、この挙動は compat gap ではありません。
   `BeforeAll`/`AfterAll` は、scenario ではなく run 全体を挟みます。
   `{ timeout }` と `{ name }` を受け付け、`tags` と `on` は拒みます。

@@ -54,12 +54,14 @@ export { defineWorld, type InferWorldFields } from "./define-world.js";
 // (src/compat/hooks.ts) already returns that exact enum's own string values
 // independently of this re-export, so the re-export alone is enough to make
 // `result.status === Status.FAILED` both import and compare correctly.
-// `Status.PENDING`/`SKIPPED`/`UNDEFINED`/`AMBIGUOUS`/`UNKNOWN` can never
-// actually match a `HookParameter.result.status` under nukadoko — there is
-// no pending/skipped concept here (a step/hook returning either string fails
-// loudly instead, src/run/run-scenario.ts's `pendingOrSkippedMessage`) and
-// undefined/ambiguous are step-match outcomes, never a hook's own result. A
-// branch comparing against
-// one of those five is not a bug in migrated glue; it is a branch nukadoko
-// simply never takes, which is the correct behavior, not a gap to close.
+// `Status.SKIPPED` matches in one place: the `After` hooks of a scenario a
+// walk (`nuka run --step`) stopped, whose steps did not all run, which is
+// what cucumber's word means. `Status.PENDING`/`UNDEFINED`/`AMBIGUOUS`/
+// `UNKNOWN` can never match a `HookParameter.result.status` under
+// nukadoko: there is no pending concept here (a step/hook returning
+// "pending" or "skipped" fails loudly instead, src/run/run-scenario.ts's
+// `pendingOrSkippedMessage`), and undefined/ambiguous are step-match
+// outcomes, never a hook's own result. A branch comparing against one of
+// those four is not a bug in migrated glue; it is a branch nukadoko simply
+// never takes, which is the correct behavior, not a gap to close.
 export { TestStepResultStatus as Status } from "@cucumber/messages";

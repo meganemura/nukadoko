@@ -2417,10 +2417,12 @@ import { Given, When, Then } from "nukadoko/compat";
   `testStepId`, that step's step record id. The id is the same kind of
   stand-in `testCaseStartedId` already is: a real stable id the
   executor holds, not the id the cucumber-messages stream assigns
-  later. The other members, `PENDING`, `SKIPPED`, `UNDEFINED`, and
-  `AMBIGUOUS`, cannot match. Nukadoko has no corresponding concept for a
-  hook result. Migrated glue never takes a branch that compares these
-  values, and this behavior is not a compat gap. `BeforeAll` and `AfterAll`
+  later. `SKIPPED` matches in one place: the `After` hooks of a scenario
+  a walk stopped, whose steps did not all run (see "A walk with a
+  person"). The other members, `PENDING`, `UNDEFINED`, and `AMBIGUOUS`,
+  cannot match. Nukadoko has no corresponding concept for a hook result.
+  Migrated glue never takes a branch that compares these values, and
+  this behavior is not a compat gap. `BeforeAll` and `AfterAll`
   bracket the full run. They accept `{ timeout }` and `{ name }`. They
   reject `tags` and `on`. `on` would choose which process runs the hook,
   and nukadoko does not offer that choice. A non-empty `name` is the title
