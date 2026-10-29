@@ -31,16 +31,35 @@ export interface Pause {
   readonly text: string;
   /** The step name `nuka steps` lists. */
   readonly step: string;
+  /** The step's own status, as its record says. */
   readonly status: "passed" | "failed";
   /** The step record's directory, relative to the run directory. */
   readonly record: string;
-  readonly error?: { readonly message: string };
+  /** Present when the scenario failed at this step: the step itself, or
+   * an AfterStep hook after a step that passed. */
+  readonly failure?: PauseFailure;
   /** Steps that run on `next`: 0 after the last step, or after a step
    * that failed the scenario, since the steps after it are skipped either
    * way. A stop there skips nothing. */
   readonly remaining: number;
   readonly paused_at: string;
   readonly views: readonly PageView[];
+}
+
+/** What failed the scenario at a pause: the step, or an AfterStep hook
+ * after a step that passed. A step that failed keeps its own message, as
+ * the run's failure does. An AfterStep hook takes no name, so none is
+ * kept. */
+export interface PauseFailure {
+  readonly by: "step" | "hook";
+  readonly message: string;
+}
+
+/** One line on what failed the scenario at `pause`. */
+export function failureText(pause: Pause & { readonly failure: PauseFailure }): string {
+  const { failure } = pause;
+  const message = failure.message.split("\n")[0] ?? "";
+  return failure.by === "step" ? `step ${pause.pause} failed: ${message}` : `an AfterStep hook after step ${pause.pause} failed: ${message}`;
 }
 
 export interface WalkScenario {
@@ -338,8 +357,9 @@ export function stepDecision(call: StepCall, target: number, seen: WalkSeen, ans
 }
 
 /** What `nuka step` prints beside the envelope's five fields, its
- * findings, and its exit code: 0 for a walk paused, starting, running, or ended
- * green; 1 for one ended red, interrupted, or gone. */
+ * findings, and its exit code: 0 for a walk paused, starting, running, or
+ * ended green; 1 for one paused where its scenario failed, ended red,
+ * interrupted, or gone. */
 export interface StepReport {
   readonly exitCode: 0 | 1;
   readonly findings: readonly Finding[];
@@ -386,9 +406,16 @@ export function stepReport(seen: WalkFound, call: StepCall): StepReport {
   }
   if (seen.state === "paused") {
     const { pause } = seen;
+    // A pause after a failure answers no differently, but what it shows is
+    // a red scenario: a caller that reads only the exit code and the
+    // findings must not read it as passing.
+    const findings: Finding[] =
+      pause.failure === undefined
+        ? []
+        : [{ severity: "failed", code: "walk-failed", message: failureText({ ...pause, failure: pause.failure }), do: answerCommand(seen.number, pause.pause, "next") }];
     return {
-      exitCode: 0,
-      findings: [],
+      exitCode: findings.length === 0 ? 0 : 1,
+      findings,
       fields: {
         walk: "paused",
         ...runFields(seen),
@@ -407,10 +434,12 @@ export function stepReport(seen: WalkFound, call: StepCall): StepReport {
   return { exitCode: 0, findings: [], fields: { walk: "running", ...runFields(seen), after: seen.after, do: again } };
 }
 
-/** The two lines `nuka run --step` writes on stderr at a pause of walk
- * `walk`, outside `--json`. */
+/** The lines `nuka run --step` writes on stderr at a pause of walk
+ * `walk`, outside `--json`: the step, what failed when the scenario failed
+ * there, and the answers. */
 export function pauseLines(walk: number, pause: Pause): string {
   const next = answerCommand(walk, pause.pause, "next");
   const or = pause.remaining > 0 ? `   (or: ${answerCommand(walk, pause.pause, "stop")})` : "";
-  return `paused after step ${pause.pause}/${pause.of} (${pause.status}): ${pause.text}\n  do: ${next}${or}\n`;
+  const failed = pause.failure === undefined ? "" : `  failure: ${failureText({ ...pause, failure: pause.failure })}\n`;
+  return `paused after step ${pause.pause}/${pause.of} (${pause.status}): ${pause.text}\n${failed}  do: ${next}${or}\n`;
 }

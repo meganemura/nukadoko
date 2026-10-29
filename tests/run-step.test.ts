@@ -430,13 +430,20 @@ describe("nuka run --step and nuka step", () => {
       const run = nukaRun(rootDir, ["features/order.feature:8", "--step"]);
       await nukaStep(rootDir, "wait", ...FIRST_WAIT);
 
+      // A pause after a failure is red: the scenario failed there.
       const failed = await nukaStep(rootDir, "next", "1", "--walk", "1");
-      expect(failed.code).toBe(0);
+      expect(failed.code).toBe(1);
       expect(failed.stdout).toMatch(/^walk 1 paused after step 2\/3 \(failed\): the order is placed\n/);
-      expect(failed.stdout).toContain("  error: the cart is empty\n");
+      expect(failed.stdout).toContain("  failure: step 2 failed: the cart is empty\n");
       expect(failed.stdout).toContain("  do: nuka step next 2 --walk 1\n");
       expect(failed.stdout).not.toContain("nuka step stop");
-      expect(walkState(rootDir)).toMatchObject({ pause: { status: "failed", remaining: 0, error: { message: "the cart is empty" } } });
+      expect(failed.stderr).toMatch(/^failed\twalk-failed\t-\tstep 2 failed: the cart is empty\n/);
+      expect(walkState(rootDir)).toMatchObject({ pause: { status: "failed", remaining: 0, failure: { by: "step", message: "the cart is empty" } } });
+      expect(run.stderr()).toContain("  failure: step 2 failed: the cart is empty\n  do: nuka step next 2 --walk 1\n");
+      const json = await nukaStepJson(rootDir, "wait");
+      expect(json.code).toBe(1);
+      expect(json.document).toMatchObject({ verdict: "failed", walk: "paused", pause: { pause: 2, failure: { by: "step" } } });
+      expect(json.document["findings"].map((finding: Record<string, unknown>) => finding["code"])).toEqual(["walk-failed"]);
 
       const end = await nukaStep(rootDir, "stop", "2", "--walk", "1");
       expect(end.code).toBe(1);
@@ -449,6 +456,38 @@ describe("nuka run --step and nuka step", () => {
       expect(document["counts"]).toMatchObject({ failed: 1, stopped: 0 });
       // The answer is kept as given, though it stopped nothing.
       expect(document["walk"]["pauses"].map((pause: Record<string, unknown>) => pause["answer"])).toEqual(["next", "stop"]);
+    },
+    SPAWNED_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "pauses after a step whose AfterStep hook failed as red, though the step itself passed",
+    async () => {
+      await writeFile(path.join(rootDir, "nukadoko-compat-shim.ts"), 'export * from "../../../src/compat/index.js";\n');
+      await writeFile(
+        path.join(rootDir, "features", "steps", "after-step-fails.ts"),
+        'import { AfterStep } from "../../nukadoko-compat-shim.js";\nAfterStep({ tags: "@after-step-fails" }, function () {\n  throw new Error("the cart check broke");\n});\n',
+      );
+      await writeFile(
+        path.join(rootDir, "features", "hooked.feature"),
+        "Feature: A hooked order\n\n  @after-step-fails\n  Scenario: a hook fails after a step\n    Given a cart with 2 items\n    When the order is placed\n",
+      );
+      const run = nukaRun(rootDir, ["features/hooked.feature:4", "--step"]);
+
+      const paused = await nukaStep(rootDir, "wait", ...FIRST_WAIT);
+      expect(paused.code).toBe(1);
+      expect(paused.stdout).toMatch(/^walk 1 paused after step 1\/2 \(passed\): a cart with 2 items\n/);
+      expect(paused.stdout).toContain("  failure: an AfterStep hook after step 1 failed: the cart check broke\n");
+      expect(paused.stdout).toContain("  do: nuka step next 1 --walk 1\n");
+      expect(paused.stdout).not.toContain("nuka step stop");
+      expect(paused.stderr).toContain("failed\twalk-failed\t-\tan AfterStep hook after step 1 failed: the cart check broke\n");
+      expect(run.stderr()).toContain("  failure: an AfterStep hook after step 1 failed: the cart check broke\n");
+      expect(walkState(rootDir)).toMatchObject({ pause: { status: "passed", remaining: 0, failure: { by: "hook", message: "the cart check broke" } } });
+
+      const end = await nukaStep(rootDir, "next", "1", "--walk", "1");
+      expect(end.code).toBe(1);
+      expect(end.stdout).toMatch(/^walk 1 ended: the run finished, exit 1\n/);
+      expect((await run.closed).code).toBe(1);
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );

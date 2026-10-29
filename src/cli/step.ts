@@ -1,6 +1,6 @@
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
-import { answerCommand, runStepCall, walkStanding, type StepCall, type StepCallResult, type WalkFound } from "../run/walk-files.js";
+import { answerCommand, failureText, runStepCall, walkStanding, type StepCall, type StepCallResult, type WalkFound } from "../run/walk-files.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { REFUSED_EXIT_CODE, RefusalError, formatEnvelope, refusalOf, refuse, withHint } from "./refusal.js";
 
@@ -41,7 +41,7 @@ function walkText(seen: WalkFound, fields: Readonly<Record<string, unknown>>): s
     const lines = [
       `walk ${seen.number} paused after step ${pause.pause}/${pause.of} (${pause.status}): ${pause.text}`,
       `  scenario: ${scenario.feature}:${scenario.line} ${scenario.name} (${scenario.environment})`,
-      ...(pause.error === undefined ? [] : [`  error: ${pause.error.message.split("\n")[0] ?? ""}`]),
+      ...(pause.failure === undefined ? [] : [`  failure: ${failureText({ ...pause, failure: pause.failure })}`]),
       `  record: ${joined(runDir, pause.record)}/record.json`,
       ...pause.views.map((view) => {
         const files = [view.screenshot, view.aria].flatMap((file) => (file === null ? [] : [joined(runDir, file)]));

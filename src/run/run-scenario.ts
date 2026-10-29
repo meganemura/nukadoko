@@ -72,7 +72,7 @@ import { gherkinStepLines, pickleStepLines } from "./run-document.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
-import type { StepPauseFacts, WalkAnswer } from "./walk-files.js";
+import type { PauseFailure, StepPauseFacts, WalkAnswer } from "./walk-files.js";
 import {
   type AfterStepEndCounts,
   hookDisplayTitle,
@@ -1709,6 +1709,16 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // while the person reads is not the step's work, and the step's record
   // is already written. After a failure nothing runs on `next` either, so
   // nothing remains and a `stop` there stops nothing.
+  // The step's own failure first, as the run reports it; else an
+  // AfterStep hook after it that failed, which leaves the step passed and
+  // the scenario failed.
+  function failureAt(due: NonNullable<typeof walk.due>): { failure?: PauseFailure } {
+    if (due.entry.error !== undefined) return { failure: { by: "step", message: redactString(due.entry.error.message, secrets) } };
+    const hook = hookRecords.find((entry) => entry.type === "after_step" && entry.step_index === due.number - 1 && entry.status === "failed");
+    if (hook?.error === undefined) return {};
+    return { failure: { by: "hook", message: redactString(hook.error.message, secrets) } };
+  }
+
   async function pauseIfDue(): Promise<void> {
     const due = walk.due;
     if (pauseAfterStep === undefined || due === undefined) return;
@@ -1725,7 +1735,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       stepRecordId: due.record.step_record_id,
       // Posix, as run.json writes every path a reader joins.
       record: path.posix.join(RUN_FILE_DIRS.steps, due.record.step_record_id),
-      ...(due.entry.error === undefined ? {} : { error: { message: redactString(due.entry.error.message, secrets) } }),
+      ...failureAt(due),
       remaining,
       holdPages: async (dir, recordedAs) => {
         await contextHandle.beginStep(dir);

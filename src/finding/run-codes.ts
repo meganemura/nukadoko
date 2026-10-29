@@ -155,6 +155,12 @@ const RUN_CODES = {
       "nuka step found a walk whose nuka run --step process ended without recording how: it was killed, or it crashed, so its world, its browser, and its fixtures may not have been torn down.",
     fix: "Stop what the walk left running, if anything, and start the walk again with the command the finding names.",
   },
+  "walk-failed": {
+    severity: "failed",
+    description:
+      "nuka step found the walk paused after a step that failed, or after a step whose AfterStep hook failed: the scenario is failed, and the pause names which of them failed and its message. The walk still waits for its answer, and nothing is left to stop.",
+    fix: "Show the person the failure and the pause's views, answer next when they have seen it, and read the step record for the cause.",
+  },
   "walk-stopped": {
     severity: "failed",
     description:

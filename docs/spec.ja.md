@@ -3722,6 +3722,14 @@ messages の stream では、中止の後の step が `SKIPPED` になります�
 その一時停止の `remaining` は 0 で、`do` は `next` だけを名指します。
 そこでの `stop` は答えとして残り、scenario の status は走ったとおりのままです。
 
+scenario が失敗した一時停止は `failure` を持ちます。
+`by` は、失敗した step なら `step`、通った step の後で AfterStep hook が失敗したなら `hook` です(一時停止の `status` は step 自身のままです)。
+`message` は失敗した内容です。
+`nuka step` はその一時停止を赤として表示します。
+finding は失敗したものを名指す `walk-failed` で、終了コードは 1 です。
+それでも walk は `next` を待ち続けます。
+終了コードだけを読む呼び出し側に、失敗した scenario が通ったと伝わることはありません。
+
 誰も答えない一時停止を終わらせるのはシグナルだけです。
 どんな制限を設けても、考えている途中の誰かを断ち切ってしまうからです。
 シグナルは、どの run とも同じく scenario とその fixture を片付け、walk は `interrupted` として、シグナルと終了コードとともに終わります。
@@ -5376,9 +5384,9 @@ nuka step stop <pause> --walk <n> [--timeout <s>] [--json]
                               begun the scenario) or running, with the
                               same command as do. Exit 0 for a walk
                               paused, starting, running, or ended green;
-                              1 for one ended
-                              red, interrupted, or gone (walk-gone); 2
-                              for a refusal
+                              1 for one paused where its scenario failed
+                              (walk-failed), ended red, interrupted, or
+                              gone (walk-gone); 2 for a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout

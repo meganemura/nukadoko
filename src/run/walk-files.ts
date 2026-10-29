@@ -12,6 +12,7 @@ import {
   stepDecision,
   stepReport,
   type Pause,
+  type PauseFailure,
   type StepCall,
   type StepRefusalCode,
   type StepReport,
@@ -46,8 +47,8 @@ import {
 // lease a process renews: it needs no clock of its own, and
 // `process.kill(pid, 0)` answers the same on Windows.
 
-export type { Pause, StepCall, StepRefusalCode, StepReport, WalkAnswer, WalkEnd, WalkFound, WalkRun, WalkScenario, WalkState };
-export { answerCommand, restartCommand, waitCommand, walkStanding } from "./walk.js";
+export type { Pause, PauseFailure, StepCall, StepRefusalCode, StepReport, WalkAnswer, WalkEnd, WalkFound, WalkRun, WalkScenario, WalkState };
+export { answerCommand, failureText, restartCommand, waitCommand, walkStanding } from "./walk.js";
 
 const LOCK_DIR = "walk.lock";
 const RELEASED = "released";
@@ -68,7 +69,7 @@ export interface StepPauseFacts {
   readonly stepRecordId: string;
   /** The step record's directory, relative to the run directory. */
   readonly record: string;
-  readonly error?: { readonly message: string };
+  readonly failure?: PauseFailure;
   readonly remaining: number;
   /** From now until the next step, the requests the open pages send land
    * in `dir`, never in the step's own record; and each open page's view is
@@ -381,7 +382,7 @@ export function openWalk(options: {
         step: facts.stepName,
         status: facts.status,
         record: facts.record,
-        ...(facts.error === undefined ? {} : { error: facts.error }),
+        ...(facts.failure === undefined ? {} : { failure: facts.failure }),
         remaining: facts.remaining,
         paused_at: new Date().toISOString(),
         views,

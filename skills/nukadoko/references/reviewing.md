@@ -30,9 +30,11 @@ walk 1 paused after step 1/4 (passed): the shopper opens the cart
   do: nuka step next 1 --walk 1   (or: nuka step stop 1 --walk 1)
 ```
 
-`--json` gives the same as fields: `pause` (`pause`, `of`, `line`,
-`text`, `step`, `status`, `record`, `error`, `remaining`, `views`),
-`run_dir`, `scenario`, `world`, and `do`. A wait that prints `starting`
+`--json` gives the same as fields: `walk` (where the walk stands,
+`paused` here), `pause` (`pause`, `of`, `line`, `text`, `step`,
+`status`, `record`, `failure` when the scenario failed there,
+`remaining`, `paused_at`, `views`), `run_id`, `run_dir`, `scenario`,
+`world`, and `do`. A wait that prints `starting`
 or `running` ran out before the walk paused: run it again. A run that refused (it
 selected more than one scenario, say) never pauses: its own output
 names the refusal, and a wait shows the walk ended before its scenario
@@ -179,10 +181,11 @@ that pause first; `pause-not-current` means the walk is elsewhere, and
 the `nuka step wait --walk <w>` its `do` names shows where;
 `walk-not-current` means the answer named a walk that a later one
 replaced, so show the person the pause its `do` prints before you answer
-again. A failed step pauses with only `next`
-offered, since nothing is left to stop: show its `error` (its `kind` and
-message) the same way, answer `next` when the person has seen it, and go
-to `diagnosing.md`. A walk that a signal ended (the host's background
+again. A pause where the scenario failed (a failed step, or an AfterStep
+hook that failed after a step that passed) prints `failure:` with what
+failed, exits 1 with `walk-failed`, and offers only `next`, since nothing
+is left to stop: show the person the failure and the views the same way,
+answer `next` when they have seen it, and go to `diagnosing.md`. A walk that a signal ended (the host's background
 limit, Ctrl-C) prints `interrupted`; one whose run was killed prints
 `walk-gone`, and its `do:` starts the walk again.
 

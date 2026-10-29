@@ -4706,6 +4706,14 @@ after a failure are skipped either way), nothing is left to stop: the
 pause's `remaining` is 0, its `do` names only `next`, and a `stop` there
 is kept as the answer and leaves the scenario's status as it ran.
 
+A pause where the scenario failed carries `failure`: `by` is `step` for
+a step that failed, or `hook` for an AfterStep hook that failed after a
+step that passed (the pause's `status` stays the step's own), and
+`message` is what failed. `nuka step` prints that pause red: its finding
+is `walk-failed`, naming what failed, and it exits 1, though the walk
+still waits for its `next`. A caller that reads only the exit code is
+not told that a failed scenario passes.
+
 Nothing but a signal ends a pause nobody answers, since any limit would
 cut some person off in the middle of a thought. A signal tears the
 scenario and its fixtures down as in any run, and the walk ends as
@@ -6692,9 +6700,9 @@ nuka step stop <pause> --walk <n> [--timeout <s>] [--json]
                               begun the scenario) or running, with the
                               same command as do. Exit 0 for a walk
                               paused, starting, running, or ended green;
-                              1 for one ended
-                              red, interrupted, or gone (walk-gone); 2
-                              for a refusal
+                              1 for one paused where its scenario failed
+                              (walk-failed), ended red, interrupted, or
+                              gone (walk-gone); 2 for a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout

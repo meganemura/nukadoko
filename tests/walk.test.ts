@@ -11,6 +11,7 @@ import {
   stepReport,
   WalkTransitionError,
   type Pause,
+  type PauseFailure,
   type StepCall,
   type WalkAnswer,
   type WalkEnd,
@@ -34,8 +35,15 @@ const RUN: WalkRun = {
 };
 const STEPS = 5;
 
-function pauseAt(k: number, remaining: number): Pause {
+const FAILURES: readonly (PauseFailure | undefined)[] = [
+  undefined,
+  { by: "step", message: "expected 2 items\nat line 7" },
+  { by: "hook", message: "the page closed" },
+];
+
+function pauseAt(k: number, remaining: number, failure?: PauseFailure): Pause {
   return {
+
     pause: k,
     of: STEPS,
     line: 3 + k,
@@ -46,6 +54,7 @@ function pauseAt(k: number, remaining: number): Pause {
     remaining,
     paused_at: "2026-10-29T10:00:01.000Z",
     views: [],
+    ...(failure === undefined ? {} : { failure, status: failure.by === "step" ? "failed" : "passed" }),
   };
 }
 
@@ -60,8 +69,8 @@ const ENDS: readonly WalkEnd[] = [
 const events: gs.Generator<WalkEvent> = gs.oneOf(
   gs.just({ kind: "begun", run: RUN } as const),
   gs
-    .tuples(gs.integers({ minValue: 0, maxValue: STEPS + 1 }), gs.integers({ minValue: 0, maxValue: STEPS }))
-    .map(([k, remaining]): WalkEvent => ({ kind: "paused", pause: pauseAt(k, remaining) })),
+    .tuples(gs.integers({ minValue: 0, maxValue: STEPS + 1 }), gs.integers({ minValue: 0, maxValue: STEPS }), gs.sampledFrom(FAILURES))
+    .map(([k, remaining, failure]): WalkEvent => ({ kind: "paused", pause: pauseAt(k, failure === undefined ? remaining : 0, failure) })),
   gs
     .tuples(gs.integers({ minValue: 0, maxValue: STEPS + 1 }), gs.sampledFrom(["next", "stop"] as const))
     .map(([k, answer]): WalkEvent => ({ kind: "answered", pause: k, answer })),
@@ -289,15 +298,23 @@ describe("stepDecision", () => {
 });
 
 describe("stepReport", () => {
-  it("exits 0 for a walk paused, running, or ended green, and 1 for one ended red, interrupted, or gone, and offers stop only while a step remains", () =>
+  it("exits 0 for a walk paused, running, or ended green, and 1 for one paused after a failure, ended red, interrupted, or gone, and offers stop only while a step remains", () =>
     hegel.test((tc) => {
       const states = walkThrough(tc.draw(gs.arrays(events, { maxSize: 12 })));
       const state = states.at(-1)!;
       const seen = seeWalk(state, () => tc.draw(gs.booleans()));
       if (seen.state === "none") return;
       const report = stepReport(seen, { kind: "wait" });
-      const red = seen.state === "gone" || (seen.state === "ended" && seen.end.exit_code !== 0);
+      const red = seen.state === "gone" || (seen.state === "ended" && seen.end.exit_code !== 0) || (seen.state === "paused" && seen.pause.failure !== undefined);
       expect(report.exitCode).toBe(red ? 1 : 0);
+      // A pause after a failure is red, names what failed, and still offers next.
+      if (seen.state === "paused") {
+        const failure = seen.pause.failure;
+        expect(report.findings.map((finding) => [finding.severity, finding.code, finding.do])).toEqual(
+          failure === undefined ? [] : [["failed", "walk-failed", `nuka step next ${seen.pause.pause} --walk ${START.number}`]],
+        );
+        if (failure !== undefined) expect(report.findings[0]!.message).toContain(failure.by === "step" ? `step ${seen.pause.pause} failed` : "AfterStep hook");
+      }
       if (seen.state === "paused") {
         expect(report.fields["do"]).toEqual({
           next: `nuka step next ${seen.pause.pause} --walk ${START.number}`,
@@ -316,5 +333,11 @@ describe("pauseLines", () => {
   it("names the pause, its step, and the commands that answer it, and leaves stop out after the last step", () => {
     expect(pauseLines(3, pauseAt(2, 3))).toBe("paused after step 2/5 (passed): step 2\n  do: nuka step next 2 --walk 3   (or: nuka step stop 2 --walk 3)\n");
     expect(pauseLines(3, pauseAt(5, 0))).toBe("paused after step 5/5 (passed): step 5\n  do: nuka step next 5 --walk 3\n");
+    expect(pauseLines(3, pauseAt(2, 0, { by: "hook", message: "the page closed" }))).toBe(
+      "paused after step 2/5 (passed): step 2\n  failure: an AfterStep hook after step 2 failed: the page closed\n  do: nuka step next 2 --walk 3\n",
+    );
+    expect(pauseLines(3, pauseAt(2, 0, { by: "step", message: "expected 2 items\nat line 7" }))).toBe(
+      "paused after step 2/5 (failed): step 2\n  failure: step 2 failed: expected 2 items\n  do: nuka step next 2 --walk 3\n",
+    );
   });
 });
