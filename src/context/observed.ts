@@ -99,6 +99,8 @@ export interface StampedBoundaryTrace extends BoundaryTrace {
   readonly spans: readonly string[];
   /** Stamped requests past MAX_KEPT_SPANS, whose span ids are not kept. */
   readonly spansNotKept: number;
+  /** How many `runCommand` processes the boundary started. */
+  readonly processes: number;
 }
 
 /** How many span ids a boundary keeps: a step that sends more requests
@@ -457,6 +459,7 @@ export function createObservedCollector(
         lastStampAt: state.lastStampAt,
         spans: [...state.spans],
         spansNotKept: state.spansNotKept,
+        processes: state.processes?.length ?? 0,
       };
     },
   };

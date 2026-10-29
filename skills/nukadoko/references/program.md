@@ -140,8 +140,11 @@ step: which tables it read and wrote, which jobs it enqueued and ran.
 `whole: true` says every request the step stamped has its `request`
 line and every job it enqueued performed. `whole: false` never says
 nothing more happened: `open` names why, one word each:
-`producer-unstamped` (the step sent the world nothing), `no-lines` (no
-writer, or a wrong variable), `request-unreported`, `jobs-pending` (with
+`no-requests` (the step sent the world no stamped request and ran no
+`runCommand` process, such as a Then that only reads the page),
+`processes-unbounded` (the step ran a `runCommand` process, whose
+requests nukadoko cannot count), `no-lines` (no writer, or a wrong
+variable), `request-unreported`, `jobs-pending` (with
 `job_ids`), `unreadable` (a line spliced or cut), `truncated`,
 `file-replaced`. A line that arrived later is in `events-late.jsonl`,
 and the run summary names it. The whole file, redacted, is in

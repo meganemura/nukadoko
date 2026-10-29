@@ -102,7 +102,7 @@ export function createEventsReader(filePath: string, prefix: string, secrets: Se
   });
   return {
     async slice(dir, trace) {
-      const tally = createTraceTally({ spans: trace.spans, spansNotKept: trace.spansNotKept });
+      const tally = createTraceTally({ spans: trace.spans, spansNotKept: trace.spansNotKept, ranProcesses: trace.processes > 0 });
       const kept = new StepLines();
       let unowned = 0;
       await reader.readStep(trace.lastStampAt, (text) => {

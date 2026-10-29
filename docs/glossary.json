@@ -658,12 +658,12 @@
     {
       "en": ["whole (a step's events)", "not whole"],
       "ja": "そろっている / そろっていない",
-      "note": "step が送ったリクエストのそれぞれが自分の行を持ち、積んだジョブのそれぞれが perform し、行に欠けがないこと。フィールド `whole` と `open` はコードスパンで英語のまま"
+      "note": "step が送ったリクエストのそれぞれが自分の行を持ち、積んだジョブのそれぞれが perform し、runCommand のプロセスを走らせておらず、行に欠けがないこと。フィールド `whole` と `open` はコードスパンで英語のまま"
     },
     {
       "en": ["gap word", "gap"],
       "ja": "欠けを示す語 / 欠け",
-      "note": "step の実行イベントがそろっていない理由。`no-lines`、`jobs-pending` などの値と、フィールド `gap` はコードスパンで英語のまま"
+      "note": "step の実行イベントがそろっていない理由。`no-requests`、`processes-unbounded`、`no-lines`、`jobs-pending` などの値と、フィールド `gap` はコードスパンで英語のまま"
     },
     {
       "en": ["unreadable (line)"],

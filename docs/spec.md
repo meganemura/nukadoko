@@ -3733,7 +3733,8 @@ value is still JSON and the file shows exactly what was read.
 - `unowned` is how many readable lines the step's read passed whose trace
   is no step's: a request nukadoko did not stamp, such as the `ready`
   check or a BeforeAll hook's, or a trace the program made itself.
-- `whole` is `true` when every request the step stamped has its
+- `whole` is `true` when the step stamped at least one request and
+  ran no `runCommand` process, every request it stamped has its
   `request` line, matched by the span id the step sent (a line with a
   bare trace id counts for one request), every job enqueued in the trace
   has at least as many `perform` lines as `enqueue` lines, no line of
@@ -3741,8 +3742,14 @@ value is still JSON and the file shows exactly what was read.
   was not replaced.
 - `open` names each reason `whole` is `false`, one gap word each, in
   this order:
-  - `producer-unstamped`: the step sent no request with a
-    `traceparent`, so no line can say that its work ended;
+  - `no-requests`: the step sent the world no request with a
+    `traceparent` and ran no `runCommand` process, so it caused no
+    work a line could report the end of, and no line can say that it
+    caused none (a Then that only reads the page is the usual one);
+  - `processes-unbounded`: the step ran a `runCommand` process; a
+    program may send the world any number of requests or none, so no
+    count says that all of them reported, whether or not the step also
+    stamped requests of its own;
   - `no-lines`: the step stamped requests, and no line carries its trace
     id: no writer, a wrong variable, or lines that came late;
   - `request-unreported`, with `requests`: that many of the stamped
@@ -3758,7 +3765,8 @@ value is still JSON and the file shows exactly what was read.
 `whole: false` never says that nothing more happened: the program's work
 may still be going on, or a line may be lost, and `open` says which.
 A step that sent nothing to the world is never whole, since no line can
-say that it caused no work.
+say that it caused no work, and neither is a step that ran a
+`runCommand` process.
 
 A line of a step that arrives after its record was written is still
 that step's: a request line the program writes after a streamed body,

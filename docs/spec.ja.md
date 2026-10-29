@@ -2950,9 +2950,14 @@ step は、プログラムのログと同じようにファイルを読みます
 - `unreadable` は、テキストがその trace id を持ち、読めなかった行の数です。
 - `unowned` は、step が読む途中で通り過ぎた読める行のうち、trace がどの step のものでもない行の数です。
   `ready` の確認や BeforeAll の hook のリクエストのように nukadoko が `traceparent` を付けなかったリクエストや、プログラムが自分で作った trace です。
-- `whole` は、step が `traceparent` を付けたリクエストのそれぞれが自分の `request` の行を持ち(step が送った span id で対応させ、trace id だけの行は 1 つのリクエストとして数えます)、trace の中で積んだジョブのそれぞれが `enqueue` の行と少なくとも同じ数の `perform` の行を持ち、trace の行に読めないものが無く、step の行がファイルに収まり、ファイルが置き換えられなかったとき `true` です。
+- `whole` は、step が `traceparent` を付けたリクエストを少なくとも 1 つ送り、`runCommand` のプロセスを走らせず、そのリクエストのそれぞれが自分の `request` の行を持ち(step が送った span id で対応させ、trace id だけの行は 1 つのリクエストとして数えます)、trace の中で積んだジョブのそれぞれが `enqueue` の行と少なくとも同じ数の `perform` の行を持ち、trace の行に読めないものが無く、step の行がファイルに収まり、ファイルが置き換えられなかったとき `true` です。
 - `open` は、`whole` が `false` である理由を、欠けを示す語 1 つずつで、この順に挙げます:
-  - `producer-unstamped`: step が `traceparent` を付けたリクエストを 1 つも送らなかったので、その仕事が終わったと言える行がありません。
+  - `no-requests`: step が world へ `traceparent` を付けたリクエストを 1 つも送らず、`runCommand` のプロセスも 1 つも走らせませんでした。
+    行が終わりを知らせる仕事を引き起こしておらず、何の仕事も引き起こさなかったと言える行もありません。
+    ページを読むだけの Then がよくある例です。
+  - `processes-unbounded`: step が `runCommand` のプロセスを走らせました。
+    プログラムは world へいくつリクエストを送ってもよく、1 つも送らなくてもよいので、そのすべてが行を書いたと言える数がありません。
+    step が自分でも `traceparent` を付けたリクエストを送ったかどうかに関わらず、そうです。
   - `no-lines`: step はリクエストに `traceparent` を付けましたが、その trace id を持つ行がありません。
     書き手が無い、変数が違う、行が遅れた、のどれかです。
   - `requests` を伴う `request-unreported`: `traceparent` を付けたリクエストのうち、その数が `request` の行を持ちません。
@@ -2965,6 +2970,7 @@ step は、プログラムのログと同じようにファイルを読みます
 プログラムの仕事がまだ続いているか、行が失われたかもしれず、`open` がどちらかを言います。
 world へ何も送らなかった step は、決してそろいません。
 その step が何の仕事も引き起こさなかったと言える行が無いからです。
+`runCommand` のプロセスを走らせた step も、決してそろいません。
 
 record を書いたあとに届いた step の行も、その step のものです。
 ストリームした本文のあとにプログラムが書くリクエストの行や、あとで perform するジョブの行です。

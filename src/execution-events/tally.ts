@@ -16,21 +16,29 @@ import type { ReadableLine } from "./format.js";
 // that sent it; a line with a bare trace id stands for one request, which
 // one unknown. Lines of several processes are in write order, not in time
 // order, so a job's `perform` line may come before its `enqueue` line and
-// the counts per job are compared, never their order.
+// the counts per job are compared, never their order. A `runCommand`
+// process the step ran is work no count bounds: the program it runs may
+// send the world any number of requests, so a trace whose step ran one is
+// never whole.
 //
 // Not whole is never read as "nothing more happened": each reason is one
 // gap word, from one closed list, so a reader branches on the word.
 
 /** Why a step's events may not hold everything its work did, in the order
  * a record lists them. */
-export const GAP_WORDS = ["producer-unstamped", "no-lines", "request-unreported", "jobs-pending", "unreadable", "truncated", "file-replaced"] as const;
+export const GAP_WORDS = ["no-requests", "processes-unbounded", "no-lines", "request-unreported", "jobs-pending", "unreadable", "truncated", "file-replaced"] as const;
 
 export type GapWord = (typeof GAP_WORDS)[number];
 
 export type EventsGap =
-  /** The step sent no request with a `traceparent`, so no line can say
-   * its work ended. */
-  | { readonly gap: "producer-unstamped" }
+  /** The step sent the world no request with a `traceparent` and ran
+   * no `runCommand` process: it caused no work a line could report the
+   * end of, and no line can say that it caused none. */
+  | { readonly gap: "no-requests" }
+  /** The step ran a `runCommand` process. What that process sent the
+   * world is not counted, since a program may send any number of
+   * requests or none, so no line can say all of them reported. */
+  | { readonly gap: "processes-unbounded" }
   /** The step stamped requests and no line carries its trace id: no
    * writer, a wrong variable, or lines still buffered. */
   | { readonly gap: "no-lines" }
@@ -75,6 +83,8 @@ export interface TallyInputs {
   readonly spans: readonly string[];
   /** Stamped requests past the span ids kept. */
   readonly spansNotKept: number;
+  /** Whether the step ran a `runCommand` process. */
+  readonly ranProcesses: boolean;
 }
 
 export function createTraceTally(inputs: TallyInputs): TraceTally {
@@ -112,7 +122,8 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
       const pending = [...jobs].filter(([, counts]) => counts.performs < counts.enqueues).map(([id]) => id);
       const silent = requests > 0 && lines === 0 && unreadable === 0 && !file.replaced;
       const open: EventsGap[] = [
-        ...(requests === 0 ? [{ gap: "producer-unstamped" as const }] : []),
+        ...(requests === 0 && !inputs.ranProcesses ? [{ gap: "no-requests" as const }] : []),
+        ...(inputs.ranProcesses ? [{ gap: "processes-unbounded" as const }] : []),
         ...(silent ? [{ gap: "no-lines" as const }] : []),
         ...(!silent && unmatched > 0 ? [{ gap: "request-unreported" as const, requests: unmatched }] : []),
         ...(pending.length > 0 ? [{ gap: "jobs-pending" as const, job_ids: pending }] : []),

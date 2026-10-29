@@ -136,6 +136,10 @@ just until 0.1.
   whether the step's work is `whole`, every stamped request reported
   and every enqueued job performed, with `open` naming each reason it is
   not (`no-lines`, `request-unreported`, `jobs-pending`, and the rest).
+  A step that sent the world no stamped request and ran no `runCommand`
+  process, such as a Then that only reads the page, is `no-requests`, and
+  one that ran a `runCommand` process, whose requests nukadoko cannot
+  count, is `processes-unbounded`.
   A line that arrives after the record goes to `events-late.jsonl`, the
   world's redacted copy to `worlds/<environment>/events.jsonl`, and its
   counts to the world's `events` in run.json. The file lives in a 0700
