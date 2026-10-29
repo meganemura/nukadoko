@@ -95,6 +95,14 @@ export type {
   StepRunResult,
 } from "./step/define-step.js";
 export type { Claim, ClaimExpected, ClaimLiteral, ClaimPoll, ComparisonClaim, EachClaim, ItemClaim } from "./step/claims.js";
+// What a claim step's `events` declares, and what its record holds of each
+// reading: a step file names the selection, and a reader of a record the
+// range, the gaps, and the lines that may match.
+export type { EventsCount } from "./step/define-step.js";
+export type { DeclaredEventSelection, EventSelection, SentenceValue } from "./execution-events/selection.js";
+export type { CountCompare, CountRange } from "./execution-events/count.js";
+export type { EventsGap, GapWord, MaybeCounts } from "./execution-events/tally.js";
+export type { EventsProducerRecord, EventsReadRecord, EventsSlice } from "./record/types.js";
 export { defineStep, InvalidStepDefinitionError } from "./step/define-step.js";
 // `z` itself, not merely its type: `vocabulary.ts` calls
 // `z.toJSONSchema(entry.step.args)` and `strict-args.ts` reads a schema's

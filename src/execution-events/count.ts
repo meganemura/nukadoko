@@ -156,15 +156,22 @@ export function describeRange(range: CountRange): string {
   return range.at_most === range.at_least ? `exactly ${range.at_least}` : `between ${range.at_least} and ${range.at_most}`;
 }
 
+/** The gaps that say nothing was read, rather than that what was read
+ * may lack lines. */
+const UNREAD_GAPS: ReadonlySet<GapWord> = new Set(["inlet-unnamed", "world-unread", "producer-not-run"]);
+
 /** Judges `compare` between a count in `reading.range` and `expected`:
  * `held` or `broken` only when every count in the range gives that
- * answer, `unjudged` with the reason and the gap word otherwise. Pure. */
-export function judgeCount(reading: CountReading, compare: CountCompare, expected: number): CountJudgment {
+ * answer, `unjudged` with the reason and the gap word otherwise. `of`
+ * names the step whose events were read, in the reason. Pure. */
+export function judgeCount(reading: CountReading, compare: CountCompare, expected: number, of?: string): CountJudgment {
   const answer = judgeRange(reading.range, compare, expected);
   if (answer !== "unknown") return { outcome: answer };
   const first = reading.whole ? undefined : reading.open[0];
   const may = describeMaybe(reading.maybe);
-  const why = first !== undefined ? `the events are not whole: ${describeGap(first)}` : may !== "" ? may : "the events are not whole";
+  const events = of === undefined ? "the events" : `the events of ${of}`;
+  const state = first !== undefined && UNREAD_GAPS.has(first.gap) ? "were not read" : "are not whole";
+  const why = first !== undefined ? `${events} ${state} (${first.gap}): ${describeGap(first)}` : may !== "" ? may : `${events} are not whole`;
   return {
     outcome: "unjudged",
     reason: `${why}, so the count is ${describeRange(reading.range)}, and ${compare} ${expected} is not known`,

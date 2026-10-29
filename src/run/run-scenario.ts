@@ -61,10 +61,10 @@ import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
-import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
+import { eventsCandidates, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type ClaimStep, type Step } from "../step/define-step.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
-import { runValidatedStep, snapshotClaimArgs, type ClaimExecution, type FilledFrom } from "./execute-typed-step.js";
+import { runValidatedStep, snapshotClaimArgs, type ClaimExecution, type EventsSource, type FilledFrom } from "./execute-typed-step.js";
 import { copyOf, type Refusal, type Snapshot } from "../step/snapshot.js";
 import { transformedFillReason } from "../step/claims.js";
 import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
@@ -254,6 +254,9 @@ interface ChainEntry {
    * names it, so a claim on a value this step's result filled is judged
    * against what the step returned, not only against what was kept. */
   readonly returnsDropped: readonly ReturnsDrop[] | undefined;
+  /** The trace id of the step's execution events, `null` when it has
+   * none: what a later step's `events` reads them by. */
+  readonly eventsTrace: string | null;
 }
 
 
@@ -880,6 +883,33 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     return chain.get(step);
   }
 
+  // The step an events key counts the execution events of: the one of
+  // its `of` candidates that ran earlier in this scenario, found in the
+  // chain as `injectFrom` finds a from key's producer. `nuka check`
+  // reports a line where none or two did (events-producer-missing,
+  // events-producer-ambiguous); under --no-check the claim is unjudged.
+  const eventsSourceOf = (step: ClaimStep) => (key: string): EventsSource => {
+    const candidates = eventsCandidates(step.events[key]!);
+    const names = candidates.map((candidate) => stepNameOf.get(candidate) ?? "a step discovery never registered");
+    const present = candidates.flatMap((candidate) => {
+      const entry = chain.get(candidate);
+      return entry === undefined ? [] : [entry];
+    });
+    if (present.length === 0) return { producer: { source: "unread", of: null, gap: "producer-not-run" }, of: names.join(" or ") };
+    if (present.length > 1) {
+      return {
+        unchosen: `events.${key}.of names ${present.map((entry) => `"${entry.stepName}"`).join(" and ")}, and each ran earlier in this scenario, so the step cannot choose whose events to count`,
+        of: names.join(" or "),
+      };
+    }
+    const entry = present[0]!;
+    const line = recordLines.get(entry.recordId) ?? null;
+    // A step with no events trace is read by its record id, which names no
+    // trace: the handle then says why there is nothing to read.
+    const producer = contextHandle.eventsProducer({ step_record_id: entry.recordId, step: entry.stepName, line }, entry.eventsTrace ?? entry.recordId);
+    return { producer, of: `${entry.stepName}@${line ?? entry.recordId}` };
+  };
+
   // Every typed step's own Step object, keyed by its vocabulary name — built
   // once per pickle from the same
   // `vocabulary` every pickle in this `nuka run` invocation shares. Doubles
@@ -1044,7 +1074,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     observed: StepRecord["observed"],
     httpLogExists: boolean,
     argsOrigin: Record<string, ArgOrigin> | undefined,
-  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings" | "readings_left_out"> {
+  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings" | "readings_left_out" | "events_read"> {
     const claims = withMeasured(execution.judged, {
       ownRecordId: begun.recordId,
       ownChannels: recordedChannels({ observed, dir: begun.recordDir, ...(httpLogExists ? { http: "http.jsonl" } : {}) }),
@@ -1064,6 +1094,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       attempts: execution.attempts,
       ...(execution.readings === undefined ? {} : { readings: [...execution.readings] }),
       ...(execution.readingsLeftOut === undefined ? {} : { readings_left_out: { ...execution.readingsLeftOut } }),
+      ...(execution.eventsRead === undefined ? {} : { events_read: execution.eventsRead }),
     };
   }
 
@@ -1225,6 +1256,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         recordId: begun.recordId,
         stepName: outcomeStepName,
         returnsDropped: chainKey.returnsDropped,
+        eventsTrace: observed.events?.trace_id ?? null,
       });
     }
 
@@ -2037,6 +2069,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               processCache: fixtureProcessCache,
               secrets,
               config,
+              ...(isClaimStep(entry.step) && Object.keys(entry.step.events).length > 0
+                ? { eventsSource: eventsSourceOf(entry.step) }
+                : {}),
               argSide: (key) => claimArgSide(key, originOf(key), (id) => recordLines.get(id) ?? null),
               filledFrom,
               ...(attachmentKey === null || (attachmentOrigin !== "docstring" && attachmentOrigin !== "table")

@@ -16,7 +16,7 @@ import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
 import { checkClaimSources } from "./claim-check.js";
 import { isClaimStep } from "../step/define-step.js";
-import { sentenceUnreadReason } from "../step/claims.js";
+import { eventsShapeOf, sentenceUnreadReason } from "../step/claims.js";
 
 // Responsibility: match every pickle step (from src/feature/load-features.ts)
 // against the vocabulary's patterns (already built once by
@@ -412,7 +412,9 @@ export function checkFeatures(
             } else {
               const key = unconsumedRequired[0]!;
               const attached = attachment.docString !== undefined ? "docstring" : "table";
-              const unread = isClaimStep(entry.step) ? sentenceUnreadReason(entry.step.claims, entry.step.observe !== undefined, key, attached) : null;
+              const unread = isClaimStep(entry.step)
+                ? sentenceUnreadReason(entry.step.claims, entry.step.observe !== undefined, key, attached, eventsShapeOf(entry.step.events))
+                : null;
               if (unread !== null) {
                 errors.push({
                   code: "claim-sentence-unread",

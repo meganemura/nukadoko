@@ -1456,6 +1456,8 @@ record の読み手は、値を行が使った言葉と見比べられます。
 
 `actual` はパスです。
 最初の要素は `from` のキーであるか、そうでなければ `observe` が返すオブジェクトのキーです。
+step の `events` のキーそのものは、代わりに前の step の実行イベントの数を読みます。
+その数は、プログラムが書いた行から nukadoko が作ります(「実行イベントの数についての claim」を参照)。
 最初の要素が文の埋めるキーであるパスは拒否されます。
 claim が計測する値は、行から来ることはありません。
 `observe` が `from` のキーと同じ名前で返したキーは、`from` のキーが勝つので claim に届きません。
@@ -1871,7 +1873,7 @@ compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)�
 claim step の record には、次の固有のフィールドがあります(「Records」を参照)。
 
 - `claims`: step が宣言した順の、各 claim です。
-  比較は、`actual`(`view`、`at`、`count` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view`、`at`、`count`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
+  比較は、`actual`(`view`、`at`、`count` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し、実行イベントの数では 1 つの数のときのその数で、範囲のときは代わりに `actual_range`)、`actual_from`、claim が名指しするときの `view`、`at`、`count`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
   `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値、parameter type の transformer が書き換えた値、読み取りの途中で過ぎた step の締め切り)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
@@ -1880,6 +1882,7 @@ claim step の record には、次の固有のフィールドがあります(「
   `observe` の呼び出しを 1 回ずつ数え、`observe` のない step は `from` の値を一度だけ読み、何も読まなかった step(`observe` が一度も動かなかったか、nukadoko が先に判定を断った step)は `0` を記録します。
 - `readings`: poll するときだけあり、step が残した読み取りです(「poll」を参照)。
   すべては残さなかったときは `readings_left_out` もあります。
+- `events_read`: `events` を持つ step にだけあり、各キーの、前の step の実行イベントの読みです(「実行イベントの数についての claim」を参照)。
 
 `measured` は、生の実際の値と内容が等しい、記録されたチャネルを名指しします。
 生の実際の値とは、`actual` が読む場所の値で、`view` とそのあとの `at` を通す前、そして `count` の前のものです(`view` のない `at` は場所の一部です)。
@@ -2921,7 +2924,8 @@ id が行のテキストにあれば、形は何でも構いません。
 nukadoko が serve するプログラムは、各リクエストの中で何をしたかを報告できます。
 データベースの文、トランザクション、ジョブ、外への呼び出し、flag、エラーのそれぞれを、[docs/execution-events.ja.md](execution-events.ja.md) の行の形式で、操作ごとに 1 行で書きます。
 そうすると各 step record は、自分のリクエストが引き起こした行を、ジョブを実行するプロセスも含めたプログラムのすべてのプロセスから持ち、自分の仕事のうちまだ終わりを報告していないものを述べます。
-この段階は証跡だけで、行を読む claim はまだありません。
+Then は、その数を claim にできます。
+その claim はプログラムが書いた行の上で判定し、step のコードが返した値では判定しません(「実行イベントの数についての claim」を参照)。
 
 プログラムのファイルは、そのファイルを `{events}` で名指します。
 例では `EXECUTION_EVENTS` を使います。
@@ -3136,6 +3140,132 @@ run サマリは、各要素に「Flags」の下の 1 行を付けます:
 - `url` の world と、`{events}` が名指すファイルではない場所に行を書くプログラムには届きません。
 - world が止まったあとにプログラムのプロセスが書く行(止めたあとも残る、ジョブを実行するプロセスなど)は、どのファイルにも入りません。
   止めるときの読みはもうファイルを読み終えていて、ファイルは消されるからです。
+
+#### 実行イベントの数についての claim
+
+Then は、前の step の中でプログラムが何をしたかを claim にできます。
+"nothing was written" や "the score row was inserted once" のような文です。
+claim step はその数を `events` で名指し、claim はそのキーを実際の値として読みます:
+
+```ts
+// features/steps/nothing-was-written.ts
+import { defineStep, z } from "nukadoko";
+import openRoom from "./open-room.ts";
+import placeScore from "./place-score.ts";
+
+export default defineStep({
+  pattern: "nothing was written",
+  args: z.object({}),
+  events: {
+    writes: { of: [openRoom, placeScore], count: { kind: "db", op: ["insert", "update", "delete", "other"], committed: true } },
+  },
+  claims: [{ actual: "writes", compare: "equal", expected: { literal: 0 } }],
+});
+```
+
+- `of` は、そのキーが実行イベントを数える step か、候補の step のリストです。
+  `from` のキーの producer と同じく、scenario の前の行でちょうど 1 つが走り、それを走らせた最後の行が数えられます。
+  1 つも走っていないとき、claim は `unjudged`(`producer-not-run`)です。
+  2 つが走ったとき、claim は `unjudged` で、その両方を名指します。
+- `count` は、種類と、その種類のフィールドの値で行を選びます。
+  種類とフィールドは [docs/execution-events.ja.md](execution-events.ja.md) のものです: `{ kind: "db", table: "scores", op: "insert", committed: true }`。
+  フィールドは 1 つの値か値のリストを取り、そのどれかに一致すれば選ばれます。
+  `null` は、形式が `null` を事実とするところでだけ取れます。
+  値は文から取ることもでき(`{ sentence: "table" }`)、期待値の文のキーと同じ規則に従います(「期待値の出所」を参照)。
+  そのとき、claim はそのキャプチャを読まなくても構いません。
+  `op` が書き込みでありうる `db` の選び方は `committed` を述べます。
+  そうしないと、ロールバックした書き込みが書かれたものとして数えられるからです。
+  `op: "read"` だけのときは `committed` を述べません。
+  書き手自身の `x_` の種類、形式が定めない種類やフィールド、フィールドの値の外の値は、import の時点で拒否されます。
+  TypeScript の step のファイルでは、先に選び方の型がそれを拒否します。
+- そのキーについての claim は数だけを読み、`view`、`at`、`count`、`each`、その中へのパスを持ちません。
+  比較は `equal`、`not-equal`、`greater-than`、`at-least`、`less-than`、`at-most` で、期待値は文が述べる数です。
+  つまり `{n:int}` のようなキャプチャか、リテラルの規則が許すリテラルです(数字、数の語、`once`、`twice` はどの比較でも、0 を決める `never`、`no`、`none`、`nothing` は `equal` でだけ)。
+  events のキーは `from` のキーや args のキーと同じ名前を持たず、どのキーもいずれかの claim が読みます。
+  どれも import の時点で拒否されます。
+
+step が claim を判定するとき、前の step の trace の行を、その step のファイルの切り出しが始まったところから読みます。
+そこから後の、どの step のものでもない行も読みます。
+その step の実行イベントがまだそろいうる間、つまり `open` が `no-lines`、`request-unreported`、`jobs-pending` を持つ間は待ちます。
+そろったとき、行が増えても閉じない欠けがあるとき、待ちが終わったときに止まります。
+待ちは claim step の `timeout` か、10 秒か、それより短いときはプロジェクトの `stepTimeout` です。
+claim が成り立つまで待つことはありません。
+`poll` が読み直すのは `observe` で、実行イベントではありません。
+
+数は範囲です。
+そろっている読みでは `[yes, yes + maybe]`、そろっていない読みでは少なくとも `yes` で上限がありません。
+`maybe` は、一致するかもしれない行を原因ごとに数えます。
+読めなかった trace の行、形式が定めない種類やバージョンの行、選び方が読むフィールドが無いか正しくない行、コミットの状態がわからない書き込み(docs/execution-events.ja.md の「文の変更が永続したか」を参照)、どの step のものでもない行です。
+claim は、範囲のどの数でも同じ答えになるときにだけ成り立つか成り立たず、そうでなければ `unjudged` です。
+その reason は最初の欠けを示す語を持ちます:
+
+```text
+the events of place-score@4 are not whole (jobs-pending): job 3f2a9c4100000000 was enqueued and has not performed, so the count is at least 1, with no upper bound, and equal 1 is not known
+```
+
+world が選んだ種類の行を 1 つも報告していない間、読みはそろっていません(`kind-unreported`)。
+その種類を報告しないプログラムでは、その不在が成り立ってしまうからです。
+`url` の world では `world-unread`、`{events}` を名指さないプログラムのファイルでは `inlet-unnamed` になります。
+どちらでも claim は `unjudged` で、reason は `were not read` を持ちます。
+
+claim step の record は、各読みをキーごとに `events_read` に持ちます。
+読みが数えたすべての行は、redact して、record の隣の `events-read.jsonl` に置きます:
+
+```json
+"events_read": {
+  "writes": {
+    "of": { "step_record_id": "step-20261029-183140-n9ob", "step": "open-room", "line": 4 },
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "count": { "kind": "db", "op": ["insert", "update", "delete", "other"], "committed": true },
+    "range": { "at_least": 0, "at_most": 0 },
+    "whole": true,
+    "open": [],
+    "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "commit_unknown": 0, "unowned": 0 },
+    "lines": 2,
+    "unreadable": 0,
+    "unowned": 0,
+    "file": "events-read.jsonl",
+    "waited_ms": 1
+  }
+}
+```
+
+- `of` は実行イベントを読んだ step で、`trace_id` はその trace id です。
+  前のどの行も走らせなかったとき、どちらも `null` です。
+- `count` は選び方で、文から取った値は埋めてあります。
+- `range` は `{ "at_least", "at_most" }` で、読みがそろっていないとき `at_most` は `null` です。
+- `whole` と `open` は `observed.events` と同じで、読みの欠けである `producer-not-run`、`world-unread`、`inlet-unnamed`、`kind-unreported` が加わります。
+- `lines` は読みが数えた trace の読める行、`unreadable` はテキストが trace id を持ち読めなかった行、`unowned` は読んだ範囲の、どの step のものでもない読める行の数です。
+- 読みが 1 行も数えなかったとき `file` は `null` で、行が 16 MiB を超えたときは `"truncated": true` があります。
+- `waited_ms` は読みが待った時間です。
+
+claim の record は、範囲が 1 つの数のときは数を `actual` に、そうでないときは `actual_range` に持ち、両方は持ちません。
+`actual_from` は `events:<step>@<line> count <selection>` で、`measured` は claim step 自身の `events_read.<key>` を名指します:
+
+```text
+0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; measured: events_read.writes
+```
+
+claim を判定したあとにも、trace の行が届くことはあります。
+リクエストの行をその中の仕事より先に書く書き手や、先に終わった待ちです。
+world が止まると、nukadoko は各読みを trace のすべての行で数え直します。
+数え直した数が、claim の判定と違う判定をするとき、その claim は `run.json` で `after_world_stop` を持ちます:
+
+```json
+"after_world_stop": { "lines": 2, "range": { "at_least": 1, "at_most": 1 }, "outcome": "broken", "reason": "1 line of the trace of step \"open-room\" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 1, so the claim breaks" }
+```
+
+step record は書き直しません。
+その実行のセルは `broke` で、reason は `a claim at line 6 was judged before every execution event it counts had arrived` です(「断定」を参照)。
+claim はまだ届く途中の行で判定されたので、セルはどちらとも示しません。
+
+この仕組みが届かないものを、1 つの一覧にまとめます:
+
+- world にリクエストを送らなかった step や、`runCommand` のプロセスを走らせた step の実行イベントは、そろうことがありません(`no-requests`、`processes-unbounded`)。
+  そのため、その数についての claim は、下限から上のどの数でも成り立つとき(`at-least` など)にだけ成り立ちます。
+- どの step のものでもない行は数える step のものかもしれないので、範囲を広げます。
+  リクエストの trace を付けずに行を書くプログラムでは、不在は示せないままです。
+- world が止まったあとに書かれた行は、どの数にも入りません。
 
 ### Ruby のプログラム
 
@@ -3558,6 +3688,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `from` で前の結果を読んで失敗した step は `used` を持ち、各 producer の step、record、読んだ結果を載せます。
   claim step は、その step record と同じ `claims`、`observation`、`attempts` を持ちます(「Claims」を参照)。
   そのため、成り立たない claim は step record を開かずに読めます。
+  `events_read` も持ち、world が止まったときの数え直しが違う判定をした claim は `after_world_stop` を持ちます(「実行イベントの数についての claim」を参照)。
   record を書いたあとに届いたプログラムのログの行を持つ step は `program_log_late` を、実行イベントの行を持つ step は `events_late` を持ちます(「テスト対象のプログラム」を参照)。
   JSON が 4096 バイトを超える結果は、代わりにプレビューになり、`truncated: true` と、値全体の大きさである `result_bytes` を持ちます。
   object のプレビューは、収まるかぎり、最上位の数、真偽値、null と、最上位の各文字列の先頭 1024 文字を残すので、process の `exitCode` と `stderr` の始まりは残ります。
@@ -3858,7 +3989,7 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 | --- | --- |
 | `pass` | すべて通った |
 | `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
-| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim。または scenario の行で、すべての実行で同じ hook が失敗した。その hook と走った時を `reason` が言います。After hook は claim が判定された後で失敗するからです |
+| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim。または scenario の行で、すべての実行で同じ hook が失敗した。その hook と走った時を `reason` が言います。After hook は claim が判定された後で失敗するからです。または、すべての実行が、何に終わったかにかかわらず、その行に、world が止まったときの数え直しが違う判定をした実行イベントの数についての claim を持つ。`reason` は `a claim at line <n> was judged before every execution event it counts had arrived` です(「実行イベントの数についての claim」を参照) |
 | `stopped@<line>` | 人がその行で walk(`nuka run --step`)を中止したので、その後の step は走らなかった。受け入れ基準が成り立つことを示すものが何もないので、行は `failed` |
 | `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も、2 つの hook が失敗した 2 回も食い違いです)。行は通らなかった最初の実行のもの |
 | `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、BeforeAll が失敗した、tree のファイルが読み込めなかった、または `--base` がその world を作らなかった(後述)) |
@@ -5862,8 +5993,9 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout
                               when the step declared one, a claim step's
-                              claims and poll (text: one claim: line per
-                              claim), which
+                              claims, poll, and events (text: one claim:
+                              line per claim, one events: line per key,
+                              naming the selection and its steps), which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
                               can't read), and where each chained args key
@@ -5882,7 +6014,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
-                              one, a claim step's claims and poll, plus
+                              one, a claim step's claims, poll, and
+                              events, plus
                               the envelope's findings beside it (the same
                               findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null

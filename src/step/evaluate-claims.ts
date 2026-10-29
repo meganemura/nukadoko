@@ -9,9 +9,11 @@ import type {
   ClaimReadingValue,
   ClaimView,
 } from "../record/types.js";
+import { COUNT_COMPARES, judgeCount, type CountCompare, type CountReading } from "../execution-events/count.js";
 import {
   isEachClaim,
   kindNamed,
+  NO_EVENTS,
   literalStatedByAll,
   pathSegments,
   placeAt,
@@ -22,7 +24,9 @@ import {
   type Claim,
   type ClaimLiteral,
   type ClaimPlace,
+  type ComparisonClaim,
   type EachClaim,
+  type EventsShape,
   type ItemClaim,
   type ValueKind,
   VALUE_KINDS,
@@ -51,6 +55,10 @@ import { readAt, snapshot, type Read, type Refusal } from "./snapshot.js";
 // and could come out otherwise with them is `unjudged` and names the
 // step, the place, and the keys, and one that holds whatever they were
 // still holds.
+//
+// A claim on a count of execution events reads no snapshot: its actual
+// is the range nukadoko counted (src/execution-events/count.ts), and it
+// holds or breaks only when every count in the range gives that answer.
 
 /** The JSON type a compare sees. `undefined` never reaches a compare: an
  * undefined side breaks first, naming its path. */
@@ -579,7 +587,7 @@ export function itemSegments(claim: ItemClaim): readonly string[] {
   return claim.view === undefined && claim.at !== undefined ? [...segments, ...claim.at.split(".")] : segments;
 }
 
-export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<string>): ClaimReads {
+export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<string>, events: EventsShape = NO_EVENTS): ClaimReads {
   const args = new Map<string, readonly string[]>();
   const observed = new Map<string, readonly string[]>();
   const argValues = new Map<string, readonly string[]>();
@@ -595,6 +603,11 @@ export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<strin
     else if ("from" in expected) add(argValues, pathSegments(expected.from));
   };
   for (const claim of claims) {
+    // A count of execution events is no value a snapshot holds.
+    if (!isEachClaim(claim) && events.keys.has(claim.actual)) {
+      addExpected(claim.expected);
+      continue;
+    }
     const segments = actualSegments(claim);
     const fromArgs = segments !== null && fromKeys.has(segments[0]!);
     if (segments !== null) add(fromArgs ? args : observed, segments);
@@ -611,6 +624,9 @@ export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<strin
     }
     for (const item of items) addExpected(item.expected);
   }
+  // What a selection takes from the sentence is read before the schema
+  // runs, as an expected sentence key is.
+  for (const value of events.sentenceValues) add(args, [value.name]);
   return {
     args: [...args.values()],
     observed: [...observed.values()],
@@ -711,6 +727,9 @@ export interface ClaimInputs {
   readonly patterns: readonly string[];
   readonly testPattern: PatternTester;
   readonly budget: JudgingBudget;
+  /** Each events key of the step as its claims read it; absent for a
+   * step with no `events`. */
+  readonly events?: ReadonlyMap<string, EventsCountSide>;
 }
 
 /** What nukadoko knows of the keys an earlier step (`step`) had its
@@ -723,6 +742,16 @@ export type DroppedKeys =
   | { readonly step: string; readonly keys: readonly string[] }
   | { readonly step: string; readonly unseen: string }
   | { readonly step: string; readonly declared: readonly string[] };
+/** One events key as a claim reads it: the label the record names the
+ * count by (`events:<step>@<line> count <selection>`), and the step's
+ * reading with the name of the step whose events it counted, or why
+ * there is none. A selection whose sentence value does not fit its field
+ * breaks the claim, since the line states what the format cannot select
+ * by, and a reading nukadoko could not make leaves it unjudged. */
+export type EventsCountSide =
+  | { readonly label: string; readonly of: string; readonly reading: CountReading }
+  | { readonly label: string; readonly broken: string }
+  | { readonly label: string; readonly unjudged: string };
 
 /** Where an expected value was read, when a step record can hold it: the
  * args key a `from` value filled (the record of the step that returned
@@ -740,6 +769,10 @@ export interface JudgedClaim {
   readonly rawActual: unknown;
   readonly fromKey: string | null;
   readonly expectedOrigins: readonly ExpectedOrigin[];
+  /** The events key a claim on a count of execution events read: its
+   * actual was measured on the claim step's own `events_read.<key>`.
+   * Absent when the step holds no reading of the key. */
+  readonly eventsKey?: string;
 }
 
 /** Where `claim`'s expected value is read, for `expected_measured`. Pure. */
@@ -940,6 +973,50 @@ function precondition(actual: Side, actualSegments: readonly string[] | null, ex
     return { broken: `the expected value ${expected.place.label} is a boolean observe computed, which is a judgment made in code: return the thing measured and let the claim compare it` };
   }
   return null;
+}
+
+/** What stops a claim on a count before it is judged, on its expected
+ * side: the same rules a comparison's expected side follows. */
+function expectedStop(expected: ExpectedSide, inputs: ClaimInputs): Stop {
+  const stop = schemaChange(expected.segments, inputs) ?? stopOf(expected);
+  if (stop !== null) return stop;
+  const received = observeReceived(expected.place, inputs, "the expected value reads");
+  if (received !== null) return received;
+  if (expected.fromObserve && "value" in expected && typeof expected.value === "boolean") {
+    return { broken: `the expected value ${expected.place.label} is a boolean observe computed, which is a judgment made in code: return the thing measured and let the claim compare it` };
+  }
+  return null;
+}
+
+function isCountCompare(compare: string): compare is CountCompare {
+  return (COUNT_COMPARES as readonly string[]).includes(compare);
+}
+
+/** A claim on a count of execution events: the range the step read
+ * against the expected number. `actual` is the count when the range is
+ * one number, and `actual_range` the range otherwise. */
+function judgeEventsCount(claim: ComparisonClaim, side: EventsCountSide, inputs: ClaimInputs): ClaimComparisonRecord {
+  const expected = expectedSide(claim, inputs);
+  const range = "reading" in side ? side.reading.range : null;
+  const base = {
+    ...(range === null ? {} : range.at_most === range.at_least ? { actual: range.at_least } : { actual_range: { ...range } }),
+    actual_from: side.label,
+    compare: claim.compare,
+    ...("value" in expected ? { expected: expected.value } : {}),
+    expected_from: expected.place.label,
+    expected_text: expected.text,
+  };
+  const stop: Stop = "broken" in side ? { broken: side.broken } : "unjudged" in side ? { unjudged: side.unjudged } : expectedStop(expected, inputs);
+  if (stop !== null) return "broken" in stop ? { ...base, outcome: "broken", reason: stop.broken } : { ...base, outcome: "unjudged", reason: stop.unjudged };
+  const value = (expected as { value: unknown }).value;
+  if (!isCountCompare(claim.compare)) {
+    return { ...base, outcome: "broken", reason: `a count of execution events is a number, and ${claim.compare} does not compare two numbers` };
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return { ...base, outcome: "broken", reason: `the expected value ${expected.place.label} is ${article(jsonType(value))}, and a count of execution events is compared with a number` };
+  }
+  const judgment = judgeCount((side as { reading: CountReading }).reading, claim.compare, value, (side as { of: string }).of);
+  return judgment.outcome === "unjudged" ? { ...base, outcome: "unjudged", reason: judgment.reason } : { ...base, outcome: judgment.outcome };
 }
 
 function declarationOf(claim: ItemClaim, expected: ExpectedSide | null): ClaimItemDeclaration {
@@ -1445,6 +1522,8 @@ function keptItems(judged: readonly ClaimItemRecord[]): ClaimItemRecord[] {
 // --- labels alone, for a claim nothing was compared for ---
 
 function actualPlace(claim: Claim, inputs: ClaimInputs): ClaimPlace {
+  const events = inputs.events?.get(claim.actual);
+  if (events !== undefined) return { origin: "events", segments: [claim.actual], label: events.label, open: false };
   const segments = pathSegments(claim.actual) ?? [claim.actual];
   const base = inputs.fromKeys.has(segments[0]!) ? placeAt(argPlace(segments[0]!, inputs), segments.slice(1).join(".")) : placeAt(OBSERVE_PLACE, claim.actual);
   return placeCounted(placeAt(placeViewed(base, claim.view), claim.at), isEachClaim(claim) ? undefined : claim.count);
@@ -1523,8 +1602,15 @@ function fromKeyOf(claim: Claim, fromKeys: ReadonlySet<string>): string | null {
 }
 
 /** Why a claim whose actual starts with `key` is not judged when
- * `observe` returned `key` too. Pure. */
-export function shadowedReason(key: string): string {
+ * `observe` returned `key` too: the claim reads the from value, or the
+ * count of execution events, that `source` names. Pure. */
+export function shadowedReason(key: string, source: "from" | "events" = "from"): string {
+  if (source === "events") {
+    return (
+      `observe returned "${key}", and events has a key of the same name, so actual "${key}" reads the count of execution events and never what observe returned. ` +
+      `Rename the key observe returns, or the events key, so each name has one source`
+    );
+  }
   return (
     `observe returned "${key}", and from has a key of the same name, so actual "${key}" reads the from value and never what observe returned. ` +
     `Rename the key observe returns, or the from key, so each name has one source`
@@ -1545,6 +1631,15 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
     if (stoppedAt !== null) {
       const reason = budgetSpent(inputs.budget, claims.length - stoppedAt, claims.length, "claims");
       judged.push({ record: notJudged(claim, inputs, "unjudged", reason), rawActual: undefined, fromKey, expectedOrigins });
+      continue;
+    }
+    const events = isEachClaim(claim) ? undefined : inputs.events?.get(claim.actual);
+    if (events !== undefined) {
+      const eventsKey = claim.actual;
+      const shadowed = inputs.shadowedByObserve?.has(eventsKey) === true;
+      const record = shadowed ? notJudged(claim, inputs, "broken", shadowedReason(eventsKey, "events")) : judgeEventsCount(claim as ComparisonClaim, events, inputs);
+      // Measured on the reading, when there is one to name.
+      judged.push({ record, rawActual: undefined, fromKey: null, expectedOrigins, ...("reading" in events ? { eventsKey } : {}) });
       continue;
     }
     if (fromKey !== null && inputs.shadowedByObserve?.has(fromKey) === true) {

@@ -164,7 +164,8 @@ just until 0.1.
   steps' `observed.events` is `null`. Only the program gets the
   variable that names `{events}`: the steps, and every process a step
   starts, get the rest of `env`, so no step's code can append a line
-  that reads as the program's. No claim reads the lines yet.
+  that reads as the program's. A Then claims a count of the lines (the
+  next entry).
   `evidence.attach` and `evidence.path` refuse `events.jsonl`,
   `events-late.jsonl`, and `events-read.jsonl`, names the harness writes.
 - **A `runCommand` process carries the step's trace context.** When the
@@ -200,6 +201,39 @@ just until 0.1.
   The run summary gives each row one line under "Flags", with its
   counts and the gates its lines named. The field is additive, so no
   `schema_version` changes.
+- **A Then can claim what the program did inside an earlier step.** A
+  claim step's new `events` key names a count of an earlier step's
+  execution events, `{ writes: { of: placeScore, count: { kind: "db", op:
+  ["insert", "update", "delete", "other"], committed: true } } }`, and a
+  claim names the key alone as its `actual`: "nothing was written" is
+  `{ actual: "writes", compare: "equal", expected: { literal: 0 } }`.
+  nukadoko counts the lines the program wrote for that step, and no value
+  step code returned stands in for the count. `of` is a step or a list of
+  candidates, one of which ran earlier in the scenario. `count` selects
+  by kind and field values, a value may come from the sentence
+  (`{ sentence: "table" }`), and `defineStep` refuses a selection the
+  format cannot judge: a writer's own `x_` kind, an undefined kind or
+  field, a value outside a field's values, and a `db` selection that may
+  count a write and does not state `committed`, since a rolled-back write
+  would count as written. A claim on a count compares as a number, with
+  `equal`, `not-equal`, `greater-than`, `at-least`, `less-than`, or
+  `at-most`, against a number the line states. When the step judges its
+  claims, it reads the earlier step's lines and waits while they may still
+  become whole, up to the step's `timeout`, or 10 seconds, or a shorter
+  `stepTimeout`, and never until a claim holds. The count is a range,
+  and the claim holds or breaks only when every count in it gives that
+  answer: otherwise it is `unjudged`, and its reason names the gap word,
+  so an absence never holds on a step that sent no request
+  (`no-requests`), a job that has not performed (`jobs-pending`), a
+  program that has never reported the kind (`kind-unreported`), or a
+  world at a `url` (`world-unread`). The record holds the count as
+  `actual`, or as `actual_range` when it is not one number, `measured`
+  names the step's own `events_read.<key>`, and `events_read` and
+  `events-read.jsonl` keep the reading and the lines it counted. When the
+  world stops, each reading is counted again over every line of the
+  trace, and a claim that the whole count judges otherwise gets
+  `after_world_stop` in run.json and makes its cell `broke`, since it was
+  judged on lines still on their way.
 - **A line can state a count with `once`, `twice`, or `never`.** The
   literal rule reads the fixed words `once` and `twice` as `1` and `2`,
   under any compare, as a number word, so "the score row was inserted

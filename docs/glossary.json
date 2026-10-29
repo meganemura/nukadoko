@@ -474,7 +474,7 @@
     {
       "en": ["unjudged", "could not judge"],
       "ja": "判定できなかった",
-      "note": "claim step は値を読んだが、nukadoko 自身が claim の判定の途中で失敗したこと(matches を試す worker が止まった など)。受け入れ基準については何もわからない。`outcome` の値 `unjudged` とエラー種別 `claim_unjudged` はコードスパンで英語のまま。成り立たない claim とも観測できなかった step とも書き分ける"
+      "note": "claim step は値を読んだが、nukadoko 自身が claim の判定の途中で失敗したこと(matches を試す worker が止まった など)、または実行イベントの数の範囲が比較に答えないこと(そろっていない読み)。受け入れ基準については何もわからない。`outcome` の値 `unjudged` とエラー種別 `claim_unjudged` はコードスパンで英語のまま。成り立たない claim とも観測できなかった step とも書き分ける"
     },
     {
       "en": ["reading", "readings"],
@@ -698,6 +698,31 @@
       "en": ["lacks (a field)", "an absent field", "present (a field)"],
       "ja": "(フィールドが)ない / ある",
       "note": "`lacks-field` で、オブジェクトがその名前の自身のキーを持たないこと。`null` を入れたフィールドは「ある」と書く。比較の名前はコードスパンで英語のまま。不在の主張(absence claim)の一つの形"
+    },
+    {
+      "en": ["a count of execution events", "a claim on a count of events"],
+      "ja": "実行イベントの数 / 実行イベントの数についての claim",
+      "note": "claim step の `events` のキーが名指す、前の step の trace の行のうち `count` が選ぶ行の数。nukadoko がプログラムの書いた行から数え、step のコードが返した値ではない。キー `events`、`of`、`count`、フィールド `events_read`、ファイル events-read.jsonl、ラベルの `events:` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["selection (of execution events)", "selects"],
+      "ja": "選び方 / 選ぶ",
+      "note": "`count` に書く、種類とフィールドの値の組。数える行を選ぶ"
+    },
+    {
+      "en": ["range (of a count)"],
+      "ja": "範囲",
+      "note": "数が取りうる値の幅。そろっている読みでは [yes, yes + maybe]、そろっていない読みでは上限が無い。フィールド `range`、`actual_range`、`at_least`、`at_most`、`maybe` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["reading (of execution events)"],
+      "ja": "読み",
+      "note": "claim step が claim を判定するときに、前の step の trace の行を読んで数えること。observe を呼んで得る 読み取り(reading)とは別の語"
+    },
+    {
+      "en": ["counts again once the world stops", "after the world stopped"],
+      "ja": "world が止まったときの数え直し",
+      "note": "world が止まったあと、各読みを trace のすべての行で数え直すこと。判定が変わった claim はフィールド `after_world_stop` を持ち、そのセルは `broke`。フィールド名はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

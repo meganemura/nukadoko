@@ -100,21 +100,22 @@ export default defineStep({
 ## The actual value
 
 `actual` is a path whose first segment is a `from` key or a key `observe`
-returns, never a key the sentence fills (a `from` key hides an `observe` key of
-its name, so a step whose claims read no `observe` key is refused); a path
-reads own properties only (not `constructor`, not a getter). `view: "text"`
-trims the end (a program's last newline), `"lines"` also splits it into lines,
-`"json"` parses it, and `"comma-list"` splits it at commas; `at` then takes a
-path inside the viewed value, so parsing is data: `{ actual: "stdout", view:
-"json", at: "sections.git.0.dirty_count", compare: "equal", expected: "count"
-}`. `count: true` then compares the number of items of the array there, with a
-number compare only (`at-least` the literal `1` for "at least one row"), and
-breaks on a value that is not an array. `{ actual, each: { where?, claims } }`
-applies item claims to every item of an array (paths inside are relative to the
-item), and breaks when the array, or what `where` selects, is empty. A `where`
-claim whose path starts an item claim's, or the reverse, is refused with
-`equal`, `has-same-items`, `has-fields`, `lacks-field`, `fits-text`, `is-a`,
-`has-item`, `matches`, `contains-text`, `starts-with-text`, or
+returns, or an `events` key alone, a count of what the program did
+(`program.md`), never a key the sentence fills (a `from` key hides an `observe`
+key of its name, so a step whose claims read no `observe` key is refused); a
+path reads own properties only (not `constructor`, not a getter). `view:
+"text"` trims the end (a program's last newline), `"lines"` also splits it into
+lines, `"json"` parses it, and `"comma-list"` splits it at commas; `at` then
+takes a path inside the viewed value, so parsing is data: `{ actual: "stdout",
+view: "json", at: "sections.git.0.dirty_count", compare: "equal", expected:
+"count" }`. `count: true` then compares the number of items of the array there,
+with a number compare only (`at-least` the literal `1` for "at least one row"),
+and breaks on a value that is not an array. `{ actual, each: { where?, claims }
+}` applies item claims to every item of an array (paths inside are relative to
+the item), and breaks when the array, or what `where` selects, is empty. A
+`where` claim whose path starts an item claim's, or the reverse, is refused
+with `equal`, `has-same-items`, `has-fields`, `lacks-field`, `fits-text`,
+`is-a`, `has-item`, `matches`, `contains-text`, `starts-with-text`, or
 `ends-with-text`, and breaks the claim where it implies it.
 
 The compares: `equal` (structural), `not-equal`, `contains-text`,
@@ -172,16 +173,15 @@ so it is one step; "is in trial" and "is not in trial" are two steps.
 
 ## `expect` in a step that runs
 
-A When may still wait with Playwright's `expect` before it acts. A step runs
-outside `playwright test`, so measured against Playwright 1.61.1: the locator
-and plain-value matchers and `expect.poll` work as in a Playwright test; a
-failing `expect.soft` throws at once, since no runner collects it;
-`toMatchAriaSnapshot`, `toHaveScreenshot`, and `toMatchSnapshot` throw
-`"<name>() must be called during the test"`, because a step has no current test
-to key a snapshot file to. In place of a snapshot, a Then observes the one
-property the scenario cares about and claims it against the docstring, which
-binds to the one required `args` key that no capture or `from` fills (here
-`expected`; see "Typed steps" in `docs/spec.md`):
+A When may still wait with Playwright's `expect` before it acts. Outside
+`playwright test` (measured on Playwright 1.61.1), the locator and plain-value
+matchers and `expect.poll` work as there; a failing `expect.soft` throws at
+once, since no runner collects it; `toMatchAriaSnapshot`, `toHaveScreenshot`,
+and `toMatchSnapshot` throw `"<name>() must be called during the test"`, since
+a step has no test to key a snapshot file to. In place of a snapshot, a Then
+observes the one property the scenario cares about and claims it against the
+docstring, which binds to the one required `args` key that no capture or
+`from` fills (here `expected`; "Typed steps" in `docs/spec.md`):
 
 ```ts
 import { defineStep, z } from "nukadoko";

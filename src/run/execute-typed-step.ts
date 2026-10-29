@@ -4,14 +4,16 @@ import { formatValidationIssues } from "../issues/format-issues.js";
 import { parseStepReturns } from "../step/parse-returns.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContextHandle } from "../context/create-context.js";
+import type { EventsProducer, EventsRequest } from "../context/events-read.js";
+import { describeSelection, resolveSelection } from "../execution-events/selection.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
-import type { ClaimComparisonRecord, ClaimEachRecord, ClaimReading, ErrorKind, FixtureUsageEntry, ReturnsDrop } from "../record/types.js";
+import type { ClaimComparisonRecord, ClaimEachRecord, ClaimReading, ErrorKind, EventsReadRecord, FixtureUsageEntry, ReturnsDrop } from "../record/types.js";
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { types } from "node:util";
-import { observeWithheldKeys, pathSegments, sentenceUnreadReason, type Claim } from "../step/claims.js";
+import { eventsShapeOf, observeWithheldKeys, pathSegments, sentenceUnreadReason, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
 import { isClaimStep, type ClaimStep, type RunStep, type Step } from "../step/define-step.js";
 import {
@@ -33,6 +35,7 @@ import {
   type ClaimInputs,
   type ClaimReads,
   type DroppedKeys,
+  type EventsCountSide,
   type JudgingBudget,
   type JudgedClaim,
   type PatternTester,
@@ -63,11 +66,26 @@ export type { ChannelText } from "./measured.js";
 // (run-scenario.ts) and `nuka do` both run a step through here, so a claim
 // is judged the same way on both paths. What happens around it (binding,
 // setup refusals, the record, evidence, teardown) stays with the caller.
+//
+// A claim step with `events` reads each key's producer before anything
+// else runs (src/context/events-read.ts): it waits until the producer's
+// events are whole, can no longer become whole, or the wait ends, and
+// never until a claim would hold. The wait is the step's `timeout`, or
+// EVENTS_WAIT_MS when the step names none and the project's
+// `stepTimeout` is not shorter. `poll` does not change it: a poll runs
+// until the claims hold, which would let "nothing was written" hold
+// before the write arrived. Judging takes its budget from the deadline
+// after the wait, so time spent waiting for lines never leaves a claim
+// unjudged for want of time to compare.
 
 /** What a claim step read and how its claims came out. */
 export interface ClaimExecution {
   /** One entry per declared claim, in declaration order. */
   readonly judged: readonly JudgedClaim[];
+  /** A step with `events` only: each key's reading, as the step record's
+   * `events_read` holds it. A key whose selection did not resolve has
+   * none. */
+  readonly eventsRead?: Readonly<Record<string, EventsReadRecord>>;
   /** `unobserved` when the step read no values: `observe` threw or ran
    * past the deadline, a fixture it names could not be set up, or an input
    * `observe` would receive could not be copied. */
@@ -146,6 +164,9 @@ export interface RunValidatedStepInput {
   readonly secrets: SecretSet;
   /** Injected by tests; the wall clock otherwise. */
   readonly clock?: PollClock;
+  /** A claim step with `events` only: the step each events key counts the
+   * execution events of. */
+  readonly eventsSource?: (key: string) => EventsSource;
 }
 
 /** The step whose result filled a `from` key, its name, the key of its
@@ -213,6 +234,17 @@ function dropIndexOf(dropped: readonly ReturnsDrop[]): DropIndex {
   dropIndexes.set(dropped, index);
   return index;
 }
+/** The step one events key counts the execution events of: where its
+ * events are (`StepContextHandle.eventsProducer`), and how a record names
+ * it: `<step>@<line>`, `<step>@<step record id>` under `nuka do`, or the
+ * candidate steps when none ran. `unchosen` says why no producer can be
+ * chosen (two candidates ran), which leaves the claim unjudged, since
+ * picking one would count a step the line may not mean. */
+export type EventsSource = { readonly of: string } & ({ readonly producer: EventsProducer } | { readonly unchosen: string });
+
+/** How long a claim step waits for the events it reads to be whole when
+ * it names no `timeout` (module header). */
+export const EVENTS_WAIT_MS = 10_000;
 
 const WALL_CLOCK: PollClock = {
   now: () => Date.now(),
@@ -238,7 +270,7 @@ function deadlineOf(step: Step, config: RunValidatedStepInput["config"]): { read
  * it is not judged. */
 export function snapshotClaimArgs(step: Step, rawArgs: unknown, refusedFrom: ReadonlyMap<string, Refusal> = new Map()): ReadonlyMap<string, Read> | undefined {
   if (!isClaimStep(step)) return undefined;
-  const paths = claimReads(step.claims, new Set(Object.keys(step.from))).args;
+  const paths = claimReads(step.claims, new Set(Object.keys(step.from)), eventsShapeOf(step.events)).args;
   const reads = new Map(takeReads(rawArgs, paths.filter((segments) => !refusedFrom.has(segments[0]!))));
   for (const segments of paths) {
     const refusal = refusedFrom.get(segments[0]!);
@@ -416,24 +448,49 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   // part of a secret no longer matches the secret.
   const failureMessage = (records: readonly (ClaimComparisonRecord | ClaimEachRecord)[]): string =>
     brokenClaimsMessage(redact(records, input.secrets) as typeof records);
-  const startedAt = Date.now();
   const testPattern: PatternTester = testPatternInWorker;
   // Judging is bounded by the step's deadline as a whole: every claim,
-  // item, and reading takes its time from what is left of it.
-  const stepBudget = deadline.ms === undefined ? null : judgingBudget(startedAt + deadline.ms, "the step's deadline");
+  // item, and reading takes its time from what is left of it. Set again
+  // once the step has read its events (module header).
+  const budgetFrom = (startedAt: number): JudgingBudget | null => (deadline.ms === undefined ? null : judgingBudget(startedAt + deadline.ms, "the step's deadline"));
+  let stepBudget = budgetFrom(Date.now());
   const budgetOf = (): JudgingBudget => stepBudget ?? judgingBudget(Date.now() + PATTERN_LIMIT_MS, "the 10 second limit for judging a step with no deadline");
   const fromKeys = new Set(Object.keys(step.from));
-  const reads = claimReads(step.claims, fromKeys);
+  const eventsShape = eventsShapeOf(step.events);
+  const reads = claimReads(step.claims, fromKeys, eventsShape);
   // A caller that took no snapshot before the schema ran (none does) gets
   // one of the validated args, so no claim reads a live value either way.
   const argReads = input.claimArgs ?? takeReads(args, reads.args);
   const schemaChanged = changedBySchema(argReads, reads, args);
+  // Each events key: the step it counts, and its selection with the
+  // sentence's values filled in from the snapshot, or why one does not fit.
+  const eventsPlans = Object.entries(step.events).map(([key, entry]) => {
+    const source: EventsSource = input.eventsSource?.(key) ?? { producer: { source: "unread", of: null, gap: "producer-not-run" }, of: `events.${key}.of` };
+    const resolved = resolveSelection(
+      entry.count,
+      (name) => {
+        const read = argReads.get(readKey([name]));
+        return read !== undefined && "value" in read ? read.value : undefined;
+      },
+      `events.${key}.count`,
+    );
+    const label = `events:${source.of} count ${describeSelection("selection" in resolved ? resolved.selection : entry.count)}`;
+    return { key, source, resolved, label };
+  });
+  let eventsSides: ReadonlyMap<string, EventsCountSide> = new Map(
+    eventsPlans.map((plan) => [plan.key, { label: plan.label, unjudged: "the step ended before it read the execution events" }] as const),
+  );
+  let eventsRead: Readonly<Record<string, EventsReadRecord>> | undefined;
+  const eventsField = (): { readonly eventsRead?: Readonly<Record<string, EventsReadRecord>> } => (eventsRead === undefined ? {} : { eventsRead });
   const noObservation: Reader = readerOf(new Map());
   const withheld = observeWithheldKeys(step.claims, fromKeys);
-  // The from keys a claim's actual starts with: a key observe returns
-  // under the same name never reaches that claim, so a reading that holds
-  // one is recorded beside its reader.
-  const actualFromKeys = step.claims.map((claim) => pathSegments(claim.actual)?.[0] ?? "").filter((key) => fromKeys.has(key));
+  // The from keys a claim's actual starts with, and the events keys: a
+  // key observe returns under the same name never reaches that claim, so
+  // a reading that holds one is recorded beside its reader.
+  const actualFromKeys = [
+    ...step.claims.map((claim) => pathSegments(claim.actual)?.[0] ?? "").filter((key) => fromKeys.has(key)),
+    ...eventsShape.keys,
+  ];
   const shadowsOf = new WeakMap<Reader, ReadonlySet<string>>();
   const observeReceived = step.observe === undefined ? [] : Object.keys(args).filter((key) => !withheld.has(key));
   const claimInputs = (observed: Reader): ClaimInputs => ({
@@ -450,6 +507,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     patterns: step.patterns,
     testPattern,
     budget: budgetOf(),
+    ...(eventsSides.size === 0 ? {} : { events: eventsSides }),
   });
   let fixtureUsage: FixtureUsageEntry[] = [];
   let attempts = 0;
@@ -462,7 +520,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   };
   const judge = async (observed: Reader): Promise<ValidatedStepOutcome> => {
     const judged = await evaluateClaims(step.claims, claimInputs(observed));
-    const claims: ClaimExecution = { judged, observation: "observed", attempts: Math.max(attempts, 1), ...readingsField() };
+    const claims: ClaimExecution = { judged, observation: "observed", attempts: Math.max(attempts, 1), ...readingsField(), ...eventsField() };
     const records = judged.map((entry) => entry.record);
     if (records.every((record) => record.outcome === "held")) return { status: "passed", result: {}, fixtureUsage, claims };
     // A claim nukadoko failed to judge is never the criterion failing, so
@@ -492,14 +550,14 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       error: { message: kind === "unobserved" ? `the step observed nothing, so no claim was judged: ${messageOf(error)}` : messageOf(error), kind },
       thrown: error,
       fixtureUsage,
-      claims: { judged, observation: timedOut && read ? "observed" : "unobserved", attempts, ...readingsField() },
+      claims: { judged, observation: timedOut && read ? "observed" : "unobserved", attempts, ...readingsField(), ...eventsField() },
     };
   };
   // Static, so before any fixture is set up: a line whose docstring or
   // table states a value no claim reads is a criterion the step does not
   // judge, as `nuka check` reports (`claim-sentence-unread`).
   const unread =
-    input.attachment === undefined ? null : sentenceUnreadReason(step.claims, step.observe !== undefined, input.attachment.key, input.attachment.kind);
+    input.attachment === undefined ? null : sentenceUnreadReason(step.claims, step.observe !== undefined, input.attachment.key, input.attachment.kind, eventsShape);
   if (unread !== null) {
     const judged = claimsEndedEarly(step.claims, claimInputs(noObservation), "broken", unread);
     return {
@@ -520,6 +578,30 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     }
   }
   handle.withholdResults(name);
+  if (eventsPlans.length > 0) {
+    const wait = step.timeout ?? Math.min(EVENTS_WAIT_MS, config.stepTimeout ?? EVENTS_WAIT_MS);
+    const requests: EventsRequest[] = eventsPlans.flatMap((plan) =>
+      "selection" in plan.resolved && "producer" in plan.source ? [{ key: plan.key, producer: plan.source.producer, selection: plan.resolved.selection }] : [],
+    );
+    let read: Readonly<Record<string, EventsReadRecord>> = {};
+    let failure = "nukadoko read no execution events for this key";
+    try {
+      if (requests.length > 0) read = await handle.readEvents(requests, Date.now() + wait);
+    } catch (error) {
+      failure = `nukadoko could not read the execution events: ${messageOf(error)}`;
+    }
+    if (Object.keys(read).length > 0) eventsRead = read;
+    eventsSides = new Map(
+      eventsPlans.map((plan): readonly [string, EventsCountSide] => {
+        if ("problems" in plan.resolved) return [plan.key, { label: plan.label, broken: plan.resolved.problems.join("; ") }];
+        if ("unchosen" in plan.source) return [plan.key, { label: plan.label, unjudged: plan.source.unchosen }];
+        const record = read[plan.key];
+        if (record === undefined) return [plan.key, { label: plan.label, unjudged: failure }];
+        return [plan.key, { label: plan.label, of: plan.source.of, reading: { range: record.range, whole: record.whole, open: record.open, maybe: record.maybe } }];
+      }),
+    );
+    stepBudget = budgetFrom(Date.now());
+  }
   let fixtures: FixtureBag;
   try {
     const resolved = await resolveFixtures({
@@ -551,7 +633,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       error: { message: failureMessage(judged.map((entry) => entry.record)), kind: "claim_unjudged" },
       thrown: undefined,
       fixtureUsage,
-      claims: { judged, observation: "unobserved", attempts: 0 },
+      claims: { judged, observation: "unobserved", attempts: 0, ...eventsField() },
     };
   }
   const copies = inputCopies.copies;
@@ -653,6 +735,7 @@ export interface ExecuteTypedStepInput {
   readonly sentenceText: (key: string) => string | null;
   readonly filledFrom?: ReadonlyMap<string, FilledFrom>;
   readonly secrets: SecretSet;
+  readonly eventsSource?: (key: string) => EventsSource;
 }
 
 /** `args` is the validated value once validation passed, and the value

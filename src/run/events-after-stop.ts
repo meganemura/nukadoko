@@ -88,11 +88,13 @@ export function afterWorldStop(claim: RunClaim, read: EventsReadRecord, recounte
   const whole = recounted.open.length === 0;
   const range = rangeOf({ yes: recounted.count.yes, maybe }, whole);
   const judgment = judgeCount({ range, whole, open: recounted.open, maybe }, claim.compare, claim.expected);
-  const late = `${lines(all - judged)} of the trace of step "${read.of?.step ?? "unknown"}" arrived after this claim judged ${judged}`;
+  // The numbers are of lines, named so: "judged 1" would read as the
+  // count the claim judged.
+  const late = `${lines(all - judged)} of the trace of step "${read.of?.step ?? "unknown"}" arrived after this claim was judged on ${lines(judged)}`;
   const reason =
     judgment.outcome === "unjudged"
       ? `${late}; ${judgment.reason}`
-      : `${late}; over all ${all}, the count is ${describeRange(range)}, so the claim ${judgment.outcome === "held" ? "holds" : "breaks"}`;
+      : `${late}; over all ${lines(all)}, the count is ${describeRange(range)}, so the claim ${judgment.outcome === "held" ? "holds" : "breaks"}`;
   return { lines: recounted.lines, range, outcome: judgment.outcome, reason };
 }
 

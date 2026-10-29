@@ -113,7 +113,7 @@ describe("the world's stop counts a reading again", () => {
           lines: 3,
           range: { at_least: 2, at_most: 2 },
           outcome: "broken",
-          reason: '1 line of the trace of step "place-score" arrived after this claim judged 2; over all 3, the count is exactly 2, so the claim breaks',
+          reason: '1 line of the trace of step "place-score" arrived after this claim was judged on 2 lines; over all 3 lines, the count is exactly 2, so the claim breaks',
         },
       },
       // Measured on another channel: no reading of it to count again.
@@ -193,7 +193,7 @@ describe("afterWorldStop", () => {
       lines: 2,
       range: { at_least: 0, at_most: 1 },
       outcome: "unjudged",
-      reason: '1 line of the trace of step "place-score" arrived after this claim judged 1; 1 line carries no step\'s trace id and may be the step\'s, so the count is between 0 and 1, and equal 0 is not known',
+      reason: '1 line of the trace of step "place-score" arrived after this claim was judged on 1 line; 1 line carries no step\'s trace id and may be the step\'s, so the count is between 0 and 1, and equal 0 is not known',
     });
     const pending = recountedOf(1, 3, { open: [{ gap: "jobs-pending", job_ids: ["3f2a9c41"] }] });
     expect(afterWorldStop(claimOn("writes", { compare: "at-least", expected: 1 }), readRecord({ lines: 1 }), pending)).toMatchObject({ range: { at_least: 1, at_most: null }, outcome: "held" });

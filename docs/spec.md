@@ -1765,7 +1765,10 @@ words the line used.
 #### The actual value
 
 `actual` is a path. Its first segment is a key of `from`, or else a key of
-the object `observe` returns. A path whose first segment is a key the
+the object `observe` returns. A key of the step's `events`, alone, reads
+a count of an earlier step's execution events instead, which nukadoko
+makes from the lines the program wrote (see "A claim on a count of
+events"). A path whose first segment is a key the
 sentence fills is refused: the value a claim measures never comes from the
 line. A key `observe` returns under the name of a `from` key would never
 reach the claim, since the `from` key wins, so neither may happen in
@@ -2372,7 +2375,9 @@ A claim step's record has these fields of its own (see "Records"):
 
 - `claims`: each claim in the order the step declares it. A comparison
   carries `actual` (after `view`, `at`, and `count`; absent when the
-  place held nothing or a value no snapshot could copy), `actual_from`,
+  place held nothing or a value no snapshot could copy; for a count of
+  execution events, the count when it is one number, and `actual_range`
+  in its place when it is a range), `actual_from`,
   `view`, `at`, and `count` when the claim names them, `compare`, `expected` (absent on the
   same terms), `expected_from`, `expected_view` when the claim names it,
   `expected_text`, `outcome` (`held`, `broken`, `unobserved`, or
@@ -2399,6 +2404,8 @@ A claim step's record has these fields of its own (see "Records"):
   to judge it first) records `0`.
 - `readings`, under `poll` only: the readings the step kept (see "Poll"),
   and `readings_left_out` when it did not keep them all.
+- `events_read`, for a step with `events`: each key's reading of an
+  earlier step's execution events (see "A claim on a count of events").
 
 `measured` names the recorded channel whose content equals the raw actual
 value, the place `actual` reads before a `view` and the `at` after it
@@ -3718,7 +3725,9 @@ error, as one line per operation in the line format of
 Each step record then holds the lines its own requests caused, from
 every process of the program, a job worker's included, and says which of
 its work has not reported its end.
-This slice is evidence only: no claim reads the lines yet.
+A Then can claim a count of them, on the lines the program wrote and
+never on a value step code returned (see "A claim on a count of
+events").
 
 The program file names the file with `{events}`.
 The examples use `EXECUTION_EVENTS`, the variable the same writer reads
@@ -3986,6 +3995,174 @@ What this does not reach, in one list:
 - A line a process of the program writes after the world stopped, such
   as a worker that outlives the stop, is in no file: the stop's pass has
   read the file, and the file is removed.
+
+#### A claim on a count of events
+
+A Then can claim what the program did inside an earlier step:
+"nothing was written", "the score row was inserted once".
+The claim step names the count in `events`, and a claim reads its key
+as its actual:
+
+```ts
+// features/steps/nothing-was-written.ts
+import { defineStep, z } from "nukadoko";
+import openRoom from "./open-room.ts";
+import placeScore from "./place-score.ts";
+
+export default defineStep({
+  pattern: "nothing was written",
+  args: z.object({}),
+  events: {
+    writes: { of: [openRoom, placeScore], count: { kind: "db", op: ["insert", "update", "delete", "other"], committed: true } },
+  },
+  claims: [{ actual: "writes", compare: "equal", expected: { literal: 0 } }],
+});
+```
+
+- `of` is the step whose execution events the key counts, or a list of
+  candidate steps.
+  Exactly one of them runs earlier in the scenario, as with a `from`
+  key's producers, and the latest line that ran it is the one counted.
+  When none ran, the claim is `unjudged` (`producer-not-run`); when
+  two of them ran, the claim is `unjudged` and names both.
+- `count` selects lines by kind and by the values of the kind's fields,
+  with the kinds and the fields of
+  [docs/execution-events.md](execution-events.md):
+  `{ kind: "db", table: "scores", op: "insert", committed: true }`.
+  A field takes one value or a list of values, any of which matches,
+  and `null` only where the format makes `null` a fact.
+  A value can come from the sentence, `{ sentence: "table" }`, under
+  the rules an expected sentence key follows (see "Where the expected
+  value comes from"); the claims then need not read that capture.
+  A `db` selection whose `op` may be a write states `committed`,
+  since a write that rolled back would otherwise count as written, and
+  states no `committed` beside `op: "read"` alone.
+  A writer's own `x_` kind, a kind or a field the format does not
+  define, and a value outside a field's values are refused at import;
+  in a TypeScript step file the selection's type refuses them first.
+- A claim on the key reads the count alone, with no `view`, `at`,
+  `count`, `each`, or path inside it.
+  It compares with `equal`, `not-equal`, `greater-than`, `at-least`,
+  `less-than`, or `at-most`, and its expected value is a number the
+  sentence states: a capture such as `{n:int}`, or a literal the literal
+  rule allows (digits, a number word, `once`, or `twice` under any
+  compare, and `never`, `no`, `none`, or `nothing`, which fix 0, under
+  `equal` alone).
+  An events key has no name of a `from` key or an args key, and a claim
+  reads every key.
+  Each of these is refused at import.
+
+When the step judges its claims, it reads the lines of the earlier
+step's trace, from where that step's slice of the file began, with the
+lines no step owns from then on.
+It waits while that step's events may still become whole, that is,
+while their `open` holds `no-lines`, `request-unreported`, or
+`jobs-pending`, and stops when they are whole, when a gap that more
+lines cannot close is open, or when the wait ends.
+The wait is the claim step's `timeout`, or 10 seconds, or the
+project's `stepTimeout` when that is shorter.
+It never waits for a claim to hold: `poll` reads `observe` again, and
+never the events.
+
+The count is a range: `[yes, yes + maybe]` on a whole reading, and at
+least `yes` with no upper bound on one that is not.
+`maybe` counts the lines that may match, by cause: a line of the trace
+that did not read, a line of a kind or a version the format does not
+define, a line whose field the selection reads is missing or invalid,
+a write whose commit state is unknown (see docs/execution-events.md
+"Whether a statement's change persisted"), and a line no step owns.
+A claim holds or breaks only when every count in the range gives that
+answer, and is `unjudged` otherwise, with the first gap word in its
+reason:
+
+```text
+the events of place-score@4 are not whole (jobs-pending): job 3f2a9c4100000000 was enqueued and has not performed, so the count is at least 1, with no upper bound, and equal 1 is not known
+```
+
+A reading is not whole while the world has reported no line of the
+selected kind (`kind-unreported`): a program that does not report the
+kind would make an absence of it hold.
+A world at a `url` gives `world-unread`, and a program file that names
+no `{events}` gives `inlet-unnamed`, and the claim is `unjudged` in
+both, with `were not read` in its reason.
+
+The claim step's record holds each reading in `events_read`, by key,
+and every line its readings counted, redacted, in `events-read.jsonl`
+beside it:
+
+```json
+"events_read": {
+  "writes": {
+    "of": { "step_record_id": "step-20261029-183140-n9ob", "step": "open-room", "line": 4 },
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "count": { "kind": "db", "op": ["insert", "update", "delete", "other"], "committed": true },
+    "range": { "at_least": 0, "at_most": 0 },
+    "whole": true,
+    "open": [],
+    "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "commit_unknown": 0, "unowned": 0 },
+    "lines": 2,
+    "unreadable": 0,
+    "unowned": 0,
+    "file": "events-read.jsonl",
+    "waited_ms": 1
+  }
+}
+```
+
+- `of` is the step whose events were read, and `trace_id` its trace
+  id; both are `null` when no earlier line ran one.
+- `count` is the selection, with each value from the sentence filled
+  in.
+- `range` is `{ "at_least", "at_most" }`, `at_most` `null` when the
+  reading is not whole.
+- `whole` and `open` are as for `observed.events`, with the gaps of a
+  reading added: `producer-not-run`, `world-unread`, `inlet-unnamed`,
+  and `kind-unreported`.
+- `lines` counts the readable lines of the trace the reading counted,
+  `unreadable` the lines whose text carries the trace id and did not
+  read, and `unowned` the readable lines no step owns in the window it
+  read.
+- `file` is `null` when the readings counted no line, and
+  `"truncated": true` says the lines came to more than 16 MiB.
+- `waited_ms` is how long the reading waited.
+
+The claim's record holds the count as `actual` when the range is one
+number, and as `actual_range` when it is not, never both.
+`actual_from` is `events:<step>@<line> count <selection>`, and
+`measured` names the claim step's own `events_read.<key>`:
+
+```text
+0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; measured: events_read.writes
+```
+
+A line of the trace can still arrive after the claim was judged: a
+writer that writes a request's line before the work inside it, or a
+wait that ended first.
+When the world stops, nukadoko counts each reading again, over every
+line of the trace.
+A claim on a count that the whole count judges otherwise than the claim
+was judged gets `after_world_stop` in `run.json`:
+
+```json
+"after_world_stop": { "lines": 2, "range": { "at_least": 1, "at_most": 1 }, "outcome": "broken", "reason": "1 line of the trace of step \"open-room\" arrived after this claim was judged on 1 line; over all 2 lines, the count is exactly 1, so the claim breaks" }
+```
+
+The step record is not rewritten.
+The execution's cell is `broke`, with the reason `a claim at line 6 was
+judged before every execution event it counts had arrived` (see
+"Verdicts"): the claim was judged on lines still on their way, so the
+cell proves nothing either way.
+
+What this does not reach, in one list:
+
+- A step that sent the world no request, or ran a `runCommand` process,
+  never has whole events (`no-requests`, `processes-unbounded`), so a
+  claim on its count holds only where every count from the lower bound
+  up would hold it, such as `at-least`.
+- A line no step owns may be the counted step's, so it widens the
+  range: a program that writes lines without the request's trace leaves
+  an absence unproven.
+- A line written after the world stopped is in no count.
 
 ### A Ruby program
 
@@ -4495,7 +4672,9 @@ to act on the run without opening another file:
   producer's step, record, and the result it read. A claim step has its
   `claims`, `observation`, and `attempts`, the same values its step
   record holds (see "Claims"), so a broken claim is read without opening
-  the step record. A step with lines of the program's log that arrived
+  the step record, and its `events_read`, and `after_world_stop` on a
+  claim the world's stop judged otherwise (see "A claim on a count of
+  events"). A step with lines of the program's log that arrived
   after its record was written has `program_log_late`, and one with
   lines of the program's execution events that did has `events_late`
   (see "Program"). A result whose JSON is
@@ -4923,7 +5102,7 @@ head passed:
 | --- | --- |
 | `pass` | every one passed |
 | `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
-| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, or a claim nukadoko could not judge; or, at the scenario's line, the same hook failed in every one, and `reason` names it and when it ran, since an After hook fails after the claims were judged |
+| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, or a claim nukadoko could not judge; or, at the scenario's line, the same hook failed in every one, and `reason` names it and when it ran, since an After hook fails after the claims were judged; or every one, whatever it came to, has a claim on a count of execution events at that line that the world's stop judged otherwise, with the `reason` `a claim at line <n> was judged before every execution event it counts had arrived` (see "A claim on a count of events") |
 | `stopped@<line>` | a person stopped the walk (`nuka run --step`) at that line, so the steps after it did not run; the row is `failed`, since nothing shows the criterion holds |
 | `flaky@<line>` | they disagree (two that broke two claims of one line disagree too, as do two that two hooks failed); the line is the first one's that did not pass |
 | `·` | none ran, and `reason` says why: the program did not start for its world, a BeforeAll failed, a tree's files did not load, or `--base` did not build the world (below) |
@@ -7375,8 +7554,9 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout
                               when the step declared one, a claim step's
-                              claims and poll (text: one claim: line per
-                              claim), which
+                              claims, poll, and events (text: one claim:
+                              line per claim, one events: line per key,
+                              naming the selection and its steps), which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
                               can't read), and where each chained args key
@@ -7395,7 +7575,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
-                              one, a claim step's claims and poll, plus
+                              one, a claim step's claims, poll, and
+                              events, plus
                               the envelope's findings beside it (the same
                               findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null

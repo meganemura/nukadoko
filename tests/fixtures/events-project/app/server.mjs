@@ -9,9 +9,12 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // Writes one line per operation, after the lines of what happened inside
 // it, with the traceparent the request arrived with. `/scores` enqueues a
 // job the worker performs before the answer goes out; `/scores?park=1`
-// enqueues one nobody performs. `/late` writes its request line 600 ms
-// after it answered, or when the server is told to stop, whichever comes
-// first. `/spliced` splits one line across two writes with another line
+// enqueues one nobody performs; `/scores?rollback=1` inserts inside a
+// transaction that rolls back, and answers 422. `/late` writes its
+// request line 600 ms after it answered, or when the server is told to
+// stop, whichever comes first. `/after` writes its request line at once
+// and a committed insert 500 ms later, or at the stop: a writer slower
+// than the claim that reads it. `/spliced` splits one line across two writes with another line
 // between them. `/secret` writes the world's token inside an event.
 // `/inlet` answers where the events file is, who may read it, and which
 // variables of the server's environment name a file nukadoko made for
@@ -42,6 +45,12 @@ process.on("SIGTERM", () => {
   for (const line of held) emit(line);
   process.exit(0);
 });
+const hold = (line, ms) => {
+  held.add(line);
+  setTimeout(() => {
+    if (held.delete(line)) emit(line);
+  }, ms);
+};
 
 const inlet = () => {
   const file = process.env.EXECUTION_EVENTS ?? null;
@@ -66,6 +75,11 @@ createServer(async (req, res) => {
   if (url.pathname.startsWith("/rooms/")) {
     route = "/rooms/:id";
     emit({ trace, kind: "db", id: newId(), parent: id, table: "rooms", op: "read", rows: 1 });
+  } else if (url.pathname === "/scores" && url.searchParams.get("rollback") === "1") {
+    status = 422;
+    const tx = newId();
+    emit({ trace, kind: "db", id: newId(), parent: tx, table: "scores", op: "insert", rows: 1 });
+    emit({ trace, kind: "tx", id: tx, parent: id, phase: "rollback" });
   } else if (url.pathname === "/scores") {
     status = 303;
     emit({ trace, kind: "db", id: newId(), parent: id, table: "scores", op: "insert", rows: 1, ids: [42], committed: true });
@@ -104,10 +118,8 @@ createServer(async (req, res) => {
   if (url.pathname === "/up") return;
   if (url.pathname !== "/late") {
     emit(line);
+    if (url.pathname === "/after") hold({ trace, kind: "db", id: newId(), parent: id, table: "scores", op: "insert", rows: 1, committed: true }, 500);
     return;
   }
-  held.add(line);
-  setTimeout(() => {
-    if (held.delete(line)) emit(line);
-  }, 600);
+  hold(line, 600);
 }).listen(Number(process.env.PORT));

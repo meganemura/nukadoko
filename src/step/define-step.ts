@@ -4,7 +4,8 @@ import { stripCaptureNames } from "../binding/pattern.js";
 import { argsSchemaRewrite, asObjectShape, isPlainString, isRequiredField, schemaRewrite } from "../binding/schema-shape.js";
 import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
-import { claimsProblem, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
+import { selectionProblems, type DeclaredEventSelection } from "../execution-events/selection.js";
+import { claimsProblem, eventsShapeOf, pathSegments, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
 import { freezeInPlace, frozenCopy, type Keep } from "./frozen-copy.js";
 import { MAX_TIMER_DELAY_MS } from "../timer/max-delay.js";
 
@@ -328,7 +329,10 @@ export interface StepDefinitionCommon<TArgs extends z.ZodTypeAny, TFrom> {
    * finite number of milliseconds greater than 0 and at most 2147483647
    * (the largest delay `setTimeout` keeps). Anything else is refused here,
    * because Node clamps it to 1ms and the step would be recorded as timed
-   * out immediately. On a claim step it bounds `observe`, polls included. */
+   * out immediately. On a claim step it bounds `observe`, polls included,
+   * and sets how long the step waits for the execution events its
+   * `events` reads to be whole (ten seconds when the step names none, or
+   * the project's `stepTimeout` when that is shorter). */
   timeout?: number;
 }
 
@@ -372,6 +376,22 @@ export interface RunStepDefinition<
   claims?: never;
   observe?: never;
   poll?: never;
+  events?: never;
+}
+
+/** One count a claim step reads (docs/spec.md "Execution events"): the
+ * earlier step whose execution events it counts, and the lines it
+ * counts. `of` is a step, or a list of candidate steps of which exactly
+ * one runs earlier in the scenario, as a `from` key's producers are. A
+ * claim names the key as its actual. */
+export interface EventsCount {
+  readonly of: Step | readonly [Step, ...Step[]];
+  readonly count: DeclaredEventSelection;
+}
+
+/** The candidate steps an events entry names, as a list. */
+export function eventsCandidates(entry: EventsCount): readonly Step[] {
+  return Array.isArray(entry.of) ? (entry.of as readonly Step[]) : [entry.of as Step];
 }
 
 type HeadOfPath<P extends string> = P extends `${infer Head}.${string}` ? Head : P;
@@ -434,6 +454,10 @@ export interface ClaimStepDefinition<
    * consecutive readings; `false` reads once. `nuka check` requires it to
    * be stated when `observe` names `page`, `context`, or `pageAs`. */
   poll?: ClaimPoll;
+  /** Counts of an earlier step's execution events, by the key a claim's
+   * actual names: nukadoko reads the lines the program wrote for that
+   * step, waits until they are whole or the wait ends, and counts. */
+  events?: Readonly<Record<string, EventsCount>>;
   run?: never;
   returns?: never;
   mutates?: never;
@@ -500,6 +524,9 @@ export interface ClaimStep<TArgs extends z.ZodTypeAny = z.ZodTypeAny> extends St
   readonly claims: readonly Claim[];
   readonly observe: ObserveFn | undefined;
   readonly poll: ClaimPoll | undefined;
+  /** Empty (`{}`) when the step declares no `events`, the same default
+   * `from` has. */
+  readonly events: Readonly<Record<string, EventsCount>>;
   readonly run?: undefined;
 }
 
@@ -550,6 +577,7 @@ const STEP_OPTIONS: Record<keyof RunStepDefinition | keyof ClaimStepDefinition, 
   claims: true,
   observe: true,
   poll: true,
+  events: true,
 };
 
 /** The options `defineStep` reads, in the order its reference lists them. */
@@ -635,6 +663,7 @@ interface DefinitionFields {
   claims?: unknown;
   observe?: unknown;
   poll?: unknown;
+  events?: unknown;
 }
 
 function validateStepDefinition(definition: DefinitionFields): void {
@@ -664,7 +693,7 @@ function validateStepDefinition(definition: DefinitionFields): void {
     validateClaimStepDefinition(definition);
     return;
   }
-  for (const option of ["observe", "poll"] as const) {
+  for (const option of ["observe", "poll", "events"] as const) {
     if (definition[option] !== undefined) {
       throw new InvalidStepDefinitionError(
         `defineStep ${option} belongs to a claim step, and this definition has no claims. A step that acts uses run; a step that judges declares claims.`,
@@ -729,6 +758,10 @@ function validateClaimStepDefinition(definition: DefinitionFields): void {
       "defineStep observe must be a function. nukadoko reads fixture names from that function's source text and then calls it.",
     );
   }
+  const eventsRefusal = eventsProblem(definition.events);
+  if (eventsRefusal !== null) {
+    throw new InvalidStepDefinitionError(`defineStep ${eventsRefusal}.`);
+  }
   const patterns = resolvePatterns(definition as Pick<StepDefinitionInput, "pattern" | "patterns">);
   const shape = asObjectShape(definition.args as z.ZodTypeAny);
   const fromKeys =
@@ -750,10 +783,43 @@ function validateClaimStepDefinition(definition: DefinitionFields): void {
       ),
       argsRewrite: argsSchemaRewrite(definition.args as z.ZodTypeAny),
       stringArgs: shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isPlainString(field)).map(([key]) => key)),
+      events: eventsShapeOf(definition.events),
     }) ?? pollProblem(definition.poll, definition.observe !== undefined, MAX_STEP_TIMEOUT_MS);
   if (problem !== null) {
     throw new InvalidStepDefinitionError(`defineStep ${problem}.`);
   }
+}
+
+const EVENTS_ENTRY_KEYS: readonly string[] = ["of", "count"];
+
+/** Why `events` is not an object of counts the run can read, or `null`:
+ * each key one word a claim's actual can name, each entry `{ of, count }`
+ * with `of` a step `defineStep` returned or a list of distinct ones, and
+ * `count` a selection the format can judge (`selectionProblems`). */
+function eventsProblem(events: unknown): string | null {
+  if (events === undefined) return null;
+  if (typeof events !== "object" || events === null || Array.isArray(events)) {
+    return "events must be an object whose keys name counts, each { of, count }";
+  }
+  for (const [key, entry] of Object.entries(events)) {
+    if (pathSegments(key)?.length !== 1) {
+      return `events key ${JSON.stringify(key)} is not one key a claim's actual can name; name it with one word and no dot`;
+    }
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry) || isDefinedStep(entry)) {
+      return `events.${key} must be an object with of, the step whose events it counts, and count, the lines it counts`;
+    }
+    const unknown = Object.keys(entry).find((name) => !EVENTS_ENTRY_KEYS.includes(name));
+    if (unknown !== undefined) return `events.${key} has the key "${unknown}", which an events entry does not have. It has ${EVENTS_ENTRY_KEYS.join(", ")}`;
+    const of = (entry as { of?: unknown }).of;
+    const candidates = Array.isArray(of) ? of : [of];
+    if (candidates.length === 0 || !candidates.every((candidate) => isDefinedStep(candidate))) {
+      return `events.${key}.of must be a step defineStep returned, or a non-empty list of them; import the step whose events it counts`;
+    }
+    if (new Set(candidates).size !== candidates.length) return `events.${key}.of names one step twice`;
+    const problems = selectionProblems((entry as { count?: unknown }).count, `events.${key}.count`);
+    if (problems.length > 0) return problems.join("; ");
+  }
+  return null;
 }
 
 function isHonoredStepTimeout(timeout: unknown): timeout is number {
@@ -802,6 +868,7 @@ export function defineStep(input: StepDefinitionInput): Step {
       claims: definition.claims,
       observe: definition.observe as ObserveFn | undefined,
       poll: definition.poll,
+      events: (definition.events ?? Object.freeze({})) as Readonly<Record<string, EventsCount>>,
       [STEP_DECLARATION]: { declaresReturns: false, ignoredOptions: ignoredOptions(definition) },
     });
   }
@@ -847,15 +914,19 @@ function definedSteps(): WeakSet<object> {
 /** The fields of a definition that hold data a step file could change or
  * answer differently on a second read: each is copied once, frozen at
  * every level, and the copy is what defineStep validates and returns. */
-const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll"] as const;
+const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll", "events"] as const;
 
 /** Where a definition field names another step, by the keys below the
- * field: `parts[i]`, and in `from` the step of a `[step, "key"]`
+ * field: `parts[i]`, in `events` the `of` of an entry, `events[key].of`
+ * or `events[key].of[i]`, and `events[key]` itself, so a step written
+ * there in place of `{ of, count }` is named in eventsProblem's words;
+ * and in `from` the step of a `[step, "key"]`
  * tuple, `from[key][0]` or, in a list of candidates, `from[key][i][0]`.
  * `from[key]` itself is one too: a step written there instead of a tuple
  * is kept, so validate-from.ts names that mistake in its own words. */
 function isStepPlace(field: string, at: readonly string[]): boolean {
   if (field === "parts") return at.length === 1;
+  if (field === "events") return at.length === 1 || ((at.length === 2 || at.length === 3) && at[1] === "of");
   if (field !== "from") return false;
   return at.length === 1 || ((at.length === 2 || at.length === 3) && at[at.length - 1] === "0");
 }

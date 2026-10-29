@@ -431,6 +431,13 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     };
     step.claims.forEach((claim: Claim, index) => {
       const label = `claims[${index}]`;
+      // A count of execution events is a place no other side can read,
+      // so only its expected side has a path to check.
+      if (!isEachClaim(claim) && Object.hasOwn(step.events, claim.actual)) {
+        if (typeof claim.expected === "object" && "from" in claim.expected) checkFromPath(`${label}.expected.from`, claim.expected.from);
+        noteExpectedFrom(label, claim.expected);
+        return;
+      }
       const actualSchema = checkFromPath(`${label}.actual`, claim.actual);
       const actualSource = fromKeys.has(pathSegments(claim.actual)?.[0] ?? "") ? "from" : "observe";
       const top = placeOf(actualSource, claim.actual, producerOf, lineOf);

@@ -1,3 +1,4 @@
+import { selectionSentenceValues } from "../execution-events/selection.js";
 import type { ClaimCompare, ClaimView } from "../record/types.js";
 
 // Responsibility: what a claim step declares in place of `run`
@@ -7,7 +8,8 @@ import type { ClaimCompare, ClaimView } from "../record/types.js";
 // (`expected`), and how the two compare, and nukadoko does the judging, so
 // the expected value is in the sentence or in an earlier step's result,
 // never in step code. This module holds the declaration types, the path
-// syntax both sides share, and the literal rule. It does not evaluate a
+// syntax both sides share, the literal rule, and what a claim on a count
+// of execution events may declare. It does not evaluate a
 // claim (src/step/evaluate-claims.ts does) and does not read a feature file
 // (`nuka check` resolves a claim against the line that binds it).
 
@@ -472,6 +474,124 @@ export interface ClaimStepShape {
   /** The args keys whose schema is a plain `z.string()`, which
    * `expected_view` can read; `null` when args is not a z.object. */
   readonly stringArgs: ReadonlySet<string> | null;
+  /** What the step's `events` declares (`eventsShapeOf`); absent for a
+   * step with none. */
+  readonly events?: EventsShape;
+}
+
+// --- execution events ---
+//
+// A claim step's `events` names counts of an earlier step's execution
+// events (docs/spec.md "Execution events"), and a claim reads one by its
+// key alone, as its actual. nukadoko measures the count, so the claim
+// takes no path, view, at, or count (the count is already one number),
+// and neither observe nor an args value can stand in for it: an events
+// key shares no name with a from key or an args key. A count nothing
+// compares changes no verdict, so every key must be read. A selection
+// may take a value from the sentence (`{ sentence: "table" }`), which is
+// then a value the line states, under the rules an expected sentence key
+// follows.
+
+/** One value a selection takes from the sentence: the events key, the
+ * field, and the args key that holds the value. */
+export interface EventsSentenceValue {
+  readonly key: string;
+  readonly field: string;
+  readonly name: string;
+}
+
+/** What a claim step's `events` adds to what its claims read: the keys a
+ * claim's actual names whole, and the values its selections take from
+ * the sentence. */
+export interface EventsShape {
+  readonly keys: ReadonlySet<string>;
+  readonly sentenceValues: readonly EventsSentenceValue[];
+}
+
+/** The shape of a step with no `events`. */
+export const NO_EVENTS: EventsShape = { keys: new Set(), sentenceValues: [] };
+
+/** The shape of an `events` declaration, read as far as it is an object
+ * of entries with a `count`: what `validateClaims` needs beside it.
+ * Pure. */
+export function eventsShapeOf(events: unknown): EventsShape {
+  if (typeof events !== "object" || events === null || Array.isArray(events)) return NO_EVENTS;
+  const keys = new Set<string>();
+  const sentenceValues: EventsSentenceValue[] = [];
+  for (const [key, entry] of Object.entries(events)) {
+    keys.add(key);
+    const count = typeof entry === "object" && entry !== null ? (entry as { count?: unknown }).count : undefined;
+    for (const value of selectionSentenceValues(count)) sentenceValues.push({ key, ...value });
+  }
+  return { keys, sentenceValues };
+}
+
+/** The args keys a step's selections take a value from. Pure. */
+export function eventsSentenceKeys(events: EventsShape): ReadonlySet<string> {
+  return new Set(events.sentenceValues.map((value) => value.name));
+}
+
+/** The keys a claim on a count of execution events has. */
+const EVENTS_CLAIM_KEYS = ["actual", "compare", "expected"] as const;
+
+/** Refuses a claim on events key `key` that the run would judge one way
+ * on every line, or whose actual is not the count alone. */
+function checkEventsClaim(label: string, claim: Record<string, unknown>, key: string, shape: ClaimStepShape): void {
+  const reads = `${label} reads events.${key}, a count of execution events`;
+  if (claim.each !== undefined) {
+    throw new InvalidClaimError(`${reads}, which is one number, and each reads the items of an array. Compare the count with ${COUNT_COMPARES.join(", ")}`);
+  }
+  checkKeys(label, claim, EVENTS_CLAIM_KEYS, "a claim on a count of execution events");
+  if (!(COUNT_COMPARES as readonly unknown[]).includes(claim.compare)) {
+    throw new InvalidClaimError(
+      `${reads}, which is a number, and ${describe(claim.compare)} does not compare two numbers, so the claim would break on every line or hold on every line. Compare the count with ${COUNT_COMPARES.join(", ")}`,
+    );
+  }
+  checkExpected(label, claim.expected, claim.compare, shape, false);
+  const literal = literalOf(claim.expected);
+  if (literal !== null && typeof literal.literal !== "number") {
+    throw new InvalidClaimError(
+      `${reads}, which is a number, and its expected value is the literal ${describe(literal.literal)}, which is never a number, so the claim always breaks. State the number in the pattern, as digits, a number word, once, twice, or a word such as nothing or never, and write it as a number literal`,
+    );
+  }
+  if (typeof claim.expected === "string" && shape.stringArgs?.has(claim.expected) === true) {
+    throw new InvalidClaimError(
+      `${reads}, which is a number, and its expected value is args.${claim.expected}, a plain z.string(), which is never a number, so the claim always breaks. Capture the number with {int}`,
+    );
+  }
+}
+
+/** Refuses an `events` declaration that collides with another source of
+ * a claim's actual, takes a sentence value an expected sentence key could
+ * not be, or names a count no claim reads. */
+function checkEvents(claims: readonly Record<string, unknown>[], shape: ClaimStepShape): void {
+  const events = shape.events ?? NO_EVENTS;
+  for (const key of events.keys) {
+    const other = shape.fromKeys.has(key) ? "a key of from" : shape.argsKeys?.has(key) === true || shape.captureKeys.has(key) ? "an args key" : null;
+    if (other !== null) {
+      throw new InvalidClaimError(`events.${key} has the name of ${other}, so a claim's actual "${key}" would have two sources. Rename one of them`);
+    }
+    if (!claims.some((claim) => claim.actual === key)) {
+      throw new InvalidClaimError(
+        `events.${key} is read by no claim, so the count it names changes no verdict. Compare a claim with actual "${key}", or take the key out of events`,
+      );
+    }
+  }
+  for (const value of events.sentenceValues) {
+    const label = `events.${value.key}.count.${value.field}`;
+    if (shape.fromKeys.has(value.name)) {
+      throw new InvalidClaimError(`${label} takes { sentence: "${value.name}" }, which from fills from an earlier step, and a selection takes a value the line states`);
+    }
+    if (shape.argsKeys !== null && !shape.argsKeys.has(value.name)) {
+      throw new InvalidClaimError(`${label} takes { sentence: "${value.name}" }, which is not a key of args`);
+    }
+    if (shape.requiredArgsKeys !== null && !shape.requiredArgsKeys.has(value.name)) {
+      throw new InvalidClaimError(
+        `${label} takes { sentence: "${value.name}" }, which args lets a line leave out (it is optional or has a default), so step code would fill what the count selects. Make it required`,
+      );
+    }
+    checkNotRewritten(label, value.name, shape, "expected");
+  }
 }
 
 type Where = "actual" | "item";
@@ -792,10 +912,10 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   COMPARE_SIDES[claim.compare as ClaimCompare]?.(label, claim);
 }
 
-/** Whether a top-level claim's `actual` reads observe: its first segment
- * is not a `from` key. */
-export function actualReadsObserve(actual: string, fromKeys: ReadonlySet<string>): boolean {
-  return !fromKeys.has(pathSegments(actual)?.[0] ?? "");
+/** Whether a top-level claim's `actual` reads observe: it is not an
+ * events key, and its first segment is not a `from` key. */
+export function actualReadsObserve(actual: string, fromKeys: ReadonlySet<string>, eventsKeys: ReadonlySet<string> = NO_EVENTS.keys): boolean {
+  return !eventsKeys.has(actual) && !fromKeys.has(pathSegments(actual)?.[0] ?? "");
 }
 
 /** Why `defineStep` must not store this claim list, naming the claim by
@@ -834,6 +954,16 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
     checkPath(`${label}.actual`, claim.actual, false);
     const segments = pathSegments(claim.actual as string)!;
     const head = segments[0]!;
+    const eventsKeys = shape.events?.keys ?? NO_EVENTS.keys;
+    if (eventsKeys.has(claim.actual as string)) {
+      checkEventsClaim(label, claim, claim.actual as string, shape);
+      return;
+    }
+    if (eventsKeys.has(head)) {
+      throw new InvalidClaimError(
+        `${label}.actual reads inside events.${head}, a count of execution events, which is one number with nothing inside it. Name the key alone: actual "${head}"`,
+      );
+    }
     const fromObserve = !shape.fromKeys.has(head);
     if (fromObserve && !shape.hasObserve) {
       throw new InvalidClaimError(
@@ -902,7 +1032,8 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
   // An observe no claim reads changes no verdict, and the likely cause is
   // a key it returns under a from key's name: the from value wins, so the
   // reading is never compared and nothing says so.
-  if (shape.hasObserve && !claimsReadObserve(claims as readonly Claim[], shape.fromKeys)) {
+  checkEvents(claims as readonly Record<string, unknown>[], shape);
+  if (shape.hasObserve && !claimsReadObserve(claims as readonly Claim[], shape.fromKeys, shape.events?.keys)) {
     throw new InvalidClaimError(
       "the step has observe, and no claim reads what it returns: every claim's actual is a key of from, and no expected value is { observe }. " +
         "A key observe returns under a from key's name never reaches a claim, since the from value wins. " +
@@ -914,7 +1045,7 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
   // step judges. The docstring or table key is known only per line, so
   // `nuka check` and the run report that half (`claim-sentence-unread`).
   if (!shape.hasObserve) {
-    const read = claimArgKeysRead(claims as readonly Claim[]);
+    const read = new Set([...claimArgKeysRead(claims as readonly Claim[]), ...eventsSentenceKeys(shape.events ?? NO_EVENTS)]);
     const unread = [...shape.captureKeys].find((key) => !read.has(key));
     if (unread !== undefined) {
       throw new InvalidClaimError(
@@ -957,9 +1088,9 @@ export function observeWithheldKeys(claims: readonly Claim[], fromKeys: Readonly
 /** Whether any claim reads what `observe` returns: an actual whose first
  * segment is not a from key, or an expected `{ observe }`, in a claim or
  * in an `each`'s `where` and item claims. Pure. */
-export function claimsReadObserve(claims: readonly Claim[], fromKeys: ReadonlySet<string>): boolean {
+export function claimsReadObserve(claims: readonly Claim[], fromKeys: ReadonlySet<string>, eventsKeys: ReadonlySet<string> = NO_EVENTS.keys): boolean {
   return claims.some((claim) => {
-    if (actualReadsObserve(claim.actual, fromKeys)) return true;
+    if (actualReadsObserve(claim.actual, fromKeys, eventsKeys)) return true;
     const entries: readonly ItemClaim[] = isEachClaim(claim) ? [...(claim.each.where ?? []), ...claim.each.claims] : [claim];
     return entries.some((entry) => typeof entry.expected === "object" && entry.expected !== null && "observe" in entry.expected);
   });
@@ -971,8 +1102,14 @@ export function claimsReadObserve(claims: readonly Claim[], fromKeys: ReadonlySe
  * `nuka check` reports this reason (`claim-sentence-unread`) and the run
  * breaks the step's claims with it, since only the line says whether a
  * docstring or a table fills a key. Pure. */
-export function sentenceUnreadReason(claims: readonly Claim[], hasObserve: boolean, key: string, attachment: "docstring" | "table"): string | null {
-  if (hasObserve || claimArgKeysRead(claims).has(key)) return null;
+export function sentenceUnreadReason(
+  claims: readonly Claim[],
+  hasObserve: boolean,
+  key: string,
+  attachment: "docstring" | "table",
+  events: EventsShape = NO_EVENTS,
+): string | null {
+  if (hasObserve || claimArgKeysRead(claims).has(key) || eventsSentenceKeys(events).has(key)) return null;
   return `the ${attachment} of the line fills args.${key}, which no claim reads, and the step has no observe to receive it, so nothing checks the value the line states`;
 }
 

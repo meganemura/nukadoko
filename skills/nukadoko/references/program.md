@@ -143,21 +143,29 @@ every process it starts, gets the rest of `env`, so no step writes a
 line that would read as the program's. Read it to see what the program did inside a
 step: which tables it read and wrote, which jobs it enqueued and ran.
 
-`whole: true` says every request the step stamped has its `request`
-line and every job it enqueued performed. `whole: false` never says
-nothing more happened: `open` names why, one word each:
-`no-requests` (the step sent the world no stamped request and ran no
-`runCommand` process, such as a Then that only reads the page),
-`processes-unbounded` (the step ran a `runCommand` process, whose
-requests nukadoko cannot count), `no-lines` (no writer, or a wrong
-variable), `request-unreported`, `jobs-pending` (with
-`job_ids`), `unreadable` (a line spliced or cut), `truncated`,
-`file-replaced`. A line that arrived later is in `events-late.jsonl`,
-and the run summary names it. The whole file, redacted, is in
-`worlds/<environment>/events.jsonl`; a world at a `url` has none, and
-`observed.events` is `null` there. A `flag` line, late or not, also puts
-its step's criterion in run.json's `flags`, under the side the line
-names (`references/verdicts.md`).
+`whole: true` says every request the step stamped has its `request` line and
+every job it enqueued performed. `whole: false` never says nothing more
+happened: `open` names why, one word each: `no-requests` (the step sent the
+world no stamped request and ran no `runCommand` process, such as a Then that
+only reads the page), `processes-unbounded` (the step ran a `runCommand`
+process, whose requests nukadoko cannot count), `no-lines` (no writer, or a
+wrong variable), `request-unreported`, `jobs-pending` (with `job_ids`),
+`unreadable` (a line spliced or cut), `truncated`, `file-replaced`. A line that
+arrived later is in `events-late.jsonl`, and the run summary names it. The
+whole file, redacted, is in `worlds/<environment>/events.jsonl`; a world at a
+`url` has none, and `observed.events` is `null` there. A `flag` line, late or
+not, also puts its step's criterion in run.json's `flags`, under the side the
+line names (`references/verdicts.md`).
+
+## Claiming what the program did
+
+A Then counts an earlier step's events: `events: { writes: { of: placeScore,
+count: { kind: "db", op: ["insert", "update", "delete", "other"], committed:
+true } } }` beside a claim on `actual: "writes"`, compared as a number. It
+waits while they may still be `whole` (the step's `timeout`, else 10 s), and
+is `unjudged`, naming the gap, while the count is a range: an absence holds on
+a whole reading only. `events_read` keeps the reading; a line that arrives
+after the claim makes the cell `broke` (docs/spec.md, "A claim on a count").
 
 ## Environments and programs nukadoko does not start
 

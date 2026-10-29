@@ -211,6 +211,17 @@ export function selectionProblems(value: unknown, where: string): string[] {
   return problems;
 }
 
+/** Each value a declared selection takes from the sentence: the field
+ * that names it and the capture's name, in the order the selection lists
+ * its fields. Reads any value, and finds nothing in one that is not a
+ * selection. Pure. */
+export function selectionSentenceValues(declared: unknown): readonly { readonly field: string; readonly name: string }[] {
+  if (!isPlainObject(declared)) return [];
+  return Object.entries(declared).flatMap(([field, selected]) =>
+    valuesOf(selected).flatMap((one) => (isSentenceValue(one) && typeof one.sentence === "string" ? [{ field, name: one.sentence }] : [])),
+  );
+}
+
 /** The selection with each value from the sentence filled in by `capture`
  * (the capture's value, by name), or why the filled selection is not one
  * the format can judge: a capture whose value does not fit its field.
@@ -282,14 +293,16 @@ export function matchLine(selection: EventSelection, line: ReadableLine): LineMa
 }
 
 function valueText(value: unknown): string {
+  if (isSentenceValue(value)) return `sentence:${value.sentence}`;
   return typeof value === "string" && /^[\w:/.@-]+$/.test(value) ? value : JSON.stringify(value);
 }
 
 /** The selection in the words a record's label and a summary use:
  * `db where op in [insert, update, delete, other], committed true`, or
  * `request` for one that names no field. Fields come in the order the
- * format's table lists them. Pure. */
-export function describeSelection(selection: EventSelection): string {
+ * format's table lists them, and a value the sentence supplies reads
+ * `sentence:<capture>`, as a claim's label names it. Pure. */
+export function describeSelection(selection: EventSelection | DeclaredEventSelection): string {
   const record = selection as unknown as JsonObject;
   const parts = Object.keys(fieldsOfKind(selection.kind)).flatMap((name) => {
     const value = record[name];

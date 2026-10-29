@@ -310,8 +310,12 @@ describe("judging a count", () => {
   it("names the first gap of a reading that is not whole, and the lines that may match of one that is", () => {
     expect(judgeCount({ range: { at_least: 0, at_most: null }, whole: false, open: [{ gap: "jobs-pending", job_ids: ["3f2a9c41"] }], maybe: NO_MAYBE }, "equal", 0)).toEqual({
       outcome: "unjudged",
-      reason: "the events are not whole: job 3f2a9c41 was enqueued and has not performed, so the count is at least 0, with no upper bound, and equal 0 is not known",
+      reason: "the events are not whole (jobs-pending): job 3f2a9c41 was enqueued and has not performed, so the count is at least 0, with no upper bound, and equal 0 is not known",
       gap: "jobs-pending",
+    });
+    expect(judgeCount({ range: { at_least: 0, at_most: null }, whole: false, open: [{ gap: "world-unread" }], maybe: NO_MAYBE }, "equal", 0, "place-score@20")).toMatchObject({
+      outcome: "unjudged",
+      reason: "the events of place-score@20 were not read (world-unread): nukadoko did not start the world's program, so it reads no events there, so the count is at least 0, with no upper bound, and equal 0 is not known",
     });
     expect(judgeCount({ range: { at_least: 0, at_most: 1 }, whole: true, open: [], maybe: { ...NO_MAYBE, commit_unknown: 1 } }, "equal", 0)).toEqual({
       outcome: "unjudged",

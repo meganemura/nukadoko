@@ -33,6 +33,11 @@ import { deepEqual, type ExpectedOrigin, type JudgedClaim } from "../step/evalua
 // that channel with itself, so a constant equal to it (an expected exit
 // code of 0 beside a process that exited 0) is `null` as a constant
 // should be, and another channel with the same content is still found.
+//
+// A claim on a count of execution events needs no search: nukadoko made
+// the count, so its channel is the claim step's own `events_read.<key>`
+// by construction, whatever the claim's outcome, which is how the run
+// finds the reading to count again once the world stops.
 
 /** One recorded channel and where it sits in its step record: a text, a
  * number the record holds as a number, or a text the record holds only in
@@ -179,8 +184,12 @@ export function withMeasured(judged: readonly JudgedClaim[], context: MeasuredCo
     const recordId = origin === "observe" ? context.ownRecordId : context.fromRecordOf(origin.fromKey);
     return { ...entry, expected_measured: Object.hasOwn(entry, "expected") ? channelFor(recordId, entry.expected, measured) : null };
   };
-  return judged.map(({ record, rawActual, fromKey, expectedOrigins }) => {
+  return judged.map(({ record, rawActual, fromKey, expectedOrigins, eventsKey }) => {
     const observed = record.outcome !== "unobserved";
+    if (eventsKey !== undefined && !("each" in record)) {
+      const measured: MeasuredChannel | null = observed ? { step_record_id: context.ownRecordId, channel: `events_read.${eventsKey}` } : null;
+      return { ...withExpected(record, expectedOrigins[0], null, observed), measured };
+    }
     const measured = observed ? channelFor(fromKey === null ? context.ownRecordId : context.fromRecordOf(fromKey), rawActual) : null;
     if (!("each" in record)) return { ...withExpected(record, expectedOrigins[0], measured, observed), measured };
     const where = record.each.where ?? [];
