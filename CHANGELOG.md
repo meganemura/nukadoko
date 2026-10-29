@@ -100,6 +100,9 @@ just until 0.1.
   and the cell reads like a product result. "Program" now says such a
   project needs a program file whose `build` makes that output in each
   tree, and that head needs it built before `nuka run`.
+- **`docs/upgrading.md` names 0.19.0 and 0.20.0 as releases that need
+  no action.** Neither had a section, and the list of such releases did
+  not name them, so a reader could not tell "no action" from "missing".
 
 ## 0.22.0 — 2026-10-28
 

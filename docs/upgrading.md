@@ -39,9 +39,12 @@ This part does not change release to release.
   a refusal exits 2, and `nuka clean` takes no `--records`, `--cache`, or
   `--export`.
 - **A release with no section below needs no action.** 0.4.1, 0.6.0,
-  0.13.1, and 0.14.0 are such releases. Start reading at the first section
-  whose range ends above your version: a project on 0.13.0, 0.13.1, or
-  0.14.0 starts at "0.14.0 to 0.14.1".
+  0.13.1, 0.14.0, 0.19.0, and 0.20.0 are such releases (0.19.0 and 0.20.0
+  only added or fixed things, and changed no exit code, config key, or
+  step contract). Start reading at the first section whose range ends above your
+  version: a project on 0.13.0, 0.13.1, or 0.14.0 starts at "0.14.0 to
+  0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
+  0.21.0".
 
 ## 0.22.0 to the next release
 
