@@ -3204,7 +3204,7 @@ run の 2 つの environment が宣言する `conditions` がちょうど 1 つ�
     "a": { "world": "head", "environment": "reorder-off" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 1, "open": 1, "same": 4, "not_compared": 0 },
+    "counts": { "changed": 1, "open": 0, "same_so_far": 1, "same": 4, "not_compared": 0 },
     "criteria": [
       {
         "feature": "features/orders.feature", "line": 18, "name": "a reorder goes through", "result": "changed",
@@ -3241,6 +3241,9 @@ run の 2 つの environment が宣言する `conditions` がちょうど 1 つ�
   そのため、欠けた行がまだ届きうる数は変化として読まれず、欠けた行が届きえない数は変化として読まれます。
   `gaps` は、その step での a 側と b 側の欠けを名指します。
 - 受け入れ基準の `result` は、step に変わった項目があるか、片側だけで走った step があれば `changed`、違いがすべて `open` なら `open`、それ以外は `same` です。
+  開いた数がどれも a 側と b 側で同じ範囲で、各 step の欠けを示す語も両側で同じなら、`open` の受け入れ基準は代わりに `same_so_far` です。
+  run が見たものに違いはありませんが、欠けた行がまだ違いを生みえます。
+  `counts` は `result` ごとに別に数えます。
   `ran: "a"` の step は、b 側の実行がその前に止まったので、a 側だけで走りました(`"b"` はその逆です)。
   その step がしたことは、その step 自身の `path` にあります。
   `steps` は違いのある step だけを持ち、`same` の受け入れ基準は持ちません。
@@ -3255,18 +3258,19 @@ run の 2 つの environment が宣言する `conditions` がちょうど 1 つ�
 
 run サマリは、「Removed criteria」のあとの「Changed paths」の下で、各組に見出しと数の行を付け、実行経路が変わったか `open` の受け入れ基準を、組ごとに 20 まで並べます。
 受け入れ基準の順は、変わった項目と、片側だけで走った step がしたことのうち、いちばん上の種類で決めます。
-種類の順は errors、writes、outgoing calls、jobs、requests、flags で、そのあとは表の順です:
+種類の順は errors、writes、outgoing calls、jobs、requests、flags で、そのあとは表の順です。
+今のところ同じ受け入れ基準は最後に来て、両側に共通の欠けを示す語を名指す 1 行になります。
+読み手が最初にそこへ向かわないようにするためです:
 
 ```text
 ### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
 
-6 criteria compared: 1 changed, 1 open, 4 the same.
+6 criteria compared: 1 changed, 1 the same so far, 4 the same.
 
 - `features/orders.feature:18` a reorder goes through
   - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201
   - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request
-- `features/orders.feature:10` a parked score is placed
-  - line 11 `the client posts to "/scores?park=1"`: open, since neither side is whole (`reorder-off`: `jobs-pending` 1 job; `reorder-on`: `jobs-pending` 1 job): writes `scores` insert 1 or more → 1 or more; jobs `ScoreRecalcJob` enqueue 1 or more → 1 or more
+- `features/orders.feature:10` a parked score is placed: the same so far, with `jobs-pending` on both sides
 ```
 
 この仕組みが届かないものを、1 つの一覧にまとめます:

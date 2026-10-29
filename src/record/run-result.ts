@@ -463,7 +463,7 @@ export interface RunPathComparison {
    * world wrote no execution events; `null` when they were. */
   readonly unread: string | null;
   /** The criteria by `result`, and those not compared. */
-  readonly counts: { readonly changed: number; readonly open: number; readonly same: number; readonly not_compared: number };
+  readonly counts: { readonly changed: number; readonly open: number; readonly same_so_far: number; readonly same: number; readonly not_compared: number };
   /** Each criterion compared, in the table's row order. */
   readonly criteria: readonly RunPathCriterion[];
   /** Each criterion not compared, with why, in the table's row order. */
@@ -483,8 +483,9 @@ export interface RunPathCriterion {
   readonly name: string;
   /** `changed` when a step has a decided difference or ran on one side
    * only, `open` when every difference is one a side's missing lines
-   * could still close, `same` otherwise. */
-  readonly result: "changed" | "open" | "same";
+   * could still close, `same_so_far` when each of those reads the same
+   * on both sides under the same gap words, `same` otherwise. */
+  readonly result: "changed" | "open" | "same_so_far" | "same";
   /** The execution each side is read from, its cell's first, with the
    * cell's outcome. */
   readonly a: RunPathExecution;

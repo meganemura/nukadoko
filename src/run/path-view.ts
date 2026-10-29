@@ -1,5 +1,6 @@
 import type { CountRange } from "../execution-events/count.js";
 import { boundingGaps, keysOf, kindRule, rangeOn, type PathKind, type StepPath } from "../execution-events/path.js";
+import type { TraceGap } from "../execution-events/tally.js";
 import type {
   RunDocument,
   RunPathComparison,
@@ -33,7 +34,10 @@ import type {
 //
 // Two counts are the same when both are exact and equal, changed when
 // their ranges cannot meet, and open otherwise: a count a side's missing
-// lines could still reach never reads as a change. In a pair of
+// lines could still reach never reads as a change. A criterion whose
+// every open count reads the same on both sides, under the same gap
+// words, is `same_so_far`: correct as `open` is, but nothing the run
+// saw differs, so a reader is not sent to it first. In a pair of
 // environments, a flag's side differing is the switch the pair was made
 // to compare, so a kind PATH_KINDS marks as the premise is named in the
 // pair's heading and never among what changed.
@@ -97,6 +101,16 @@ function apart(a: CountRange, b: CountRange): boolean {
   return (a.at_most !== null && a.at_most < b.at_least) || (b.at_most !== null && b.at_most < a.at_least);
 }
 
+function gapWords(gaps: readonly TraceGap[]): string {
+  return JSON.stringify([...new Set(gaps.map((gap) => gap.gap))].sort());
+}
+
+/** Whether an open step reads the same on both sides so far: every open
+ * count has one range on both, under the same gap words. */
+function sameSoFar(step: Extract<RunPathStep, { ran: "both" }>): boolean {
+  return step.open.every(({ a, b }) => a.at_least === b.at_least && a.at_most === b.at_most) && gapWords(step.gaps.a) === gapWords(step.gaps.b);
+}
+
 /** What changed between two paths of one step, over the kinds `compared`
  * keeps. */
 function stepDifference(a: StepPath, b: StepPath, compared: (kind: PathKind) => boolean): Pick<Extract<RunPathStep, { ran: "both" }>, "changed" | "open"> {
@@ -135,7 +149,7 @@ function compareCriterion(pair: Pair, row: RunTableRow, sides: readonly [RunScen
     if (changed.length > 0 || open.length > 0) steps.push({ line: stepA.line, text: stepA.text, ran: "both", changed, open, gaps: { a: boundingGaps(stepA.path), b: boundingGaps(stepB.path) } });
   }
   const isChanged = steps.some((step) => step.ran !== "both" || step.changed.length > 0);
-  const result = isChanged ? "changed" : steps.length > 0 ? "open" : "same";
+  const result = isChanged ? "changed" : steps.length === 0 ? "same" : steps.every((step) => step.ran === "both" && sameSoFar(step)) ? "same_so_far" : "open";
   return {
     criterion: {
       feature: row.feature,
@@ -154,7 +168,7 @@ function comparePair(document: ComparedDocument, pair: Pair): RunPathComparison 
   // Neither side read events: a run of a program that reports none says
   // nothing about paths.
   if (unread[0] !== null && unread[1] !== null) return undefined;
-  const empty = { changed: 0, open: 0, same: 0, not_compared: 0 };
+  const empty = { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 };
   const base = { between: pair.between, a: pair.a, b: pair.b };
   const why = unread[0] ?? unread[1];
   if (why !== null) return { ...base, unread: why, counts: empty, criteria: [], not_compared: [] };
@@ -176,7 +190,7 @@ function comparePair(document: ComparedDocument, pair: Pair): RunPathComparison 
     else criteria.push(found.criterion);
   }
   const count = (result: RunPathCriterion["result"]): number => criteria.filter((criterion) => criterion.result === result).length;
-  return { ...base, unread: null, counts: { changed: count("changed"), open: count("open"), same: count("same"), not_compared: notCompared.length }, criteria, not_compared: notCompared };
+  return { ...base, unread: null, counts: { changed: count("changed"), open: count("open"), same_so_far: count("same_so_far"), same: count("same"), not_compared: notCompared.length }, criteria, not_compared: notCompared };
 }
 
 /** One comparison per pair of sides the run can compare, in the run's

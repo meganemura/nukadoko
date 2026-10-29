@@ -631,6 +631,13 @@ function criterionLines(reading: PathReading, criterion: RunPathCriterion): stri
   return lines;
 }
 
+// A criterion whose open counts read the same on both sides, in one line:
+// the gap words that leave them open, which both sides share.
+function sameSoFarText(criterion: RunPathCriterion): string {
+  const words = [...new Set((criterion.steps ?? []).flatMap((step) => (step.ran === "both" ? step.gaps.a.map((gap) => gap.gap) : [])))];
+  return words.length === 0 ? "the same so far, with lines on both sides that may be any line" : `the same so far, with ${words.map(codeSpan).join(", ")} on both sides`;
+}
+
 // A criterion ranks by the highest kind among its decided differences and
 // what its one-side steps did, so what persists outside the process comes
 // first; then by the table's order, which the criteria already hold.
@@ -660,7 +667,7 @@ function renderPathComparison(document: RunDocument, comparison: RunPathComparis
     compared: (kind) => kindRule(kind).conditionPremise !== true,
   };
   const { counts } = comparison;
-  const said = ([["changed", counts.changed], ["open", counts.open], ["the same", counts.same]] as const).filter(([, n]) => n > 0).map(([word, n]) => `${n} ${word}`);
+  const said = ([["changed", counts.changed], ["open", counts.open], ["the same so far", counts.same_so_far], ["the same", counts.same]] as const).filter(([, n]) => n > 0).map(([word, n]) => `${n} ${word}`);
   const compared = comparison.criteria.length === 0 ? "No criterion was compared." : `${countOf(comparison.criteria.length, "criterion", "criteria")} compared: ${said.join(", ")}.`;
   const reasons = new Map<string, number>();
   for (const entry of comparison.not_compared) reasons.set(entry.reason, (reasons.get(entry.reason) ?? 0) + 1);
@@ -668,11 +675,12 @@ function renderPathComparison(document: RunDocument, comparison: RunPathComparis
   const listed = comparison.criteria
     .filter((criterion) => criterion.result !== "same")
     .map((criterion) => ({ criterion, rank: pathRank(reading, criterion) }))
-    .sort((a, b) => a.rank - b.rank);
+    .sort((a, b) => Number(a.criterion.result === "same_so_far") - Number(b.criterion.result === "same_so_far") || a.rank - b.rank);
   const lines = ["", heading, "", `${compared}${notCompared.join("")}`];
   if (listed.length > 0) lines.push("");
   for (const { criterion } of listed.slice(0, PATHS_SHOWN)) {
-    lines.push(`- ${cellCode(`${criterion.feature}:${criterion.line}`)} ${cellText(criterion.name)}`, ...criterionLines(reading, criterion));
+    const head = `- ${cellCode(`${criterion.feature}:${criterion.line}`)} ${cellText(criterion.name)}`;
+    lines.push(...(criterion.result === "same_so_far" ? [`${head}: ${sameSoFarText(criterion)}`] : [head, ...criterionLines(reading, criterion)]));
   }
   if (listed.length > PATHS_SHOWN) lines.push(`- and ${listed.length - PATHS_SHOWN} more in run.json's \`paths\``);
   return lines;
@@ -690,6 +698,7 @@ function renderPaths(document: RunDocument): string[] {
     "",
     "Each criterion below did something else on one side than on the other, or may have, step by step, as the program's execution events report it. " +
       "A count that a side's missing lines could still reach is listed as open, never as a change. " +
+      "A criterion whose open counts read the same on both sides, under the same gaps, is the same so far, and comes last. " +
       "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes.",
     ...comparisons.flatMap((comparison) => renderPathComparison(document, comparison)),
   ];

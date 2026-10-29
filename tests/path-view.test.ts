@@ -173,12 +173,24 @@ describe("comparePaths", () => {
       }
     }));
 
-  it("finds nothing changed between a path and itself, and nothing at all when the path is whole", () =>
+  it("finds a path the same as itself, so far when it is not whole, and keeps no steps when it is", () =>
     hegel.test((tc) => {
       const paths = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 3 }));
       const criterion = compare({ paths }, { paths }).criteria[0]!;
-      expect(criterion.result).not.toBe("changed");
+      expect(["same_so_far", "same"]).toContain(criterion.result);
       if (paths.every((path) => path.open.length === 0 && path.maybe === 0)) expect(criterion).not.toHaveProperty("steps");
+    }));
+
+  it("reads a criterion as the same so far only when every open count has one range on both sides, under the same gap words", () =>
+    hegel.test((tc) => {
+      const one = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 2 }));
+      const other = tc.draw(gs.arrays(stepPath, { minSize: one.length, maxSize: one.length }));
+      const criterion = compare({ paths: one }, { paths: other }).criteria[0]!;
+      const words = (gaps: readonly TraceGap[]): string[] => [...new Set(gaps.map((gap) => gap.gap))].sort();
+      const alike = (criterion.steps ?? []).every(
+        (step) => step.ran === "both" && step.changed.length === 0 && step.open.every(({ a, b }) => a.at_least === b.at_least && a.at_most === b.at_most) && words(step.gaps.a).join() === words(step.gaps.b).join(),
+      );
+      expect(criterion.result === "same_so_far").toBe(criterion.steps !== undefined && alike);
     }));
 
   it("compares two environments by their steps, names a step that ran on one side only, and keeps the flag out", () => {
@@ -192,7 +204,7 @@ describe("comparePaths", () => {
       a: { world: "head", environment: "reorder-off" },
       b: { world: "head", environment: "reorder-on" },
       unread: null,
-      counts: { changed: 1, open: 0, same: 0, not_compared: 0 },
+      counts: { changed: 1, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
       criteria: [
         {
           feature: FEATURE,
@@ -241,6 +253,18 @@ describe("comparePaths", () => {
     ]);
   });
 
+  it("reads both sides' pending jobs, with one count each, as the same so far, and one pending job against none as open", () => {
+    const pending = whole({ requests: [REQUESTS[0]], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }], open: [GAPS[0]!] });
+    const later = whole({ requests: [REQUESTS[0]], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }], open: [{ gap: "jobs-pending", job_ids: ["77aa"] }] });
+    const alike = compare({ paths: [pending] }, { paths: [later] });
+    expect(alike.counts).toEqual({ changed: 0, open: 0, same_so_far: 1, same: 0, not_compared: 0 });
+    expect(alike.criteria[0]!.steps).toEqual([
+      { line: 4, text: "step 1", ran: "both", changed: [], open: [{ kind: "db", table: "scores", op: "insert", a: { at_least: 1, at_most: null }, b: { at_least: 1, at_most: null } }], gaps: { a: [GAPS[0]], b: [{ gap: "jobs-pending", job_ids: ["77aa"] }] } },
+    ]);
+    const more = whole({ requests: [REQUESTS[0]], entries: [{ kind: "db", table: "scores", op: "insert", count: 2 }], open: [GAPS[0]!] });
+    expect(compare({ paths: [pending] }, { paths: [more] }).criteria[0]!.result).toBe("open");
+  });
+
   it("pairs every two environments whose conditions differ in exactly one, the side without it first", () => {
     const other: RunEnvironment = { name: "reorder-v2", target_version: null, conditions: { quick_reorder: true, layout: "v2" } };
     const paths = [whole()];
@@ -260,7 +284,7 @@ describe("comparePaths", () => {
         a: { world: "head", environment: "reorder-off" },
         b: { world: "head", environment: "reorder-on" },
         unread: "world reorder-on runs at http://127.0.0.1:4100, which nukadoko did not start, so it read no execution events there",
-        counts: { changed: 0, open: 0, same: 0, not_compared: 0 },
+        counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
         criteria: [],
         not_compared: [],
       },
@@ -270,7 +294,7 @@ describe("comparePaths", () => {
 
   it("names a criterion that did not run on a side as not compared", () => {
     const document = documentOf([{ line: 3, name: "a reorder goes through", steps: 1, sides: { "reorder-on": { paths: [whole()] } } }]);
-    expect(comparePaths(document)[0]).toMatchObject({ counts: { changed: 0, open: 0, same: 0, not_compared: 1 }, criteria: [], not_compared: [{ feature: FEATURE, line: 3, reason: "did not run in reorder-off" }] });
+    expect(comparePaths(document)[0]).toMatchObject({ counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 1 }, criteria: [], not_compared: [{ feature: FEATURE, line: 3, reason: "did not run in reorder-off" }] });
   });
 });
 
@@ -282,7 +306,7 @@ describe("the Changed paths section of the summary", () => {
     return start === -1 ? [] : lines.slice(start, end === -1 ? undefined : end);
   };
 
-  it("lists each changed or open criterion, errors first, then writes, and an open one after every changed one", () => {
+  it("lists each changed or open criterion, errors first, then writes, an open one after every changed one, and one the same so far last, in one line", () => {
     const reorder: Criterion = {
       line: 3,
       name: "a reorder goes through",
@@ -311,16 +335,26 @@ describe("the Changed paths section of the summary", () => {
         "reorder-on": { paths: [whole({ entries: [{ kind: "error", class: "CacheMiss", handled: true, count: 1 }, { kind: "db", table: "rooms", op: "update", count: 2 }] })] },
       },
     };
-    expect(section(documentOf([reorder, receipt, opened, rooms]))).toEqual([
+    const parked: Criterion = {
+      line: 2,
+      name: "a parked score is placed",
+      steps: 1,
+      sides: {
+        "reorder-off": { paths: [whole({ entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }], open: [GAPS[0]!] })] },
+        "reorder-on": { paths: [whole({ entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }], open: [GAPS[0]!] })] },
+      },
+    };
+    expect(section(documentOf([parked, reorder, receipt, opened, rooms]))).toEqual([
       "## Changed paths",
       "",
       "Each criterion below did something else on one side than on the other, or may have, step by step, as the program's execution events report it. " +
         "A count that a side's missing lines could still reach is listed as open, never as a change. " +
+        "A criterion whose open counts read the same on both sides, under the same gaps, is the same so far, and comes last. " +
         "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes.",
       "",
       "### `reorder-off` → `reorder-on` (`quick_reorder` false → true)",
       "",
-      "4 criteria compared: 2 changed, 1 open, 1 the same.",
+      "5 criteria compared: 2 changed, 1 open, 1 the same so far, 1 the same.",
       "",
       "- `features/orders.feature:13` a room is closed",
       "  - line 14 `step 1`: errors `CacheMiss` handled 0 → 1; writes `rooms` update 1 → 2",
@@ -329,6 +363,7 @@ describe("the Changed paths section of the summary", () => {
       "  - line 5 ran only in `reorder-on`, since `reorder-off` stopped at line 4 (`broke@4`): 1 write, 1 job, 1 request",
       "- `features/orders.feature:7` a receipt goes out",
       "  - line 8 `step 1`: open, since `reorder-on` is not whole (`jobs-pending` 1 job): writes `receipts` insert 2 → 1 or more",
+      "- `features/orders.feature:2` a parked score is placed: the same so far, with `jobs-pending` on both sides",
       "",
     ]);
   });

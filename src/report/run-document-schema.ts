@@ -385,13 +385,13 @@ const pathComparison = z.looseObject({
   a: pathSide,
   b: pathSide,
   unread: z.string().nullable(),
-  counts: z.looseObject({ changed: count, open: count, same: count, not_compared: count }),
+  counts: z.looseObject({ changed: count, open: count, same_so_far: count, same: count, not_compared: count }),
   criteria: z.array(
     z.looseObject({
       feature: z.string(),
       line: z.number().int(),
       name: z.string(),
-      result: z.enum(["changed", "open", "same"]),
+      result: z.enum(["changed", "open", "same_so_far", "same"]),
       a: pathExecution,
       b: pathExecution,
       steps: z.array(pathStep).optional(),

@@ -365,8 +365,11 @@ just until 0.1.
   cannot meet, and `open` otherwise, so a count a side's missing lines
   could still reach never reads as a change. A step one side never
   reached, since its execution stopped before it, makes its criterion
-  `changed`. A flag's side is what the pair switches, so no flag entry
-  is compared there. A pair one of whose worlds read no events says so
+  `changed`. An open criterion whose every open count has one range on
+  both sides, under the same gap words, is `same_so_far`, counted apart:
+  correct, but nothing the run saw differs, so the summary lists it last
+  in one line that names the gaps. A flag's side is what the pair
+  switches, so no flag entry is compared there. A pair one of whose worlds read no events says so
   in `unread`, and a criterion that did not run on a side is listed in
   `not_compared` with why. The run summary's new "Changed paths"
   section gives each pair a heading that names the condition, a count

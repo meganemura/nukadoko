@@ -147,13 +147,13 @@ describe("each step's path in run.json, and the paths of two environments compar
       a: { world: "head", environment: "reorder-off" },
       b: { world: "head", environment: "reorder-on" },
       unread: null,
-      counts: { changed: 1, open: 1, same: 4, not_compared: 0 },
+      counts: { changed: 1, open: 0, same_so_far: 1, same: 4, not_compared: 0 },
       not_compared: [],
     });
     expect(pair!.criteria.map((criterion) => [criterion.line, criterion.result])).toEqual([
       [3, "same"],
       [6, "same"],
-      [10, "open"],
+      [10, "same_so_far"],
       [14, "same"],
       [18, "changed"],
       [22, "same"],
@@ -180,18 +180,17 @@ describe("each step's path in run.json, and the paths of two environments compar
       "",
       "Each criterion below did something else on one side than on the other, or may have, step by step, as the program's execution events report it. " +
         "A count that a side's missing lines could still reach is listed as open, never as a change. " +
+        "A criterion whose open counts read the same on both sides, under the same gaps, is the same so far, and comes last. " +
         "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes.",
       "",
       "### `reorder-off` → `reorder-on` (`quick_reorder` false → true)",
       "",
-      "6 criteria compared: 1 changed, 1 open, 4 the same.",
+      "6 criteria compared: 1 changed, 1 the same so far, 4 the same.",
       "",
       "- `features/events.feature:18` a reorder goes through",
       '  - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201',
       "  - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request",
-      "- `features/events.feature:10` a parked score is placed",
-      '  - line 11 `the client posts to "/scores?park=1"`: open, since neither side is whole (`reorder-off`: `jobs-pending` 1 job; `reorder-on`: `jobs-pending` 1 job): ' +
-        "writes `scores` insert 1 or more → 1 or more; jobs `ScoreRecalcJob` enqueue 1 or more → 1 or more",
+      "- `features/events.feature:10` a parked score is placed: the same so far, with `jobs-pending` on both sides",
       "",
     ]);
   });

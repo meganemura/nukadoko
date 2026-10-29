@@ -167,7 +167,7 @@ describe("parseRunDocument", () => {
         a: { world: "head", environment: "reorder-off" },
         b: { world: "head", environment: "reorder-on" },
         unread: null,
-        counts: { changed: 1, open: 0, same: 0, not_compared: 0 },
+        counts: { changed: 1, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
         criteria: [
           {
             feature: "features/a.feature",
@@ -198,6 +198,7 @@ describe("parseRunDocument", () => {
           "a.environment",
           "unread",
           "counts.open",
+          "counts.same_so_far",
           "criteria",
           "criteria.0.result",
           "criteria.0.a.line",

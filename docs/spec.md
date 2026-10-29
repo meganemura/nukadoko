@@ -4089,7 +4089,7 @@ what the program did differently on the other side.
     "a": { "world": "head", "environment": "reorder-off" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 1, "open": 1, "same": 4, "not_compared": 0 },
+    "counts": { "changed": 1, "open": 0, "same_so_far": 1, "same": 4, "not_compared": 0 },
     "criteria": [
       {
         "feature": "features/orders.feature", "line": 18, "name": "a reorder goes through", "result": "changed",
@@ -4135,6 +4135,11 @@ what the program did differently on the other side.
 - A criterion's `result` is `changed` when a step has a changed entry
   or ran on one side only, `open` when every difference is open, and
   `same` otherwise.
+  An open criterion is `same_so_far` instead when each open count has
+  one range on both sides and each of its steps has the same gap words
+  on both: nothing the run saw differs, though a side's missing lines
+  could still make it differ.
+  `counts` counts each `result` apart.
   A step with `ran: "a"` or `"b"` ran on that side alone, since the
   other side's execution stopped before it; what it did is that step's
   own `path`.
@@ -4158,18 +4163,19 @@ The run summary gives each pair a heading under "Changed paths", after
 path changed or is open, at most 20 per pair.
 A criterion is ranked by the highest kind among its changed entries and
 what its one-side steps did, in the order errors, writes, outgoing
-calls, jobs, requests, flags, and then by the table's order:
+calls, jobs, requests, flags, and then by the table's order.
+A criterion the same so far comes last, in one line that names the gap
+words both sides share, so a reader is not sent to it first:
 
 ```text
 ### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
 
-6 criteria compared: 1 changed, 1 open, 4 the same.
+6 criteria compared: 1 changed, 1 the same so far, 4 the same.
 
 - `features/orders.feature:18` a reorder goes through
   - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201
   - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request
-- `features/orders.feature:10` a parked score is placed
-  - line 11 `the client posts to "/scores?park=1"`: open, since neither side is whole (`reorder-off`: `jobs-pending` 1 job; `reorder-on`: `jobs-pending` 1 job): writes `scores` insert 1 or more → 1 or more; jobs `ScoreRecalcJob` enqueue 1 or more → 1 or more
+- `features/orders.feature:10` a parked score is placed: the same so far, with `jobs-pending` on both sides
 ```
 
 What this does not reach, in one list:
