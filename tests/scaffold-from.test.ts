@@ -236,7 +236,7 @@ describe("nuka scaffold --from", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        "refused\tinvalid-value\t-\tRefusing to scaffold: --then: a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty)\n" +
+        "refused\tinvalid-value\t-\tRefusing to scaffold: --then: a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty, or a number word from zero to twelve)\n" +
         '  fix: Capture the value the line checks in --pattern, such as "the count is {count:int}", or write a feature line with a docstring or a table, and scaffold again.\n',
     });
     expect(existsSync(path.join(rootDir, "features", "steps", "greet-wrote.ts"))).toBe(false);

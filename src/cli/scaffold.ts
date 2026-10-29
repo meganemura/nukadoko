@@ -22,7 +22,7 @@ import { DESCRIPTION_TODO_PREFIX } from "../check/description-todo.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
-import { fixedWords, LITERAL_WORDS, literalStatement, type ClaimLiteral } from "../step/claims.js";
+import { fixedWords, LITERAL_WORDS, literalStatement, NUMBER_WORDS, type ClaimLiteral } from "../step/claims.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
 
@@ -560,15 +560,18 @@ const OUTPUT_STREAMS: ReadonlySet<string> = new Set(["stdout", "stderr"]);
  * by `nuka scaffold --then`, which refuses, and `--feature`, which writes
  * no stub for such a line and says so. */
 export const THEN_STATES_NO_VALUE =
-  "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty)";
+  "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, neither, empty, or a number word from zero to twelve)";
 
-/** Every fixed word of `pattern` that states a literal (`LITERAL_WORDS`),
- * in order, with the values it states there: the claim rule decides, so a
- * `neither` that a `nor` follows states nothing here either. Pure. */
+/** Every fixed word of `pattern` that states a literal (`LITERAL_WORDS`,
+ * or a number word from `zero` to `twelve`), in order, with the values it
+ * states there: the claim rule decides, so a `neither` that a `nor`
+ * follows states nothing here either. Pure. */
 function literalWords(pattern: string | null): readonly { readonly word: string; readonly values: readonly ClaimLiteral[] }[] {
   if (pattern === null) return [];
   return fixedWords(pattern).flatMap((word) => {
-    const values = (LITERAL_WORDS[word.toLowerCase()] ?? []).filter((value) => literalStatement(pattern, value)?.words === word);
+    const number = NUMBER_WORDS.indexOf(word.toLowerCase());
+    const candidates: readonly ClaimLiteral[] = number === -1 ? (LITERAL_WORDS[word.toLowerCase()] ?? []) : [number];
+    const values = candidates.filter((value) => literalStatement(pattern, value)?.words === word);
     return values.length === 0 ? [] : [{ word, values }];
   });
 }
@@ -593,8 +596,10 @@ export function wordLiteral(
   if (pattern === null || jsonType === null) return null;
   for (const { word, values } of literalWords(pattern)) {
     const literal = values.find((value) => jsonTypeOfLiteral(value) === jsonType);
-    const compare = literal === undefined ? null : literalStatement(pattern, literal)?.compare;
-    if (literal !== undefined && (compare === "equal" || compare === "not-equal")) return { word, literal, compare };
+    const statement = literal === undefined ? null : literalStatement(pattern, literal);
+    // A number word takes any compare; the scaffold writes equal, as it
+    // does for a captured number.
+    if (literal !== undefined && statement != null) return { word, literal, compare: statement.compare ?? "equal" };
   }
   return null;
 }
@@ -738,7 +743,9 @@ function wordThenLines(pattern: string | null, chained: readonly Field[]): strin
   if (actual === undefined || stated === null) throw new Error("internal: the caller should have refused this Then (thenLiteralRefusal)");
   const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string";
   return [
-    `  // "${stated.word}" states ${JSON.stringify(stated.literal)} for the type ${actual.key} holds. A word's literal is compared with ${stated.compare} alone.`,
+    NUMBER_WORDS.includes(stated.word.toLowerCase())
+      ? `  // "${stated.word}" states ${JSON.stringify(stated.literal)}. A number word takes any compare: change equal to the one the line says ("at least three" is at-least).`
+      : `  // "${stated.word}" states ${JSON.stringify(stated.literal)} for the type ${actual.key} holds. A word's literal is compared with ${stated.compare} alone.`,
     ...(text ? ["  // The program ends its output with a newline that the feature line does not show."] : []),
     `  claims: [{ actual: ${JSON.stringify(actual.key)},${text ? ' view: "text",' : ""} compare: "${stated.compare}", expected: { literal: ${JSON.stringify(stated.literal)} } }],`,
   ];

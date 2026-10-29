@@ -61,7 +61,10 @@ just until 0.1.
   points" may claim `{ literal: 3 }` with `at-least`, and "one relation
   line was drawn" may claim `1`. A word inside a capture, an optional
   group, or an alternation still states nothing, and `{int}` still reads
-  digits alone.
+  digits alone. `nuka scaffold --then` writes the number word's literal
+  for a line that states its value with one, given a `z.number()`
+  `--from`, with `equal` and a comment that a number word takes any
+  compare.
 - **A claim can compare a list in any order with the list a sentence
   states.** `has-same-items` holds when two arrays hold the same
   items, each as many times, in any order, so `["a", "a"]` against

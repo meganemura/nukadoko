@@ -48,6 +48,10 @@ This part does not change release to release.
 
 ## 0.22.0 to the next release
 
+- **`nuka scaffold --then` writes a claim for a line that states its value
+  with a number word,** given one `z.number()` `--from`, where it refused.
+  Its refusal for a line that states no value names number words among
+  the words that state one; a script that matched the old text updates it.
 - **A broken claim's failure message shows `{{secret.NAME}}` where a
   loaded secret stood,** cut after redaction, so its character positions
   are those of the redacted text, as in the run summary. No step file

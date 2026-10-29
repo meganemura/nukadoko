@@ -6572,7 +6572,10 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               that value with the word's literal of the same
                               JSON type ("", 0, or []), with equal, or with
                               not-equal right after the word "not",
-                              "neither", or "nor". With no
+                              "neither", or "nor". A number word from zero
+                              to twelve does the same with a z.number()
+                              --from, written with equal, which the step may
+                              change to the compare the line says. With no
                               --from, several, one of another type, or one
                               whose type the word fixes no value of, --then
                               refuses and writes no literal. A pattern that
