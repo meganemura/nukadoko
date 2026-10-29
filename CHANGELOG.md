@@ -179,7 +179,9 @@ just until 0.1.
   the base and old worlds under `--base` add no row. The rows are
   evidence to join with the program's own record of the flag by `name`
   and `side`; nukadoko does not judge whether a flag may be turned on.
-  The field is additive, so no `schema_version` changes.
+  The run summary gives each row one line under "Flags", with its
+  counts and the gates its lines named. The field is additive, so no
+  `schema_version` changes.
 
 ### Fixed
 

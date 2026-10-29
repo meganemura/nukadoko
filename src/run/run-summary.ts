@@ -7,6 +7,7 @@ import { RED_VERDICTS, type RunClaim, type RunDocument, type RunScenario, type R
 import type { MeasuredChannel } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
+import { byGate } from "./flag-rows.js";
 import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
 import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 
@@ -18,7 +19,8 @@ import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 // is red. Under `nuka run --base` the table says what each criterion's
 // change is, the line above it what the run compared with and whether the
 // mapping changed, and a section after the reasons quotes each removed
-// criterion, since head no longer holds its sentences.
+// criterion, since head no longer holds its sentences. When the program's
+// execution events named a flag, a section counts each side's criteria.
 //
 // Only head's executions feed the sections after the table (claims,
 // unmeasured actions, scenarios with no claim, reruns): an execution of
@@ -469,6 +471,42 @@ function countOf(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
 
+const FLAG_VERDICTS = ["held", "proven", "failed", "unproven", "moved"] as const;
+
+// A flag's name, side, and gate are the program's text, unlike a
+// scenario's name, which Gherkin keeps to one line: a line break in one
+// would end the list item, and the text after it could open a heading.
+function programWord(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+// One line per flag and side of run.json's `flags`, for the person who
+// decides whether to turn a flag on: its counts, and the gates its lines
+// named. The criteria themselves are the table's rows above, so the line
+// does not repeat them.
+function renderFlags(document: RunDocument): string[] {
+  const rows = document.flags ?? [];
+  if (rows.length === 0) return [];
+  const lines = rows.map((row) => {
+    const counts = FLAG_VERDICTS.filter((verdict) => row.counts[verdict] > 0).map((verdict) => `${row.counts[verdict]} ${verdict}`);
+    if (row.counts.controls > 0) counts.push(`${row.counts.controls} only in controls`);
+    const gates = [...new Set(row.criteria.flatMap((criterion) => criterion.cells.flatMap((cell) => cell.gates)))].sort(byGate);
+    const named = gates.map((gate) => (gate === null ? "none named" : codeSpan(programWord(gate))));
+    const counted = counts.length === 0 ? "" : `: ${counts.join(", ")}`;
+    const tail = named.length === 0 ? "" : `; gates ${named.join(", ")}`;
+    return `- ${codeSpan(programWord(row.name))} ${codeSpan(programWord(row.side))}, ${countOf(row.criteria.length, "criterion", "criteria")}${counted}${tail}`;
+  });
+  return [
+    "",
+    "## Flags",
+    "",
+    "Each line counts the criteria whose steps evaluated the flag on the side the program's lines named, by their verdict in the table.",
+    "One seen on that side only in controls is counted apart, since its verdict is about another side.",
+    "",
+    ...lines,
+  ];
+}
+
 // The item that names what a step started after its record was written
 // (docs/spec.md "Records"): those lines are in the step's own files, but
 // its record was already final, so this line is the one place that says
@@ -691,6 +729,7 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderReasons(document),
     ...renderCondition(document),
     ...renderRemoved(document),
+    ...renderFlags(document),
     ...renderClaims(document),
     ...renderUnjudged(document),
     ...renderUnmeasured(document),

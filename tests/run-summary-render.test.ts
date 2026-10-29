@@ -751,6 +751,60 @@ describe("the execution events lines of the summary", () => {
   });
 });
 
+describe("the flags lines of the summary", () => {
+  type FlagRow = NonNullable<RunDocument["flags"]>[number];
+  const cell = (gates: readonly (string | null)[]) => ({ environment: "reorder-on", role: "required" as const, outcome: "pass" as const, gates });
+  const criterion = (line: number, verdict: FlagRow["criteria"][number]["verdict"], gates: readonly (string | null)[]) => ({
+    feature: "features/orders.feature",
+    line,
+    name: `c${line}`,
+    verdict,
+    cells: [cell(gates)],
+  });
+  const flagRow = (name: string, side: string, criteria: FlagRow["criteria"], counts: Partial<FlagRow["counts"]>): FlagRow => ({
+    name,
+    side,
+    criteria,
+    counts: { held: 0, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0, ...counts },
+  });
+
+  it("gives each flag and side one line with its counts and the gates its lines named, after the removed criteria", () => {
+    const flags = [
+      flagRow("quick_reorder", "off", [criterion(4, "proven", ["boolean"]), criterion(7, "held", ["boolean"]), criterion(17, "held", [null])], { held: 2, controls: 1 }),
+      flagRow("quick_reorder", "on", [criterion(4, "proven", ["boolean"]), criterion(7, "held", ["actor", "boolean"]), criterion(21, "failed", [null, "manual"])], { held: 1, proven: 1, failed: 1 }),
+    ];
+    const markdown = renderRunSummary({ ...base, flags });
+    expect(markdown.slice(markdown.indexOf("\n## Flags")).split("\n")).toEqual([
+      "",
+      "## Flags",
+      "",
+      "Each line counts the criteria whose steps evaluated the flag on the side the program's lines named, by their verdict in the table.",
+      "One seen on that side only in controls is counted apart, since its verdict is about another side.",
+      "",
+      "- `quick_reorder` `off`, 3 criteria: 2 held, 1 only in controls; gates `boolean`, none named",
+      "- `quick_reorder` `on`, 3 criteria: 1 held, 1 proven, 1 failed; gates `boolean`, `actor`, `manual`, none named",
+      "",
+    ]);
+    expect(renderRunSummary(base)).not.toContain("## Flags");
+  });
+
+  it("keeps every flag and side on one line of its own, whatever the program named them", () =>
+    hegel.test((tc) => {
+      // Any text, and text made of what could break a line or open Markdown.
+      const words = gs.oneOf(gs.text({ maxSize: 12 }), gs.text({ alphabet: "a`|<#\n\r\u2028 ", maxSize: 12 }));
+      const flags = tc.draw(
+        gs.arrays(
+          gs.composite((inner) => flagRow(inner.draw(words), inner.draw(words), [criterion(3, "held", [inner.draw(gs.oneOf(words, gs.just(null)))])], { held: 1 })),
+          { minSize: 1, maxSize: 4 },
+        ),
+      );
+      const markdown = renderRunSummary({ ...base, flags });
+      const section = markdown.slice(markdown.indexOf("\n## Flags\n")).split("\n").slice(6, -1);
+      expect(section).toHaveLength(flags.length);
+      for (const line of section) expect(line).toMatch(/^- `.*, 1 criterion: 1 held(; gates .+)?$/);
+    }));
+});
+
 describe("the comparison line of the summary", () => {
   it("names the base by its ref, and adds the commit unless the ref is that commit's own hash", () =>
     hegel.test((tc) => {

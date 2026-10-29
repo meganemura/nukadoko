@@ -281,6 +281,17 @@ const table = z.looseObject({
   proof_runs: z.number().int().min(1),
 });
 
+// run.json's `flags` (src/run/flag-rows.ts): the summary reads each row's
+// flag and side, its counts, how many criteria it holds, and the gates of
+// their cells.
+const count = z.number().int().min(0);
+const flagRow = z.looseObject({
+  name: z.string(),
+  side: z.string(),
+  criteria: z.array(z.looseObject({ cells: z.array(z.looseObject({ gates: z.array(z.string().nullable()) })) })),
+  counts: z.looseObject({ held: count, proven: count, failed: count, unproven: count, moved: count, controls: count }),
+});
+
 const document = z.looseObject({
   command: z.literal("run"),
   nukadoko: z.string(),
@@ -338,6 +349,7 @@ const document = z.looseObject({
   }),
   scenarios: z.array(scenario),
   table,
+  flags: z.array(flagRow).optional(),
   walk: z
     .looseObject({
       pauses: z.array(

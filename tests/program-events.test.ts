@@ -192,6 +192,7 @@ describe("the program's execution events", () => {
     // The one flag line went down with the spliced line around it, so no
     // step read a flag, and run.json names none.
     expect(run).not.toHaveProperty("flags");
+    expect(readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).not.toContain("## Flags");
 
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     expect(summary.filter((line) => line.includes("events of world"))).toEqual([

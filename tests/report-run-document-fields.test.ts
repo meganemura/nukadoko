@@ -103,6 +103,15 @@ describe("nuka report on a run.json with one field deleted or null", () => {
     });
     document.worlds = [{ name: "default", tree: "base", url: null, commands: [], timings: {}, log: null, error: "it did not start", program_from_head: true }];
     document.scenarios.push({ ...structuredClone(first), world: "old", row: { feature: first.feature, line: first.line } });
+    // What a program's flag lines add.
+    document.flags = [
+      {
+        name: "quick_reorder",
+        side: "on",
+        criteria: [{ feature: first.feature, line: first.line, name: first.scenario, verdict: "held", cells: [{ environment: "default", role: "required", outcome: "pass", gates: ["actor", null] }] }],
+        counts: { held: 1, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 },
+      },
+    ];
     base = document as Json;
   }, 120_000);
 

@@ -1,9 +1,10 @@
+import { readFileSync } from "node:fs";
 import { copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { parseRunDocument } from "../src/report/run-document-schema.js";
-import { copyFixtureToTempDir, createCaptureSink, latestRunJson, latestRunJsonText, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, latestRunJsonText, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: run.json's `flags` end to end, against
 // tests/fixtures/events-project served in two environments that declare
@@ -129,6 +130,13 @@ describe("run.json's flags", () => {
       expect(step.observed.events.kinds).not.toHaveProperty("flag");
       expect(step.events_late?.file).toBe("events-late.jsonl");
     }
+
+    // The summary gives each row one line: its counts, and the gates.
+    const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
+    expect(summary.filter((line) => line.startsWith("- `quick_reorder`"))).toEqual([
+      "- `quick_reorder` `off`, 5 criteria: 2 held, 1 failed, 2 only in controls; gates `boolean`, none named",
+      "- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named",
+    ]);
 
     // `nuka report` reads the same document, flags included.
     expect("document" in parseRunDocument(latestRunJsonText(rootDir))).toBe(true);

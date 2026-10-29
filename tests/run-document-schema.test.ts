@@ -114,6 +114,25 @@ describe("parseRunDocument", () => {
       if (!valid) expect("problem" in result && result.problem).toContain("a fail cell, and only a fail cell, names the claim that broke");
     }));
 
+  it("reads the flags a summary counts, and refuses a row without any one field it reads", () =>
+    hegel.test((tc) => {
+      const row = {
+        name: "quick_reorder",
+        side: "on",
+        criteria: [{ feature: "features/a.feature", line: 3, name: "a", verdict: "held", cells: [{ environment: "default", role: "required", outcome: "pass", gates: ["boolean", null] }] }],
+        counts: { held: 1, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 },
+      };
+      expect(parseRunDocument(JSON.stringify({ ...VALID, flags: [row] }))).toEqual({ document: { ...VALID, flags: [row] } });
+      const path = tc.draw(gs.sampledFrom(["name", "side", "criteria", "counts", ...Object.keys(row.counts).map((key) => `counts.${key}`), "criteria.0.cells", "criteria.0.cells.0.gates"]));
+      const broken = structuredClone(row) as Record<string, unknown>;
+      const segments = path.split(".");
+      let parent = broken;
+      for (const segment of segments.slice(0, -1)) parent = parent[segment] as Record<string, unknown>;
+      delete parent[segments[segments.length - 1]!];
+      const result = parseRunDocument(JSON.stringify({ ...VALID, flags: [broken] }));
+      expect("problem" in result && result.problem).toContain(`flags.0.${path}: `);
+    }));
+
   it("refuses another schema version before it reads a field", () => {
     expect(parseRunDocument(JSON.stringify({ schema_version: 2 }))).toEqual({ problem: "has schema_version 2, and this release reads 4" });
     expect(parseRunDocument("[")).toEqual({ problem: "does not parse as JSON: Unexpected end of JSON input" });

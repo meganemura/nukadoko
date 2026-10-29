@@ -43,7 +43,8 @@ function gateOrder(gate: string | null): [number, string] {
   return [known === -1 ? FORMAT_GATES.length : known, gate];
 }
 
-function byGate(a: string | null, b: string | null): number {
+/** The order of a cell's `gates`, which the run summary keeps too. */
+export function byGate(a: string | null, b: string | null): number {
   const [rankA, wordA] = gateOrder(a);
   const [rankB, wordB] = gateOrder(b);
   return rankA - rankB || (wordA < wordB ? -1 : wordA > wordB ? 1 : 0);

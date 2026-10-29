@@ -3909,6 +3909,12 @@ criteria ran on each side and what their rows came to:
   cells the table already reads, nor a removed criterion, which has no
   execution.
 
+The run summary gives each row one line under "Flags":
+
+```text
+- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
+```
+
 What this does not reach, in one list:
 
 - A line a step's own code writes to the file reads as the program's.
@@ -6098,6 +6104,12 @@ holds:
   version, the run id, and the start and finish times;
 - under `--base`, "Removed criteria": each removed criterion's location
   and name, and its sentences at the ref in a `gherkin` block;
+- "Flags", when run.json has `flags`: one line per flag and side, with
+  how many criteria evaluated it there, their counts by verdict,
+  `only in controls` for the ones seen there only in controls, and each
+  gate its lines named, `none named` for a line that named none (see
+  "Execution events"); a control character in the program's text is
+  written as its `\u` escape, so a name cannot end the line;
 - "Claims", one entry per Then that declared claims: its location and
   sentence, its environment in a run of several, `control` for a
   control's, the number of readings when there was more than one, and under

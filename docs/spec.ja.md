@@ -3086,6 +3086,12 @@ flag を全員に有効にするかを決める読み手が、どの受け入れ
   そのセルは、表がすでに読んでいるからです。
   消えた受け入れ基準も、実行が無いので要素を生みません。
 
+run サマリは、各要素に「Flags」の下の 1 行を付けます:
+
+```text
+- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
+```
+
 この仕組みが届かないものを、1 つの一覧にまとめます:
 
 - step 自身のコードがファイルに書いた行は、プログラムのものとして読まれます。
@@ -4695,6 +4701,10 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world ごとの 1 行(「実行イベント」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--base` のもとでは「Removed criteria」。
   消えた各受け入れ基準の場所と名前、そして基点での文を `gherkin` のブロックで載せます。
+- run.json が `flags` を持つときは「Flags」。
+  flag と側の組ごとに 1 行で、そこで flag を評価した受け入れ基準の数、断定ごとの数、その側で対照にしか現れなかったものの `only in controls`、行が名指した各ゲート(ゲートを名指さなかった行は `none named`)を載せます(「実行イベント」を参照)。
+  プログラムのテキストの中の制御文字は `\u` のエスケープで書きます。
+  名前が行を終わらせないようにするためです。
 - 「Claims」。
   claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
