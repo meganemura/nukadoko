@@ -83,7 +83,15 @@ export type WalkState =
   | (WalkStart & { readonly state: "starting" })
   | (WalkStart & WalkRun & { readonly state: "running"; readonly after: number })
   | (WalkStart & WalkRun & { readonly state: "paused"; readonly pause: Pause })
-  | (WalkStart & Partial<WalkRun> & { readonly state: "ended"; readonly end: WalkEnd; readonly ended_at: string });
+  | (WalkStart &
+      Partial<WalkRun> & {
+        readonly state: "ended";
+        readonly end: WalkEnd;
+        readonly ended_at: string;
+        /** The last pause the walk reached, 0 when it reached none: an
+         * answer to a later pause is no answer to this walk. */
+        readonly reached: number;
+      });
 
 export type WalkEvent =
   | { readonly kind: "begun"; readonly run: WalkRun }
@@ -121,7 +129,8 @@ export function advanceWalk(state: WalkState, event: WalkEvent): WalkState {
   if (state.state === "ended") return state;
   if (event.kind === "ended") {
     const run = state.state === "starting" ? {} : runOf(state);
-    return { state: "ended", ...startOf(state), ...run, end: event.end, ended_at: event.at };
+    const reached = state.state === "paused" ? state.pause.pause : state.state === "running" ? state.after : 0;
+    return { state: "ended", ...startOf(state), ...run, end: event.end, ended_at: event.at, reached };
   }
   switch (state.state) {
     case "starting":
@@ -202,13 +211,17 @@ export function walkStanding(seen: WalkFound): string {
   if (seen.state === "paused") return `is at pause ${seen.pause.pause}`;
   if (seen.state === "running") return seen.after === 0 ? "is running its first step" : `is running the step after pause ${seen.after}`;
   if (seen.state === "starting") return "is starting";
-  const { end } = seen;
-  if (end.how === "interrupted") return `ended: interrupted by ${end.signal}, exit ${end.exit_code}`;
-  if (end.how === "not-run") return `ended before its scenario ran, exit ${end.exit_code}`;
+  return `ended${howEnded(seen.end)}`;
+}
+
+// What follows "ended" in a walk's standing.
+function howEnded(end: WalkEnd): string {
+  if (end.how === "interrupted") return `: interrupted by ${end.signal}, exit ${end.exit_code}`;
+  if (end.how === "not-run") return ` before its scenario ran, exit ${end.exit_code}`;
   if (end.stopped !== undefined) {
-    return `ended: stopped after step ${end.stopped.after_step}${end.stopped.line === null ? "" : ` (line ${end.stopped.line})`}, exit ${end.exit_code}`;
+    return `: stopped after step ${end.stopped.after_step}${end.stopped.line === null ? "" : ` (line ${end.stopped.line})`}, exit ${end.exit_code}`;
   }
-  return `ended: the run finished, exit ${end.exit_code}`;
+  return `: the run finished, exit ${end.exit_code}`;
 }
 
 /** The message of a wait that found no walk to report before its time ran
@@ -277,20 +290,34 @@ export function stepDecision(call: StepCall, target: number, seen: WalkSeen, ans
   const now = seen;
   if (now.state === "gone") return { kind: "report", seen: now };
   const given = answers.get(call.pause);
+  // A wait that names the walk reports it whatever it came to, an end
+  // included, so it is the do of every refusal below.
   if (given !== undefined && given !== call.answer) {
+    const ended = now.state === "ended" ? `, and walk ${target} ${walkStanding(now)}` : "";
     return {
       kind: "refuse",
       code: "pause-answered",
-      message: `pause ${call.pause} was already answered ${given}, so this ${call.answer} changes nothing`,
-      // A wait after an end waits for the next walk, so it is offered only
-      // while this one runs.
-      ...(now.state === "ended" ? {} : { do: waitCommand(target) }),
+      message: `pause ${call.pause} was already answered ${given}${ended}, so this ${call.answer} changes nothing`,
+      do: waitCommand(target),
     };
   }
-  // Nothing is left to answer once a walk ended, and how it ended is what
-  // the caller needs: a repeat of the answer that ended it, or an answer
-  // that came too late.
-  if (now.state === "ended") return { kind: "report", seen: now };
+  if (now.state === "ended") {
+    // A pause the walk never reached is no answer to it, and a report
+    // would read as one.
+    if (call.pause > now.reached) {
+      const when = now.end.how === "not-run" ? "" : now.reached === 0 ? " before its first pause" : ` after pause ${now.reached}`;
+      return {
+        kind: "refuse",
+        code: "pause-not-current",
+        message: `pause ${call.pause} is not a pause of walk ${target}, which ended${when}${howEnded(now.end)}`,
+        do: waitCommand(target),
+      };
+    }
+    // Nothing is left to answer, and how the walk ended is what the
+    // caller needs: a repeat of the answer that ended it, or an answer
+    // that came too late.
+    return { kind: "report", seen: now };
+  }
   if (given === undefined) {
     if (now.state === "paused" && now.pause.pause === call.pause) return { kind: "write-answer", runDir: now.run_dir };
     return {

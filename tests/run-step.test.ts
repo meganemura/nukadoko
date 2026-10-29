@@ -183,6 +183,12 @@ describe("nuka run --step and nuka step", () => {
       expect(end.stdout).toBe(`walk 1 ended: the run finished, exit 0\n  run: ${runDir}/run.json\n`);
       expect((await run.closed).code).toBe(0);
 
+      // A pause the walk never reached is no answer to its end.
+      const never = await nukaStepJson(rootDir, "next", "1e2", "--walk", "1");
+      expect(never.code).toBe(2);
+      expect(never.document["findings"][0]).toMatchObject({ code: "pause-not-current", do: "nuka step wait --walk 1" });
+      expect(never.document["findings"][0]["message"]).toBe("pause 100 is not a pause of walk 1, which ended after pause 3: the run finished, exit 0");
+
       const document = runJson(rootDir, runDir);
       expect(document["verdict"]).toBe("passed");
       expect(document["counts"]).toMatchObject({ passed: 1, failed: 0, stopped: 0 });
@@ -329,12 +335,15 @@ describe("nuka run --step and nuka step", () => {
       expect(summary).toContain("## Rerun a stopped scenario");
 
       // The stop that ended the walk, again: the same end. A next to that
-      // pause now contradicts the stop, and no wait is offered after an end.
+      // pause now contradicts the stop, and the wait it offers names the
+      // walk, so it reports this end rather than waiting for the next walk.
       expect(await nukaStep(rootDir, "stop", "2", "--walk", "1")).toEqual(stopped);
       const late = await nukaStep(rootDir, "next", "2", "--walk", "1");
       expect(late.code).toBe(2);
       expect(late.stderr).toContain("pause-answered");
-      expect(late.stderr).not.toContain("do: nuka step wait");
+      expect(late.stderr).toContain("pause 2 was already answered stop, and walk 1 ended: stopped after step 2 (line 5), exit 1, so this next changes nothing");
+      expect(late.stderr).toContain("do: nuka step wait --walk 1");
+      expect((await nukaStep(rootDir, "wait", "--walk", "1")).stdout).toBe(stopped.stdout);
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );
@@ -505,17 +514,12 @@ describe("nuka run --step and nuka step", () => {
       expect(run.stderr()).toContain("the targets select 2 scenarios");
       expect(walkState(rootDir)).toMatchObject({ state: "ended", number: 1, end: { how: "not-run", exit_code: 2 } });
 
-      // An answer finds the walk it is for ended.
+      // The walk never paused, so no pause of it can be answered.
       const answer = await nukaStep(rootDir, "next", "1", "--walk", "1");
-      expect(answer.code).toBe(1);
-      expect(answer.stdout).toBe("walk 1 ended before its scenario ran, exit 2\n");
-
-      // A wait is for the walk after an ended one, and says which walk
-      // came last when none starts.
-      const wait = await nukaStepJson(rootDir, "wait", "--timeout", "0");
-      expect(wait.code).toBe(2);
-      expect(wait.document["findings"][0]).toMatchObject({ code: "walk-not-found" });
-      expect(wait.document).toMatchObject({ walk: "none", last: { number: 1, state: "ended" } });
+      expect(answer.code).toBe(2);
+      expect(answer.stderr).toContain("pause-not-current");
+      expect(answer.stderr).toContain("pause 1 is not a pause of walk 1, which ended before its scenario ran, exit 2");
+      expect(answer.stderr).toContain("do: nuka step wait --walk 1");
     },
     SPAWNED_TEST_TIMEOUT_MS,
   );

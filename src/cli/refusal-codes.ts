@@ -134,7 +134,7 @@ const REFUSAL_CODES = {
     fix: "Run nuka step wait --walk <n> to see where the walk stands, and answer the pause it shows.",
   },
   "pause-not-current": {
-    description: "nuka step answers a pause that is not the one the walk waits at: the walk has not reached it, has moved past it, or has ended.",
+    description: "nuka step answers a pause that is not the one the walk waits at: the walk has not reached it yet, has moved past it without that answer, or ended without reaching it.",
     fix: "Run nuka step wait --walk <n> to see the pause the walk waits at, and answer that pause.",
   },
   "read-only-environment": {

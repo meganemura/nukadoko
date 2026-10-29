@@ -4647,7 +4647,9 @@ started is refused with `walk-not-current`, which names the walk there
 is, and moves nothing. A call made twice writes nothing the second time: the
 same answer again prints what followed it, another answer to that pause
 is refused with `pause-answered`, and an answer to a pause the walk is
-not at with `pause-not-current`. `nuka step wait` waits until the walk
+not at, or that an ended walk never reached, with `pause-not-current`.
+Each of these refusals names `nuka step wait --walk <n>`, which reports
+that walk wherever it stands, its end included. `nuka step wait` waits until the walk
 pauses or ends, and answers nothing. Without `--walk`, a wait is about
 the newest walk until a `nuka step` call has printed how that walk
 ended, so a walk that ended before anyone looked (a refusal, a signal, a

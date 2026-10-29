@@ -222,15 +222,18 @@ describe("stepDecision", () => {
       expect(stepDecision({ kind: "answer", walk: START.number, pause: named, answer }, START.number, seen, answers)).toMatchObject({ kind: "refuse", code: "pause-not-current" });
     }));
 
-  it("reports an ended walk to any answer that does not contradict one given, since a wait after an end waits for the next walk", () =>
+  it("reports an ended walk to an answer to a pause it reached that does not contradict one given, and refuses a pause it never reached", () =>
     hegel.test((tc) => {
       const k = tc.draw(gs.integers({ minValue: 1, maxValue: STEPS - 1 }));
       const answer = tc.draw(gs.sampledFrom(["next", "stop"] as const));
       const { seen, answers } = walkTo(k, answer, "ended");
+      expect(seen).toMatchObject({ state: "ended", reached: k });
       const call: StepCall = { kind: "answer", walk: START.number, pause: tc.draw(gs.integers({ minValue: 1, maxValue: STEPS + 1 })), answer: tc.draw(gs.sampledFrom(["next", "stop"] as const)) };
       const given = answers.get(call.pause);
       const decision = stepDecision(call, START.number, seen, answers);
-      if (given !== undefined && given !== call.answer) expect(decision).toEqual({ kind: "refuse", code: "pause-answered", message: expect.any(String) });
+      const wait = `nuka step wait --walk ${START.number}`;
+      if (given !== undefined && given !== call.answer) expect(decision).toEqual({ kind: "refuse", code: "pause-answered", message: expect.any(String), do: wait });
+      else if (call.pause > k) expect(decision).toEqual({ kind: "refuse", code: "pause-not-current", message: expect.any(String), do: wait });
       else expect(decision).toEqual({ kind: "report", seen });
     }));
 
