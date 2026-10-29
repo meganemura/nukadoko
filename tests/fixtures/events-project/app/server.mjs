@@ -15,7 +15,10 @@ import { emit, emitRaw, newId } from "./events.mjs";
 // between them. `/secret` writes the world's token inside an event.
 // `/inlet` answers where the events file is, who may read it, and which
 // variables of the server's environment name a file nukadoko made for
-// events.
+// events. `/up`, the readiness probe, writes its line before it answers,
+// so the line is in the file before any step reads it: written after, it
+// would reach the first step's reading as a line no step owns, or not,
+// as the race went.
 const jobs = process.env.JOBS_DIR;
 mkdirSync(jobs, { recursive: true });
 fork(new URL("./worker.mjs", import.meta.url).pathname);
@@ -67,9 +70,11 @@ createServer(async (req, res) => {
   } else if (url.pathname === "/inlet") {
     body = JSON.stringify(inlet());
   }
+  const line = { trace, kind: "request", id, method: req.method, route, status };
+  if (url.pathname === "/up") emit(line);
   res.writeHead(status, { "content-type": "text/plain" });
   res.end(body);
-  const line = { trace, kind: "request", id, method: req.method, route, status };
+  if (url.pathname === "/up") return;
   if (url.pathname !== "/late") {
     emit(line);
     return;
