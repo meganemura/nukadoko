@@ -149,6 +149,12 @@ const RUN_CODES = {
     description: "The environment's version probe did not answer, so the records have no target version.",
     fix: "Correct the environment's version setting in nukadoko.program.ts, or the endpoint it names.",
   },
+  "walk-gone": {
+    severity: "failed",
+    description:
+      "nuka step found a walk whose nuka run --step process ended without recording how: it was killed, or it crashed, so its world, its browser, and its fixtures may not have been torn down.",
+    fix: "Stop what the walk left running, if anything, and start the walk again with the command the finding names.",
+  },
   "walk-stopped": {
     severity: "failed",
     description:
