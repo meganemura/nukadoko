@@ -507,6 +507,7 @@ scenario の中では、capture、docstring、table、または前の step の r
 `program_log` は、nukadoko がプログラムを起動するとき、step の trace id を持つそのログの行です。
 プログラムへの各リクエストは、プログラムが自分のログの行に書ける `traceparent` を運びます。
 `url` のプログラムでは `null` です。
+`events` は、プログラムのファイルが `{events}` を名指すとき、プログラム自身が step の中で何をしたかを報告したもので、文、ジョブ、呼び出しごとに 1 行を [docs/execution-events.ja.md](docs/execution-events.ja.md) の形式で持ちます。
 `unmeasured` は、nukadoko が見えたが計測できない操作の一覧です。
 たとえば `runCommand` を通さずに起動したプロセスです。
 これにより、nukadoko が完全でないと見た record は、完全には見えません。

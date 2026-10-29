@@ -90,6 +90,21 @@ export interface BoundaryTrace {
   readonly lastStampAt: number | undefined;
 }
 
+/** The boundary's trace with the span id of each request it stamped,
+ * for the step's slice of the program's events (events-file.ts), which
+ * matches each request to the line that reports its end. */
+export interface StampedBoundaryTrace extends BoundaryTrace {
+  /** The span ids the boundary sent, in the order sent, at most
+   * MAX_KEPT_SPANS of them. */
+  readonly spans: readonly string[];
+  /** Stamped requests past MAX_KEPT_SPANS, whose span ids are not kept. */
+  readonly spansNotKept: number;
+}
+
+/** How many span ids a boundary keeps: a step that sends more requests
+ * than this to the world is rare, and its events count the rest. */
+const MAX_KEPT_SPANS = 1000;
+
 /** How many requests and `runCommand` processes started after a step's
  * record was written. Live: it grows while the step's code keeps running. */
 export interface AfterStepEnd {
@@ -126,7 +141,7 @@ export interface ObservedCollector extends StepRecorder {
   reset(): void;
   /** Executor-only: the current boundary's trace, or `undefined` when the
    * run has no world to stamp requests for. */
-  boundaryTrace(): BoundaryTrace | undefined;
+  boundaryTrace(): StampedBoundaryTrace | undefined;
   /** The `traceparent` for a request to `url` sent now, in the current
    * boundary: a page's request, which runs in no step's scope. */
   traceparentFor(url: string, base?: string): string | undefined;
@@ -154,6 +169,8 @@ interface Boundary {
   readonly traceId: string | undefined;
   stamped: number;
   lastStampAt: number | undefined;
+  readonly spans: string[];
+  spansNotKept: number;
 }
 
 function newBoundary(dir: string | undefined, traceId: string | undefined): Boundary {
@@ -162,6 +179,8 @@ function newBoundary(dir: string | undefined, traceId: string | undefined): Boun
     traceId,
     stamped: 0,
     lastStampAt: undefined,
+    spans: [],
+    spansNotKept: 0,
     closed: false,
     afterEnd: { requests: 0, processes: 0 },
     processes: null,
@@ -261,13 +280,16 @@ export function createObservedCollector(
       const state = current();
       if (trace === undefined || state.traceId === undefined || !stampsUrl(trace.origin, url, base)) return undefined;
       let counted = false;
+      const span = newSpanId();
       return {
-        value: traceparentOf(state.traceId, newSpanId()),
+        value: traceparentOf(state.traceId, span),
         sent() {
           if (counted) return;
           counted = true;
           state.stamped += 1;
           state.lastStampAt = Date.now();
+          if (state.spans.length < MAX_KEPT_SPANS) state.spans.push(span);
+          else state.spansNotKept += 1;
         },
       };
     };
@@ -426,13 +448,15 @@ export function createObservedCollector(
     reset(): void {
       boundary = openBoundary();
     },
-    boundaryTrace(): BoundaryTrace | undefined {
+    boundaryTrace(): StampedBoundaryTrace | undefined {
       const state = boundary;
       if (state.traceId === undefined) return undefined;
       return {
         traceId: state.traceId,
         stamped: state.stamped,
         lastStampAt: state.lastStampAt,
+        spans: [...state.spans],
+        spansNotKept: state.spansNotKept,
       };
     },
   };

@@ -702,6 +702,55 @@ describe("the program log lines of the summary", () => {
   });
 });
 
+describe("the execution events lines of the summary", () => {
+  const counts = { file: "worlds/default/events.jsonl", lines: 9, owned: 8, late: 0, unowned: 1, unreadable: 0, undefined_kinds: {} };
+
+  it("says once per world that the file was not read, got no line, or holds lines no record holds, and nothing for the others", () => {
+    const markdown = renderRunSummary(
+      run({
+        worlds: [
+          { ...world("default", "http://localhost:41873"), events: counts },
+          { ...world("silent", "http://localhost:41874"), events: { ...counts, file: "worlds/silent/events.jsonl", lines: 0, owned: 0, unowned: 0 } },
+          { ...world("busy", "http://localhost:41875"), events: { ...counts, file: null, late: 3, unreadable: 1, undefined_kinds: { queue: 2, cache: 1 } } },
+          { ...world("staging", "https://staging.example.test"), events: null },
+          { ...world("plain", "http://localhost:41876") },
+        ],
+      }),
+    );
+    expect(markdown.split("\n").filter((line) => line.includes("events of world"))).toEqual([
+      "- events of world silent: the program wrote no line to the file {events} names, so no step's record has an event",
+      "- events of world busy: 3 lines carrying a step's trace id arrived after that step ended (`events-late.jsonl`); " +
+        "1 line is not one readable line of the format; 3 lines name a kind the format does not define (`queue`, `cache`); " +
+        "the world's copy of the file could not be written",
+      "- events of world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
+    ]);
+  });
+
+  it("names a step's late events once under that step, and says when they could not be written", () => {
+    const observed = { processes: null, http: 1, files: null, unmeasured: [] };
+    const markdown = renderRunSummary(
+      run({
+        scenarios: [
+          scenario("features/a.feature", 3, "late", "passed", 1, {
+            steps: [
+              step("the client gets late", { line: 4, record: "steps/step-1", observed, events_late: { lines: 1, file: "events-late.jsonl" } }),
+              step("the client gets late again", { line: 5, record: "steps/step-2", observed, events_late: { lines: 2, file: null }, program_log_late: { lines: 1, file: "program-log-late.txt" } }),
+            ],
+          }),
+        ],
+      }),
+    );
+    const section = markdown.slice(markdown.indexOf("## Unmeasured actions"));
+    expect(section.split("\n").filter((line) => line.startsWith("- ") || line.includes("-late."))).toEqual([
+      "A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record.",
+      "A line of the program's events that carries a step's trace id and arrived after its record was written is in that step's `events-late.jsonl`, and not in its record.",
+      "- `features/a.feature:4` the client gets late: 1 line of the program's events after the step ended, in `events-late.jsonl`; record `steps/step-1`",
+      "- `features/a.feature:5` the client gets late again: 1 line of the program's log after the step ended, in `program-log-late.txt`, " +
+        "2 lines of the program's events after the step ended, which could not be written; record `steps/step-2`",
+    ]);
+  });
+});
+
 describe("the comparison line of the summary", () => {
   it("names the base by its ref, and adds the commit unless the ref is that commit's own hash", () =>
     hegel.test((tc) => {

@@ -53,6 +53,7 @@ import { createHttpLogFailedCollector } from "./http-log-failed.js";
 import { createHttpOmittedCollector } from "./http-omitted.js";
 import { type AfterStepEnd, createObservedCollector, finalizeOpenRequests } from "./observed.js";
 import { createPageEventsCollector } from "./page-events.js";
+import { createEventsReader } from "./events-file.js";
 import { createProgramLogReader } from "./program-log-slice.js";
 import { newTracePrefix, originOf } from "./trace-context.js";
 import { pollWithRecording } from "./poll.js";
@@ -535,6 +536,14 @@ export interface CreateStepContextOptions {
    * not read. Absent, or ignored without `baseURL`, when there is no
    * world URL. */
   programLog?: string | null | undefined;
+  /** The file the world's program appends its execution events to
+   * (src/program/world-view.ts), which each step's record slices by trace
+   * id: its path when the program file names `{events}` and nukadoko
+   * serves the program, `null` or absent otherwise. A world at a `url`
+   * (`programLog: null`) records `events: null`, since nukadoko reads
+   * nothing a program it did not start writes. Ignored without
+   * `baseURL`. */
+  events?: string | null | undefined;
   /** The prefix every trace id of the world starts with
    * (src/program/world-view.ts). Without one, the handle makes its own. */
   tracePrefix?: string | undefined;
@@ -727,6 +736,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // before it can carry a trace id this handle makes.
   const programLog =
     trace !== undefined && typeof options.programLog === "string" ? createProgramLogReader(options.programLog, trace.prefix, secrets) : undefined;
+  // The same rule for the program's events.
+  const eventsReader = trace !== undefined && typeof options.events === "string" ? createEventsReader(options.events, trace.prefix, secrets) : undefined;
   // Same lifetime rule as `observed`, for provenance instead of network
   // calls.
   const used = createUsedCollector();
@@ -1332,8 +1343,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     observed.close();
     const boundaryTrace = observed.boundaryTrace();
     if (boundaryTrace === undefined) return counts;
-    if (programLog === undefined) return options.programLog === null ? { ...counts, program_log: null } : counts;
-    return { ...counts, program_log: await programLog.slice(boundaryDir, boundaryTrace) };
+    // Both slices wait at once, so a step that stamped a request waits for
+    // the slower of the two, not for both in turn.
+    const [programLogSlice, eventsSlice] = await Promise.all([programLog?.slice(boundaryDir, boundaryTrace), eventsReader?.slice(boundaryDir, boundaryTrace)]);
+    return {
+      ...counts,
+      ...(programLogSlice !== undefined ? { program_log: programLogSlice } : options.programLog === null ? { program_log: null } : {}),
+      ...(eventsSlice !== undefined ? { events: eventsSlice } : options.programLog === null ? { events: null } : {}),
+    };
   }
 
   function usedSnapshot(): UsedEntryWithResult[] {

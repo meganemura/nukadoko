@@ -4,17 +4,19 @@ import { mkdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { commandWords, programUrlProblem, urlPort, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
+import { collectWorldEvents, EVENTS_WORLD_FILE_NAME } from "../context/events-file.js";
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
-import type { RunWorld, RunWorldCommand, RunWorldName } from "../record/run-result.js";
+import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldName } from "../record/run-result.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { createLineBuffer } from "../sink/line-buffer.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { openEventsInlet, type EventsInlet } from "./events-inlet.js";
 import { captureOutput } from "./in-process-output.js";
-import { describePlaceholderGap, fillPlaceholders, placeholderGaps, type PlaceholderValues } from "./placeholders.js";
+import { describePlaceholderGap, fillPlaceholders, namesPlaceholder, placeholderGaps, type PlaceholderValues } from "./placeholders.js";
 import { groupAlive } from "./process-group.js";
 import { openProgramLog, type ProgramLog } from "./program-log.js";
 import type { WorldView } from "./world-view.js";
@@ -89,6 +91,13 @@ import type { WorldView } from "./world-view.js";
 // trace id of the world, which is how the run tells a program that does
 // not tag its lines from one whose lines all came late.
 //
+// A served world whose program file names `{events}` gets the file the
+// program appends its execution events to (src/program/events-inlet.ts)
+// before its first command runs. When the world stops, after the program
+// has, one pass over that file writes the world's redacted copy beside
+// `program.log` and each step's events that arrived after its record
+// (src/context/events-file.ts), and the file is removed.
+//
 // A program nukadoko started must not outlive nukadoko, however nukadoko
 // ends: a signal that arrives while a world is still starting, a step that
 // calls process.exit, or a crash. Every child this module starts is listed
@@ -101,6 +110,9 @@ import type { WorldView } from "./world-view.js";
 export interface WorldStep extends TracedStep {
   /** How many requests it sent to the world with a `traceparent`. */
   readonly stamped: number;
+  /** How many of the program's events its slice read
+   * (`observed.events.lines`), when the world has an events file. */
+  readonly eventLines?: number;
 }
 
 export interface WorldStop {
@@ -111,13 +123,17 @@ export interface WorldStop {
   /** Each step's lines of the program's log that arrived after its record
    * was written, by trace id. Empty when nukadoko did not read the log. */
   readonly late: ReadonlyMap<string, LateSlice>;
+  /** Each step's execution events that arrived after its record was
+   * written, by trace id. Empty when the world has no events file. */
+  readonly eventsLate: ReadonlyMap<string, LateSlice>;
 }
 
 export interface StartedWorld {
   readonly ok: true;
   readonly view: WorldView;
   /** Stops the program and closes the log, then finds the late lines of
-   * `steps`, the pass's steps (module header). */
+   * `steps`, the pass's steps, and copies the world's events (module
+   * header). */
   stop(steps?: readonly WorldStep[]): Promise<WorldStop>;
   /** The world's run.json entry, as of now. */
   record(): RunWorld;
@@ -260,6 +276,8 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       let url: string | undefined;
       let server: ServeProcess | undefined;
       let programLog: RunWorld["program_log"];
+      let inlet: EventsInlet | undefined;
+      let worldEvents: RunWorldEvents | null | undefined;
 
       const tree = options.tree ?? "head";
       const record = (error: string | null): RunWorld => ({
@@ -272,6 +290,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         log: log.written ? options.recordPath(log.path) : null,
         error: error === null ? null : redactString(error, allSecrets),
         ...(programLog === undefined ? {} : { program_log: programLog }),
+        ...(worldEvents === undefined ? {} : { events: worldEvents }),
       });
       const run = (phase: RunWorldCommand["phase"], argv: readonly string[], timeoutMs: number, env: NodeJS.ProcessEnv): Promise<void> => {
         commands.push({ phase, argv });
@@ -392,6 +411,8 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           // Every world with a URL has a port (src/program/placeholders.ts).
           port = urlPort(url);
         }
+        // Before `prepare`, which may name it too.
+        if (reach.kind === "serve" && namesPlaceholder(recipe, "events")) inlet = openEventsInlet();
         const values: PlaceholderValues = {
           root: options.rootDir,
           dir,
@@ -399,6 +420,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           token,
           ...(port === undefined ? {} : { port: String(port) }),
           ...(url === undefined ? {} : { url }),
+          ...(inlet === undefined ? {} : { events: inlet.path }),
           conditions: recipe.conditions,
         };
         const worldEnv: Record<string, string> = {};
@@ -444,11 +466,15 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         }
 
         if (commands.length > 0 || recipe.setup !== undefined) announce(readyLine(timings, url, log.written ? options.displayPath(log.path) : null));
-        const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix };
+        const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix, events: inlet?.path ?? null };
         const running = server;
-        // A world at a URL has a log nukadoko cannot read; a world with no
-        // URL sends nothing to stamp.
-        if (url !== undefined && running === undefined) programLog = null;
+        const events = inlet;
+        // A world at a URL has a log and events nukadoko cannot read; a
+        // world with no URL sends nothing to stamp.
+        if (url !== undefined && running === undefined) {
+          programLog = null;
+          worldEvents = null;
+        }
         return {
           ok: true,
           view,
@@ -470,9 +496,30 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
                 tagged: found.tagged,
               };
             }
+            let eventsLate: ReadonlyMap<string, LateSlice> = new Map();
+            if (events !== undefined) {
+              try {
+                const copy = path.join(dir, EVENTS_WORLD_FILE_NAME);
+                const traced = (steps ?? []).flatMap((step) => (step.eventLines === undefined ? [] : [{ traceId: step.traceId, lines: step.eventLines, dir: step.dir }]));
+                const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy);
+                eventsLate = found.late;
+                worldEvents = {
+                  file: found.copied ? options.recordPath(copy) : null,
+                  lines: found.lines,
+                  owned: found.owned,
+                  late: [...found.late.values()].reduce((total, slice) => total + slice.lines, 0),
+                  unowned: found.unowned,
+                  unreadable: found.unreadable,
+                  undefined_kinds: found.undefinedKinds,
+                };
+              } finally {
+                events.remove();
+              }
+            }
             return {
               exitedEarly: exitedEarly === null ? null : redactString(`${exitedEarly}; see ${options.displayPath(log.path)}`, allSecrets),
               late,
+              eventsLate,
             };
           },
           record: () => record(null),
@@ -485,6 +532,8 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         const aborted = error instanceof WorldStartAborted || abort?.aborted === true;
         if (aborted) server?.kill();
         await server?.stop();
+        // A world that did not start keeps no events: no step read any.
+        inlet?.remove();
         const cause = aborted
           ? "the start was stopped before the program was ready"
           : error instanceof WorldStartError

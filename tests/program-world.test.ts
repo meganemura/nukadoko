@@ -94,7 +94,7 @@ describe("a world nukadoko serves", () => {
       ),
     );
 
-    expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map() });
+    expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map(), eventsLate: new Map() });
     expect(await answers(port)).toBe(false);
     expect(readFileSync(path.join(dir, "program.log"), "utf8")).toBe("$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}\n");
     expect(world.record()).toEqual({
@@ -399,6 +399,7 @@ describe("a world nukadoko does not serve", () => {
       log: null,
       dir: path.join(runDir, "worlds", "pr-12"),
       tracePrefix: expect.stringMatching(/^[0-9a-f]{8}$/),
+      events: null,
     });
     expect(progress.text()).toBe("");
     await world.stop();
@@ -410,8 +411,10 @@ describe("a world nukadoko does not serve", () => {
       timings: { stop_ms: expect.any(Number) },
       log: null,
       error: null,
-      // nukadoko does not read the log of a program it did not start.
+      // nukadoko does not read the log or the events of a program it did
+      // not start.
       program_log: null,
+      events: null,
     });
     expect(existsSync(path.join(runDir, "worlds", "pr-12", "program.log"))).toBe(false);
   });

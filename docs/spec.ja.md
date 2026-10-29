@@ -573,7 +573,7 @@ fixture の名前:
   step が一方のメソッドを必要とする頻度は、もう一方を必要とする頻度とほぼ同じです。
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt` と等しい `name` も拒否されます。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl` と等しい `name` も拒否されます。
   `nuka do` では、record の隣にある world の directory の名前 `world` も拒否されます。
   `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も拒否されます。
   大文字小文字だけが違う綴りも同じです。
@@ -2404,15 +2404,16 @@ world はそれを待たずに失敗し、`program.log` は、関数が持ち時
 | `{root}` | プログラムを build する tree のルートの絶対パス |
 | `{world}` | world の名前。それが実行する environment |
 | `{token}` | その world のために作った 32 文字のランダムな 16 進数 |
+| `{events}` | nukadoko が serve する world が、そのプログラムの実行イベントのために受け取る空のファイルの絶対パス。run ディレクトリの外にあります(「実行イベント」を参照) |
 | `{condition.<name>}` | world の environment が `conditions` でその condition に宣言する値のテキスト。`true`、`false`、または文字列 |
 
 `build` は tree ごとに 1 回、どの world よりも前に実行するので、`build` のコマンドが名指せるのは `{root}` だけです。
 URL を持つ world はどれもポートを持つので、`serve` を `url` に替える environment も、トップレベルの `PORT: "{port}"` をそのまま使えます。
 world が値を持たないプレースホルダーは、何かを実行する前に名前を挙げて拒否されます。
-`serve` も `url` も無い world の `{port}` や `{url}`、そして environment がその condition を宣言しない world の `{condition.<name>}` です。
+`serve` も `url` も無い world の `{port}` や `{url}`、nukadoko が serve しない world の `{events}`、そして environment がその condition を宣言しない world の `{condition.<name>}` です。
 default の world は condition を 1 つも宣言しないので、これに含まれます。
 fix は world に欠けているものだけを挙げます。
-`build` のコマンドには `{root}` だけにするか `prepare` に移すことを、どちらも無い world には `serve` か `url` を、`{condition.<name>}` にはその condition を environment の `conditions` に宣言することを挙げます。
+`build` のコマンドには `{root}` だけにするか `prepare` に移すことを、どちらも無い world には `serve` か `url` を、`{events}` には `serve` を(`url` を持つ world ではその `url` の代わりに)、`{condition.<name>}` にはその condition を environment の `conditions` に宣言することを挙げます。
 ファイルの environment ではない world(`environments` に `default` の項目が無いときの default の world)には condition を宣言する `conditions` が無いので、その fix は代わりにその condition を宣言する environment を挙げます。
 `nuka do` はそのとき `do:` 行も出力します。
 それは同じ呼び出しに `--env` とそのうち最初の environment を付けたものです。
@@ -2522,7 +2523,8 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
     "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
     "log": "worlds/default/program.log",
     "error": null,
-    "program_log": { "stamped": 12, "lines": 31, "late": 2, "tagged": 33 }
+    "program_log": { "stamped": 12, "lines": 31, "late": 2, "tagged": 33 },
+    "events": { "file": "worlds/default/events.jsonl", "lines": 140, "owned": 131, "late": 1, "unowned": 9, "unreadable": 0, "undefined_kinds": {} }
   }
 ]
 ```
@@ -2541,6 +2543,9 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
   `late` は、step の trace id を持ち、その record を書いたあとに届いた行の数です。
   `tagged` は、hook の分も含めて、world の trace id を持つログの行すべての数です。
   `url` の world では `null` で、URL の無い world と起動しなかった world には現れません。
+- `events` は、world が止まるときに `{events}` が名指すファイルを数えます(「実行イベント」を参照)。
+  すべての行、step の trace id を持つ行、そのうち step の record のあとに届いた行、それを持たない行、読めなかった行、そして形式が定めない種類の行を数えます。
+  `url` の world では `null` で、プログラムのファイルが `{events}` を名指さない world と起動しなかった world には現れません。
 
 各 step record は、自分の world を `world_name` で名指します。
 `worlds` のエントリの `name` か、world が動かなかったときは `null` です。
@@ -2629,6 +2634,8 @@ head では、何も返さない関数は world を `program-start-failed` で�
 nukadoko は自分が動かしていないプログラムのログを読めないからです。
 そのどれも何も出力しなかったとき、world の `log` は `null` です。
 そのリクエストはそれでも `traceparent` を運び、各 step の `observed.program_log` は `null` です(「trace context とプログラムのログ」を参照)。
+実行イベントのファイルもありません。
+`{events}` は名前を挙げて拒否され、各 step の `observed.events` は `null` です(「実行イベント」を参照)。
 `env` はそれでも step に届き、`{token}` もそれでも作られます。
 サーバがほかの誰かに必要なデータを持つなら、そうした environment には read-only の `policy` を付けます。
 
@@ -2819,6 +2826,143 @@ id が行のテキストにあれば、形は何でも構いません。
   そのポートで `ready` に答えるサーバが自分の起動したものであることは確かめません。
   その間にポートを取ったプロセスがあれば、そのプロセスが代わりに答えます。
   固定の `port` は、プログラムの起動前に確かめられます(「serve」を参照)。
+
+### 実行イベント
+
+nukadoko が serve するプログラムは、各リクエストの中で何をしたかを報告できます。
+データベースの文、トランザクション、ジョブ、外への呼び出し、flag、エラーのそれぞれを、[docs/execution-events.ja.md](execution-events.ja.md) の行の形式で、操作ごとに 1 行で書きます。
+そうすると各 step record は、自分のリクエストが引き起こした行を、ジョブを実行するプロセスも含めたプログラムのすべてのプロセスから持ち、自分の仕事のうちまだ終わりを報告していないものを述べます。
+この段階は証跡だけで、行を読む claim はまだありません。
+
+プログラムのファイルは、そのファイルを `{events}` で名指します。
+例では `EXECUTION_EVENTS` を使います。
+本番でも同じ書き手がこの変数を読むからです。
+名前はプログラムのファイルが決めます:
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "node server.js", ready: "/up" },
+  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+});
+```
+
+- `{events}` は、nukadoko が world を起動するとき、最初の `prepare` のコマンドを実行する前に作る空のファイル `events.jsonl` の絶対パスです。
+  そのファイルは、システムの一時ディレクトリの中の専用のディレクトリにあり、ディレクトリはモード 0700、ファイルはモード 0600 で作ります。
+  run ディレクトリには決して置きません。
+  プログラムは secret も含めてそのファイルに直接書き、run ディレクトリは CI がアップロードするものだからです。
+  run ディレクトリに届くのは、行を redact した写しだけです。
+  そのディレクトリは world が止まるとき、それより前に nukadoko が終わるときはそのときに消します。
+- nukadoko は、プログラムのファイルが名指さない変数を設定しません。
+  プログラムのファイルが `{events}` を名指さない world はファイルを持たず、その step record は `observed.events` を持ちません。
+- nukadoko が serve しない world は、そのファイルを持ちません。
+  `url` の world、`serve` も `url` も無い world、`build` のコマンドの `{events}` は、何かを実行する前に名前を挙げて拒否されます(「プレースホルダー」を参照)。
+- step は `env` のほかの値と一緒にその変数を受け取ります(「env」を参照)。
+  nukadoko は、step 自身のコードが追記した行とプログラムが書いた行を見分けられないので、step はそこに書きません。
+- `--concurrency` のもとでは親がファイルを作り、各 worker が自分の step のためにそれを読みます。
+
+行は、その `trace` フィールドが持つ trace id の step のものです。
+`trace` は形式が定めるとおりに読み、world の 8 文字で始まる `traceparent` か trace id だけのものです。
+プログラムのログの規則(行のテキストの中で最初に現れるそうした id)は、ここでは使いません。
+イベントの中の値も id を持てるからです。
+形式の 1 行として読めない行はどの step のものでもないので、どの step のイベントもそこからデータを取りません。
+そのテキストがプログラムのログの規則で step の trace id を持つとき、その step はそれを `unreadable` で数えます。
+その行は、その step のどの行でもありえたからです。
+よくあるのは、2 つの書き込みが継ぎ合わせた行です。
+
+step は、プログラムのログと同じようにファイルを読みます(「trace context とプログラムのログ」を参照)。
+待ちながら先へ読み、step が終わった時点と自分の最後の行のうち遅いほうから、自分の行が 30 ms 届かなくなるまで、全部で 300 ms まで待ちます。
+その行は step record の隣の `events.jsonl` に入ります。
+そこにある各行は、解析した行を step の secret で redact し(trace id はそのまま残します)、JSON として書き直したものです。
+そのため、redact した値も JSON のままで、ファイルは読んだものをそのまま示します。
+`observed.events` がそれを数えます:
+
+```json
+"events": {
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "lines": 5,
+  "file": "events.jsonl",
+  "kinds": { "db": 2, "job": 2, "request": 1 },
+  "stamped": 1,
+  "unreadable": 0,
+  "unowned": 0,
+  "whole": true,
+  "open": []
+}
+```
+
+- `trace_id` と `stamped` は、`observed.program_log` が持つものと同じです。
+- `lines` は、step の record を書いたときにその trace id を持っていた、読める行の数です。
+- `file` は、`lines` が 0 のとき `null` です。
+- `kinds` は、それらの行を `kind` ごとに数えます。
+  書き手自身の `x_` の種類、形式が定めない種類、あとの版の行は、どれも行が名指す種類で数えます。
+- `unreadable` は、テキストがその trace id を持ち、読めなかった行の数です。
+- `unowned` は、step が読む途中で通り過ぎた読める行のうち、trace がどの step のものでもない行の数です。
+  `ready` の確認や BeforeAll の hook のリクエストのように nukadoko が `traceparent` を付けなかったリクエストや、プログラムが自分で作った trace です。
+- `whole` は、step が `traceparent` を付けたリクエストのそれぞれが自分の `request` の行を持ち(step が送った span id で対応させ、trace id だけの行は 1 つのリクエストとして数えます)、trace の中で積んだジョブのそれぞれが `enqueue` の行と少なくとも同じ数の `perform` の行を持ち、trace の行に読めないものが無く、step の行がファイルに収まり、ファイルが置き換えられなかったとき `true` です。
+- `open` は、`whole` が `false` である理由を、欠けを示す語 1 つずつで、この順に挙げます:
+  - `producer-unstamped`: step が `traceparent` を付けたリクエストを 1 つも送らなかったので、その仕事が終わったと言える行がありません。
+  - `no-lines`: step はリクエストに `traceparent` を付けましたが、その trace id を持つ行がありません。
+    書き手が無い、変数が違う、行が遅れた、のどれかです。
+  - `requests` を伴う `request-unreported`: `traceparent` を付けたリクエストのうち、その数が `request` の行を持ちません。
+  - `job_ids` を伴う `jobs-pending`: trace の中で積んだジョブのうち、`perform` の行が `enqueue` の行より少ないものです。
+  - `lines` を伴う `unreadable`: `unreadable` が持つ数です。
+  - `truncated`: step の行が 16 MiB を超え、ファイルはその初めのほうを持ちます。
+  - `file-replaced`: world が動いているあいだにファイルが置き換えられたか短くなり、そのあとは何も読んでいません。
+
+`whole: false` は、それ以上何も起きなかったとは決して言いません。
+プログラムの仕事がまだ続いているか、行が失われたかもしれず、`open` がどちらかを言います。
+world へ何も送らなかった step は、決してそろいません。
+その step が何の仕事も引き起こさなかったと言える行が無いからです。
+
+record を書いたあとに届いた step の行も、その step のものです。
+ストリームした本文のあとにプログラムが書くリクエストの行や、あとで perform するジョブの行です。
+record は書き直しません。
+world が止まるとき、プログラムが止まったあとに、ファイル全体を 1 回読んでそうした行を step record の隣の `events-late.jsonl` に、同じように redact して書きます。
+`run.json` の step は `"events_late": { "lines", "file" }` を持ち、16 MiB を超えたときは `"truncated": true` も持ちます。
+run サマリは「Unmeasured actions」の step の行でその行たちを名指し、`nuka do` は stderr の `events-late` の注記でそのファイルを名指します。
+
+同じ 1 回の読みで、world のファイルの写し `worlds/<environment>/events.jsonl` も書きます。
+各行は同じように redact し、読めなかった行は redact したテキストのまま残します。
+そしてファイルを数えて `run.json` に書きます:
+
+```json
+"events": { "file": "worlds/default/events.jsonl", "lines": 18, "owned": 15, "late": 1, "unowned": 1, "unreadable": 2, "undefined_kinds": {} }
+```
+
+- `lines` はファイルのすべての行の数です。
+  `owned` は world の trace id を持つ読める行、`late` はそのうち step の record のあとに届いた行、`unowned` はそれを持たない読める行、`unreadable` は読めなかった行の数です。
+  `undefined_kinds` は、形式が定めない種類の行を種類ごとに数えます。
+- `file` は、写しを書けなかったとき `null` です。
+
+run サマリは、プログラムが 1 行も書かなかったとき、またはどの step record も持たない行をファイルが持つとき、world に 1 行を付けます:
+
+```text
+- events of world default: 1 line carrying a step's trace id arrived after that step ended (`events-late.jsonl`); 2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`
+```
+
+```text
+- events of world default: the program wrote no line to the file {events} names, so no step's record has an event
+```
+
+`url` の world には、nukadoko が読めるファイルがありません。
+各 step の `observed.events` は `null` で、`run.json` の world の `events` も `null` です。
+run サマリはこう言います:
+
+```text
+- events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+```
+
+この仕組みが届かないものを、1 つの一覧にまとめます:
+
+- step 自身のコードがファイルに書いた行は、プログラムのものとして読まれます(上記)。
+- step が読み込んだページが、その step が返ったあとに送るリクエストは、次の step の trace id を運びます。
+  そのため、その行は次の step のものになります。
+- `url` の world と、`{events}` が名指すファイルではない場所に行を書くプログラムには届きません。
+- world が止まったあとにプログラムのプロセスが書く行(止めたあとも残る、ジョブを実行するプロセスなど)は、どのファイルにも入りません。
+  止めるときの読みはもうファイルを読み終えていて、ファイルは消されるからです。
 
 ### Ruby のプログラム
 
@@ -3030,8 +3174,8 @@ stderr の step ごとの進捗行は、その scenario 自身が終わるまで
 stdout はスクリプトのためのもので、求められたものだけを出力します。
 `--records` のときは、scenario が終わるたびに、1 行 1 件の scenario を NDJSON として出力します。
 各行は、その scenario の `run.json` のエントリです。
-`--records` の行は、どの step の `program_log_late` も持ちません。
-遅れた行は world が止まるとき、scenario の行が出たあとに見つかるので、`program_log_late` は `run.json` にだけ現れます。
+`--records` の行は、どの step の `program_log_late` も `events_late` も持ちません。
+遅れた行は world が止まるとき、scenario の行が出たあとに見つかるので、どちらも `run.json` にだけ現れます。
 `--json` のときは、下で述べる `run.json` の文書を出力します。
 どちらのフラグもなければ、端末かどうかにかかわらず stdout には何も出力しません。
 `run.json` はフラグにかかわらずディスクにあり、`run` の行がそれを示します。
@@ -3241,7 +3385,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `from` で前の結果を読んで失敗した step は `used` を持ち、各 producer の step、record、読んだ結果を載せます。
   claim step は、その step record と同じ `claims`、`observation`、`attempts` を持ちます(「Claims」を参照)。
   そのため、成り立たない claim は step record を開かずに読めます。
-  record を書いたあとに届いたプログラムのログの行を持つ step は、`program_log_late` を持ちます(「テスト対象のプログラム」を参照)。
+  record を書いたあとに届いたプログラムのログの行を持つ step は `program_log_late` を、実行イベントの行を持つ step は `events_late` を持ちます(「テスト対象のプログラム」を参照)。
   JSON が 4096 バイトを超える結果は、代わりにプレビューになり、`truncated: true` と、値全体の大きさである `result_bytes` を持ちます。
   object のプレビューは、収まるかぎり、最上位の数、真偽値、null と、最上位の各文字列の先頭 1024 文字を残すので、process の `exitCode` と `stderr` の始まりは残ります。
   値全体は producer の `record` にあります。
@@ -3965,6 +4109,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
 - `observed` は、その実行が届いたものとしてツールが見たものを、チャネルごとに 1 つのキーで持ちます。
   キーは `processes`、`http`、`files`、`unmeasured` で、run に world の URL があるときは `program_log` もあります。
+  world のプログラムのファイルが `{events}` を名指すとき、または world が `url` にあるときは `events` もあります。
   どのチャネルも 1 つの規則に従います。
   正確に計測できるものは計測し、計測できないものはそうと印を付け、メソッドから書き込みを推測しません。
   実行が一度も届かなかったチャネルは `0` ではなく `null` です。
@@ -4072,6 +4217,8 @@ scenario record は独立したファイルではなく、その run の `run.js
 - `observed.program_log` は、プログラムのログのうち step の切り出しで、`{ "trace_id", "lines", "file", "stamped" }` です。
   `url` の world では、nukadoko がそのログを読まないので `null` です。
   run に world の URL が無いときは現れません(「テスト対象のプログラム」、「trace context とプログラムのログ」を参照)。
+- `observed.events` は、プログラムの実行イベントのうち step の切り出しで、`{ "trace_id", "lines", "file", "kinds", "stamped", "unreadable", "unowned", "whole", "open" }` です。
+  `url` の world では `null` で、world のプログラムのファイルが `{events}` を名指さないときは現れません(「実行イベント」を参照)。
 - `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
   各エントリは `{ "path", "change", "bytes", "content" }` です。
   2 つの出どころをまとめます。
@@ -4220,7 +4367,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。
@@ -4407,7 +4554,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   その場所、名前、行の理由を載せます。
   その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せ、base か old の world のセルではその前に `base:` か `old:` を付けます。
 - 条件。
-  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
+  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world ごとの 1 行(「実行イベント」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--base` のもとでは「Removed criteria」。
   消えた各受け入れ基準の場所と名前、そして基点での文を `gherkin` のブロックで載せます。
 - 「Claims」。
@@ -4415,8 +4562,8 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - 「Scenarios with no claim」。
   要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、どの claim も判定しなかったこと(判定したかもしれない compat step が Then の位置にあればそのこと)を載せます。
 - 「Unmeasured actions」。
-  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、または step のあとに届いたプログラムのログの行があるとき(`program_log_late`)、step ごとに 1 行を載せます。
-  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es)`、world の停止がそうした行を見つけたときは `<n> line(s) of the program's log after the step ended, in program-log-late.txt`(「テスト対象のプログラム」を参照)、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
+  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、または step のあとに届いたプログラムのログや実行イベントの行があるとき(`program_log_late`、`events_late`)、step ごとに 1 行を載せます。
+  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es)`、world の停止がそうした行を見つけたときは `<n> line(s) of the program's log after the step ended, in program-log-late.txt` と `<n> line(s) of the program's events after the step ended, in events-late.jsonl`(「テスト対象のプログラム」を参照)、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
   どちらもない step は何も加えず、`--repeat` のときは同じ行を持つ同じ step が 1 行になります。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。
@@ -5373,8 +5520,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               stdout is empty unless asked: --records
                               prints NDJSON, each scenario's run.json
                               entry as the scenario finishes, on a terminal
-                              or not (a step's program_log_late is only in
-                              run.json, written when the world stops). --json prints
+                              or not (a step's program_log_late and
+                              events_late are only in run.json, written
+                              when the world stops). --json prints
                               run.json (commit, environments, selection,
                               counts, table, each scenario's steps with line,
                               status, record, and error, each failed

@@ -3,8 +3,9 @@ import type { SecretSet } from "../secrets/types.js";
 // Responsibility: what the steps of a world see of it, as one plain value
 // that crosses to a `--concurrency` worker as JSON: its name, its base
 // URL, the env its processes got, the values made for it that every record
-// redacts, the prefix of its trace ids, and its program log when nukadoko
-// serves the program. Boundary:
+// redacts, the prefix of its trace ids, its program log when nukadoko
+// serves the program, and the file its program appends execution events
+// to when the program file asks for one. Boundary:
 // no process; starting and stopping the program is src/program/world.ts's.
 
 export interface WorldView {
@@ -30,6 +31,11 @@ export interface WorldView {
    * with (src/context/trace-context.ts), so every process that reads the
    * program's log finds the same trace id in a line. */
   readonly tracePrefix: string;
+  /** The absolute path of the file the program appends its execution
+   * events to, `{events}`, while nukadoko serves the program and the
+   * program file names it; `null` otherwise. Only the parent makes and
+   * removes the file; every process that runs steps reads it. */
+  readonly events: string | null;
 }
 
 export function serializeWorldView(view: WorldView): string {
@@ -51,6 +57,7 @@ export function parseWorldView(text: string): WorldView {
     log: value.log ?? null,
     dir: value.dir,
     tracePrefix: value.tracePrefix,
+    events: typeof value.events === "string" ? value.events : null,
   };
 }
 

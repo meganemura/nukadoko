@@ -127,7 +127,7 @@ export default {
   declaredModules: [
     { name: "condition", glob: "src/condition/**", surface: ["condition.ts"] },
     { name: "env", glob: "src/env/**", surface: ["load-env-files.ts", "parse-env-file.ts"] },
-    { name: "execution-events", glob: "src/execution-events/**", surface: ["format.ts"] },
+    { name: "execution-events", glob: "src/execution-events/**", surface: ["format.ts", "tally.ts"] },
     { name: "finding", glob: "src/finding/**", surface: ["finding.ts", "run-codes.ts"] },
     { name: "issues", glob: "src/issues/**", surface: ["format-issues.ts"] },
     { name: "shell", glob: "src/shell/**", surface: ["shell-word.ts"] },
@@ -202,6 +202,7 @@ export default {
         "run-command.ts",
         "windows-command.ts",
         "trace-actions.ts",
+        "events-file.ts",
         "program-log-slice.ts",
         "trace-context.ts",
         "used.ts",

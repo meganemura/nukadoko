@@ -80,6 +80,10 @@ export interface RunStep {
    * arrived after its record was written, found when the world stopped.
    * Present only when there is one. */
   readonly program_log_late?: RunProgramLogLate;
+  /** The lines of the program's execution events that carry the step's
+   * trace id and arrived after its record was written, found when the
+   * world stopped. Present only when there is one. */
+  readonly events_late?: RunEventsLate;
   /** A claim step's claims, as its step record holds them, with each value
    * whose JSON is longer than `CLAIM_VALUE_MAX_BYTES` cut (`RunClaim`). */
   readonly claims?: readonly RunClaim[];
@@ -94,6 +98,17 @@ export interface RunProgramLogLate {
   readonly lines: number;
   /** `program-log-late.txt` in the step record's directory, or `null`
    * when it could not be written. */
+  readonly file: string | null;
+  /** The lines came to more than 16 MiB, so the file holds the first of
+   * them. */
+  readonly truncated?: true;
+}
+
+/** A step's late lines of the program's execution events. */
+export interface RunEventsLate {
+  readonly lines: number;
+  /** `events-late.jsonl` in the step record's directory, or `null` when
+   * it could not be written. */
   readonly file: string | null;
   /** The lines came to more than 16 MiB, so the file holds the first of
    * them. */
@@ -348,6 +363,35 @@ export interface RunWorld {
    * URL, one that did not start, and in a run.json an earlier build
    * wrote. */
   readonly program_log?: RunWorldProgramLog | null;
+  /** What the program wrote to the file `{events}` names (docs/spec.md
+   * "Execution events"). `null` for a world at a `url`, which nukadoko
+   * does not start. Absent for a world whose program file names no
+   * `{events}`, one with no URL, one that did not start, and in a
+   * run.json an earlier build wrote. */
+  readonly events?: RunWorldEvents | null;
+}
+
+/** A served world's execution events, counted when the world stopped. */
+export interface RunWorldEvents {
+  /** The world's copy of the file, every line redacted, relative to the
+   * run directory; `null` when the copy could not be written. */
+  readonly file: string | null;
+  /** Every line the program wrote. */
+  readonly lines: number;
+  /** The readable lines that carry a trace id of the world, whichever
+   * step or hook it belongs to. */
+  readonly owned: number;
+  /** The owned lines that arrived after their step's record was written:
+   * each step's `events-late.jsonl`. */
+  readonly late: number;
+  /** The readable lines whose trace is none of the world's. */
+  readonly unowned: number;
+  /** The lines that are not one readable line of the format. */
+  readonly unreadable: number;
+  /** Readable lines whose kind the format does not define and that do
+   * not start with `x_`, by kind: a misspelled kind, or a later
+   * version's. */
+  readonly undefined_kinds: Readonly<Record<string, number>>;
 }
 
 /** A served world's program log, counted when the world stopped. */

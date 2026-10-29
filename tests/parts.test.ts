@@ -101,7 +101,7 @@ describe("call / parts", () => {
     // that actually issues the POST; project-with-member's own run() never
     // touches `request` at all. The fixture's program runs at a `url`,
     // so nukadoko reads no log of it.
-    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [], program_log: null });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [], program_log: null, events: null });
   });
 
   it("records args (as given) and result (validated) on calls[0], with a part-of-a-part nested under calls[0].calls", async () => {

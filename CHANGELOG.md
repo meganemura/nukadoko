@@ -64,6 +64,27 @@ just until 0.1.
   states nothing; `nuka check` reports a line whose capture names no kind
   (`claim-kind-unknown`).
 
+- **Each step record holds what the program did inside the step.** A
+  program file that names the new `{events}` placeholder
+  (`env: { EXECUTION_EVENTS: "{events}" }`) hands a world nukadoko
+  serves the path of a private, empty file, and the program appends one
+  JSON line to it per operation it ends: a request, a database statement,
+  a transaction, a job, an outgoing HTTP call, a flag, an error.
+  docs/execution-events.md defines the line format, version 1, for
+  production as much as for tests. Each step record gets the lines whose
+  `trace` carries its trace id, from every process the program runs, in
+  `events.jsonl` beside it, redacted and written again as JSON, and
+  counts them in `observed.events`: by kind, how many did not read, and
+  whether the step's work is `whole`, every stamped request reported
+  and every enqueued job performed, with `open` naming each reason it is
+  not (`no-lines`, `request-unreported`, `jobs-pending`, and the rest).
+  A line that arrives after the record goes to `events-late.jsonl`, the
+  world's redacted copy to `worlds/<environment>/events.jsonl`, and its
+  counts to the world's `events` in run.json. The file lives in a 0700
+  directory of its own outside the run directory and is removed when the
+  world stops. A world at a `url` refuses `{events}` by name, and its
+  steps' `observed.events` is `null`. No claim reads the lines yet.
+
 ### Fixed
 
 - **A Chromium page's requests carry a `traceparent` on Chromium 141

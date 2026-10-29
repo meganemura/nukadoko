@@ -475,12 +475,17 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // The program outlives the fixtures, whose teardown may still talk
       // to it, on the signal path as on the normal one.
       stopWorld = runOnce(async () => {
-        const { exitedEarly, late } = await started.stop(tracedSteps);
+        const { exitedEarly, late, eventsLate } = await started.stop(tracedSteps);
         if (exitedEarly !== null) warnings("program-exited").write(`world ${started.view.name}: ${exitedEarly}\n`);
         for (const slice of late.values()) {
           const where = slice.file === null ? "they could not be written beside the record" : `see ${path.relative(rootDir, path.join(evidenceDir, slice.file))}`;
           const message = `world ${started.view.name}: ${slice.lines} line(s) of the program's log carry the step's trace id and arrived after the step ended; ${where}`;
           stderr.write(formatFinding(withHint({ severity: "note", code: "program-log-late", message })));
+        }
+        for (const slice of eventsLate.values()) {
+          const where = slice.file === null ? "they could not be written beside the record" : `see ${path.relative(rootDir, path.join(evidenceDir, slice.file))}`;
+          const message = `world ${started.view.name}: ${slice.lines} line(s) of the program's execution events carry the step's trace id and arrived after the step ended; ${where}`;
+          stderr.write(formatFinding(withHint({ severity: "note", code: "events-late", message })));
         }
       });
     }
@@ -496,6 +501,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       onRequestScreenFailed: createRequestScreenWarner(warnings("show-requests-failed")),
       baseURL: world?.view.url,
       programLog: world?.view.log,
+      events: world?.view.events,
       tracePrefix: world?.view.tracePrefix,
       worldDir: world?.view.dir,
       evidenceDir,
@@ -657,7 +663,16 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const observed = await contextHandle.observedSnapshot();
     if (observed.program_log !== undefined && observed.program_log !== null) {
       const slice = observed.program_log;
-      tracedSteps = [{ traceId: slice.trace_id, lines: slice.lines, stamped: slice.stamped, dir: evidenceDir }];
+      const events = observed.events;
+      tracedSteps = [
+        {
+          traceId: slice.trace_id,
+          lines: slice.lines,
+          stamped: slice.stamped,
+          dir: evidenceDir,
+          ...(events === undefined || events === null ? {} : { eventLines: events.lines }),
+        },
+      ];
     }
     // `ctx.section` works the same under `nuka do` as under `nuka run` —
     // there is no scenario/pickle

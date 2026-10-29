@@ -7,13 +7,21 @@ import { commandWords, type ProgramRecipe } from "../config/program-schema.js";
 // Boundary: which values a running world has is src/program/world.ts's;
 // which worlds a command checks is the command's.
 //
-// Only the six names below and `{condition.<name>}` are placeholders. Any
-// other text in braces is left as written, so a command that passes JSON or
-// a shell brace needs no escape. A placeholder this world has no value for
-// (`{port}` or `{url}` in a world with neither `serve` nor `url`,
-// anything but `{root}` in a build command) is refused by name instead of
-// becoming an empty string, which would start a server on no port or point
-// a database at no directory.
+// Only the seven names below and `{condition.<name>}` are placeholders.
+// Any other text in braces is left as written, so a command that passes
+// JSON or a shell brace needs no escape. A placeholder this world has no
+// value for (`{port}` or `{url}` in a world with neither `serve` nor
+// `url`, `{events}` in a world nukadoko does not serve, anything but
+// `{root}` in a build command) is refused by name instead of becoming an
+// empty string, which would start a server on no port, point a database
+// at no directory, or leave a program writing its events where nobody
+// reads them.
+//
+// `{events}` is the file the program appends its execution events to
+// (docs/execution-events.md). nukadoko makes it only for a world it
+// serves, and only when the program file names `{events}`
+// (`namesPlaceholder`): it sets no variable a program did not ask for,
+// and a program that writes no events gets no file.
 //
 // Every world with a URL has a port: the one nukadoko gave `serve`, or the
 // port of the `url` (written, or the scheme's), so an environment that
@@ -33,7 +41,7 @@ import { commandWords, type ProgramRecipe } from "../config/program-schema.js";
 // refuse, for the worlds they resolve, before a build or a prepare
 // command has run.
 
-export const PLACEHOLDER_NAMES = ["port", "url", "dir", "root", "world", "token"] as const;
+export const PLACEHOLDER_NAMES = ["port", "url", "dir", "root", "world", "token", "events"] as const;
 
 /** The prefix of the placeholder that names one condition of the world's
  * environment: `{condition.banner}`. */
@@ -85,12 +93,14 @@ export interface PlaceholderGap {
 
 const BUILD_WHY = "build runs once per tree, before any world exists";
 const NO_URL_WHY = "this world has neither serve nor url";
+const URL_EVENTS_WHY = "nukadoko does not start this world's program, so it reads no file the program writes";
 
 /** Why a world of `reach` has no value for `name`, or `undefined` when it
  * has one. A build has `{root}` alone. */
 export function placeholderAbsence(name: PlaceholderName, reach: ProgramRecipe["reach"]["kind"] | "build"): string | undefined {
   if (reach === "build") return name === "root" ? undefined : BUILD_WHY;
-  if ((name === "port" || name === "url") && reach === "none") return NO_URL_WHY;
+  if ((name === "port" || name === "url" || name === "events") && reach === "none") return NO_URL_WHY;
+  if (name === "events" && reach === "url") return URL_EVENTS_WHY;
   return undefined;
 }
 
@@ -131,6 +141,17 @@ export function placeholderGaps(
     }
   }
   return gaps;
+}
+
+/** Whether `recipe` names placeholder `name` in a field its world fills:
+ * `env`, `prepare`, or `serve.command`. */
+export function namesPlaceholder(recipe: Pick<ProgramRecipe, "prepare" | "reach" | "env">, name: (typeof PLACEHOLDER_NAMES)[number]): boolean {
+  const texts = [
+    ...recipe.prepare.flatMap(({ command }) => commandWords(command)),
+    ...(recipe.reach.kind === "serve" ? commandWords(recipe.reach.serve.command) : []),
+    ...Object.values(recipe.env),
+  ];
+  return texts.some((text) => [...text.matchAll(PLACEHOLDER)].some((match) => match[1] === name));
 }
 
 /** One gap as a sentence: `prepare[1] names {port}, which has no value
@@ -208,6 +229,12 @@ export function placeholderGapFix(gap: PlaceholderGap, world: string, programFil
   }
   if (gap.where.startsWith("build")) {
     return `Write only {root} in ${gap.where} of ${programFile}, or move the command to prepare, which runs once per world.`;
+  }
+  if (gap.name === "events") {
+    // A url world is told to serve in place of its url, never beside it,
+    // which the file refuses.
+    const edit = gap.why === URL_EVENTS_WHY ? `serve world ${world} in place of its url` : `give world ${world} serve`;
+    return `Remove {events} from ${gap.where} of ${programFile}, or ${edit}: nukadoko makes the events file only for a program it starts.`;
   }
   return `Remove {${gap.name}} from ${gap.where} of ${programFile}, or give world ${world} serve or url.`;
 }

@@ -531,7 +531,10 @@ response body), `files` (the files the step changed in a scratch
 directory or wrote through `node:fs`, with their content), `program_log`
 (when nukadoko starts the program, the lines of its log that carry the
 step's trace id: each request to it carries a `traceparent` the program
-can write into its lines; `null` for a program at a `url`), and
+can write into its lines; `null` for a program at a `url`), `events`
+(when the program file names `{events}`, the program's own report of
+what it did inside the step, one line per statement, job, or call, in
+the format of [docs/execution-events.md](docs/execution-events.md)), and
 `unmeasured`. That last one lists what nukadoko saw but cannot measure,
 such as a process started without `runCommand`, so a record does not
 look complete when nukadoko saw that it is not. A key is `null` when the step did nothing

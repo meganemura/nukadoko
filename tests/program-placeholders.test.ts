@@ -14,10 +14,11 @@ import {
 } from "../src/program/placeholders.js";
 
 // Responsibility: src/program/placeholders.ts, the one rule that fills
-// `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, and `{token}` in a
-// program file's commands and env, and names each one a world has no
-// value for from its recipe alone: every world with a URL has `{port}`,
-// the one `serve` got or the URL's.
+// `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, `{token}`, and
+// `{events}` in a program file's commands and env, and names each one a
+// world has no value for from its recipe alone: every world with a URL
+// has `{port}`, the one `serve` got or the URL's, and only a world
+// nukadoko serves has `{events}`.
 
 // Literal text, braces included. Its alphabet cannot spell a placeholder
 // name, so two pieces side by side never spell one between them.
@@ -77,7 +78,7 @@ const timed = (command: string | readonly string[]): TimedCommand => ({ command,
 // The values a running world of `kind` fills, and a build's.
 function valuesFor(kind: "serve" | "url" | "none" | "build"): PlaceholderValues {
   if (kind === "build") return { root: "/r" };
-  return { root: "/r", dir: "/d", world: "w", token: "t", ...(kind === "none" ? {} : { port: "1", url: "u" }) };
+  return { root: "/r", dir: "/d", world: "w", token: "t", ...(kind === "none" ? {} : { port: "1", url: "u" }), ...(kind === "serve" ? { events: "/e" } : {}) };
 }
 const word = gs.tuples(literal, gs.arrays(placeholder, { maxSize: 2 })).map(([text, names]) => `${text}${names.map((name) => `{${name}}`).join("")}`);
 const command = gs.arrays(word, { minSize: 1, maxSize: 3 });
@@ -136,11 +137,16 @@ describe("placeholderGaps", () => {
       const fixes = placeholderGaps(recipe).map((gap) => placeholderGapFix(gap, "w", "nukadoko.program.ts", {}));
       for (const fix of fixes) {
         if (fix.includes("build[0]")) expect(fix).toBe("Write only {root} in build[0] of nukadoko.program.ts, or move the command to prepare, which runs once per world.");
+        else if (name === "events") {
+          const edit = kind === "url" ? "serve world w in place of its url" : "give world w serve";
+          expect(fix).toBe(`Remove {events} from prepare[0] of nukadoko.program.ts, or ${edit}: nukadoko makes the events file only for a program it starts.`);
+        }
         else expect(fix).toBe(`Remove {${name}} from prepare[0] of nukadoko.program.ts, or give world w serve or url.`);
       }
       // A world that serves or has a url is never told to add the other,
-      // which the file refuses beside it.
-      expect(fixes.some((fix) => fix.includes("prepare[0]"))).toBe(kind === "none" && (name === "port" || name === "url"));
+      // which the file refuses beside it; {events} has a value only where
+      // nukadoko serves, so a url world is told to serve in place of it.
+      expect(fixes.some((fix) => fix.includes("prepare[0]"))).toBe((kind === "none" && (name === "port" || name === "url")) || (kind !== "serve" && name === "events"));
     }));
 });
 

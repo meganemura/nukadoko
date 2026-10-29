@@ -4,6 +4,7 @@ import path from "node:path";
 import type { EvidenceAttachmentEntry, EvidenceMeta } from "../record/types.js";
 import { isNamedContextHarnessFile } from "./context-name.js";
 import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js";
+import { EVENTS_LATE_FILE_NAME, EVENTS_SLICE_FILE_NAME } from "./events-file.js";
 import { PROGRAM_LOG_LATE_FILE_NAME, PROGRAM_LOG_SLICE_FILE_NAME } from "./program-log-slice.js";
 import { isProcessOutputFileName } from "./process-output.js";
 
@@ -42,8 +43,9 @@ import { isProcessOutputFileName } from "./process-output.js";
 // the harness file names seeded, so a later step still cannot replace them.
 //
 // Those harness files (`record.json`, `final.png`, `trace.zip`,
-// `http.jsonl`, and the step's lines of the program's log,
-// `program-log.txt` and `program-log-late.txt`) are refused up front,
+// `http.jsonl`, the step's lines of the program's log,
+// `program-log.txt` and `program-log-late.txt`, and of its execution
+// events, `events.jsonl` and `events-late.jsonl`) are refused up front,
 // including a spelling that differs only by case
 // (`ReservedEvidenceNameError`). A suffixed copy would not be
 // the name the step asked for, and writing the name as given would replace
@@ -81,6 +83,8 @@ const HARNESS_EVIDENCE_FILE_NAMES = [
   "http.jsonl",
   PROGRAM_LOG_SLICE_FILE_NAME,
   PROGRAM_LOG_LATE_FILE_NAME,
+  EVENTS_SLICE_FILE_NAME,
+  EVENTS_LATE_FILE_NAME,
 ] as const;
 
 /** Registry key. `toLowerCase` is the locale-independent Unicode default

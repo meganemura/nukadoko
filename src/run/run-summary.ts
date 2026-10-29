@@ -191,6 +191,28 @@ function renderCondition(document: RunDocument): string[] {
     }
     return [];
   });
+  // Once per world whose program file names {events}, and per world at a
+  // URL, only for what a reader of a step's events has to know: that the
+  // file was not read, that the program wrote no line to it, or what of it
+  // no step's record holds.
+  const events = (document.worlds ?? []).flatMap((world) => {
+    const read = world.events;
+    if (read === undefined) return [];
+    const head = `- events of world ${worldName(world)}:`;
+    if (read === null) return [`${head} not read, since the program runs at ${world.url ?? "a URL"}, which nukadoko did not start`];
+    if (read.lines === 0) return [`${head} the program wrote no line to the file {events} names, so no step's record has an event`];
+    const undefinedKinds = Object.entries(read.undefined_kinds);
+    const facts = [
+      ...(read.late > 0 ? [`${countOf(read.late, "line", "lines")} carrying a step's trace id arrived after that step ended (\`events-late.jsonl\`)`] : []),
+      ...(read.unreadable > 0 ? [`${countOf(read.unreadable, "line is", "lines are")} not one readable line of the format`] : []),
+      ...(undefinedKinds.length > 0
+        ? [`${countOf(undefinedKinds.reduce((total, [, count]) => total + count, 0), "line names", "lines name")} a kind the format does not define (${undefinedKinds.map(([kind]) => cellCode(kind)).join(", ")})`]
+        : []),
+    ];
+    if (facts.length === 0) return [];
+    const copy = read.file === null ? "the world's copy of the file could not be written" : `the whole file is in ${cellCode(read.file)}`;
+    return [`${head} ${facts.join("; ")}; ${copy}`];
+  });
   const browsers = new Map<string, string>();
   for (const scenario of document.scenarios) {
     if (scenario.browser !== undefined) {
@@ -220,6 +242,7 @@ function renderCondition(document: RunDocument): string[] {
     commit,
     ...environments,
     ...programLogs,
+    ...events,
     browser,
     selection,
     ...proofRuns,
@@ -474,6 +497,17 @@ function programLogLateItem(step: RunScenario["steps"][number]): string | undefi
     : `${lines} of the program's log after the step ended, in ${cellCode(late.file)}`;
 }
 
+// The item that names a step's execution events that arrived after its
+// record was written, the same way.
+function eventsLateItem(step: RunScenario["steps"][number]): string | undefined {
+  const late = step.events_late;
+  if (late === undefined) return undefined;
+  const lines = countOf(late.lines, "line", "lines");
+  return late.file === null
+    ? `${lines} of the program's events after the step ended, which could not be written`
+    : `${lines} of the program's events after the step ended, in ${cellCode(late.file)}`;
+}
+
 // One line per step that did something nukadoko could not measure (the
 // step record's `observed.unmeasured`), or that started an action after
 // its record was written: a reader approving the run needs to know which
@@ -486,17 +520,21 @@ function renderUnmeasured(document: RunDocument): string[] {
   const named = document.environments.length > 1;
   const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
   let anyLateLog = false;
+  let anyLateEvents = false;
   for (const scenario of headScenarios(document)) {
     for (const step of scenario.steps) {
       const unmeasured = step.observed?.unmeasured ?? [];
       const late = afterStepEndItem(step);
       const lateLog = programLogLateItem(step);
       if (lateLog !== undefined) anyLateLog = true;
-      if (unmeasured.length === 0 && late === undefined && lateLog === undefined) continue;
+      const lateEvents = eventsLateItem(step);
+      if (lateEvents !== undefined) anyLateEvents = true;
+      if (unmeasured.length === 0 && late === undefined && lateLog === undefined && lateEvents === undefined) continue;
       const shown = unmeasured.slice(0, UNMEASURED_SHOWN).map((entry) => `${entry.kind.replace("_", " ")} ${cellCode(entry.detail)}`);
       if (unmeasured.length > UNMEASURED_SHOWN) shown.push(`and ${unmeasured.length - UNMEASURED_SHOWN} more`);
       if (late !== undefined) shown.push(late);
       if (lateLog !== undefined) shown.push(lateLog);
+      if (lateEvents !== undefined) shown.push(lateEvents);
       const where = `${scenario.feature}:${step.line ?? scenario.line}`;
       const environment = named ? ` (${cellText(scenario.environment)})` : "";
       const hint = unmeasured.some((entry) => entry.kind === "child_process") ? "; start a process with `runCommand` to record it" : "";
@@ -518,6 +556,9 @@ function renderUnmeasured(document: RunDocument): string[] {
     "An action a step started after its record was written is in that step's own files, marked `after_step_end`, and not in its record.",
     ...(anyLateLog
       ? ["A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record."]
+      : []),
+    ...(anyLateEvents
+      ? ["A line of the program's events that carries a step's trace id and arrived after its record was written is in that step's `events-late.jsonl`, and not in its record."]
       : []),
     "",
     ...sorted.map((line) => line.text),

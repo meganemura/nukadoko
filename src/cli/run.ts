@@ -961,8 +961,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       return "failed";
     };
     // Stops the pass's world. Every scenario of the pass has its entry by
-    // now, so the stop can find each step's lines of the program's log that
-    // arrived after its record was written, and those entries say so.
+    // now, so the stop can find each step's lines of the program's log and
+    // events that arrived after its record was written, and those entries
+    // say so.
     const stopWorld = async (world: StartedWorld, tree: RunWorldName = "head"): Promise<void> => {
       const name = world.view.name;
       const inWorld = (scenario: RunScenario): boolean => scenario.environment === name && (scenario.world ?? "head") === tree;
@@ -972,19 +973,34 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           scenario.steps.flatMap((step) => {
             const slice = step.observed?.program_log;
             if (slice === undefined || slice === null || step.record === null) return [];
-            return [{ traceId: slice.trace_id, lines: slice.lines, stamped: slice.stamped, dir: path.join(runDirAbsolute, step.record) }];
+            const events = step.observed?.events;
+            return [
+              {
+                traceId: slice.trace_id,
+                lines: slice.lines,
+                stamped: slice.stamped,
+                dir: path.join(runDirAbsolute, step.record),
+                ...(events === undefined || events === null ? {} : { eventLines: events.lines }),
+              },
+            ];
           }),
         );
-      const { exitedEarly, late } = await world.stop(steps);
+      const { exitedEarly, late, eventsLate } = await world.stop(steps);
       worlds.push(world.record());
-      if (late.size > 0) {
+      if (late.size > 0 || eventsLate.size > 0) {
         for (const [index, scenario] of runScenarios.entries()) {
           if (!inWorld(scenario)) continue;
           runScenarios[index] = {
             ...scenario,
             steps: scenario.steps.map((step) => {
-              const found = step.observed?.program_log ? late.get(step.observed.program_log.trace_id) : undefined;
-              return found === undefined ? step : { ...step, program_log_late: found };
+              const traceId = step.observed?.program_log?.trace_id;
+              const found = traceId === undefined ? undefined : late.get(traceId);
+              const foundEvents = traceId === undefined ? undefined : eventsLate.get(traceId);
+              return {
+                ...step,
+                ...(found === undefined ? {} : { program_log_late: found }),
+                ...(foundEvents === undefined ? {} : { events_late: foundEvents }),
+              };
             }),
           };
         }

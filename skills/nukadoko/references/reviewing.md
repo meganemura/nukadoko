@@ -76,12 +76,12 @@ measured there, not that nothing happened):
   `traceparent` is the value the request went out with, nukadoko's or
   the step's own, and `traceparent_sent_to` the origins that received
   it; nukadoko's value names the id the program's log lines carry.
-- `program_log` counts the lines of the program's log that carry the
-  step's trace id, in `program-log.txt` beside the record: what the
-  server did for this step. Lines that arrived after the step ended are
-  in `program-log-late.txt`, and the run summary names them. `lines: 0`
-  with `stamped` above 0 is explained by the run summary's line for the
-  world (`program.md`); `null` means the world runs at a `url`.
+- `program_log` counts the step's lines of the program's log, in
+  `program-log.txt` (late ones in `program-log-late.txt`): what the server
+  did for this step. `lines: 0` with `stamped` above 0 is explained by the
+  run summary's line for the world (`program.md`); `null`: a `url` world.
+- `events` counts the step's execution events by kind, in `events.jsonl`
+  (late ones in `events-late.jsonl`); `open` names why `whole` is false.
 - `files` lists the paths the step changed in a scratch directory or
   wrote through `node:fs`, each with its content after the step. A file
   the step asked Playwright to write (a screenshot saved to a path, a

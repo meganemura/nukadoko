@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GAP_WORDS } from "../execution-events/tally.js";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { RunDocument } from "../record/run-result.js";
 import { isGeneratedId } from "../record/record-id.js";
@@ -119,6 +120,20 @@ const observed = z.looseObject({
     .looseObject({ trace_id: z.string(), lines: z.number().int(), file: z.string().nullable(), stamped: z.number().int(), truncated: z.literal(true).optional() })
     .nullable()
     .optional(),
+  events: z
+    .looseObject({
+      trace_id: z.string(),
+      lines: z.number().int(),
+      file: z.string().nullable(),
+      kinds: z.record(z.string(), z.number().int()),
+      stamped: z.number().int(),
+      unreadable: z.number().int(),
+      unowned: z.number().int(),
+      whole: z.boolean(),
+      open: z.array(z.looseObject({ gap: z.enum(GAP_WORDS) })),
+    })
+    .nullable()
+    .optional(),
 });
 
 const step = z.looseObject({
@@ -135,6 +150,7 @@ const step = z.looseObject({
   used: z.array(z.looseObject({ step: z.string(), record: z.string(), result: z.unknown() })).optional(),
   after_step_end: z.looseObject({ requests: z.number().int(), processes: z.number().int(), http: z.literal("http.jsonl").optional() }).optional(),
   program_log_late: z.looseObject({ lines: z.number().int(), file: z.string().nullable(), truncated: z.literal(true).optional() }).optional(),
+  events_late: z.looseObject({ lines: z.number().int(), file: z.string().nullable(), truncated: z.literal(true).optional() }).optional(),
   claims: z.array(z.union([eachClaim, comparisonClaim])).optional(),
   observation: z.enum(["observed", "unobserved"]).optional(),
   attempts: z.number().int().optional(),
@@ -287,6 +303,18 @@ const document = z.looseObject({
         url: z.string().nullable(),
         program_log: z
           .looseObject({ stamped: z.number().int(), lines: z.number().int(), late: z.number().int(), tagged: z.number().int() })
+          .nullable()
+          .optional(),
+        events: z
+          .looseObject({
+            file: z.string().nullable(),
+            lines: z.number().int(),
+            owned: z.number().int(),
+            late: z.number().int(),
+            unowned: z.number().int(),
+            unreadable: z.number().int(),
+            undefined_kinds: z.record(z.string(), z.number().int()),
+          })
           .nullable()
           .optional(),
       }),

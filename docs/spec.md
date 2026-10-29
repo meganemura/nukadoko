@@ -667,8 +667,9 @@ The fixture names:
   evidence. A step needs one method about as often as it needs the other. A
   `name` that contains a path separator is refused. A `name` equal to `.`,
   `..`, or the empty string is also refused. A `name` of `record.json`,
-  `final.png`, `trace.zip`, `http.jsonl`, `program-log.txt`, or
-  `program-log-late.txt`, under `nuka do` a `name` of `world` (the world's
+  `final.png`, `trace.zip`, `http.jsonl`, `program-log.txt`,
+  `program-log-late.txt`, `events.jsonl`, or `events-late.jsonl`, under
+  `nuka do` a `name` of `world` (the world's
   directory beside the record), or a `name` of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused too,
   including a spelling that differs only by case (`ReservedEvidenceNameError`). Those
@@ -2980,6 +2981,7 @@ placeholder:
 | `{root}` | the root of the tree the program is built from, as an absolute path |
 | `{world}` | the world's name: the environment it runs |
 | `{token}` | 32 random hexadecimal characters made for this world |
+| `{events}` | the absolute path of the empty file a world nukadoko serves gets for its program's execution events, outside the run directory (see "Execution events") |
 | `{condition.<name>}` | the value the world's environment declares for that condition under `conditions`, as text: `true`, `false`, or the string |
 
 `build` runs once per tree, before any world exists, so a `build` command
@@ -2988,11 +2990,13 @@ Every world with a URL has a port, so an environment that swaps `serve`
 for a `url` keeps a top-level `PORT: "{port}"`.
 A placeholder the world has no value for is refused by name before
 anything runs: `{port}` or `{url}` in a world with neither `serve` nor
-`url`, or `{condition.<name>}` in one whose environment does not declare
-that condition, the default world included, which declares none.
+`url`, `{events}` in a world nukadoko does not serve, or
+`{condition.<name>}` in one whose environment does not declare that
+condition, the default world included, which declares none.
 The fix names only what the world lacks: `{root}` alone, or a move to
 `prepare`, for a `build` command, `serve` or `url` for a world with
-neither, and the condition under the environment's `conditions` for
+neither, `serve` for `{events}`, in place of the `url` of a world that
+has one, and the condition under the environment's `conditions` for
 `{condition.<name>}`.
 A world that is no environment of the file, the default world when `environments` has no `default` entry, has no `conditions` to declare one in, so its fix names the environments that declare the condition instead.
 `nuka do` there also prints a `do:` line, the same call with `--env` and the first of them.
@@ -3136,7 +3140,8 @@ them:
     "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
     "log": "worlds/default/program.log",
     "error": null,
-    "program_log": { "stamped": 12, "lines": 31, "late": 2, "tagged": 33 }
+    "program_log": { "stamped": 12, "lines": 31, "late": 2, "tagged": 33 },
+    "events": { "file": "worlds/default/events.jsonl", "lines": 140, "owned": 131, "late": 1, "unowned": 9, "unreadable": 0, "undefined_kinds": {} }
   }
 ]
 ```
@@ -3160,6 +3165,13 @@ them:
   log that carries a trace id of the world, a hook's included.
   It is `null` for a world at a `url`, and absent for a world with no
   URL or one that did not start.
+- `events` counts the file `{events}` names when the world stops (see
+  "Execution events"): every line, the lines that carry a step's trace
+  id, those that arrived after their step's record, those that carry
+  none, those that did not read, and the lines of each kind the format
+  does not define.
+  It is `null` for a world at a `url`, and absent for a world whose
+  program file does not name `{events}` or that did not start.
 
 Each step record names its world in `world_name`, the `name` of a
 `worlds` entry, or `null` when no world ran.
@@ -3273,6 +3285,9 @@ The world's `log` is `null` when none of them printed anything.
 Its requests still carry a `traceparent`, and each step's
 `observed.program_log` is `null` (see "Trace context and the program's
 log").
+It has no file of execution events either: `{events}` is refused by
+name, and each step's `observed.events` is `null` (see "Execution
+events").
 `env` still reaches the steps, and `{token}` is still made.
 A read-only `policy` belongs on such an environment whenever the server
 holds data someone else needs.
@@ -3545,6 +3560,186 @@ What this does not reach, in one list:
   between would answer for it.
   A fixed `port` is checked before the program starts (see "serve").
 
+### Execution events
+
+A program nukadoko serves can report what it did inside each request,
+each database statement, transaction, job, outgoing call, flag, and
+error, as one line per operation in the line format of
+[docs/execution-events.md](execution-events.md).
+Each step record then holds the lines its own requests caused, from
+every process of the program, a job worker's included, and says which of
+its work has not reported its end.
+This slice is evidence only: no claim reads the lines yet.
+
+The program file names the file with `{events}`.
+The examples use `EXECUTION_EVENTS`, the variable the same writer reads
+in production; the program file chooses the name:
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "node server.js", ready: "/up" },
+  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+});
+```
+
+- `{events}` is the absolute path of an empty file, `events.jsonl`, that
+  nukadoko makes when the world starts, before its first `prepare`
+  command runs.
+  The file is in a directory of its own in the system's temporary
+  directory, made with mode 0700, and the file with mode 0600, never in
+  the run directory: the program writes it directly, secrets included,
+  and a run directory is what CI uploads.
+  Only redacted copies of its lines reach the run directory.
+  The directory is removed when the world stops, and when nukadoko exits
+  before that.
+- nukadoko sets no variable the program file does not name.
+  A world whose program file does not name `{events}` gets no file, and
+  its step records have no `observed.events`.
+- A world nukadoko does not serve has no such file: `{events}` in a world
+  at a `url`, in a world with neither `serve` nor `url`, or in a `build`
+  command is refused by name before anything runs (see "Placeholders").
+- The steps get the variable with the rest of `env` (see "env").
+  nukadoko cannot tell a line a step's own code appended from one the
+  program wrote, so a step writes none.
+- Under `--concurrency` the parent makes the file, and every worker reads
+  it for its own steps.
+
+A line belongs to the step whose trace id its `trace` field holds, read
+as the format defines it: a `traceparent` or a bare trace id that starts
+with the world's eight characters.
+The program log's rule, the first such id anywhere in the line's text,
+is not used here, since a value inside an event can hold an id too.
+A line that does not read as one line of the format belongs to no step,
+so no step's events take data from it.
+When its text carries a step's trace id by the program log's rule, that
+step counts it in `unreadable`: the line may have been any of its lines.
+A line two writes spliced together is the usual one.
+
+A step reads the file the way it reads the program's log (see "Trace
+context and the program's log"): forward, as it waits, until no line of
+its own has arrived for 30 ms after the later of the step's end and its
+last such line, and no longer than 300 ms in all.
+Its lines go to `events.jsonl` beside the step record.
+Each line there is the line as it parsed, redacted with the step's
+secrets, trace ids kept whole, and written again as JSON, so a redacted
+value is still JSON and the file shows exactly what was read.
+`observed.events` counts them:
+
+```json
+"events": {
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "lines": 5,
+  "file": "events.jsonl",
+  "kinds": { "db": 2, "job": 2, "request": 1 },
+  "stamped": 1,
+  "unreadable": 0,
+  "unowned": 0,
+  "whole": true,
+  "open": []
+}
+```
+
+- `trace_id` and `stamped` are the ones `observed.program_log` holds.
+- `lines` is how many readable lines carried the trace id when the
+  step's record was written.
+- `file` is `null` when `lines` is 0.
+- `kinds` counts those lines by `kind`.
+  A writer's own `x_` kind, a kind the format does not define, and a
+  later version's line are each counted under the kind the line names.
+- `unreadable` is how many lines whose text carries the trace id did not
+  read.
+- `unowned` is how many readable lines the step's read passed whose trace
+  is no step's: a request nukadoko did not stamp, such as the `ready`
+  check or a BeforeAll hook's, or a trace the program made itself.
+- `whole` is `true` when every request the step stamped has its
+  `request` line, matched by the span id the step sent (a line with a
+  bare trace id counts for one request), every job enqueued in the trace
+  has at least as many `perform` lines as `enqueue` lines, no line of
+  the trace was unreadable, the step's lines fit its file, and the file
+  was not replaced.
+- `open` names each reason `whole` is `false`, one gap word each, in
+  this order:
+  - `producer-unstamped`: the step sent no request with a
+    `traceparent`, so no line can say that its work ended;
+  - `no-lines`: the step stamped requests, and no line carries its trace
+    id: no writer, a wrong variable, or lines that came late;
+  - `request-unreported`, with `requests`: that many of the stamped
+    requests have no `request` line;
+  - `jobs-pending`, with `job_ids`: the jobs enqueued in the trace with
+    fewer `perform` lines than `enqueue` lines;
+  - `unreadable`, with `lines`: the count `unreadable` holds;
+  - `truncated`: the step's lines came to more than 16 MiB, and the file
+    holds the first of them;
+  - `file-replaced`: the file was replaced or made shorter while the
+    world ran, and nothing after that was read.
+
+`whole: false` never says that nothing more happened: the program's work
+may still be going on, or a line may be lost, and `open` says which.
+A step that sent nothing to the world is never whole, since no line can
+say that it caused no work.
+
+A line of a step that arrives after its record was written is still
+that step's: a request line the program writes after a streamed body,
+or a job that performs later.
+The record is not rewritten.
+When the world stops, after the program has, one pass over the whole
+file writes those lines to `events-late.jsonl` beside the step record,
+redacted the same way.
+The step in `run.json` carries `"events_late": { "lines", "file" }`,
+with `"truncated": true` past 16 MiB, the run summary names the lines on
+the step's line under "Unmeasured actions", and `nuka do` names the file
+in an `events-late` note on stderr.
+
+The same pass writes the world's copy of the file,
+`worlds/<environment>/events.jsonl`, every line redacted the same way, a
+line that did not read kept as its redacted text, and counts the file
+into `run.json`:
+
+```json
+"events": { "file": "worlds/default/events.jsonl", "lines": 18, "owned": 15, "late": 1, "unowned": 1, "unreadable": 2, "undefined_kinds": {} }
+```
+
+- `lines` is every line of the file; `owned`, the readable lines that
+  carry a trace id of the world; `late`, those that arrived after their
+  step's record; `unowned`, the readable lines that carry none;
+  `unreadable`, the lines that did not read; and `undefined_kinds`, the
+  lines of each kind the format does not define, by kind.
+- `file` is `null` when the copy could not be written.
+
+The run summary gives the world one line when the program wrote no line
+at all, or when the file holds lines no step record holds:
+
+```text
+- events of world default: 1 line carrying a step's trace id arrived after that step ended (`events-late.jsonl`); 2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`
+```
+
+```text
+- events of world default: the program wrote no line to the file {events} names, so no step's record has an event
+```
+
+A world at a `url` has no file nukadoko can read.
+Each step's `observed.events` is `null`, the world's `events` in
+`run.json` is `null`, and the run summary says:
+
+```text
+- events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+```
+
+What this does not reach, in one list:
+
+- A line a step's own code writes to the file reads as the program's
+  (above).
+- A request a page sends after the step that loaded it returned carries
+  the next step's trace id, so its lines are the next step's.
+- A world at a `url`, and a program that writes its lines somewhere
+  other than the file `{events}` names.
+- A line a process of the program writes after the world stopped, such
+  as a worker that outlives the stop, is in no file: the stop's pass has
+  read the file, and the file is removed.
+
 ### A Ruby program
 
 The file is TypeScript, and the commands are whatever the project runs.
@@ -3815,9 +4010,9 @@ Each run uses two output channels for two readers. stdout is for scripts,
 and it carries only what one asked for: under `--records`, NDJSON with one
 scenario per line, each line the scenario's entry in `run.json`, written as
 the scenario finishes, and under `--json`, the `run.json` document described
-below. A `--records` line holds no step's `program_log_late`: late lines
-are found when the world stops, after the scenario's line went out, so
-`program_log_late` appears only in `run.json`. Without either flag, stdout stays empty, on a terminal or not.
+below. A `--records` line holds no step's `program_log_late` or
+`events_late`: late lines are found when the world stops, after the
+scenario's line went out, so both appear only in `run.json`. Without either flag, stdout stays empty, on a terminal or not.
 `run.json` is on disk either way, and the `run` line names it.
 A person and an agent both read stderr, and an agent's shell is
 no terminal and reads stdout together with stderr, so a line of JSON per
@@ -4054,7 +4249,9 @@ to act on the run without opening another file:
   `claims`, `observation`, and `attempts`, the same values its step
   record holds (see "Claims"), so a broken claim is read without opening
   the step record. A step with lines of the program's log that arrived
-  after its record was written has `program_log_late` (see "Program"). A result whose JSON is
+  after its record was written has `program_log_late`, and one with
+  lines of the program's execution events that did has `events_late`
+  (see "Program"). A result whose JSON is
   over 4096 bytes is a preview instead, with `truncated: true` and
   `result_bytes`, the whole value's size: an object keeps its top-level
   numbers, booleans, and nulls and the first 1024 characters of each
@@ -5018,7 +5215,8 @@ its scenario record's id, so either record leads to the other.
   this execution's own timeline the screenshot was actually taken.
 - `observed` holds what the tool saw the execution reach, one key per
   channel: `processes`, `http`, `files`, and `unmeasured`, and, when the
-  run has a world URL, `program_log`. Every channel
+  run has a world URL, `program_log`, and `events` when the world's
+  program file names `{events}` or the world is at a `url`. Every channel
   follows one rule: measure what can be measured exactly, mark what
   cannot, and never infer a write from a method. A channel the execution
   never reached is `null`, never `0`: "nothing was measured" and
@@ -5178,6 +5376,11 @@ its scenario record's id, so either record leads to the other.
   "trace_id", "lines", "file", "stamped" }`, or `null` for a world at a `url`, whose
   log nukadoko does not read; it is absent when the run has no world URL
   (see "Program", "Trace context and the program's log").
+- `observed.events` is the step's slice of the program's execution
+  events, `{ "trace_id", "lines", "file", "kinds", "stamped",
+  "unreadable", "unowned", "whole", "open" }`, or `null` for a world at a
+  `url`; it is absent when the world's program file does not name
+  `{events}` (see "Execution events").
 - `observed.files` (`null` when the execution changed none) lists the
   paths the step changed, sorted: `{ "path", "change", "bytes", "content" }`.
   Two sources are merged. Every scratch directory (see "Context API") is
@@ -5401,8 +5604,8 @@ its scenario record's id, so either record leads to the other.
   call. A `name` containing a path separator, or equal to `.`/`..`/the
   empty string, is refused before anything is written, never silently
   rewritten into something safe. A `name` of `record.json`, `final.png`,
-  `trace.zip`, `http.jsonl`, `program-log.txt`, or `program-log-late.txt`,
-  under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
+  `trace.zip`, `http.jsonl`, `program-log.txt`, `program-log-late.txt`,
+  `events.jsonl`, or `events-late.jsonl`, under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
   `final.<name>.png` for a valid `pageAs` name, or of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by
@@ -5694,7 +5897,9 @@ holds:
   changes (from `commit`, or "unknown" without one), each environment and its
   target version, a line for each world whose program log was not read,
   carries no trace ids, or tagged the steps' lines only after they ended
-  (see "Program"), every browser a scenario launched or "none launched", the
+  (see "Program"), a line for each world whose execution events were not
+  read, got no line, or hold lines no step record holds (see "Execution
+  events"), every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
   file), `proof runs: <n>` when `--proof-runs` is not 2, `check: skipped`
   under `nuka run --no-check` (nothing when the check ran), the nukadoko
@@ -5714,14 +5919,15 @@ holds:
 - "Unmeasured actions", when a step did something the tool saw but could
   not measure (`observed.unmeasured`), started a request or a
   `runCommand` process after its record was written (`after_step_end`),
-  or has lines of the program's log that arrived after it
-  (`program_log_late`):
+  or has lines of the program's log or of its execution events that
+  arrived after it (`program_log_late`, `events_late`):
   one line per step, with its location, its text, its environment when
   the run had more than one, up to three of its actions and how many
   more, `started after the step ended: <n> request(s) in http.jsonl, <n>
   process(es)` when it did, `<n> line(s) of the program's log after the
-  step ended, in program-log-late.txt` when the world's stop found any
-  (see "Program"), the advice to start a process with `runCommand` when one
+  step ended, in program-log-late.txt` and `<n> line(s) of the program's
+  events after the step ended, in events-late.jsonl` when the world's stop
+  found any (see "Program"), the advice to start a process with `runCommand` when one
   of its actions is a `child_process`, and its record's path. A step
   with neither adds nothing, and under `--repeat` the same step with the
   same line is one line;
@@ -6738,8 +6944,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               stdout is empty unless asked: --records
                               prints NDJSON, each scenario's run.json
                               entry as the scenario finishes, on a terminal
-                              or not (a step's program_log_late is only in
-                              run.json, written when the world stops). --json prints
+                              or not (a step's program_log_late and
+                              events_late are only in run.json, written
+                              when the world stops). --json prints
                               run.json (commit, environments, selection,
                               counts, table, each scenario's steps with line,
                               status, record, and error, each failed

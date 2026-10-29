@@ -236,6 +236,7 @@
 
 import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { DeclaredSnapshot } from "../compat/declared.js";
+import type { EventsGap } from "../execution-events/tally.js";
 
 /** Dropped-request counts by Playwright's own `request.resourceType()`
  * (`"image"`, `"stylesheet"`, `"script"`, ...) — the step record's own
@@ -271,6 +272,44 @@ export interface ObservedCounts {
    * whose log nukadoko does not read. Absent when the run has no world
    * URL. */
   program_log?: ProgramLogSlice | null;
+  /** The lines of the world's execution events that carry this step's
+   * trace id (docs/spec.md "Execution events"). `null` for a world at a
+   * `url`, which nukadoko does not start, so it reads nothing the program
+   * writes. Absent when the world has no events file: the program file
+   * names no `{events}`, or the run has no world URL. */
+  events?: EventsSlice | null;
+}
+
+/** A step's slice of the program's execution events (docs/spec.md
+ * "Execution events"). */
+export interface EventsSlice {
+  /** The step's trace id, the same as `program_log.trace_id`. */
+  readonly trace_id: string;
+  /** How many readable lines carried the step's trace id when its record
+   * was written. */
+  readonly lines: number;
+  /** `events.jsonl` beside the step record: the step's lines parsed,
+   * redacted, and written again as JSON. `null` when there are none. */
+  readonly file: string | null;
+  /** `lines` by the `kind` each line names. */
+  readonly kinds: Readonly<Record<string, number>>;
+  /** How many requests the step sent to the world with a `traceparent`. */
+  readonly stamped: number;
+  /** Lines whose text carries the step's trace id and that are not one
+   * readable line of the format. They are in no other count, and only in
+   * the world's copy of the file. */
+  readonly unreadable: number;
+  /** Readable lines whose trace is none of the world's, read while the
+   * step ran: a request nukadoko did not stamp, or work the program traced
+   * on its own. They may be the step's, and are only in the world's copy
+   * of the file. */
+  readonly unowned: number;
+  /** Whether the lines say all of the step's work had reported its end
+   * when the record was written: `open` is empty. */
+  readonly whole: boolean;
+  /** Why the lines may not hold all of the step's work, one gap word
+   * each. */
+  readonly open: readonly EventsGap[];
 }
 
 /** A step's slice of the program's log (docs/spec.md "Trace context and

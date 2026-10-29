@@ -12,6 +12,8 @@ The format assumes no reader.
 A test harness, a log pipeline, a database table, and a person with
 `grep` and `jq` read the same lines.
 Nothing in a line names the tool that reads it.
+How nukadoko reads these lines is in [docs/spec.md](spec.md),
+"Execution events".
 
 The words "must", "must not", "should", and "may" have their RFC 2119
 meanings.

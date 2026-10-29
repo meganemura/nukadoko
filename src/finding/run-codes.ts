@@ -45,6 +45,12 @@ const RUN_CODES = {
       "A row of the verdict table has no required cell: no environment the run started meets every condition its scenario's tags name, so the row is failed and nothing ran that shows it holds. Only a run under --no-check reaches it; nuka check reports the scenario as condition-unmet.",
     fix: "Add an environment whose conditions meet the scenario's tags, run one that does with --env, or correct the tags.",
   },
+  "events-late": {
+    severity: "note",
+    description:
+      "nuka do found lines of the program's execution events that carry the step's trace id and arrived after the step ended, when the world stopped. They are in events-late.jsonl beside the step record, and are not in its observed.events.",
+    fix: "No change is necessary. A job the step enqueued that performed after the step ended writes its lines then; observed.events.open names a job that had not performed.",
+  },
   "fixture-teardown-failed": {
     severity: "warning",
     description: "A fixture's teardown threw after its scenario or the run finished.",

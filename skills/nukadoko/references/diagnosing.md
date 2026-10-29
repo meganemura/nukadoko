@@ -59,7 +59,9 @@ need more than a glance.
 4. `program-log.txt` beside the record, when `observed.program_log`
    names it, and `program-log-late.txt` when the run summary names one:
    the lines the program under test wrote for this step's own requests,
-   such as the error behind a 500 (`program.md`).
+   such as the error behind a 500, and `events.jsonl` when
+   `observed.events` names it: each statement, job, and call it made
+   (`program.md`).
 5. `nuka do <step> --use <upstream-step-record-id>` when the record
    sharpens a hypothesis rather than confirming it ("Testing a hypothesis
    without a full re-run").

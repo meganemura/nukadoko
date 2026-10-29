@@ -69,7 +69,7 @@ the second call is suffixed the same way (`Report.txt`, then
 `report-2.txt`) and the two do not share one path. A harness file name is
 refused with `ReservedEvidenceNameError`: `record.json`, `final.png`,
 `trace.zip`, `http.jsonl`, `program-log.txt`, `program-log-late.txt`,
-`world` under `nuka do`, and `process-<n>.stdout.txt`,
+`events.jsonl`, `events-late.jsonl`, `world` under `nuka do`, and `process-<n>.stdout.txt`,
 `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, and
 `process-<n>.json` (what a `runCommand` process printed and was given,
 and the entry of one that started after the step ended), in any case.

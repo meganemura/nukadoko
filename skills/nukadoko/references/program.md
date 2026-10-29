@@ -41,11 +41,12 @@ no user or password in it.
 | `{root}` | the tree's root, the one placeholder `build` may name |
 | `{world}` | the environment's name |
 | `{token}` | random per world, redacted as `{{secret.WORLD_TOKEN}}` in every record |
+| `{events}` | a private empty file a world nukadoko serves gets for its program's execution events |
 | `{condition.<name>}` | the value the environment declares for that condition: `true`, `false`, or the string |
 
 A placeholder a world has no value for (`{port}` or `{url}` with neither
-`serve` nor `url`, `{condition.<name>}` where the environment does not
-declare it, anything but `{root}` in `build`) is
+`serve` nor `url`, `{events}` without `serve`, `{condition.<name>}` where
+the environment does not declare it, anything but `{root}` in `build`) is
 `program-placeholder-unfilled`: `nuka check` reports it for the worlds a
 `nuka run` with the same `--env` flags would start, and `nuka run` and
 `nuka do` refuse it before any command runs.
@@ -122,6 +123,30 @@ writes for a request. A world at a `url` has no log nukadoko reads:
 `observed.program_log` is `null`, and the server's own log finds a
 step's requests by the `traceparent` on its `http.jsonl` lines, each
 with `traceparent_sent_to`, the origins that received it.
+
+## Each step's execution events
+
+A program can also write one JSON line per operation it ends (a request,
+a statement, a transaction, a job, an outgoing call, a flag, an error) to
+the file `{events}` names, in the format of docs/execution-events.md:
+`env: { EXECUTION_EVENTS: "{events}" }`. Each line carries the request's
+`traceparent`, a job's the one that enqueued it, so the lines of every
+process the program runs reach the step that caused them. Each step record
+gets its lines, redacted, in `events.jsonl` beside it, counted in
+`observed.events` (`{ trace_id, lines, file, kinds, stamped, unreadable,
+unowned, whole, open }`). Read it to see what the program did inside a
+step: which tables it read and wrote, which jobs it enqueued and ran.
+
+`whole: true` says every request the step stamped has its `request`
+line and every job it enqueued performed. `whole: false` never says
+nothing more happened: `open` names why, one word each:
+`producer-unstamped` (the step sent the world nothing), `no-lines` (no
+writer, or a wrong variable), `request-unreported`, `jobs-pending` (with
+`job_ids`), `unreadable` (a line spliced or cut), `truncated`,
+`file-replaced`. A line that arrived later is in `events-late.jsonl`,
+and the run summary names it. The whole file, redacted, is in
+`worlds/<environment>/events.jsonl`; a world at a `url` has none, and
+`observed.events` is `null` there.
 
 ## Environments and programs nukadoko does not start
 
