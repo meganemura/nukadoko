@@ -137,7 +137,8 @@ an `undefined` item, a `Proxy`, or nesting past 256 levels leaves the claim
 `unjudged` (return an ISO string or a number). Each claim or item the step's
 deadline cuts off, a running `matches` included, is `unjudged`, with how many.
 `nuka check` reports a `from` path the producer's `returns` does not declare
-(`claim-path-unknown`), a claim whose sides are one place
+(`claim-path-unknown`) or holds as an object that drops the field a
+`lacks-field` names (`claim-field-stripped`), a claim whose sides are one place
 (`claim-compares-itself`), an `is-a` capture that names no kind
 (`claim-kind-unknown`), and a parameter type with a transformer on an expected
 key (`claim-expected-transformed`).

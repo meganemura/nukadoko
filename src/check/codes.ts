@@ -73,6 +73,12 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Capture the key with a type that has no transformer, such as {key:string}, and declare expected_view (text, lines, json, or comma-list) on the claim if the text needs one.",
   },
+  "claim-field-stripped": {
+    description:
+      "A lacks-field claim reads a value an earlier step returned, and that step's returns schema declares the value as an object that does not declare the field and keeps no key it does not declare: a z.object, which drops such a key when it parses the result, or a z.strictObject, which refuses it. The field is never there, so the claim holds whatever the behaviour is. Also reported for a where claim that selects the items lacking such a field, which then selects every item. Only a field the claim names as a literal, or that the line fills through a {word}, {string}, or anonymous capture, is checked; a schema that may keep the key (z.looseObject, a catchall, a union, a transform, or a default or a catch anywhere on the path, whose own value skips the schema at every depth below it) is taken to keep it.",
+    severity: "error",
+    fix: "Declare the field in the producing step's returns as optional (such as password: z.unknown().optional()), so a result that holds it keeps it and one without it still parses, or declare that object with z.looseObject, which keeps the keys it does not declare.",
+  },
   "claim-kind-unknown": {
     description:
       "An is-a claim's expected value is a plain string args key, read as it is or with expected_view text, and the line fills it through a {word}, {string}, or anonymous capture with a name that is none of the kinds is-a names, so the claim always breaks on that line. defineStep refuses a literal that names no kind; only the line says what a capture holds, so this half is the check's.",

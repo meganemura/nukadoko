@@ -2390,6 +2390,161 @@ export default defineStep({
   });
 });
 
+describe("a field the producer's returns never keeps", () => {
+  /** A step that signs a user up and returns the user with a password,
+   * through `user` in the returns schema the test names. */
+  const signUp = (user: string, users: string) => `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "Signs a user up",
+  pattern: "a user signs up",
+  args: z.object({}),
+  returns: z.object({ user: ${user}, users: z.array(${users}) }),
+  mutates: false,
+  run() {
+    const user = { name: "aki", password: "secret" };
+    return { user, users: [user] };
+  },
+});
+`;
+  const claimStep = (pattern: string, args: string, claims: string) => `import { defineStep, z } from "nukadoko";
+import signUp from "./a-user-signs-up.ts";
+export default defineStep({
+  pattern: "${pattern}",
+  args: z.object({ ${args}${args === "" ? "" : ", "}user: signUp.returns.shape.user, users: signUp.returns.shape.users }),
+  from: { user: [signUp, "user"], users: [signUp, "users"] },
+  claims: [${claims}],
+});
+`;
+  const steps = {
+    "features/steps/the-user-has-no-password-field.ts": claimStep("the user has no password field", "", `{ actual: "user", compare: "lacks-field", expected: { literal: "password" } }`),
+    "features/steps/the-user-carries-no-field.ts": claimStep("the user carries no {field:word} field", "field: z.string()", `{ actual: "user", compare: "lacks-field", expected: "field" }`),
+    "features/steps/every-user-without-a-deleted-at-field-has-no-password-field.ts": claimStep(
+      "every user without a deleted_at field has no password field",
+      "",
+      `{ actual: "users", each: { where: [{ compare: "lacks-field", expected: { literal: "deleted_at" } }], claims: [{ compare: "lacks-field", expected: { literal: "password" } }] } }`,
+    ),
+  };
+  const feature = [
+    "Feature: sign up",
+    "  Scenario: a literal",
+    "    When a user signs up",
+    "    Then the user has no password field",
+    "  Scenario: a capture",
+    "    When a user signs up",
+    "    Then the user carries no password field",
+    "    Then the user carries no name field",
+    "  Scenario: each user",
+    "    When a user signs up",
+    "    Then every user without a deleted_at field has no password field",
+    "",
+  ].join("\n");
+
+  it("is reported by nuka check for a z.object or a z.strictObject that does not declare it, on a claim and on a where clause, and the run refuses to start", async () => {
+    for (const object of ["z.object", "z.strictObject"]) {
+      const rootDir = await project({ "features/steps/a-user-signs-up.ts": signUp(`${object}({ name: z.string() })`, `${object}({ name: z.string() })`), ...steps, "features/t.feature": feature });
+      const checked = await cli(rootDir, ["check", "features/t.feature"]);
+      const findings = checked.stdout.split("\n").filter((line) => line.startsWith("error\tclaim-field-stripped\t"));
+      expect(findings).toEqual([
+        'error\tclaim-field-stripped\tfeatures/t.feature:4\tStep "the-user-has-no-password-field"\'s claims[0] is lacks-field "password" on user, and step "a-user-signs-up" on line 3 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
+        'error\tclaim-field-stripped\tfeatures/t.feature:7\tStep "the-user-carries-no-field"\'s claims[0] is lacks-field "password" on user, and step "a-user-signs-up" on line 6 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
+        'error\tclaim-field-stripped\tfeatures/t.feature:11\tStep "every-user-without-a-deleted-at-field-has-no-password-field"\'s claims[0].each.where[0] is lacks-field "deleted_at" on each item of users, and step "a-user-signs-up" on line 10 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. deleted_at is never there, so where selects every item, whatever the behaviour is',
+        'error\tclaim-field-stripped\tfeatures/t.feature:11\tStep "every-user-without-a-deleted-at-field-has-no-password-field"\'s claims[0].each.claims[0] is lacks-field "password" on each item of users, and step "a-user-signs-up" on line 10 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
+      ]);
+      expect(checked.exitCode).toBe(1);
+      const result = await cli(rootDir, ["run", "features/t.feature"]);
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stdout + result.stderr).toContain("claim-field-stripped");
+    }
+  });
+
+  it("is not reported for a schema that keeps the field, and the run then breaks the claim on the password it returned", async () => {
+    for (const user of ["z.looseObject({ name: z.string() })", "z.object({ name: z.string(), password: z.string().optional(), deleted_at: z.string().optional() })"]) {
+      const rootDir = await project({ "features/steps/a-user-signs-up.ts": signUp(user, user), ...steps, "features/t.feature": feature });
+      const checked = await cli(rootDir, ["check", "features/t.feature"]);
+      expect(checked.stdout).not.toContain("claim-field-stripped");
+      const result = await cli(rootDir, ["run", "features/t.feature"]);
+      expect(result.exitCode).toBe(1);
+      const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+      expect(summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: "))).toEqual([
+        '  - {"name":"aki","password":"secret"} (from:a-user-signs-up@3.user) lacks-field "password" (literal:password) broken; field "password" is present and holds "secret"; measured: none',
+        '  - {"name":"aki","password":"secret"} (from:a-user-signs-up@6.user) lacks-field "password" (sentence:field) broken; field "password" is present and holds "secret"; measured: none',
+        `  - each of from:a-user-signs-up@10.users (1 item) where item lacks-field "deleted_at" (literal:deleted_at): item lacks-field "password" (literal:password) broken; item 0 (name "aki"): {"name":"aki","password":"secret"} (from:a-user-signs-up@10.users.0) lacks-field "password" (literal:password); measured: none`,
+      ]);
+    }
+  });
+
+  /** A step that returns nothing, so the wrapper above each object in its
+   * returns hands back the fallback the test names. */
+  const openAccount = (account: string, users: string) => `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "Opens an account",
+  pattern: "an account opens",
+  args: z.object({}),
+  returns: z.object({
+    account: z.object({ user: z.object({ name: z.string() }) }).${account}({ user: { name: "kei", password: "from the fallback" } }),
+    users: z.array(z.object({ name: z.string() })).${users}([{ name: "kei", password: "from the fallback" }]),
+  }),
+  mutates: false,
+  run() {
+    return {} as any;
+  },
+});
+`;
+  const accountSteps = {
+    "features/steps/the-account-user-has-no-password-field.ts": `import { defineStep, z } from "nukadoko";
+import open from "./an-account-opens.ts";
+export default defineStep({
+  pattern: "the account user has no password field",
+  args: z.object({ account: z.unknown() }),
+  from: { account: [open, "account"] },
+  claims: [{ actual: "account", at: "user", compare: "lacks-field", expected: { literal: "password" } }],
+});
+`,
+    "features/steps/every-user-has-no-password-field.ts": `import { defineStep, z } from "nukadoko";
+import open from "./an-account-opens.ts";
+export default defineStep({
+  pattern: "every user has no password field",
+  args: z.object({ users: z.unknown() }),
+  from: { users: [open, "users"] },
+  claims: [{ actual: "users", each: { claims: [{ compare: "lacks-field", expected: { literal: "password" } }] } }],
+});
+`,
+    "features/t.feature": [
+      "Feature: accounts",
+      "  Scenario: the account user",
+      "    When an account opens",
+      "    Then the account user has no password field",
+      "  Scenario: every user",
+      "    When an account opens",
+      "    Then every user has no password field",
+      "",
+    ].join("\n"),
+  };
+
+  it("is not reported below a default or a catch, whose own value skips the schema, and the run then breaks the claim on the field that value holds", async () => {
+    const rootDir = await project({ "features/steps/an-account-opens.ts": openAccount("default", "catch"), ...accountSteps });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.stdout).not.toContain("claim-field-stripped");
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: "))).toEqual([
+      '  - {"name":"kei","password":"from the fallback"} (from:an-account-opens@3.account.user) lacks-field "password" (literal:password) broken; field "password" is present and holds "from the fallback"; measured: none',
+      '  - each of from:an-account-opens@6.users (1 item): item lacks-field "password" (literal:password) broken; item 0 (name "kei"): {"name":"kei","password":"from the fallback"} (from:an-account-opens@6.users.0) lacks-field "password" (literal:password); measured: none',
+    ]);
+  });
+
+  it("is reported below a prefault, whose value the schema parses", async () => {
+    const rootDir = await project({ "features/steps/an-account-opens.ts": openAccount("prefault", "prefault"), ...accountSteps });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.stdout.split("\n").filter((line) => line.startsWith("error\tclaim-field-stripped\t"))).toEqual([
+      'error\tclaim-field-stripped\tfeatures/t.feature:4\tStep "the-account-user-has-no-password-field"\'s claims[0] is lacks-field "password" on account at user, and step "an-account-opens" on line 3 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
+      'error\tclaim-field-stripped\tfeatures/t.feature:7\tStep "every-user-has-no-password-field"\'s claims[0].each.claims[0] is lacks-field "password" on each item of users, and step "an-account-opens" on line 6 returns that value through an object schema that declares name, which drops any key it does not declare, or refuses it as a strict object. password is never there, so the claim holds whatever the behaviour is',
+    ]);
+    expect(checked.exitCode).toBe(1);
+  });
+});
+
 describe("a claim its compare could never judge as the sentence means it, refused at import", () => {
   /** A claim step that observes a body and an output, and reads a key of
    * the step that answers, so a claim can name either side. */

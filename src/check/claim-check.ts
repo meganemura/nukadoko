@@ -37,7 +37,11 @@ import type { CheckIssue } from "./types.js";
 // the value an actual `from` reads when the expected value is
 // `{ observe }`. A third reads the line's own words: an `is-a` claim
 // whose expected sentence key a capture fills with a name that is no kind
-// (`claim-kind-unknown`). Two findings are per bound step:
+// (`claim-kind-unknown`). A fourth reads the producer's `returns` for a
+// field: a `lacks-field` claim, or a `where` that selects by one, on a
+// value whose schema is an object that drops or refuses every key it
+// does not declare, and does not declare that field, so the field is
+// never there (`claim-field-stripped`). Two findings are per bound step:
 // a claim step whose `observe` reaches a browser page and does not state
 // `poll` (`claim-poll-unstated`), and an expected sentence key that a
 // parameter type with a transformer fills (`claim-expected-transformed`),
@@ -58,7 +62,7 @@ export interface ClaimCheckIssue {
   /** 0-based index into `pickle.steps`: the claim step's line. */
   readonly stepIndex: number;
   readonly stepName: string;
-  readonly code: "claim-compares-itself" | "claim-kind-unknown" | "claim-path-unknown";
+  readonly code: "claim-compares-itself" | "claim-field-stripped" | "claim-kind-unknown" | "claim-path-unknown";
   readonly message: string;
 }
 
@@ -100,7 +104,12 @@ interface ZodDef {
   readonly right?: z.ZodTypeAny;
 }
 
-const WRAPPERS = new Set(["optional", "nullable", "default", "prefault", "nonoptional", "readonly", "catch"]);
+const WRAPPERS: ReadonlySet<string> = new Set(["optional", "nullable", "default", "prefault", "nonoptional", "readonly", "catch"]);
+// The wrappers that parse the value they hold, so an object inside one
+// still drops the keys it does not declare. `default` and `catch` are not
+// here: each can return its own value without parsing it, and that value
+// may hold any key, at any depth below it.
+const PARSING_WRAPPERS: ReadonlySet<string> = new Set(["optional", "nullable", "nonoptional", "readonly", "prefault"]);
 const LEAVES = new Set(["string", "number", "boolean", "bigint", "null", "undefined", "literal", "enum", "date", "nan", "void", "never", "symbol", "template_literal"]);
 const INDEX = /^(0|[1-9][0-9]*)$/;
 
@@ -110,18 +119,19 @@ function defOf(schema: z.ZodTypeAny): ZodDef {
 
 /** Follows `segments` through `schema` the way `valueAt` reads a parsed
  * value: an object key, or a decimal index into an array or a tuple.
+ * `wrappers` names the wrappers it sees through; any other is open.
  * Pure. */
-export function walkSchema(schema: z.ZodTypeAny, segments: readonly string[], depth = 0): Walk {
+export function walkSchema(schema: z.ZodTypeAny, segments: readonly string[], depth = 0, wrappers: ReadonlySet<string> = WRAPPERS): Walk {
   let current = schema;
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index]!;
     let def = defOf(current);
-    while (WRAPPERS.has(def.type) && def.innerType !== undefined) {
+    while (wrappers.has(def.type) && def.innerType !== undefined) {
       current = def.innerType;
       def = defOf(current);
     }
     if (def.type === "pipe" && def.out !== undefined) {
-      return walkSchema(def.out, segments.slice(index), depth + 1);
+      return walkSchema(def.out, segments.slice(index), depth + 1, wrappers);
     }
     switch (def.type) {
       case "object": {
@@ -154,12 +164,12 @@ export function walkSchema(schema: z.ZodTypeAny, segments: readonly string[], de
       case "union": {
         // One option that has the path, or that this module cannot read,
         // is enough: which option a value takes is known only at run time.
-        const walks = (def.options ?? []).map((option) => walkSchema(option, segments.slice(index), depth + 1));
+        const walks = (def.options ?? []).map((option) => walkSchema(option, segments.slice(index), depth + 1, wrappers));
         if (walks.length === 0 || walks.some((walk) => walk.kind !== "missing")) return { kind: "open" };
         return { kind: "missing", at: index, keys: null };
       }
       case "intersection": {
-        const walks = [def.left, def.right].filter((side) => side !== undefined).map((side) => walkSchema(side!, segments.slice(index), depth + 1));
+        const walks = [def.left, def.right].filter((side) => side !== undefined).map((side) => walkSchema(side!, segments.slice(index), depth + 1, wrappers));
         if (walks.some((walk) => walk.kind !== "missing")) return { kind: "open" };
         return { kind: "missing", at: index, keys: null };
       }
@@ -169,6 +179,29 @@ export function walkSchema(schema: z.ZodTypeAny, segments: readonly string[], de
     }
   }
   return { kind: "schema", schema: current };
+}
+
+/** The keys an object schema keeps, when it keeps no other key for
+ * certain: a `z.object` with no catchall, which drops a key it does not
+ * declare, or a `never` catchall (`z.strictObject`), which refuses it.
+ * `null` for any other schema, whose parsed value may hold any key.
+ * Pure. */
+export function closedObjectKeys(schema: z.ZodTypeAny): readonly string[] | null {
+  let def = defOf(schema);
+  while (PARSING_WRAPPERS.has(def.type) && def.innerType !== undefined) def = defOf(def.innerType);
+  if (def.type !== "object") return null;
+  const catchall = def.catchall === undefined ? undefined : defOf(def.catchall).type;
+  if (catchall !== undefined && catchall !== "never") return null;
+  return Object.keys(def.shape ?? {});
+}
+
+/** The keys the object at `segments` inside `schema` keeps, as
+ * `closedObjectKeys` names them, or `null`. The walk sees through the
+ * parsing wrappers alone: a default or a catch anywhere on the path can
+ * hand back its own value, with any key at any depth below it. Pure. */
+export function closedObjectKeysAt(schema: z.ZodTypeAny, segments: readonly string[]): readonly string[] | null {
+  const walk = walkSchema(schema, segments, 0, PARSING_WRAPPERS);
+  return walk.kind === "schema" ? closedObjectKeys(walk.schema) : null;
 }
 
 /** The producer a `from` key resolves to on line `stepIndex`: the nearest
@@ -328,6 +361,30 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     reportUnknownKinds(step, match(pickle.steps[stepIndex]!.text).matched, pickle.steps[stepIndex]!.text, (message) =>
       report("claim-kind-unknown", `Step "${stepName}"'s ${message}`),
     );
+    const captured = capturedTexts(match(pickle.steps[stepIndex]!.text).matched, pickle.steps[stepIndex]!.text);
+    const argsShape = asObjectShape(step.args) ?? null;
+    // A lacks-field claim, or a where clause, on a value the producer's
+    // returns parses as an object that keeps no undeclared key: `actualPath`
+    // is the claim's from path, `inside` the segments it reads below that,
+    // and `path` names the place for the reader.
+    const strippedField = (label: string, entry: ItemClaim, actualPath: string, inside: readonly string[], path: string, where: boolean): void => {
+      const field = lackedField(entry, captured, argsShape);
+      if (field === null) return;
+      const segments = pathSegments(actualPath);
+      if (segments === null || !fromKeys.has(segments[0]!)) return;
+      const producer = producerOf(segments[0]!);
+      if (producer === null) return;
+      const keys = closedObjectKeysAt(producer.step.returns, [producer.key, ...segments.slice(1), ...inside]);
+      if (keys === null || keys.includes(field)) return;
+      const line = lines[producer.lineIndex];
+      const has = keys.length === 0 ? "no keys" : keys.join(", ");
+      report(
+        "claim-field-stripped",
+        `Step "${stepName}"'s ${label} is lacks-field ${JSON.stringify(field)} on ${path}, and step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`} ` +
+          `returns that value through an object schema that declares ${has}, which drops any key it does not declare, or refuses it as a strict object. ` +
+          `${field} is never there, so ${where ? "where selects every item, whatever the behaviour is" : "the claim holds whatever the behaviour is"}`,
+      );
+    };
     // Every place of the step that `observe` must not receive, for the
     // observe check: each expected `{ from }` place, and each actual
     // `from` place whose claim takes its expected value from `observe`.
@@ -350,6 +407,15 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       if (isEachClaim(claim)) {
         if (actualSchema !== null && claim.view === undefined && claim.at === undefined) {
           checkItemPaths(stepName, label, claim, actualSchema, report);
+          const entries: readonly [string, ItemClaim, boolean][] = [
+            ...(claim.each.where ?? []).map((item, itemIndex): [string, ItemClaim, boolean] => [`${label}.each.where[${itemIndex}]`, item, true]),
+            ...claim.each.claims.map((item, itemIndex): [string, ItemClaim, boolean] => [`${label}.each.claims[${itemIndex}]`, item, false]),
+          ];
+          for (const [itemLabel, item, where] of entries) {
+            const inside = item.view === undefined ? itemSegmentsOf(item) : null;
+            const named = inside === null || inside.length === 0 ? "each item" : `${inside.join(".")} of each item`;
+            if (inside !== null) strippedField(itemLabel, item, claim.actual, ["0", ...inside], `${named} of ${claim.actual}`, where);
+          }
         }
         const items: readonly [string, ItemClaim][] = [
           ...(claim.each.where ?? []).map((item, itemIndex): [string, ItemClaim] => [`${label}.each.where[${itemIndex}]`, item]),
@@ -377,6 +443,8 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       if (typeof claim.expected === "object" && "from" in claim.expected) {
         checkFromPath(`${label}.expected.from`, claim.expected.from);
       }
+      const at = claim.view === undefined ? (claim.at === undefined ? [] : pathSegments(claim.at)) : null;
+      if (actualSchema !== null && at !== null) strippedField(label, claim, claim.actual, at, claim.at === undefined ? claim.actual : `${claim.actual} at ${claim.at}`, false);
       noteExpectedFrom(label, claim.expected);
       noteActualFrom(label, claim.expected, actual, actualSource);
       // expected_view is on a sentence key alone, which no other side reads.
@@ -406,6 +474,32 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     }
   });
   return issues;
+}
+
+/** The path an item claim reads inside its item, `actual` then `at`, or
+ * `null` for one that is not a path. */
+function itemSegmentsOf(item: ItemClaim): readonly string[] | null {
+  const actual = item.actual === undefined ? [] : pathSegments(item.actual);
+  const at = item.at === undefined ? [] : pathSegments(item.at);
+  return actual === null || at === null ? null : [...actual, ...at];
+}
+
+/** The field a `lacks-field` claim names on this line before it runs: a
+ * literal, or a plain string key a capture fills with its own text. `null`
+ * for any other claim, and for a field only the run can know (a
+ * docstring, a table, a custom type's transformer, a blank name). */
+function lackedField(entry: ItemClaim, captured: ReadonlyMap<string, string>, shape: Record<string, z.ZodTypeAny> | null): string | null {
+  if (entry.compare !== "lacks-field") return null;
+  const expected = entry.expected;
+  let name: string | undefined;
+  if (typeof expected === "object") {
+    name = "literal" in expected && typeof expected.literal === "string" ? expected.literal : undefined;
+  } else if (entry.expected_view === undefined || entry.expected_view === "text") {
+    const schema = shape?.[expected];
+    const text = schema !== undefined && isPlainString(schema) ? captured.get(expected) : undefined;
+    name = entry.expected_view === "text" ? text?.trimEnd() : text;
+  }
+  return name === undefined || name.trim() === "" ? null : name;
 }
 
 /** The value each capture of a typed pattern gives on `text`, by key, for

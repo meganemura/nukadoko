@@ -106,6 +106,21 @@ just until 0.1.
   `where` claim that selects the items with no `deleted_at` field reads
   that field's place, so it leaves a claim on another field of theirs to
   the data and is refused beside one on `deleted_at` or the item itself.
+- **`nuka check` reports a `lacks-field` claim on a field the producer's
+  `returns` drops (`claim-field-stripped`).** A step's result passes
+  through its `returns` schema before the next step reads it: `z.object`
+  drops every key it does not declare, and `z.strictObject` refuses the
+  result. A claim that a `from` value lacks such a field then holds, or
+  its `where` selects every item, whatever the behaviour is. The check
+  reads the field from a literal or from a capture of plain text, walks
+  the claim's `at` (or, in an `each`, the item path) through the
+  producer's schema, unwraps `optional`, `nullable`, `nonoptional`,
+  `readonly`, and `prefault`, and stays silent for an object that keeps
+  other keys (`z.looseObject`, a `catchall`), below a `default` or a
+  `catch` anywhere on the path, whose own value skips the schema at every
+  depth, and for any schema it cannot read to the end. Declare the field
+  as optional in `returns`, such as `password: z.unknown().optional()`,
+  so its presence reaches the claim.
 
 - **Each step record holds what the program did inside the step.** A
   program file that names the new `{events}` placeholder

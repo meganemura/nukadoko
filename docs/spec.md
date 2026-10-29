@@ -1954,6 +1954,22 @@ no `at`, which never make an object: each would break on every line. A
 `where` claim can select the items that lack a field and leave a claim
 on another of their fields to the data (see "Each").
 
+A value an earlier step returned has passed through that step's
+`returns`, and a `z.object` drops each key it does not declare (a
+`z.strictObject` refuses the result instead), so a field that schema
+does not declare is never there, whatever the step returned, and a
+`lacks-field` claim on it holds whatever the behaviour is. `nuka check`
+reports such a claim, and a `where` claim that selects the items
+lacking such a field, which then selects every item
+(`claim-field-stripped`). It reads the field a claim names as a
+literal, or the text a `{word}`, `{string}`, or anonymous capture fills
+on the line, and takes a schema that may keep a key (`z.looseObject`, a
+catchall, a union, a transform, or a `default` or a `catch` anywhere on
+the path, which return their own value unparsed at every depth below
+them) to keep it. Under `--no-check` such a claim holds. Declaring the
+field in `returns` as optional (`password: z.unknown().optional()`)
+keeps it when the step returns it.
+
 `fits-text` compares two texts, and lets a docstring state a program's
 output whose times, sizes, and paths change on each run without each
 changing part becoming a claim of its own. Both texts are split into

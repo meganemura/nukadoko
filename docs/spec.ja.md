@@ -1589,6 +1589,16 @@ literal が文字列でない `lacks-field` の claim、リストを作る `expe
 どれも、どの行でも成り立たなくなるからです。
 `where` の claim は、あるフィールドのない要素を選び、その要素の別のフィールドについての claim をデータに任せられます(「each」を参照)。
 
+前の step が返した値は、その step の `returns` を通っています。
+`z.object` は宣言していないキーを落とし(`z.strictObject` は代わりに結果を拒否します)、そのスキーマが宣言していないフィールドは、step が何を返してもありません。
+そのため、そのフィールドについての `lacks-field` の claim は、振る舞いがどうであっても成り立ちます。
+`nuka check` はそのような claim と、そのようなフィールドのない要素を選ぶ `where` の claim を報告します(`claim-field-stripped`)。
+そのような `where` はすべての要素を選ぶからです。
+読むのは、claim が literal で名指すフィールドか、行の `{word}`、`{string}`、無名の capture が埋めるテキストです。
+キーを残しうるスキーマ(`z.looseObject`、catchall、union、transform、パスのどこかにあり、自身の値をその下のどの深さでもパースせずに返す `default` や `catch`)は、キーを残すものとします。
+`--no-check` のもとでは、そのような claim は成り立ちます。
+`returns` にフィールドを任意のものとして宣言すれば(`password: z.unknown().optional()`)、step が返したときにフィールドが残ります。
+
 `fits-text` は 2 つのテキストを比べ、実行のたびに時刻、大きさ、パスが変わるプログラムの出力を、変わる部分ごとに claim を分けずに docstring で述べられるようにします。
 両方のテキストを `\n` か `\r\n` ごとに行に分け、それぞれの側で最後の空行を 1 つだけ除きます。
 そのため、プログラムが最後に出力する改行は数えません。

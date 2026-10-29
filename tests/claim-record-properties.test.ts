@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
-import { certainlySamePlace } from "../src/check/claim-check.js";
+import { z } from "zod";
+import { certainlySamePlace, closedObjectKeys, closedObjectKeysAt } from "../src/check/claim-check.js";
 import { type ChainedJsonType, wordLiteral } from "../src/cli/scaffold.js";
 import type { ClaimReading, StepRecord } from "../src/record/types.js";
 import { judgedBy, scenarioClaims } from "../src/run/run-document.js";
@@ -189,6 +190,106 @@ describe("when nuka check calls two places the same", () => {
       const path = tc.draw(segments);
       expect(certainlySamePlace({ origin: "args.count", segments: path }, { origin: "observe", segments: path })).toBe(false);
     }));
+});
+
+describe("an object schema that keeps no key it does not declare", () => {
+  const KINDS = ["object", "strictObject", "looseObject", "catchall"] as const;
+  const WRAPPERS = ["optional", "nullable", "readonly", "prefault", "default", "catch"] as const;
+  /** An object schema of one kind over drawn keys, inside drawn wrappers.
+   * A default or a catch holds a value with a key the object does not
+   * declare, since either returns its value without parsing it. */
+  const objectSchemas = gs.composite((tc) => {
+    const keys = [...new Set(tc.draw(gs.arrays(gs.text({ alphabet: "abc", minSize: 1, maxSize: 2 }), { maxSize: 3 })))];
+    const kind = tc.draw(gs.sampledFrom(KINDS));
+    const shape = Object.fromEntries(keys.map((key) => [key, z.number().optional()]));
+    let schema: z.ZodTypeAny =
+      kind === "object" ? z.object(shape) : kind === "strictObject" ? z.strictObject(shape) : kind === "looseObject" ? z.looseObject(shape) : z.object(shape).catchall(z.number());
+    const wrappers = tc.draw(gs.arrays(gs.sampledFrom(WRAPPERS), { maxSize: 2 }));
+    const undeclared = { zz: 1 } as never;
+    for (const wrapper of wrappers) {
+      const inner = schema as z.ZodObject;
+      schema =
+        wrapper === "optional" ? inner.optional() : wrapper === "nullable" ? inner.nullable() : wrapper === "readonly" ? inner.readonly() : wrapper === "prefault" ? inner.prefault({}) : wrapper === "default" ? inner.default(undeclared) : inner.catch(undeclared);
+    }
+    return { keys, kind, wrappers, schema };
+  });
+
+  it("names exactly the declared keys only when no value it parses keeps another key", () =>
+    hegel.testAsync(async (tc) => {
+      const { keys, schema } = tc.draw(objectSchemas);
+      const named = closedObjectKeys(schema);
+      if (named === null) return;
+      expect([...named].sort()).toEqual([...keys].sort());
+      const extra = tc.draw(gs.text({ alphabet: "abcz", minSize: 1, maxSize: 2 }));
+      tc.assume(!keys.includes(extra));
+      for (const input of [undefined, null, "x", {}, { [extra]: 1 }, { ...Object.fromEntries(keys.map((key) => [key, 1])), [extra]: 1 }]) {
+        const parsed = schema.safeParse(input);
+        if (!parsed.success || typeof parsed.data !== "object" || parsed.data === null) continue;
+        expect(Object.keys(parsed.data).every((key) => keys.includes(key))).toBe(true);
+      }
+    }));
+
+  it("names the keys of a z.object or a z.strictObject inside wrappers that parse, and of nothing that may keep another key", () =>
+    hegel.testAsync(async (tc) => {
+      const { kind, wrappers, schema } = tc.draw(objectSchemas);
+      const closes = (kind === "object" || kind === "strictObject") && !wrappers.some((wrapper) => wrapper === "default" || wrapper === "catch");
+      expect(closedObjectKeys(schema) !== null).toBe(closes);
+    }));
+
+  /** That object schema at a drawn path, each level a z.object around
+   * the one below it inside drawn wrappers. A default or a catch on a
+   * level holds a value whose object at the path's end has a key that
+   * object does not declare. */
+  const nestedSchemas = gs.composite((tc) => {
+    const drawn = tc.draw(objectSchemas);
+    const levels = tc.draw(gs.arrays(gs.tuples(gs.sampledFrom(["p", "q"]), gs.arrays(gs.sampledFrom(WRAPPERS), { maxSize: 2 })), { maxSize: 3 }));
+    let schema = drawn.schema;
+    let below: string[] = [];
+    for (const [segment, wrappers] of levels) {
+      const fallback = below.reduceRight<unknown>((value, key) => ({ [key]: value }), { zz: 1 }) as never;
+      for (const wrapper of wrappers) {
+        const inner = schema as z.ZodObject;
+        schema =
+          wrapper === "optional" ? inner.optional() : wrapper === "nullable" ? inner.nullable() : wrapper === "readonly" ? inner.readonly() : wrapper === "prefault" ? inner.prefault({}) : wrapper === "default" ? inner.default(fallback) : inner.catch(fallback);
+      }
+      schema = z.object({ [segment]: schema });
+      below = [segment, ...below];
+    }
+    return { ...drawn, schema, segments: below, pathWrappers: levels.flatMap(([, wrappers]) => wrappers) };
+  });
+
+  it("names the keys of the object at a path only when no default or catch on the way keeps another key of it", () =>
+    hegel.testAsync(async (tc) => {
+      const { keys, kind, wrappers, schema, segments, pathWrappers } = tc.draw(nestedSchemas);
+      const named = closedObjectKeysAt(schema, segments);
+      const closes = (kind === "object" || kind === "strictObject") && ![...wrappers, ...pathWrappers].some((wrapper) => wrapper === "default" || wrapper === "catch");
+      expect(named !== null).toBe(closes);
+      if (named === null) return;
+      expect([...named].sort()).toEqual([...keys].sort());
+      // Each level missing or wrong in turn, so every default, catch, and
+      // prefault on the path fills its value.
+      for (let missing = 0; missing <= segments.length; missing += 1) {
+        for (const leaf of [undefined, "x", { zz: 1 }]) {
+          const input = segments.slice(0, missing).reduceRight<unknown>((value, key) => ({ [key]: value }), leaf);
+          const parsed = schema.safeParse(input);
+          if (!parsed.success) continue;
+          const value = segments.reduce<unknown>((object, key) => (typeof object === "object" && object !== null ? (object as Record<string, unknown>)[key] : undefined), parsed.data);
+          if (typeof value !== "object" || value === null) continue;
+          expect(Object.keys(value).every((key) => keys.includes(key))).toBe(true);
+        }
+      }
+    }));
+
+  it("finds a value a default, a catch, a z.looseObject, or a catchall keeps another key of, so naming none of them is no guess", () => {
+    const declared = { a: z.number() };
+    const kept = (schema: z.ZodTypeAny, input: unknown) => Object.hasOwn(schema.parse(input) as object, "zz");
+    expect(kept(z.object(declared).default({ a: 1, zz: 1 } as never), undefined)).toBe(true);
+    expect(kept(z.object(declared).catch({ a: 1, zz: 1 } as never), "x")).toBe(true);
+    expect(kept(z.looseObject(declared), { a: 1, zz: 1 })).toBe(true);
+    expect(kept(z.object(declared).catchall(z.number()), { a: 1, zz: 1 })).toBe(true);
+    expect(kept(z.object(declared), { a: 1, zz: 1 })).toBe(false);
+    expect(z.strictObject(declared).safeParse({ a: 1, zz: 1 }).success).toBe(false);
+  });
 });
 
 const OUTCOMES = ["held", "broken", "unobserved", "unjudged"] as const;
