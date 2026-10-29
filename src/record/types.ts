@@ -236,7 +236,7 @@
 
 import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { DeclaredSnapshot } from "../compat/declared.js";
-import type { EventsGap } from "../execution-events/tally.js";
+import type { TraceGap } from "../execution-events/tally.js";
 
 /** Dropped-request counts by Playwright's own `request.resourceType()`
  * (`"image"`, `"stylesheet"`, `"script"`, ...) — the step record's own
@@ -315,7 +315,7 @@ export interface EventsSlice {
   readonly whole: boolean;
   /** Why the lines may not hold all of the step's work, one gap word
    * each. */
-  readonly open: readonly EventsGap[];
+  readonly open: readonly TraceGap[];
 }
 
 /** A step's slice of the program's log (docs/spec.md "Trace context and

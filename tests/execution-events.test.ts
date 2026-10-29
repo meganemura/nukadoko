@@ -127,6 +127,7 @@ describe("createTraceTally", () => {
       lines: 4,
       kinds: { job: 3, request: 1 },
       unreadable: 1,
+      unowned: 0,
       processRequests: 0,
       whole: false,
       open: [
@@ -136,15 +137,18 @@ describe("createTraceTally", () => {
         { gap: "truncated" },
         { gap: "file-replaced" },
       ],
+      counts: [],
     });
     expect(createTraceTally({ spans: [SPANS[0]!], spansNotKept: 0, ranProcesses: false, processSpans: [] }).reading({ truncated: false, replaced: false }).open).toEqual([{ gap: "no-lines" }]);
     expect(createTraceTally({ spans: [], spansNotKept: 0, ranProcesses: false, processSpans: [] }).reading({ truncated: false, replaced: false })).toEqual({
       lines: 0,
       kinds: {},
       unreadable: 0,
+      unowned: 0,
       processRequests: 0,
       whole: false,
       open: [{ gap: "no-requests" }],
+      counts: [],
     });
   });
 
