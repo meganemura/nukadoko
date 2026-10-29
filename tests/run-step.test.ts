@@ -375,6 +375,18 @@ describe("nuka run --step and nuka step", () => {
       const summary = await readFile(path.join(rootDir, runDir, "summary.md"), "utf8");
       expect(summary).toContain("## Rerun a stopped scenario");
 
+      // The Allure result says where the walk was stopped.
+      expect(await runCli(["report", "--format", "allure"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
+      const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
+      const results = readdirSync(resultsDir)
+        .filter((name) => name.endsWith("-result.json"))
+        .map((name) => readJson(path.join(resultsDir, name)));
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        status: "skipped",
+        statusDetails: { message: "the walk (nuka run --step) was stopped after step 2 with nuka step stop, so the steps after it did not run" },
+      });
+
       // The stop that ended the walk, again: the same end. A next to that
       // pause now contradicts the stop, and the wait it offers names the
       // walk, so it reports this end rather than waiting for the next walk.

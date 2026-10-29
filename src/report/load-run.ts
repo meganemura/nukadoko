@@ -97,6 +97,8 @@ export function scenarioRecordOf(document: RunDocument, scenario: RunScenario): 
     scenario: scenario.scenario,
     line: scenario.line,
     status: scenario.status,
+    // The Allure result's status details name the stop from it.
+    ...(scenario.stopped !== undefined ? { stopped: scenario.stopped } : {}),
     environment: scenario.environment,
     ...(targetVersion !== undefined && targetVersion !== null ? { target_version: targetVersion } : {}),
     ...(scenario.browser !== undefined ? { browser: scenario.browser } : {}),
