@@ -15,8 +15,10 @@ import { kindOf, valueAt } from "../step/snapshot.js";
 //
 // The value is found without running any code of its own (own data
 // properties only, no getter, no Proxy trap), and its `ariaSnapshot` is
-// found the same way on its prototypes, so the one call into it is the
-// snapshot itself. No timeout is passed: the snapshot waits for a locator
+// found the same way on its class (the prototypes below `Object.prototype`,
+// as a locator and a page have it), so the one call into it is the
+// snapshot itself, and a plain object step code wrote is never taken for
+// a measurement. No timeout is passed: the snapshot waits for a locator
 // as any read in `observe` would, for the page's own timeout (30 seconds
 // unless the step set another), and the step's deadline bounds it as it
 // bounds `observe`. A timeout tied to a poll's end was refused: near the
@@ -32,11 +34,14 @@ function valueKind(value: unknown): string {
   return kindOf(value);
 }
 
-/** The `ariaSnapshot` function on `value`'s prototypes, found by
- * descriptor, or `null` when none is a plain method. A getter there is
- * code of the value's own, so it is never called to find one. */
+/** The `ariaSnapshot` method of `value`'s class, found by descriptor on
+ * its prototypes below `Object.prototype`, or `null` when none is a plain
+ * method. The value's own properties are not read: a plain object step
+ * code wrote with a function of that name would be a tree written in code,
+ * and so would a function set on a real locator. A getter is code of the
+ * value's own, so it is never called to find one. */
 function ariaSnapshotMethod(value: object): ((options?: object) => unknown) | null {
-  for (let current: object | null = value; current !== null; current = Object.getPrototypeOf(current) as object | null) {
+  for (let current = Object.getPrototypeOf(value) as object | null; current !== null && current !== Object.prototype; current = Object.getPrototypeOf(current) as object | null) {
     if (types.isProxy(current)) return null;
     const descriptor = Object.getOwnPropertyDescriptor(current, "ariaSnapshot");
     if (descriptor === undefined) continue;

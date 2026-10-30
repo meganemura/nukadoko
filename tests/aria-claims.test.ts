@@ -110,7 +110,7 @@ describe("taking the ARIA snapshot of what observe returned", () => {
       expect(ariaSnapshotReader(taken)([...path, "more"])).toEqual({ unjudged: "has no ARIA snapshot nukadoko took, so the claim was not judged" });
     }));
 
-  it("breaks on a value that is no locator or page, and runs none of its code to find out", async () => {
+  it("breaks on a value that is no locator or page, a plain object with the method included, and runs none of its code to find out", async () => {
     let ran = 0;
     const getter = new (class Lookalike {
       get ariaSnapshot() {
@@ -118,13 +118,17 @@ describe("taking the ARIA snapshot of what observe returned", () => {
         return () => PAGE;
       }
     })();
-    const reads = await takeAriaSnapshots({ text: PAGE, nothing: null, getter, plain: { ariaSnapshot: "no" } }, [["text"], ["nothing"], ["getter"], ["plain"], ["absent"]]);
+    const own = new StandIn(() => PAGE);
+    Object.defineProperty(own, "ariaSnapshot", { value: () => "- heading \"Written in code\"" });
+    const reads = await takeAriaSnapshots({ text: PAGE, nothing: null, getter, plain: { ariaSnapshot: () => PAGE }, own }, [["text"], ["nothing"], ["getter"], ["plain"], ["own"], ["absent"]]);
     const read = ariaSnapshotReader(reads);
     const takes = "fits-aria-snapshot takes the ARIA snapshot of a locator or page that observe returns: return the locator or page itself, and nukadoko takes its snapshot";
     expect(read(["text"])).toEqual({ broken: `is a string, and ${takes}` });
     expect(read(["nothing"])).toEqual({ broken: `is null, and ${takes}` });
     expect(read(["getter"])).toEqual({ broken: `is a Lookalike, and ${takes}` });
     expect(read(["plain"])).toEqual({ broken: `is an Object, and ${takes}` });
+    // The method of the value's class, never one set on the value itself.
+    expect(read(["own"])).toEqual({ text: PAGE });
     expect(read(["absent"])).toEqual({ broken: "is undefined" });
     expect(ran).toBe(0);
   });
