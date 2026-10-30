@@ -2574,13 +2574,22 @@ per-occurrence fact:
 - A reader can use the step record to disprove an incorrect declaration
   after execution. This boundary marks the end of the tool's authority
   over mutation semantics.
-- Nukadoko does not perform that comparison. `nuka run`, `nuka check`,
-  and the run summary do not claim that a measurement and a declaration
-  conflict. Such a claim would treat the HTTP-method proxy as a settled
-  fact. It would report every GraphQL read, RPC-over-POST read, or vendor
-  POST read as a false positive. For the same reason, nukadoko does not
-  enforce mutation semantics at run time. A person reviewing the pull
-  request reads the declaration and the step record side by side.
+- Nukadoko does not perform that comparison on what it measures of a
+  request. `nuka run`, `nuka check`, and the run summary do not claim
+  that a request's method and a declaration conflict. Such a claim would
+  treat the HTTP-method proxy as a settled fact. It would report every
+  GraphQL read, RPC-over-POST read, or vendor POST read as a false
+  positive. For the same reason, nukadoko does not enforce mutation
+  semantics at run time. A person reviewing the pull request reads the
+  declaration and the step record side by side.
+- The one comparison nukadoko makes is with what the program itself says
+  it did. A `db` execution event whose change persisted, on a table
+  that holds state (see "Lists"), is the program's own account of a
+  write, not a proxy for one, so `nuka run` sets it beside a step that
+  declares `mutates: false` as the note `undeclared-write`. The note
+  decides nothing: the step still runs, its cell keeps its outcome, a
+  read-only environment still trusts the declaration, and the person
+  decides whether the declaration or the program is wrong.
 - Compat (untyped) steps have no `mutates` declaration (see "Compat steps (the
   migration door)"), and they cannot declare claims. The `then-compat-step` warning from `nuka check` identifies
   this coverage gap when a compat step is bound in Then position: nukadoko
@@ -4004,6 +4013,11 @@ The path of the request in the format's example
   did.
   A path does not read commit state either, so a write that rolled back
   counts as written.
+- A path keeps a write to a table the world's tables list marks as
+  holding bookkeeping or infrastructure, and its `db` entry says so in
+  `holds`: `{ "kind": "db", "table": "events", "op": "insert", "count": 1, "holds": "bookkeeping" }`.
+  No sentence is about such a write, but another reader of that table
+  may be (see "What a table holds").
 - `maybe` counts the lines of the trace that may be any line: one that
   did not read and whose text carries the trace id, one of a kind the
   format does not define, and one of a later version.
@@ -4116,7 +4130,7 @@ exactly one condition, the two are a pair.
     "a": { "world": "base", "environment": "reorder-on" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 2, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 0 },
+    "counts": { "changed": 2, "open": 0, "same_so_far": 0, "marked_only": 0, "same": 0, "not_compared": 0 },
     "criteria": [
       {
         "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed",
@@ -4144,7 +4158,7 @@ exactly one condition, the two are a pair.
     "a": { "world": "head", "environment": "reorder-off" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 1, "open": 0, "same_so_far": 1, "same": 4, "not_compared": 0 },
+    "counts": { "changed": 1, "open": 0, "same_so_far": 1, "marked_only": 1, "same": 4, "not_compared": 0 },
     "criteria": [
       {
         "feature": "features/orders.feature", "line": 18, "name": "a reorder goes through", "result": "changed",
@@ -4196,9 +4210,14 @@ exactly one condition, the two are a pair.
   So a count a side's missing lines could still reach never reads as a
   change, and one no missing line can reach still does.
   `gaps` names each side's gaps for the step.
-- A criterion's `result` is `changed` when a step has a changed entry
-  or ran on one side only, `open` when every difference is open, and
-  `same` otherwise.
+  A difference on a table either side's entry marks has that entry's
+  `holds`.
+- A criterion's `result` reads every difference but those with
+  `holds`: it is `changed` when a step has a changed entry or ran on
+  one side only, `open` when every difference is open, `marked_only`
+  when its only differences have `holds`, and `same` otherwise.
+  So a criterion is not sent to a reader first for what no sentence is
+  about, and one whose bookkeeping differs is never `same`.
   An open criterion is `same_so_far` instead when each open count has
   one range on both sides and each of its steps has the same gap words
   on both: nothing the run saw differs, though a side's missing lines
@@ -4243,7 +4262,14 @@ A criterion is ranked by the highest kind among its changed entries and
 what its one-side steps did, in the order errors, writes, outgoing
 calls, jobs, requests, flags, and then by the table's order.
 A criterion the same so far comes last, in one line that names the gap
-words both sides share, so a reader is not sent to it first:
+words both sides share, so a reader is not sent to it first.
+A difference with `holds` is never among a criterion's lines and never
+ranks it.
+After the list, each criterion with such differences is listed once more
+under its own line, in the table's order, at most 20 per heading, each
+difference with what its table holds, and a criterion whose only
+differences are there counts as `different only in bookkeeping or
+infrastructure writes`:
 
 ```text
 ### base → head
@@ -4257,12 +4283,17 @@ words both sides share, so a reader is not sent to it first:
 
 ### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
 
-6 criteria compared: 1 changed, 1 the same so far, 4 the same.
+7 criteria compared: 1 changed, 1 the same so far, 1 different only in bookkeeping or infrastructure writes, 4 the same.
 
 - `features/orders.feature:18` a reorder goes through
   - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201
   - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request
 - `features/orders.feature:10` a parked score is placed: the same so far, with `jobs-pending` on both sides
+
+Bookkeeping and infrastructure writes that differ, which no sentence is about, though another reader of those tables may be:
+
+- `features/orders.feature:3` a room page reads the room
+  - line 4 `the client gets "/rooms/7"`: writes `events` insert 1 → 2 (bookkeeping)
 ```
 
 What this does not reach, in one list:
@@ -4333,6 +4364,10 @@ export default defineStep({
   A `db` selection whose `op` may be a write states `committed`,
   since a write that rolled back would otherwise count as written, and
   states no `committed` beside `op: "read"` alone.
+  A `db` selection that names no `table` leaves out the tables the
+  program's tables list marks as holding bookkeeping or infrastructure
+  (see "What a table holds"), and one that names a table counts it,
+  whatever it holds.
   A writer's own `x_` kind, a kind or a field the format does not
   define, and a value outside a field's values are refused at import;
   in a TypeScript step file the selection's type refuses them first.
@@ -4365,6 +4400,8 @@ least `yes` with no upper bound on one that is not.
 `maybe` counts the lines that may match, by cause: a line of the trace
 that did not read, a line of a kind or a version the format does not
 define, a line whose field the selection reads is missing or invalid,
+a `db` line that may be on a table the count leaves out (`holds_unknown`:
+the tables list was not read, or the writer could not name the table),
 a write whose commit state is unknown (see docs/execution-events.md
 "Whether a statement's change persisted"), and a line no step owns.
 A claim holds or breaks only when every count in the range gives that
@@ -4408,7 +4445,7 @@ beside it:
     "counted": [],
     "whole": true,
     "open": [],
-    "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "commit_unknown": 0, "unowned": 0 },
+    "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "holds_unknown": 0, "commit_unknown": 0, "unowned": 0 },
     "lines": 2,
     "unreadable": 0,
     "unowned": 0,
@@ -4428,6 +4465,12 @@ beside it:
   reports, most lines first:
   `{ "kind": "db", "fields": { "op": "insert", "table": "events" }, "lines": 1 }`.
   The fields of a group are in the table below.
+- `left_out`, present when the count left a line out, groups the lines
+  on a table the tables list marks, as `counted` does, each group with
+  what its table holds:
+  `{ "kind": "db", "fields": { "op": "insert", "table": "events" }, "lines": 1, "holds": "bookkeeping" }`.
+  A line is left out only where `at_least` would have counted it, so
+  a write that rolled back is in neither.
 - `whole` and `open` are as for `observed.events`, with the gaps of a
   reading added: `producer-not-run`, `world-unread`, `inlet-unnamed`,
   and `kind-unreported`.
@@ -4460,7 +4503,7 @@ for every line the count counts.
 
 The claim's record holds the count as `actual` when the range is one
 number, and as `actual_range` when it is not, never both, and the
-reading's `counted` as its own `counted`.
+reading's `counted` and `left_out` as its own.
 `actual_from` is `events:<step>@<line> count <selection>`, and
 `measured` names the claim step's own `events_read.<key>`:
 
@@ -4478,11 +4521,20 @@ A page whose GET asks a feature flag, and records that it asked, breaks
 1 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) broken; counted 1 line: db insert into events; measured: events_read.writes
 ```
 
+When the program's tables list marks `events` as holding bookkeeping,
+the count leaves that line out, and the line names it after what the
+count counted, with what its table holds:
+
+```text
+0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; left out 1 line: db insert into events (bookkeeping); measured: events_read.writes
+```
+
 Several groups each name their lines,
 `counted 3 lines: 2 db insert into scores, 1 db update rankings`, and
 past the third group the line says how many lines the rest hold,
 `..., and 4 more lines in 2 groups`.
-A count that counted no line adds nothing.
+A count that counted no line adds nothing, and one that left out no line
+adds no `left out`.
 
 A count that is not one number shows its range in that place:
 
@@ -4530,13 +4582,16 @@ What this does not reach, in one list:
   range: a program that writes lines without the request's trace leaves
   an absence unproven.
 - A line written after the world stopped is in no count.
+- A selection that names no table leaves out a write to a marked table
+  even where a criterion is about it: a step that means such a table
+  names it.
 
 ### Lists
 
 A program has places a scenario can reach, such as its routes and its
-flags.
+flags, and tables that hold different things.
 The execution events say which of them a step reached; only the program
-can say which it has.
+can say which it has, and what each of its tables holds.
 `lists` in the program file names one command per kind of place, and
 each command prints the program's places of that kind, one JSON object
 per line:
@@ -4551,6 +4606,7 @@ export default defineProgram({
   lists: {
     routes: "node scripts/routes.mjs",
     flags: ["node", "scripts/flags.mjs", "{url}"],
+    tables: "node scripts/tables.mjs",
   },
 });
 ```
@@ -4559,6 +4615,7 @@ export default defineProgram({
 | --- | --- | --- |
 | `routes` | `{"method":"PUT","route":"/rooms/:id","handler":"rooms#update"}` | `method` and `route`, each as a `request` line names it: the method in uppercase, and the route's template; `handler`, optional, what the route runs, in the program's own words |
 | `flags` | `{"name":"quick_reorder","sides":["off","on"]}` | `name`, and `sides`, every side a `flag` line may name for the flag |
+| `tables` | `{"table":"events","holds":"bookkeeping"}` | `table`, as a `db` line names it; `holds`, optional, what the table holds: `state`, the default, `bookkeeping`, or `infrastructure` (see "What a table holds") |
 
 - A list names each place in the words the execution events use, and
   nukadoko compares the two as text, exactly.
@@ -4574,6 +4631,9 @@ export default defineProgram({
   A route printed twice with two handlers keeps both, since a `request`
   line names its method and route and not which handler ran, and a flag
   printed twice keeps every side either line declares.
+  A table printed twice with two holdings is refused, naming both lines,
+  since what a table holds decides what a count counts and neither line
+  can win.
 
 A Rails application prints its routes with no dependency.
 The command is one argv word to `bin/rails runner`, so no shell reads it:
@@ -4592,7 +4652,10 @@ A route that answers more than one method has one line per method, and
 a mounted application, which has no controller, has no `handler`.
 
 Each command runs once per world, in a world nukadoko serves whose
-program file names `{events}`, of the tree the run was started in:
+program file names `{events}`.
+The `routes` and `flags` commands run in the worlds of the tree the run
+was started in, and the `tables` command in such a world of every tree
+(see "What a table holds"):
 
 - It runs after `serve` answers `ready` and `setup` has run, so a
   command may ask the running program, as a client of its API does.
@@ -4600,10 +4663,11 @@ program file names `{events}`, of the tree the run was started in:
   placeholders a `prepare` command's do, what it prints on stderr goes
   to `program.log`, and what it prints on stdout is the list.
 - It has 60,000 ms to finish (see "Limits").
-- A world at a `url`, a world with neither `serve` nor `url`, a world
-  with no events file, the base and old worlds of `nuka run --base`, and
-  `nuka do` read no list: a list is read against the lines of a run's
-  steps, which no other world has.
+- A world at a `url`, a world with neither `serve` nor `url`, and a
+  world with no events file read no list.
+  The base and old worlds of `nuka run --base`, and `nuka do`, read no
+  routes or flags list: each is read against the lines of a run's steps,
+  which no other world has.
 - An environment's `lists` replaces the top level's whole, so
   `lists: {}` reads none in that environment.
 
@@ -4615,6 +4679,8 @@ table turns red.
 The world's record says why the list was not read, the run raises
 `program-list-unread`, a warning that names the command and, for a line,
 its number and what is wrong with it, and nothing of the list counts.
+A base or old world's warning names its tree, `world default (base)`,
+and `nuka do` raises the same warning for the tables list of its world.
 Read in part, a list would leave out what the line it could not read
 named, and a request to that route would read as one the list does not
 name.
@@ -4624,7 +4690,8 @@ name.
 ```json
 "lists": {
   "routes": { "entries": 31, "error": null },
-  "flags": { "entries": null, "error": "lists.flags command bin/rails runner script/flags.rb exited with code 1" }
+  "flags": { "entries": null, "error": "lists.flags command bin/rails runner script/flags.rb exited with code 1" },
+  "tables": { "entries": 14, "error": null }
 }
 ```
 
@@ -4699,6 +4766,81 @@ ones that were:
   that was not read never reads as one whose every route went
   unrequested; the world's `lists` and the `program-list-unread` warning
   say why.
+
+#### What a table holds
+
+A tables list says what each table of the program holds, in the
+program's own declaration:
+
+- `state`: what the program is for, such as its rooms, its scores, and
+  the settings of its feature flags.
+  A table the list does not name holds state, and so does every table
+  when the program file names no tables list.
+- `bookkeeping`: a record the program keeps of its own work, such as a
+  telemetry table each page writes, or an audit trail.
+- `infrastructure`: what the program's frameworks keep in order to run
+  it, such as applied migrations, a job queue, a cache, or a pub/sub
+  channel.
+
+A sentence such as "nothing was written" is about state.
+A page whose GET records the visit, or fills a cache on a miss, writes
+to a table no sentence is about, and without the list every Then that
+counts writes would name the tables it means by hand.
+So what a table holds decides three things:
+
+- A count of execution events whose `db` selection names no `table`
+  leaves out each line on a table that holds bookkeeping or
+  infrastructure, and its record and its line name each line it left
+  out (see "A claim on a count of events").
+  A selection that names a table counts it, whatever it holds.
+- `nuka run`'s note `undeclared-write` names a step that declares
+  `mutates: false` and whose trace holds a committed write to a table
+  that holds state (see "Checks and notes").
+- A step's path keeps every write, and an entry on a table that holds
+  bookkeeping or infrastructure says so, so a comparison of paths
+  ranks a difference there below the rest (see "Execution events").
+
+Bookkeeping and infrastructure are two values, though a count and the
+note treat them alike, since a person reads them apart: a telemetry row
+may be what another part of the program reads, such as a guard that
+turns a flag off on what the telemetry counts, and a row of applied
+migrations is read by nothing a criterion is about.
+
+A list may print every table, or only the ones that hold something other
+than state.
+What a table holds is the program's to decide, so the command prints it
+from where the program already says it, never from a list kept in the
+program file.
+A Rails application that keeps its telemetry in the model `Event`
+prints:
+
+```ruby
+# script/tables.rb, run as bin/rails runner script/tables.rb
+bookkeeping = [Event.table_name]
+infrastructure = [ActiveRecord::Base.schema_migrations_table_name, ActiveRecord::Base.internal_metadata_table_name]
+ActiveRecord::Base.connection.tables.each do |table|
+  holds = bookkeeping.include?(table) ? "bookkeeping" : infrastructure.include?(table) ? "infrastructure" : "state"
+  puts({ table: table, holds: holds }.to_json)
+end
+```
+
+The tables list is read wherever a count of execution events is judged:
+in every world nukadoko serves whose program file names `{events}`, of
+every tree, the base and old worlds of `nuka run --base` included, and
+in `nuka do`'s world when its step counts execution events.
+A claim judged at the base reads the base tree's own list, as head's
+reads head's, and a `--concurrency` worker reads its world's.
+
+- A tables list the program file names and the world did not read
+  leaves what each table holds unknown, never state.
+  A `db` line a selection that names no table would count may then be
+  on a table the count leaves out, so it may match (`holds_unknown`),
+  and the claim is `unjudged` rather than counted either way.
+- A line whose writer could not name its table (`table: "unknown"`)
+  may be on a table the list marks, so it may match too, when the list
+  marks any table.
+- `run.json`'s world records the list in `lists`, as any list, and the
+  `entries` of `tables` count the tables it names.
 
 ### A Ruby program
 
@@ -4893,6 +5035,32 @@ HTTP API project. Naming a saving would be claiming the lift is possible,
 which nothing here measured. When every shared step comes from a
 Background, the note says the steps already sit in one, and offers no
 Background. It never changes a scenario's status or the exit code.
+
+A run whose worlds write execution events sets one declaration beside
+them too: a step that declares `mutates: false` and whose trace holds a
+write the program committed to a table that holds state is the note
+`undeclared-write`. The declaration is what a read-only environment and
+the advice of `repeated-scenario-prefix` trust, so a wrong one costs
+wherever it is read. The note names the scenario, the step's line, the
+step, and each table and op the program wrote:
+
+```text
+note	undeclared-write	features/rooms.feature:4	a room page reads the room: the step at line 4, get-room, declares mutates: false, and its trace holds writes the program committed to tables that hold state, 1 line: db insert into scores
+```
+
+It reads only the program's own lines, under the world's tables list
+(see "What a table holds"): a `db` line whose change persisted, by its
+own `committed` or its transaction's `commit`, on a table the list
+does not mark as holding bookkeeping or infrastructure. A write that
+rolled back, a write whose commit state no line decides, a write on a
+table the writer could not name while the list marks any table, and
+every write when the tables list was not read are not named, and a request's method is never read as a
+write. A line that arrived after the step's record counts, as it does
+in the step's path. Only head's executions are noted, once per step line
+of a scenario and environment however many times `--repeat` ran it: a
+base or old world runs another tree's steps, whose declarations are not
+the change under review. It does not say which of the two is wrong, and
+it never changes a scenario's status or the exit code.
 
 `--base <git ref>` compares the run with the commit the ref names, such
 as the base of a pull request: a new or changed criterion also runs
@@ -6969,7 +7137,8 @@ holds:
   and name, and its sentences at the ref in a `gherkin` block;
 - "Changed paths", when run.json has `paths`: a heading per pair that
   names what it switches, a count line, and each criterion whose path
-  changed or is open, at most 20 per pair, with each step's differences
+  changed or is open, at most 20 per pair, with each step's differences,
+  then the differences on tables that hold bookkeeping or infrastructure
   (see "Execution events");
 - "Flags", when run.json has `flags`: one line per flag and side, with
   how many criteria evaluated it there, their counts by verdict,
@@ -7868,8 +8037,8 @@ or a `from` declaration is ever exercised, depends on every feature the
 project scans (`featuresDir` and each `additionalFeatureDirs` entry), so only
 a `nuka check` with no target computes notes. A `nuka check` with targets,
 and the check `nuka run` runs before it executes, compute none. `nuka run`
-reports one note of its own, `repeated-scenario-prefix`, from the run that
-just ended (see "Running").
+reports two notes of its own from the run that just ended,
+`repeated-scenario-prefix` and `undeclared-write` (see "Running").
 
 Notes once came from a separate `tend` command. A survey of eleven
 projects that use nukadoko found that ten of its fourteen codes fired in none
@@ -8021,6 +8190,11 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               the first When, docstrings and tables compared
                               too, and what that opening took (measured, no
                               advice); the exit code is unchanged.
+                              An undeclared-write note names a step that
+                              declares mutates: false whose trace holds a
+                              write the program committed to a table that
+                              holds state, with each table and op; the exit
+                              code is unchanged.
                               --json drops every one of these lines, and
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records

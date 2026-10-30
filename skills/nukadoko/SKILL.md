@@ -92,7 +92,7 @@ If none is true, ask what this is supposed to do before writing anything.
    A red Then, or a `held` row whose control passed (`references/verdicts.md`),
    is fixed in the code or by asking the person, never by weakening it.
    Read "Unmeasured actions" (`references/evidence.md`), "Scenarios with no
-   claim", and `measured: none` (`references/reviewing.md`).
+   claim", `measured: none` (`references/reviewing.md`), `undeclared-write`.
 5. **Commit before the run you report**, push, and open the pull request;
    CI posts the summary of `nuka run --base <the base>` (`docs/ci.md`). Run
    it first: `unproven` and `moved` rows are red (`references/verdicts.md`).

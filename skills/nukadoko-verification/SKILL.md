@@ -219,6 +219,13 @@ the program did differently, step by step, on the side with the fix.
   run.json; `skills/nukadoko/references/verdicts.md`). A route no
   scenario requested is a place the map may be missing; a requested one
   is not yet a checked one.
+- `nuka run` with a `tables` list in the program file: a count of
+  writes that names no table counts the tables that hold state, and its
+  line names the bookkeeping and infrastructure writes it left out; the
+  note `undeclared-write` names a step declared `mutates: false` whose
+  trace the program says wrote state
+  (`skills/nukadoko/references/diagnosing.md`). Either is a question for
+  the person, not a Then to edit.
 
 What remains for a pass that drives the app by hand is the sub-features
 marked `no scenario`, the routes no scenario requested, and features

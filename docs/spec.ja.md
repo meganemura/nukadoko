@@ -2006,12 +2006,18 @@ Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` �
   サーバの状態が変わったかどうかは述べません。
 - 読み手は実行後に step record を使って誤った宣言を反証できます。
   この境界は、mutation の意味論に対するツールの権限が終わる場所を示します。
-- nukadoko は、この比較を実行しません。
-  `nuka run`、`nuka check`、run サマリは、計測と宣言が矛盾すると主張しません。
+- nukadoko は、リクエストについて計測したものでは、この比較を実行しません。
+  `nuka run`、`nuka check`、run サマリは、リクエストのメソッドと宣言が矛盾すると主張しません。
   その主張は、HTTP メソッドのプロキシを確定した事実として扱います。
   GraphQL の読み取り、RPC-over-POST の読み取り、ベンダー API の POST による読み取りを、すべて偽陽性として報告します。
   同じ理由で、nukadoko は実行時に mutation の意味論を強制しません。
   pull request をレビューする人が、宣言と step record を並べて読みます。
+- nukadoko がする唯一の比較は、プログラム自身が何をしたと言うかとの比較です。
+  状態を持つテーブル(「一覧」を参照)での、変更が永続した `db` の実行イベントは、プログラム自身による書き込みの説明であり、そのプロキシではありません。
+  そのため `nuka run` は、それを `mutates: false` を宣言する step と並べ、注記 `undeclared-write` にします。
+  注記は何も決めません。
+  step はそのまま走り、そのセルは成否を保ち、読み取り専用の environment は宣言を信頼し続けます。
+  宣言とプログラムのどちらが誤っているかは、人が決めます。
 - Compat(型のない)step には、`mutates` の宣言がなく(「Compat steps(移行の扉)」を参照)、claim も宣言できません。
   `nuka check` の `then-compat-step` 警告は、compat step が Then の位置に結び付けられたときに、このカバレッジの欠落を示します。
   nukadoko には、そのような step が何を判定するのかが見えません。
@@ -3126,6 +3132,9 @@ step の record のあとに届いた行も、record の中の行と同じよう
   読み取りは、今のところ入れません。
   クエリの数はキャッシュのたびに動くので、ほかに何も変わらなくても、同じ受け入れ基準の 2 回の実行の間で違ってしまうからです。
   実行経路はコミットの状態も読まないので、ロールバックした書き込みも書いたものとして数えます。
+- world のテーブルの一覧が記帳か基盤を持つとするテーブルへの書き込みも、実行経路は持ちます。
+  その `db` の項目は、それを `holds` で言います: `{ "kind": "db", "table": "events", "op": "insert", "count": 1, "holds": "bookkeeping" }`。
+  そうした書き込みを扱う文はありませんが、そのテーブルを読むほかの読み手は扱うかもしれません(「テーブルが持つもの」を参照)。
 - `maybe` は、trace の行のうち、どの行でもありうる行を数えます。
   読めずテキストに trace id を持つ行、形式が定めない種類の行、あとの版の行です。
   書き手自身の `x_` の種類は数えません。
@@ -3218,7 +3227,7 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
     "a": { "world": "base", "environment": "reorder-on" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 2, "open": 0, "same_so_far": 0, "same": 0, "not_compared": 0 },
+    "counts": { "changed": 2, "open": 0, "same_so_far": 0, "marked_only": 0, "same": 0, "not_compared": 0 },
     "criteria": [
       {
         "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed",
@@ -3246,7 +3255,7 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
     "a": { "world": "head", "environment": "reorder-off" },
     "b": { "world": "head", "environment": "reorder-on" },
     "unread": null,
-    "counts": { "changed": 1, "open": 0, "same_so_far": 1, "same": 4, "not_compared": 0 },
+    "counts": { "changed": 1, "open": 0, "same_so_far": 1, "marked_only": 1, "same": 4, "not_compared": 0 },
     "criteria": [
       {
         "feature": "features/orders.feature", "line": 18, "name": "a reorder goes through", "result": "changed",
@@ -3288,7 +3297,10 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
 - 2 つの数は、どちらもちょうどの数で等しいとき同じで、範囲が重なりえないとき `changed`、それ以外は `open` です。
   そのため、欠けた行がまだ届きうる数は変化として読まれず、欠けた行が届きえない数は変化として読まれます。
   `gaps` は、その step での a 側と b 側の欠けを名指します。
-- 受け入れ基準の `result` は、step に変わった項目があるか、片側だけで走った step があれば `changed`、違いがすべて `open` なら `open`、それ以外は `same` です。
+  どちらかの側の項目が印を付けたテーブルでの違いは、その項目の `holds` を持ちます。
+- 受け入れ基準の `result` は、`holds` を持つ違いを除いたすべての違いを読みます。
+  step に変わった項目があるか、片側だけで走った step があれば `changed`、違いがすべて `open` なら `open`、違いが `holds` を持つものだけなら `marked_only`、それ以外は `same` です。
+  そのため、どの文も扱わないものを理由に受け入れ基準が読み手の最初に示されることはなく、記帳が違う受け入れ基準が `same` になることもありません。
   開いた数がどれも a 側と b 側で同じ範囲で、各 step の欠けを示す語も両側で同じなら、`open` の受け入れ基準は代わりに `same_so_far` です。
   run が見たものに違いはありませんが、欠けた行がまだ違いを生みえます。
   `counts` は `result` ごとに別に数えます。
@@ -3317,7 +3329,10 @@ run サマリは、「Removed criteria」のあとの「Changed paths」の下�
 受け入れ基準の順は、変わった項目と、片側だけで走った step がしたことのうち、いちばん上の種類で決めます。
 種類の順は errors、writes、outgoing calls、jobs、requests、flags で、そのあとは表の順です。
 今のところ同じ受け入れ基準は最後に来て、両側に共通の欠けを示す語を名指す 1 行になります。
-読み手が最初にそこへ向かわないようにするためです:
+読み手が最初にそこへ向かわないようにするためです。
+`holds` を持つ違いは、受け入れ基準の行に入らず、その順も決めません。
+一覧のあとに、そうした違いを持つ受け入れ基準を、専用の 1 行の下に表の順で、見出しごとに 20 まで、もう一度並べます。
+各違いはそのテーブルが持つものを添え、違いがそこにしか無い受け入れ基準は `different only in bookkeeping or infrastructure writes` として数えます:
 
 ```text
 ### base → head
@@ -3331,12 +3346,17 @@ run サマリは、「Removed criteria」のあとの「Changed paths」の下�
 
 ### `reorder-off` → `reorder-on` (`quick_reorder` false → true)
 
-6 criteria compared: 1 changed, 1 the same so far, 4 the same.
+7 criteria compared: 1 changed, 1 the same so far, 1 different only in bookkeeping or infrastructure writes, 4 the same.
 
 - `features/orders.feature:18` a reorder goes through
   - line 19 `customer "kim" reorders order 7`: requests `POST /reorders` 403 → 201
   - line 20 ran only in `reorder-on`, since `reorder-off` stopped at line 19 (`broke@19`): 2 writes, 2 jobs, 1 request
 - `features/orders.feature:10` a parked score is placed: the same so far, with `jobs-pending` on both sides
+
+Bookkeeping and infrastructure writes that differ, which no sentence is about, though another reader of those tables may be:
+
+- `features/orders.feature:3` a room page reads the room
+  - line 4 `the client gets "/rooms/7"`: writes `events` insert 1 → 2 (bookkeeping)
 ```
 
 この仕組みが届かないものを、1 つの一覧にまとめます:
@@ -3393,6 +3413,8 @@ export default defineStep({
   `op` が書き込みでありうる `db` の選び方は `committed` を述べます。
   そうしないと、ロールバックした書き込みが書かれたものとして数えられるからです。
   `op: "read"` だけのときは `committed` を述べません。
+  `table` を名指さない `db` の選び方は、プログラムのテーブルの一覧が記帳か基盤を持つとするテーブルを除きます(「テーブルが持つもの」を参照)。
+  テーブルを名指す選び方は、そのテーブルが何を持っていても、それを数えます。
   書き手自身の `x_` の種類、形式が定めない種類やフィールド、フィールドの値の外の値は、import の時点で拒否されます。
   TypeScript の step のファイルでは、先に選び方の型がそれを拒否します。
 - そのキーについての claim は数だけを読み、`view`、`at`、`count`、`each`、その中へのパスを持ちません。
@@ -3412,7 +3434,7 @@ claim が成り立つまで待つことはありません。
 数は範囲です。
 そろっている読みでは `[yes, yes + maybe]`、そろっていない読みでは少なくとも `yes` で上限がありません。
 `maybe` は、一致するかもしれない行を原因ごとに数えます。
-読めなかった trace の行、形式が定めない種類やバージョンの行、選び方が読むフィールドが無いか正しくない行、コミットの状態がわからない書き込み(docs/execution-events.ja.md の「文の変更が永続したか」を参照)、どの step のものでもない行です。
+読めなかった trace の行、形式が定めない種類やバージョンの行、選び方が読むフィールドが無いか正しくない行、数が除くテーブルのものかもしれない `db` の行(`holds_unknown`: テーブルの一覧を読まなかったか、書き手がテーブルを名指せなかった)、コミットの状態がわからない書き込み(docs/execution-events.ja.md の「文の変更が永続したか」を参照)、どの step のものでもない行です。
 claim は、範囲のどの数でも同じ答えになるときにだけ成り立つか成り立たず、そうでなければ `unjudged` です。
 その reason は最初の欠けを示す語を持ちます:
 
@@ -3446,7 +3468,7 @@ claim step の record は、各読みをキーごとに `events_read` に持ち�
     "counted": [],
     "whole": true,
     "open": [],
-    "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "commit_unknown": 0, "unowned": 0 },
+    "maybe": { "unreadable": 0, "undefined_kind": 0, "unknown_version": 0, "field_unknown": 0, "holds_unknown": 0, "commit_unknown": 0, "unowned": 0 },
     "lines": 2,
     "unreadable": 0,
     "unowned": 0,
@@ -3462,6 +3484,9 @@ claim step の record は、各読みをキーごとに `events_read` に持ち�
 - `range` は `{ "at_least", "at_most" }` で、読みがそろっていないとき `at_most` は `null` です。
 - `counted` は、`at_least` が数える行を、それぞれが報告することでグループにまとめ、行の多いグループから並べます: `{ "kind": "db", "fields": { "op": "insert", "table": "events" }, "lines": 1 }`。
   グループのフィールドは下の表にあります。
+- `left_out` は、数が行を除いたときにだけあります。
+  テーブルの一覧が印を付けたテーブルの行を `counted` と同じくグループにまとめ、各グループはそのテーブルが持つものを持ちます: `{ "kind": "db", "fields": { "op": "insert", "table": "events" }, "lines": 1, "holds": "bookkeeping" }`。
+  行を除くのは `at_least` がその行を数えたはずのときだけなので、ロールバックした書き込みはどちらにも入りません。
 - `whole` と `open` は `observed.events` と同じで、読みの欠けである `producer-not-run`、`world-unread`、`inlet-unnamed`、`kind-unreported` が加わります。
 - `lines` は読みが数えた trace の読める行、`unreadable` はテキストが trace id を持ち読めなかった行、`unowned` は読んだ範囲の、どの step のものでもない読める行の数です。
 - 読みが 1 行も数えなかったとき `file` は `null` で、行が 16 MiB を超えたときは `"truncated": true` があります。
@@ -3485,7 +3510,7 @@ claim step の record は、各読みをキーごとに `events_read` に持ち�
 選び方の `committed` が、数えるどの行についてもそれを決めるからです。
 
 claim の record は、範囲が 1 つの数のときは数を `actual` に、そうでないときは `actual_range` に持ち、両方は持ちません。
-読みの `counted` も、自分の `counted` として持ちます。
+読みの `counted` と `left_out` も、自分のものとして持ちます。
 `actual_from` は `events:<step>@<line> count <selection>` で、`measured` は claim step 自身の `events_read.<key>` を名指します:
 
 ```text
@@ -3501,9 +3526,17 @@ GET で feature flag を尋ね、尋ねたことを記録するページは、cl
 1 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) broken; counted 1 line: db insert into events; measured: events_read.writes
 ```
 
+プログラムのテーブルの一覧が `events` を記帳を持つとするとき、数はその行を除きます。
+行は、数が数えたもののあとに、除いた行をそのテーブルが持つものと一緒に名指します:
+
+```text
+0 (events:open-room@4 count db where op in [insert, update, delete, other], committed true) equal 0 (literal:nothing) held; left out 1 line: db insert into events (bookkeeping); measured: events_read.writes
+```
+
 グループが複数あるときは、それぞれがその行の数を名指します: `counted 3 lines: 2 db insert into scores, 1 db update rankings`。
 3 つ目のグループより後は、残りのグループが持つ行の数を述べます: `..., and 4 more lines in 2 groups`。
 1 行も数えなかった数は、何も加えません。
+1 行も除かなかった数は、`left out` を加えません。
 
 1 つの数でない数は、その場所に範囲を示します:
 
@@ -3537,13 +3570,16 @@ claim はまだ届く途中の行で判定されたので、セルはどちら�
 - デーモンが `setsid` でするように、自分のプロセスグループを離れたプロセスは見えません。
   グループの残りが終われば step はそろったと読まれ、claim の判定のあとにデーモンが引き起こした行は、world が止まったときにだけ見つかります。
 - world が止まったあとに書かれた行は、どの数にも入りません。
+- テーブルを名指さない選び方は、受け入れ基準が扱うときでも、印の付いたテーブルへの書き込みを除きます。
+  そうしたテーブルを扱う step は、それを名指します。
 
 ### 一覧
 
 プログラムには、scenario が届きうる箇所があります。
 ルートや flag がその例です。
+また、プログラムのテーブルは、それぞれ違うものを持ちます。
 実行イベントは、step がそのどれに届いたかを言います。
-プログラムがどの箇所を持つかは、プログラムにしか言えません。
+プログラムがどの箇所を持つか、各テーブルが何を持つかは、プログラムにしか言えません。
 プログラムのファイルの `lists` は、箇所の種類ごとに 1 つのコマンドを名指します。
 各コマンドは、その種類のプログラムの箇所を、1 行に 1 つの JSON オブジェクトで出力します:
 
@@ -3557,6 +3593,7 @@ export default defineProgram({
   lists: {
     routes: "node scripts/routes.mjs",
     flags: ["node", "scripts/flags.mjs", "{url}"],
+    tables: "node scripts/tables.mjs",
   },
 });
 ```
@@ -3565,6 +3602,7 @@ export default defineProgram({
 | --- | --- | --- |
 | `routes` | `{"method":"PUT","route":"/rooms/:id","handler":"rooms#update"}` | `method` と `route`。どちらも `request` の行が名指すとおりで、メソッドは大文字、ルートはそのテンプレートです。`handler` は任意で、ルートが実行するものをプログラム自身の語で書きます |
 | `flags` | `{"name":"quick_reorder","sides":["off","on"]}` | `name` と `sides`。`sides` は、`flag` の行がその flag について名指しうるすべての側です |
+| `tables` | `{"table":"events","holds":"bookkeeping"}` | `table` は `db` の行が名指すとおりのテーブルです。`holds` は任意で、テーブルが持つものです。既定の `state`、`bookkeeping`、`infrastructure` のどれかです(「テーブルが持つもの」を参照) |
 
 - 一覧は、各箇所を実行イベントと同じ語で名指します。
   nukadoko は、その 2 つを文字列として、そのまま比べます。
@@ -3579,6 +3617,8 @@ export default defineProgram({
   2 つのハンドラで 2 回出力されたルートは、両方を持ちます。
   `request` の行が名指すのはメソッドとルートで、どのハンドラが動いたかではないからです。
   2 回出力された flag は、どちらかの行が宣言するすべての側を持ちます。
+  2 つの違うものを持つとして 2 回出力されたテーブルは、両方の行を名指して拒否されます。
+  テーブルが何を持つかで数が何を数えるかが決まるので、どちらの行も優先できないからです。
 
 Rails のアプリケーションは、依存無しでルートを出力できます。
 コマンドは `bin/rails runner` への 1 つの argv の語なので、shell はそれを読みません:
@@ -3596,7 +3636,8 @@ lists: {
 複数のメソッドに答えるルートは、メソッドごとに 1 行を持ちます。
 mount したアプリケーションには controller が無いので、`handler` がありません。
 
-各コマンドは、run を始めた tree の、nukadoko が起動し、プログラムのファイルが `{events}` を名指す world で、world ごとに 1 回実行します:
+各コマンドは、nukadoko が起動し、プログラムのファイルが `{events}` を名指す world で、world ごとに 1 回実行します。
+`routes` と `flags` のコマンドは run を始めた tree の world で実行し、`tables` のコマンドはどの tree のそうした world でも実行します(「テーブルが持つもの」を参照):
 
 - `serve` が `ready` に答え、`setup` が終わったあとに実行します。
   そのため、コマンドは API のクライアントがするように、動いているプログラムに問い合わせられます。
@@ -3604,8 +3645,9 @@ mount したアプリケーションには controller が無いので、`handler
   語は `prepare` のコマンドと同じプレースホルダーを埋めます。
   stderr に出力したものは `program.log` に入り、stdout に出力したものが一覧です。
 - 終わるまでの持ち時間は 60,000 ms です(「持ち時間」を参照)。
-- `url` の world、`serve` も `url` も無い world、イベントのファイルが無い world、`nuka run --base` の base と old の world、そして `nuka do` は、一覧を読みません。
-  一覧は run の step の行と突き合わせて読むもので、それを持つ world はほかに無いからです。
+- `url` の world、`serve` も `url` も無い world、イベントのファイルが無い world は、一覧を読みません。
+- `nuka run --base` の base と old の world、そして `nuka do` は、ルートの一覧と flag の一覧を読みません。
+  どちらも run の step の行と突き合わせて読むもので、それを持つ world はほかに無いからです。
 - environment の `lists` は、トップレベルのものを丸ごと置き換えます。
   そのため `lists: {}` と書いた environment では、どの一覧も読みません。
 
@@ -3614,6 +3656,8 @@ mount したアプリケーションには controller が無いので、`handler
 world の record は、一覧を読まなかった理由を言います。
 run は警告の `program-list-unread` を出し、コマンドと、行のときはその番号とどこが誤りかを名指します。
 その一覧のものは、何も数えません。
+base や old の world の警告は、`world default (base)` のように tree を名指します。
+`nuka do` も、その world のテーブルの一覧について同じ警告を出します。
 一部だけ読むと、一覧は読めなかった行が名指したものを欠きます。
 すると、そのルートへのリクエストは、一覧が名指さないものとして読まれてしまいます。
 
@@ -3622,7 +3666,8 @@ run は警告の `program-list-unread` を出し、コマンドと、行のと�
 ```json
 "lists": {
   "routes": { "entries": 31, "error": null },
-  "flags": { "entries": null, "error": "lists.flags command bin/rails runner script/flags.rb exited with code 1" }
+  "flags": { "entries": null, "error": "lists.flags command bin/rails runner script/flags.rb exited with code 1" },
+  "tables": { "entries": 14, "error": null }
 }
 ```
 
@@ -3688,6 +3733,64 @@ head の world がルートの一覧を読むと、`run.json` は `routes` を�
 - head のどの world もルートの一覧を読まなかったとき、`routes` はありません。
   そのため、読めなかった一覧が、どのルートもリクエストされなかった一覧として読まれることはありません。
   理由は world の `lists` と、警告の `program-list-unread` が言います。
+
+#### テーブルが持つもの
+
+テーブルの一覧は、プログラムの各テーブルが何を持つかを、プログラム自身の宣言で言います:
+
+- `state`(状態): プログラムが何のためにあるかに当たるものです。
+  部屋、得点、feature flag の設定などがその例です。
+  一覧が名指さないテーブルは状態を持ちます。
+  プログラムのファイルがテーブルの一覧を名指さないときは、すべてのテーブルが状態を持ちます。
+- `bookkeeping`(記帳): プログラムが自分の仕事について残す記録です。
+  各ページが書くテレメトリーのテーブルや、監査の記録がその例です。
+- `infrastructure`(基盤): プログラムのフレームワークがプログラムを動かすために持つものです。
+  適用済みのマイグレーション、ジョブのキュー、キャッシュ、pub/sub のチャンネルがその例です。
+
+"nothing was written" のような文が扱うのは状態です。
+GET で訪問を記録するページや、キャッシュに無いときにキャッシュを埋めるページは、どの文も扱わないテーブルに書きます。
+一覧が無ければ、書き込みを数える Then はどれも、扱うテーブルを手で名指すことになります。
+そのため、テーブルが何を持つかで、次の 3 つが決まります:
+
+- 実行イベントの数で、`db` の選び方が `table` を名指さないものは、記帳か基盤を持つテーブルの行を除きます。
+  その record と行は、除いた行をそれぞれ名指します(「実行イベントの数についての claim」を参照)。
+  テーブルを名指す選び方は、そのテーブルが何を持っていても、それを数えます。
+- `nuka run` の注記 `undeclared-write` は、`mutates: false` を宣言し、その trace が状態を持つテーブルへのコミットした書き込みを持つ step を名指します(「check と注記」を参照)。
+- step の実行経路はすべての書き込みを持ち、記帳か基盤を持つテーブルの項目はそう言います。
+  そのため、実行経路の比較は、そこでの違いをほかのものより下に並べます(「実行イベント」を参照)。
+
+記帳と基盤は 2 つの値ですが、数と注記は 2 つを同じに扱います。
+人はこの 2 つを分けて読むからです。
+テレメトリーの行は、テレメトリーが数えたものを見て flag を off にするガードのように、プログラムのほかの部分が読むものかもしれません。
+適用済みのマイグレーションの行を読むのは、受け入れ基準が扱わないものだけです。
+
+一覧は、すべてのテーブルを出力しても、状態以外のものを持つテーブルだけを出力しても構いません。
+テーブルが何を持つかはプログラムが決めることです。
+そのため、コマンドはそれをプログラムがすでに言っている場所から出力し、プログラムのファイルに置いた一覧からは出力しません。
+テレメトリーをモデル `Event` に持つ Rails のアプリケーションは、次のように出力します:
+
+```ruby
+# script/tables.rb, run as bin/rails runner script/tables.rb
+bookkeeping = [Event.table_name]
+infrastructure = [ActiveRecord::Base.schema_migrations_table_name, ActiveRecord::Base.internal_metadata_table_name]
+ActiveRecord::Base.connection.tables.each do |table|
+  holds = bookkeeping.include?(table) ? "bookkeeping" : infrastructure.include?(table) ? "infrastructure" : "state"
+  puts({ table: table, holds: holds }.to_json)
+end
+```
+
+テーブルの一覧は、実行イベントの数を判定するところならどこでも読みます。
+nukadoko が起動し、プログラムのファイルが `{events}` を名指す、どの tree の world でも読みます。
+`nuka run --base` の base と old の world も含みます。
+`nuka do` の world でも、その step が実行イベントを数えるときに読みます。
+base で判定する claim は base の tree の一覧を読み、head の claim は head の一覧を読みます。
+`--concurrency` のワーカーは、その world の一覧を読みます。
+
+- プログラムのファイルが名指し、world が読まなかったテーブルの一覧のもとでは、各テーブルが何を持つかはわからず、状態とはみなしません。
+  テーブルを名指さない選び方が数えるはずの `db` の行は、数が除くテーブルのものかもしれないので、一致するかもしれない行になります(`holds_unknown`)。
+  そのため claim は、どちらにも数えられず、`unjudged` になります。
+- 書き手がテーブルを名指せなかった行(`table: "unknown"`)は、一覧が何かのテーブルに印を付けているとき、その印の付いたテーブルのものかもしれないので、同じく一致するかもしれない行になります。
+- `run.json` の world は、ほかの一覧と同じく `lists` にこの一覧を記録し、`tables` の `entries` は一覧が名指すテーブルの数です。
 
 ### Ruby のプログラム
 
@@ -3843,6 +3946,24 @@ step record には、各 step 自身の `mutates` の宣言が載っています
 節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
 共有する step がすべて Background から来ているときは、その step がすでに Background にあると伝え、Background への移動は勧めません。
 scenario の status も終了コードも変えません。
+
+world が実行イベントを書く run は、宣言を 1 つ、それと並べもします。
+`mutates: false` を宣言し、その trace が、プログラムが状態を持つテーブルにコミットした書き込みを持つ step は、注記 `undeclared-write` です。
+読み取り専用の environment と `repeated-scenario-prefix` の助言が信頼するのはこの宣言なので、誤った宣言は、それを読むところでコストになります。
+注記は、scenario、step の行、step、プログラムが書いた各テーブルと op を名指します:
+
+```text
+note	undeclared-write	features/rooms.feature:4	a room page reads the room: the step at line 4, get-room, declares mutates: false, and its trace holds writes the program committed to tables that hold state, 1 line: db insert into scores
+```
+
+注記が読むのは、world のテーブルの一覧のもとでの、プログラム自身の行だけです(「テーブルが持つもの」を参照)。
+つまり、自身の `committed` かトランザクションの `commit` で変更が永続した `db` の行で、一覧が記帳か基盤を持つとしないテーブルのものです。
+ロールバックした書き込み、どの行もコミットの状態を決めない書き込み、一覧が何かのテーブルに印を付けているときに書き手がテーブルを名指せなかった書き込み、テーブルの一覧を読まなかったときのすべての書き込みは名指しません。
+リクエストのメソッドを書き込みとして読むこともありません。
+step の record のあとに届いた行は、step の実行経路と同じく数えます。
+注記を出すのは head の実行だけで、`--repeat` が何回走らせても、scenario と environment の step の行ごとに 1 回です。
+base や old の world が走らせるのはほかの tree の step で、その宣言はレビューする変更ではないからです。
+宣言とプログラムのどちらが誤っているかは言わず、scenario の status も終了コードも変えません。
 
 `--base <git ref>` は、pull request の向かう先など、ref が名指すコミットと run を比べます。
 新しいか変わった受け入れ基準は基点のコードに対しても走り、そこで Then が失敗しなければ証明されません。
@@ -5349,7 +5470,8 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - `--base` のもとでは「Removed criteria」。
   消えた各受け入れ基準の場所と名前、そして基点での文を `gherkin` のブロックで載せます。
 - run.json が `paths` を持つときは「Changed paths」。
-  組ごとに、それが切り替えるものを名指す見出しと数の行を付け、実行経路が変わったか `open` の受け入れ基準を 20 まで、各 step の違いと一緒に載せます(「実行イベント」を参照)。
+  組ごとに、それが切り替えるものを名指す見出しと数の行を付け、実行経路が変わったか `open` の受け入れ基準を 20 まで、各 step の違いと一緒に載せます。
+  そのあとに、記帳か基盤を持つテーブルでの違いを載せます(「実行イベント」を参照)。
 - run.json が `flags` を持つときは「Flags」。
   flag と側の組ごとに 1 行で、そこで flag を評価した受け入れ基準の数、断定ごとの数、その側で対照にしか現れなかったものの `only in controls`、行が名指した各ゲート(ゲートを名指さなかった行は `none named`)を載せます。
   そのあとに、flag の唯一の側には `only this side was evaluated` を、どの一覧も宣言しない側には `no flags list that was read declares this side` を続けます。
@@ -6176,7 +6298,8 @@ exit code は、報告にエラーが 1 つ以上あるか、`--fail-on`(後述)
 step の pattern が結び付いているか、`from` 宣言が一度でも行使されるかは、プロジェクトがスキャンするすべての feature(`featuresDir` と、各 `additionalFeatureDirs` エントリ)で決まります。
 そのため、注記を計算するのは対象を指定しない `nuka check` だけです。
 対象を指定した `nuka check` と、`nuka run` が実行の前に走らせる check は、注記を計算しません。
-`nuka run` は、終わったばかりの run から自分自身の注記 `repeated-scenario-prefix` を 1 つ報告します(「実行」を参照)。
+`nuka run` は、終わったばかりの run から自分自身の注記を 2 つ報告します。
+`repeated-scenario-prefix` と `undeclared-write` です(「実行」を参照)。
 
 注記は、かつては別の `tend` コマンドが出していました。
 nukadoko を使う 11 のプロジェクトを調べたところ、その 14 の code のうち 10 はどのプロジェクトでも発火せず、サマリーを読む人もおらず、使われていたのは 2 つの code でゲートを掛ける 1 つのテストだけでした。
@@ -6318,6 +6441,11 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               the first When, docstrings and tables compared
                               too, and what that opening took (measured, no
                               advice); the exit code is unchanged.
+                              An undeclared-write note names a step that
+                              declares mutates: false whose trace holds a
+                              write the program committed to a table that
+                              holds state, with each table and op; the exit
+                              code is unchanged.
                               --json drops every one of these lines, and
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records

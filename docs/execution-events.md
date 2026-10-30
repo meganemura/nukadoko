@@ -190,6 +190,11 @@ requested: see "Lists" in [docs/spec.md](spec.md).
 | `ids` | array of strings or integers | no | The primary keys of the rows the statement changed. Present only when it is complete and has at most 100 entries; leave it out when there are more or the writer cannot tell. |
 | `committed` | boolean | no | `true` when the change persisted with no transaction left to decide it (the statement ran outside a transaction). `false` when the writer knows it did not persist. Leave it out inside a transaction, and name the transaction in `parent`. |
 
+A program that also prints what each of its tables holds, in these same
+words (`table`), lets a reader tell a write to the program's state from
+one to its own bookkeeping or infrastructure: see "What a table holds"
+in [docs/spec.md](spec.md).
+
 ### `tx`: a transaction or a savepoint ended
 
 | Field | Type | Required | Meaning |

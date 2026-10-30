@@ -94,11 +94,25 @@ claim broken: 1 (events:open-room@4 count db where op in [insert, update, delete
 ```
 
 `events_read.<key>.counted` in the step record lists every group, and
-`events-read.jsonl` holds each line. A group the sentence does not mean,
-such as a table the program writes for its own bookkeeping, is a question
-for the person: the implementation stops the write, or the step's `count`
-names the tables the sentence means. A held count is read the same way,
-since it may have counted the wrong table.
+`events-read.jsonl` holds each line. A group the sentence does not mean is
+a question for the person. A table the program writes for its own
+bookkeeping (a telemetry row) or to run (a cache entry, a migration row) is
+the program's to declare: a `lists.tables` command prints
+`{"table":"events","holds":"bookkeeping"}` (or `"infrastructure"`) from
+where the program already says it, never from a list in the program file,
+and a `db` count that names no `table` then leaves those lines out. The
+line ends `left out 1 line: db insert into events (bookkeeping)`, and
+`events_read.<key>.left_out` names each group. Otherwise the implementation
+stops the write, or the step's `count` names the tables the sentence means.
+A held count is read the same way, since it may have counted the wrong
+table or left out the one the sentence means. A tables list that was not
+read (`program-list-unread`) leaves such a count `unjudged`
+(`holds_unknown`): fix the command first.
+
+The note `undeclared-write` (`nuka run`) names a step that declares
+`mutates: false` whose trace holds a write the program committed to a
+table that holds state, with the table and the op. The declaration or the
+program is wrong; ask the person which before changing either.
 
 ## Reading a step record as a timeline
 

@@ -26,12 +26,11 @@ AfterAll hooks. `nuka do` does the same for its one execution. No
 terminal has to keep a server running, and no fixture starts one.
 
 A command is an argv array, or a string split on whitespace. Neither goes
-through a shell; write `["sh", "-c", "a && b"]` when one is needed. The
-program learns its port only from `{port}`, in the command or in `env`.
-`ready` is a path on the program's own server, and only a 2xx answer
-counts: a redirect is not followed, so name a path that answers 200 with
-no login (`/up`, `/health`). `url` is an `http:` or `https:` URL with
-no user or password in it.
+through a shell; write `["sh", "-c", "a && b"]` when one is needed. The program
+learns its port only from `{port}`, in the command or in `env`. `ready` is a
+path on the program's own server, and only a 2xx answer counts: a redirect is
+not followed, so name a path that answers 200 with no login (`/up`, `/health`).
+`url` is an `http:` or `https:` URL with no user or password in it.
 
 | Placeholder | Its value |
 | --- | --- |
@@ -60,18 +59,17 @@ world before the first scenario, to seed data; what it prints reaches
 stderr and `program.log` redacted. A `setup` or `url` function past its
 limit is abandoned and its `signal` aborted: it stops only if it honours it.
 
-Every phase has a limit: 600 s for each `build` or `prepare` command, 60 s
-for `serve` to answer `ready`, `setup`, and a `url` function. Write
-`{ command, timeout_ms }` for a command, `serve.timeout_ms`, `setup: {
-run, timeout_ms }`, or `url: { resolve, timeout_ms }` for another, in
-whole milliseconds up to 2147483647, the longest delay a Node.js timer
-keeps. Each phase prints `world <name>: <phase> started` on stderr, so a long
-wait names what it waits on. A `build` or `prepare` command's process
-group is killed when the command exits: a service that has to outlive
-`prepare`, such as a database, starts with `setsid`, as a daemon does.
-`serve.command` stays in the foreground: one that daemonizes, as `rails
-server -d` does, exits before `ready` answers and fails the world, and
-the daemon keeps running, out of nukadoko's reach.
+Every phase has a limit: 600 s for each `build` or `prepare` command, 60 s for
+`serve` to answer `ready`, `setup`, and a `url` function. Write `{ command,
+timeout_ms }` for a command, `serve.timeout_ms`, `setup: { run, timeout_ms }`,
+or `url: { resolve, timeout_ms }` for another, in whole milliseconds up to
+2147483647, the longest delay a Node.js timer keeps. Each phase prints `world
+<name>: <phase> started` on stderr, so a long wait names what it waits on. A
+`build` or `prepare` command's process group is killed when the command exits:
+a service that has to outlive `prepare`, such as a database, starts with
+`setsid`, as a daemon does. `serve.command` stays in the foreground: one that
+daemonizes, as `rails server -d` does, exits before `ready` answers and fails
+the world, and the daemon keeps running, out of nukadoko's reach.
 
 ## When it does not start
 
@@ -136,10 +134,10 @@ unreadable, unowned, process_spans, process_requests, whole, open }`). A
 `runCommand` process gets the step's trace context as `TRACEPARENT`;
 a command-line tool that copies it into its requests' `traceparent`
 header makes their lines the step's (`process_requests` counts them).
-Only the program gets the variable that names `{events}`: a step, and
-every process it starts, gets the rest of `env`, so no step writes a
-line that would read as the program's. Read it to see what the program did inside a
-step: which tables it read and wrote, which jobs it enqueued and ran.
+Only the program gets the variable that names `{events}`: a step, and every
+process it starts, gets the rest of `env`, so no line a step writes reads as the program's.
+Read it to see what the program did inside a step: which tables it read and
+wrote, which jobs it enqueued and ran.
 
 `whole: true` says every request the step stamped has its `request` line, every
 job it enqueued performed, and each `runCommand` process it ran ended with its
@@ -164,9 +162,11 @@ count: { kind: "db", op: ["insert", "update", "delete", "other"], committed:
 true } } }` beside a claim on `actual: "writes"` and a number. It waits while
 they may still be `whole` (the step's `timeout`, else 10 s), and is `unjudged`,
 naming the gap, while the count is a range: an absence holds on a whole reading
-only. Its line and `events_read` name what it `counted`; a line after the
-claim makes the cell `broke`. `events-inlet-missing` and `events-unread` name
-a world that reads none; a `--base` ref without `{events}` still runs.
+only. Its line and `events_read` name what it `counted`, and what a `db` count
+with no `table` left out on tables `lists.tables` marks (`left_out`,
+`references/diagnosing.md`); a line after the claim makes the cell `broke`.
+`events-inlet-missing` and `events-unread` name a world that reads none (a
+`--base` ref without `{events}` still runs).
 
 ## Environments and programs nukadoko does not start
 

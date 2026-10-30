@@ -121,8 +121,8 @@ say so. Expect one of four answers, each citing the field it rests on:
   whose claims read something other than what the sentence names, a When
   whose process exited before it did the work).
 - **does more**: the record shows work the sentence does not name (a
-  write under a `mutates: false` declaration, a file the sentence never
-  mentions, a request to another endpoint).
+  write under a `mutates: false` declaration, which `undeclared-write`
+  names, a file the sentence never mentions, a request elsewhere).
 - **cannot tell**: the evidence does not reach the claim (an
   `observed` channel that is `null` or an entry in `observed.unmeasured`
   where the claim needs evidence, a result that only echoes an argument).

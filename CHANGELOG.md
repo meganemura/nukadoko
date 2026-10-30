@@ -401,6 +401,45 @@ just until 0.1.
   and its `scenarios` entry carries `for_paths` with what it came to in
   a cell's words. Its scenario line on stderr ends with `(for paths)`. It
   costs about one more pass of head's rows at the base.
+- **The program says what each of its tables holds, and "nothing was
+  written" counts state.** `lists.tables` in the program file names a
+  command that prints `{ "table": "events", "holds": "bookkeeping" }`
+  per line: `state`, the default, `bookkeeping` (telemetry, an audit
+  trail), or `infrastructure` (applied migrations, a job queue, a
+  cache), from where the program already declares it. A page whose GET
+  records the visit used to break every "nothing was written" claim, and
+  every such Then had to name the tables it meant. Now a `db` count that
+  names no `table` leaves out each line on a table that holds
+  bookkeeping or infrastructure, and its record and its line name each
+  line it left out: `events_read.<key>.left_out` and the claim's
+  `left_out` group them with their `holds`, and the line reads `held;
+  left out 1 line: db insert into events (bookkeeping)`. A count that
+  names the table counts it as before. The list is read wherever a count
+  is judged: head's worlds, the base and old worlds of `nuka run --base`,
+  `--concurrency` workers, and `nuka do` when its step counts execution
+  events. A table printed with two holdings is refused. A tables list
+  that was not read leaves each line it would decide as one that may
+  match (`holds_unknown`), so the claim is `unjudged` instead of counted
+  either way, and `nuka do` now warns `program-list-unread` for it too.
+  A program file with no tables list counts as it did.
+- **`nuka run` notes a step whose `mutates: false` the program's own
+  writes contradict.** The note `undeclared-write` names the scenario,
+  the step's line, the step, and each table and op, for a head step that
+  declares `mutates: false` whose trace holds a `db` write that
+  persisted on a table that holds state, late lines included. It reads
+  the program's execution events alone, never a request's method, and
+  names no write that rolled back, none whose commit state no line
+  decides, and none at all while a declared tables list was not read.
+  It changes no status and no exit code.
+- **A step's path says which writes are bookkeeping, and the summary
+  reads them last.** A `db` entry on a marked table keeps its count and
+  gains `holds`, and so does a difference in `paths`. A criterion's
+  `result` reads the other differences, and is the new `marked_only`
+  when its only differences are on marked tables, counted in `counts`.
+  "Changed paths" lists those differences after the rest, under their
+  own line, so a reader goes first to what a sentence is about and still
+  sees a telemetry write that another reader of that table, such as a
+  guard that turns a flag off, depends on.
 
 ### Changed
 

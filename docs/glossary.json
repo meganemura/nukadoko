@@ -744,9 +744,9 @@
       "note": "実行イベントの数が数えた行を、その種類のグループのフィールドが同じ値を持つ行ごとにまとめたもの。フィールド `counted`、`fields`、`lines` と、claim の行の `counted 1 line: ...` はコードスパンで英語のまま"
     },
     {
-      "en": ["list (of a program's places)", "lists", "route list", "flag list"],
+      "en": ["list (of a program's places)", "lists", "route list", "flag list", "tables list"],
       "ja": "一覧",
-      "note": "プログラムのファイルの `lists` のコマンドが出力する、プログラムが持つ箇所の一覧。ルートの一覧、flag の一覧と書く。キー名 `lists` と種類 `routes`、`flags` はコードスパンで英語のまま"
+      "note": "プログラムのファイルの `lists` のコマンドが出力する、プログラムが持つ箇所の一覧。ルートの一覧、flag の一覧、テーブルの一覧と書く。キー名 `lists` と種類 `routes`、`flags`、`tables` はコードスパンで英語のまま"
     },
     {
       "en": ["place (a route or a flag a program has)", "places"],
@@ -806,6 +806,46 @@
       "en": ["premise (of a pair)"],
       "ja": "前提",
       "note": "environment の組が切り替える condition。flag の側が違うことは前提であって変化ではないので、組の見出しが名指し、違いには並べない"
+    },
+    {
+      "en": ["what a table holds", "holds (a table)", "holds_unknown"],
+      "ja": "テーブルが持つもの / 持つ",
+      "note": "テーブルの一覧の項目の `holds` が言う、テーブルの中身の種類。値は `state`、`bookkeeping`、`infrastructure` の 3 つ。claim が holds(成り立つ)のとは別の語なので、成り立つ と訳さない。フィールド `holds` と maybe の原因 `holds_unknown` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["state (a table that holds state)", "holds state"],
+      "ja": "状態 / 状態を持つテーブル",
+      "note": "テーブルの一覧の `holds` の既定値 `state`。プログラムが何のためにあるかに当たるもの。一覧が名指さないテーブルは状態を持つ。state ディレクトリの state とは別の語"
+    },
+    {
+      "en": ["bookkeeping", "holds bookkeeping"],
+      "ja": "記帳 / 記帳を持つテーブル",
+      "note": "テーブルの一覧の `holds` の値 `bookkeeping`。プログラムが自分の仕事について残す記録(テレメトリー、監査の記録)。値はコードスパンで英語のまま。run サマリの見出し行 Bookkeeping and infrastructure writes that differ は英語のまま"
+    },
+    {
+      "en": ["infrastructure", "holds infrastructure"],
+      "ja": "基盤 / 基盤を持つテーブル",
+      "note": "テーブルの一覧の `holds` の値 `infrastructure`。フレームワークがプログラムを動かすために持つもの(適用済みのマイグレーション、ジョブのキュー、キャッシュ、pub/sub)。値はコードスパンで英語のまま"
+    },
+    {
+      "en": ["marks (a tables list marks a table)", "marked table"],
+      "ja": "印を付ける / 印の付いたテーブル",
+      "note": "テーブルの一覧が、テーブルを記帳か基盤を持つとすること。状態を持つテーブルには印が無い"
+    },
+    {
+      "en": ["leaves out (a count leaves out a line)", "left out", "left_out"],
+      "ja": "除く / 除いた行",
+      "note": "table を名指さない db の選び方の数が、印の付いたテーブルの行を数えないこと。除いた行は record の `left_out` と claim の行の `left out 1 line: ...` が名指す。どちらもコードスパンで英語のまま"
+    },
+    {
+      "en": ["marked only (a criterion whose paths differ only on marked tables)", "marked_only"],
+      "ja": "記帳か基盤の書き込みだけが違う",
+      "note": "実行経路の比較の結果。違いが印の付いたテーブルの書き込みだけにある受け入れ基準。値 `marked_only` と run サマリの different only in bookkeeping or infrastructure writes はコードスパンで英語のまま"
+    },
+    {
+      "en": ["undeclared write", "undeclared-write"],
+      "ja": "宣言されていない書き込み",
+      "note": "nuka run の注記 `undeclared-write`。mutates: false を宣言した step の trace が、状態を持つテーブルへのコミットした書き込みを持つこと。コードはコードスパンで英語のまま"
     }
   ],
   "keep_english": [
