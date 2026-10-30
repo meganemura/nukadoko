@@ -1,4 +1,4 @@
-import type { BrowserContext, CDPSession, Page } from "playwright";
+import type { BrowserContext, CDPSession, Page, Request } from "playwright";
 import { stampsUrl, TRACEPARENT } from "./trace-context.js";
 
 // Responsibility: put a `traceparent` header on each request a Chromium
@@ -6,7 +6,9 @@ import { stampsUrl, TRACEPARENT } from "./trace-context.js";
 // program's log"), so the program's log can say which step a page request
 // came from. Boundary:
 // one browser context's pages; the value, and which URLs get one, are the
-// recorder's (observed.ts, trace-context.ts).
+// recorder's (observed.ts, trace-context.ts). It also reads back the
+// value a request went out with (`sentTraceparent`), for page-order.ts
+// and page-http-log.ts.
 //
 // It uses the Chrome DevTools Protocol's Fetch domain on a session of its
 // own for each page, with patterns that match only the world's origin: a
@@ -159,6 +161,30 @@ async function attachPage(context: BrowserContext, page: Page, stamp: PageStamp)
     return messageOf(error);
   }
   return undefined;
+}
+
+// How long a read of a request's header waits. Read once the request has
+// its response or ended, Playwright already holds the header; for a
+// request still waiting on its response, it did not resolve within a
+// second for 4 of 10 measured (page-order.ts).
+const HEADER_WAIT_MS = 500;
+
+/** The `traceparent` a page request went out with, as Playwright read it
+ * off the wire: this session's, or the page's own. `null` when it went
+ * without one, and `undefined` when Playwright did not say within 500 ms
+ * or could not say at all (a context that closed): neither is "none". */
+export async function sentTraceparent(request: Request): Promise<string | null | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), HEADER_WAIT_MS);
+  });
+  try {
+    return await Promise.race([request.headerValue(TRACEPARENT), late]);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function messageOf(error: unknown): string {

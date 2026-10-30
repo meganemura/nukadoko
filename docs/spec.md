@@ -2679,7 +2679,7 @@ page had received from the world when the step read it:
 "pages": [{ "as": null, "page": 1, "url": "http://localhost:43223/room", "last_response": 0, "in_flight": [1] }],
 "page_requests": [
   { "method": "GET", "url": "http://localhost:43223/state", "trace_id": "a899bf5d1c04fb3ac3b325e7e865ec35",
-    "sent_at": "2026-10-30T07:33:32.355Z", "finished_at": "2026-10-30T07:33:32.367Z",
+    "span_id": "05f6d495231cc78b", "sent_at": "2026-10-30T07:33:32.355Z", "finished_at": "2026-10-30T07:33:32.367Z",
     "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-rqe9", "step": "aki-opens-the-room", "line": 8 } },
   { "method": "GET", "url": "http://localhost:43223/state?hold=1500", "sent_at": "2026-10-30T07:33:32.450Z", "finished_at": null,
     "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-vk55", "step": "the-room-starts-a-refresh", "line": 9 } }
@@ -2702,9 +2702,11 @@ page had received from the world when the step read it:
   began, or the page sent it while the reading ran. A reading is the
   `observe` call and the ARIA snapshots nukadoko takes after it.
 - Both are indexes into `page_requests`, which holds each request they
-  name: `method`, `url`, `trace_id` (from the `traceparent` the
-  request went out with; `null` when it went without one; absent when it
-  had not ended when the record was written), `sent_at`, `finished_at`
+  name: `method`, `url`, `trace_id` and `span_id` (the two ids of the
+  `traceparent` the request went out with, from one read of it; both
+  `null` when it went without one; both absent when it had not ended
+  when the record was written, or Playwright did not give the header
+  within 500 ms), `sent_at`, `finished_at`
   (`null` when the page had not finished receiving the response, or the
   request failed), `failed_at` when it ended without a response,
   `sent_during`, and `step`.
@@ -2715,6 +2717,13 @@ page had received from the world when the step read it:
   `pause` (a pause of `nuka run --step`). A page sends requests on its
   own as often as for a step, so `sent_during` says when the page sent
   it, never what made the page send it.
+- `span_id` tells apart the requests of pages that share one step's
+  trace: every page has the step's trace id, so when three
+  pages each sent the same `GET` in one step, the program's three
+  request lines carry one trace id and three span ids. The page's
+  http.jsonl line names the same `traceparent` (see "Records"), and
+  so does each line of the program's that writes it, such as an
+  execution event's `trace` field.
 - The step's `pages` are the reading its claims were judged on: the only
   reading of a step that reads once, and the last reading of a poll.
   Under `poll`, each reading has `pages` too, and a reading whose pages
@@ -2745,12 +2754,13 @@ flight on every reading. A WebSocket sends no request to count, and a
 service worker's request belongs to no page. The order comes from
 Playwright's `request`, `requestfinished`, and `requestfailed` events,
 which every engine sends, so a Firefox or WebKit page has `pages` too,
-with `trace_id: null`, since its requests go without a `traceparent`.
+with `trace_id` and `span_id` `null`, since its requests go without a
+`traceparent`.
 The DevTools session that stamps the requests could report the same
 order on Chromium, but asking Chromium for its Network events on a second
 session made a page that loads 200 images and makes 50 fetches take 457
-ms against 414 ms (the median of six runs each). The trace id is read
-from the request once it ended: Playwright did not answer within a second
+ms against 414 ms (the median of six runs each). The ids are read from
+the request once it ended: Playwright did not answer within a second
 for 4 of 10 requests still waiting for their responses. A run without a
 world has no `pages`.
 
@@ -4026,7 +4036,12 @@ hook's boundary, so their requests go without a `traceparent`.
   Playwright request context the first hop's origin and the response's.
   A redirected request's `url` is where its response came from, never by
   itself where the id went.
-  A page's line has neither: the browser added the header.
+  A page's line has both, read off the request once its response
+  arrived, so the value is the one the browser sent, nukadoko's or the
+  page's own; `traceparent_sent_to` is the origin of its `url`, since
+  each hop of a page's redirect is a request and a line of its own.
+  A page's line whose header Playwright did not give within 500 ms has
+  neither.
 - A page's requests are stamped through the Chrome DevTools Protocol, so
   only on Chromium.
   Firefox and WebKit have no such protocol through Playwright, and their
@@ -7364,7 +7379,7 @@ its scenario record's id, so either record leads to the other.
   A line of a request that went out with a `traceparent` has
   `"traceparent"`, the value that went out, nukadoko's or the step's own,
   and `"traceparent_sent_to"`, the origins that received it (see
-  "Program"); a page's line has neither, since the browser added it.
+  "Program"), a page's line too, as the browser sent it.
   No header is written: headers carry cookies and credentials, and the
   trace holds a page's. A page line has no bodies: the trace already holds
   the page's traffic. A call the step itself made is logged whatever its outcome,

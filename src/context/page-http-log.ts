@@ -1,8 +1,10 @@
 import type { BrowserContext, Request as PlaywrightRequest } from "playwright";
 import type { SecretSet } from "../secrets/types.js";
-import { appendHttpLogEntry } from "./http-log.js";
+import { sentTraceparent } from "./browser-trace.js";
+import { appendHttpLogEntry, type HttpLogEntry } from "./http-log.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
+import { originOf } from "./trace-context.js";
 
 // Responsibility: the page-origin half of http.jsonl — everything a step's
 // `ctx.page()` itself sends, as opposed to
@@ -35,8 +37,16 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // `via: "page"` (http-log.ts's own `HttpLogEntry`) is what tells an entry
 // this module wrote apart from one `ctx.request()` produced, on the same
 // file, in whatever order the two happen to interleave in — this module
-// never reorders or buffers, it only appends as each `response` event
-// fires, same as http-log.ts's own `logCall` does for its own calls.
+// never reorders, it appends its lines in the order the `response` events
+// fired.
+//
+// A line names the `traceparent` the request went out with and the origin
+// that received it, as a `ctx.request()` line does: a step's pages share
+// the step's trace id, and the span id is what tells one page's request
+// from another's in the program's own request lines. Playwright reads the
+// header off the wire, so the value is browser-trace.ts's or the page's
+// own, and it is read when the response has arrived, when Playwright
+// already holds it (browser-trace.ts's `sentTraceparent`).
 //
 // Duration is measured the same way http-log.ts's own `logCall` measures
 // its: wall time between this module's own `request` listener (the
@@ -62,8 +72,8 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // Each append is kicked off from inside a `response` handler, which has no
 // caller of its own to await it — unlike http-log.ts's own `logCall`, whose
 // `await appendHttpLogEntry(...)` sits on the same promise chain the step's
-// own `await ctx.request()...` call is already waiting on. `pending` below
-// (a `Set` of in-flight append promises) is what closes that gap: the
+// own `await ctx.request()...` call is already waiting on. `tail` below
+// (the last append, each chained on the one before) is what closes that gap: the
 // handle's own `flush()` lets a caller wait for everything this
 // subscription has started so far before it reads http.jsonl for the
 // current step boundary — create-context.ts's `closeCurrentChunk` calls it
@@ -104,7 +114,10 @@ export function subscribePageHttpLogging(
   // `at` is the duration origin. `logPath` is that step's http.jsonl,
   // resolved now so a later step boundary cannot move the line.
   const started = new Map<PlaywrightRequest, { at: number; logPath: string }>();
-  const pending = new Set<Promise<void>>();
+  // The last append kicked off: each waits for the one before it, so the
+  // lines stay in the order the responses arrived while each one's header
+  // read runs at once.
+  let tail: Promise<void> = Promise.resolve();
 
   context.on("request", (request) => {
     started.set(request, { at: performance.now(), logPath: logPath() });
@@ -134,31 +147,39 @@ export function subscribePageHttpLogging(
     // fallback this branch already uses when the start time is missing.
     const entryPath = start === undefined ? logPath() : start.logPath;
     const durationMs = start === undefined ? 0 : Math.round(performance.now() - start.at);
-    const write: Promise<void> = appendHttpLogEntry(
-      () => entryPath,
-      {
-        method: request.method(),
-        url: request.url(),
-        status: response.status(),
-        duration_ms: durationMs,
-        via: "page",
-        ...(as !== undefined ? { as } : {}),
-      },
-      secrets,
-    )
+    const entry: HttpLogEntry = {
+      method: request.method(),
+      url: request.url(),
+      status: response.status(),
+      duration_ms: durationMs,
+      via: "page",
+      ...(as !== undefined ? { as } : {}),
+    };
+    const header = sentTraceparent(request);
+    tail = tail
+      .then(async () => {
+        const traceparent = await header;
+        await appendHttpLogEntry(() => entryPath, { ...entry, ...sentToFields(traceparent, entry.url) }, secrets);
+      })
       .catch(() => {
         // See this file's own header: measurement must never break execution.
         httpLogFailed.record();
-      })
-      .finally(() => {
-        pending.delete(write);
       });
-    pending.add(write);
   });
 
   return {
     async flush(): Promise<void> {
-      await Promise.all(pending);
+      await tail;
     },
   };
+}
+
+/** The `traceparent` fields of a page's line: the value the request went
+ * out with, and the origin of its `url`, the one that received it. Each
+ * hop of a redirect is a request and a line of its own, so its origin is
+ * known exactly. None when it went without one or Playwright did not give
+ * the header. */
+function sentToFields(traceparent: string | null | undefined, url: string): Pick<HttpLogEntry, "traceparent" | "traceparent_sent_to"> {
+  const origin = originOf(url);
+  return traceparent === null || traceparent === undefined ? {} : { traceparent, traceparent_sent_to: origin === undefined ? [] : [origin] };
 }

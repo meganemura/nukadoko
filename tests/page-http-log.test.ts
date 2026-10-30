@@ -21,11 +21,13 @@ function fakeContext(): BrowserContext & EventEmitter {
   return new EventEmitter() as BrowserContext & EventEmitter;
 }
 
-function fakePageRequest(url: string, method: string, resourceType: string): Request {
+/** `header` is what Playwright's `headerValue("traceparent")` resolves to. */
+function fakePageRequest(url: string, method: string, resourceType: string, header: () => Promise<string | null> = async () => null): Request {
   return {
     url: () => url,
     method: () => method,
     resourceType: () => resourceType,
+    headerValue: (name: string) => (name === "traceparent" ? header() : Promise.resolve(null)),
   } as unknown as Request;
 }
 
@@ -115,6 +117,43 @@ describe("subscribePageHttpLogging", () => {
     ]);
     expect(stepALines[0]?.duration_ms).toEqual(expect.any(Number));
     expect(stepBLines[0]?.duration_ms).toEqual(expect.any(Number));
+  });
+
+  it("names the traceparent each request went out with, and its origin, in the order the responses arrived, whenever each header resolves", () =>
+    hegel.testAsync(async (tc) => {
+      const delays = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: 20 }), { minSize: 1, maxSize: 6 }));
+      root = await mkdtemp(path.join(os.tmpdir(), "nukadoko-page-http-log-"));
+      const log = path.join(root, "http.jsonl");
+      const context = fakeContext();
+      const handle = subscribePageHttpLogging(context, () => log, [], createHttpOmittedCollector(), createHttpLogFailedCollector());
+      const traceparents = delays.map((_, index) => (index % 3 === 2 ? null : `00-${"a".repeat(32)}-${index.toString(16).padStart(16, "0")}-01`));
+      delays.forEach((delay, index) => {
+        const traceparent = traceparents[index]!;
+        const request = fakePageRequest(`http://aki.localhost:4100/${index}`, "GET", "fetch", () => new Promise((resolve) => setTimeout(() => resolve(traceparent), delay)));
+        context.emit("request", request);
+        context.emit("response", fakeResponse(request, 200));
+      });
+      await handle.flush();
+      const lines = await readLines(log);
+      expect(lines.map((line) => line.url)).toEqual(delays.map((_, index) => `http://aki.localhost:4100/${index}`));
+      lines.forEach((line, index) => {
+        const traceparent = traceparents[index];
+        expect([line.traceparent, line.traceparent_sent_to]).toEqual(traceparent === null ? [undefined, undefined] : [traceparent, ["http://aki.localhost:4100"]]);
+      });
+    }));
+
+  it("writes the line with no traceparent when Playwright cannot give the header", async () => {
+    root = await mkdtemp(path.join(os.tmpdir(), "nukadoko-page-http-log-"));
+    const log = path.join(root, "http.jsonl");
+    const context = fakeContext();
+    const failed = createHttpLogFailedCollector();
+    const handle = subscribePageHttpLogging(context, () => log, [], createHttpOmittedCollector(), failed);
+    const request = fakePageRequest("http://127.0.0.1/gone", "GET", "fetch", () => Promise.reject(new Error("Target page, context or browser has been closed")));
+    context.emit("request", request);
+    context.emit("response", fakeResponse(request, 200));
+    await handle.flush();
+    expect(await readLines(log)).toEqual([{ method: "GET", url: "http://127.0.0.1/gone", status: 200, duration_ms: expect.any(Number), via: "page" }]);
+    expect(failed.snapshot()).toBeUndefined();
   });
 
   // A failed append used to vanish: `observed` counted the request while

@@ -118,9 +118,8 @@ program is wrong; ask the person which before changing either.
 
 Read the failed step's own step record as one timeline rather than a bag of
 separate fields: `started_at`, `finished_at`, `sections[].at`, `polls[].at`,
-`actions[].at`, and `evidence.screenshots[].at` all share the same clock, so
-sorting them together turns the step record into an ordered account of what
-happened when.
+`actions[].at`, and `evidence.screenshots[].at` all share one clock, so sorted
+together they are an ordered account of what happened when.
 
 ```sh
 jq -r '([{at: .started_at, event: "started"}, {at: .finished_at, event: "finished"}]
@@ -169,9 +168,10 @@ facts as text, and is quicker to read.
 A Then that read a page while a request to the world was in flight says so on
 its summary line (`read with a request in flight`, each request with the step
 that sent it), and its record's `pages` name each page's `last_response` and
-`in_flight` in `page_requests`. A claim that broke there may have read the page
-before the answer it needed: poll the Then (`checking-steps.md`), or have the
-When wait for what it started. This is an order, never what the page drew.
+`in_flight` in `page_requests`, whose `span_id` finds the page's `http.jsonl`
+line and the program's request line. A claim that broke there may have read the
+page before the answer it needed: poll the Then (`checking-steps.md`), or have
+the When wait for what it started. This is an order, never what the page drew.
 
 ## A step that timed out
 

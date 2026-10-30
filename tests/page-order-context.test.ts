@@ -106,6 +106,7 @@ describe.skipIf(!chromiumAvailable)("what the pages had received around a readin
         method: "GET",
         url: `${origin}/state?n=load`,
         trace_id: expect.stringMatching(/^[0-9a-f]{32}$/),
+        span_id: expect.stringMatching(/^[0-9a-f]{16}$/),
         sent_at: expect.any(String),
         finished_at: expect.any(String),
         sent_during: "earlier-step",
@@ -114,8 +115,9 @@ describe.skipIf(!chromiumAvailable)("what the pages had received around a readin
       expect(Date.parse(loaded!.finished_at!)).toBeGreaterThanOrEqual(Date.parse(loaded!.sent_at));
       expect(hooked?.sent_during).toBe("hook");
       expect(hooked?.trace_id).not.toBe(loaded?.trace_id);
+      expect([hooked?.span_id, bens?.span_id]).not.toContain(loaded?.span_id);
       expect(bens?.sent_during).toBe("this-step");
-      // Still in flight when the record is made: no trace id, no finish.
+      // Still in flight when the record is made: no ids, no finish.
       expect(held).toEqual({ method: "GET", url: `${origin}/state?hold=2000`, sent_at: expect.any(String), finished_at: null, sent_during: "this-step" });
     } finally {
       await handle.dispose();

@@ -13,3 +13,7 @@ Feature: What the room page had received when a Then read it
     When aki opens the room
     And the room starts a refresh held back for 600 ms
     Then the room comes to show "refreshed"
+
+  Scenario: two tabs sent the same request in one step
+    When aki opens the room in two tabs
+    Then the room shows "ready"

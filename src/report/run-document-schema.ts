@@ -206,9 +206,13 @@ const pageReading = z.looseObject({
   last_response: z.number().int().min(0).nullable(),
   in_flight: z.array(z.number().int().min(0)),
 });
+// The ids go out whole in the messages stream's claims attachment
+// (messages/map-scenario.ts), so they are checked too.
 const pageRequest = z.looseObject({
   method: z.string(),
   url: z.string(),
+  trace_id: z.string().nullable().optional(),
+  span_id: z.string().nullable().optional(),
   sent_during: z.enum(["this-step", "earlier-step", "hook", "pause"]),
   step: z.looseObject({ line: z.number().int().nullable() }).optional(),
 });

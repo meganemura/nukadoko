@@ -2093,7 +2093,7 @@ JSON にして 1024 バイトより長い値は、その先頭とバイト数で
 "pages": [{ "as": null, "page": 1, "url": "http://localhost:43223/room", "last_response": 0, "in_flight": [1] }],
 "page_requests": [
   { "method": "GET", "url": "http://localhost:43223/state", "trace_id": "a899bf5d1c04fb3ac3b325e7e865ec35",
-    "sent_at": "2026-10-30T07:33:32.355Z", "finished_at": "2026-10-30T07:33:32.367Z",
+    "span_id": "05f6d495231cc78b", "sent_at": "2026-10-30T07:33:32.355Z", "finished_at": "2026-10-30T07:33:32.367Z",
     "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-rqe9", "step": "aki-opens-the-room", "line": 8 } },
   { "method": "GET", "url": "http://localhost:43223/state?hold=1500", "sent_at": "2026-10-30T07:33:32.450Z", "finished_at": null,
     "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-vk55", "step": "the-room-starts-a-refresh", "line": 9 } }
@@ -2111,10 +2111,13 @@ JSON にして 1024 バイトより長い値は、その先頭とバイト数で
   読み取りが始まったときにレスポンスを受け取り終えていなかったものと、読み取りのあいだにページが送ったものです。
   読み取りとは、`observe` の呼び出しと、そのあとに nukadoko が取る ARIA スナップショットのことです。
 - どちらも `page_requests` の添字で、`page_requests` は名指されたリクエストを持ちます。
-  各リクエストは、`method`、`url`、`trace_id`(リクエストに付いて出た `traceparent` から読み、付かずに出たときは `null`、record を書いたときにまだ終わっていなかったときは無し)、`sent_at`、`finished_at`(ページがレスポンスを受け取り終えていなかったとき、またはリクエストが失敗したときは `null`)、レスポンスなしで終わったときの `failed_at`、`sent_during`、`step` を持ちます。
+  各リクエストは、`method`、`url`、`trace_id` と `span_id`(リクエストに付いて出た `traceparent` を 1 回読んで得る 2 つの id で、付かずに出たときはどちらも `null`、record を書いたときにまだ終わっていなかったときや、Playwright が 500 ms 以内にヘッダを返さなかったときはどちらも無し)、`sent_at`、`finished_at`(ページがレスポンスを受け取り終えていなかったとき、またはリクエストが失敗したときは `null`)、レスポンスなしで終わったときの `failed_at`、`sent_during`、`step` を持ちます。
 - `sent_during` は、ページがリクエストを送ったときの境界で、リクエストの行をその step の http.jsonl に入れるのと同じ決まりです。
   値は `this-step`、`earlier-step`(その step の `step_record_id`、`step`、`line` を `step` に持ちます)、`hook`、`pause`(`nuka run --step` の一時停止)です。
   ページは step のためと同じくらい自分からもリクエストを送るので、`sent_during` が述べるのはページがいつ送ったかで、何がページに送らせたかではありません。
+- `span_id` は、1 つの step の trace id を共有するページのリクエストを見分けるものです。
+  3 つのページが 1 つの step で同じ `GET` を送ると、プログラムの 3 つのリクエストの行は 1 つの trace id と 3 つの span id を持ちます。
+  ページの http.jsonl の行は同じ `traceparent` を名指し(「Records」を参照)、それを書くプログラムの行も、たとえば実行イベントの `trace` フィールドも、同じ値を持ちます。
 - step の `pages` は、claim を判定した読み取りのものです。
   一度だけ読む step ではその読み取りで、poll では最後の読み取りです。
   `poll` のときは各読み取りも `pages` を持ち、`pages` が直前の読み取りと違う読み取りは変化点です(「poll」を参照)。
@@ -2137,10 +2140,10 @@ EventSource は数えません。
 そのレスポンスは開いたままのストリームなので、どの読み取りでもレスポンス待ちになってしまうからです。
 WebSocket は数えるリクエストを送らず、service worker のリクエストはどのページのものでもありません。
 順序は Playwright の `request`、`requestfinished`、`requestfailed` のイベントから取り、これはどのエンジンも送るので、Firefox や WebKit のページにも `pages` があります。
-そのリクエストは `traceparent` が付かずに出るので、`trace_id` は `null` です。
+そのリクエストは `traceparent` が付かずに出るので、`trace_id` と `span_id` は `null` です。
 `traceparent` を付ける DevTools のセッションでも Chromium では同じ順序が取れます。
 ですが、2 つ目のセッションで Chromium に Network のイベントを求めると、200 枚の画像を読み 50 回 fetch するページが、414 ms ではなく 457 ms かかりました(それぞれ 6 回の中央値)。
-trace id は、リクエストが終わってから読みます。
+2 つの id は、リクエストが終わってから読みます。
 レスポンス待ちのリクエスト 10 個のうち 4 個で、Playwright は 1 秒以内に答えませんでした。
 world のない run には `pages` はありません。
 
@@ -3128,8 +3131,10 @@ BeforeAll と AfterAll はどの scenario の外でも、どの step や hook �
   `traceparent` を持つ行はどれも、それを受け取ったオリジンを `traceparent_sent_to` として持ちます。
   `fetch` ではそれを運んだ各ホップのオリジン、`node:http` と `node:https` ではリクエスト自身のオリジン、Playwright の request context では最初のホップのオリジンとレスポンスのオリジンです。
   リダイレクトされたリクエストの `url` はレスポンスが来た場所で、それだけでは id がどこへ行ったかを示しません。
-  page の行はどちらも持ちません。
-  ヘッダを足したのはブラウザだからです。
+  page の行も両方を持ちます。
+  値はレスポンスが届いたあとでリクエストから読むので、ブラウザが送った値で、nukadoko のものかページ自身のものです。
+  page のリダイレクトの各ホップはそれぞれ 1 つのリクエストで 1 つの行なので、`traceparent_sent_to` はその `url` のオリジンです。
+  Playwright が 500 ms 以内にヘッダを返さなかった page の行は、どちらも持ちません。
 - page のリクエストには Chrome DevTools Protocol を通してヘッダを付けるので、付くのは Chromium だけです。
   Firefox と WebKit には Playwright を通したそうしたプロトコルが無く、その page のリクエストはヘッダなしで送られます。
   ポップアップの最初のリクエストもヘッダなしで送られます。
@@ -5660,8 +5665,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   `"page"` 以外のどの行にも `"request_body"`(リクエストが何も送らなかったときはありません)と `"response_body"`(レスポンスが届かなかったか、HEAD、204、304、`content-length: 0` のように本文がなかったときは、どのクライアントでもありません)があり、それぞれ 16 KiB までのテキストとして残します(下記)。
   本文がない行は、ステータスの時点で書かれます。
   `traceparent` を持って出ていったリクエストの行は、出ていった値(nukadoko のものか step 自身のもの)を `"traceparent"` として、それを受け取ったオリジンを `"traceparent_sent_to"` として持ちます(「テスト対象のプログラム」を参照)。
-  page の行はどちらも持ちません。
-  ヘッダを足したのはブラウザだからです。
+  page の行も、ブラウザが送った値として持ちます。
   それ以外のヘッダは書きません。
   ヘッダは cookie と資格情報を運び、page のヘッダは trace が持つからです。
   page の行は本文を持ちません。

@@ -1,7 +1,7 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import { createPageOrder, type PageBoundary, sentDuring, traceIdOf } from "../src/context/page-order.js";
+import { createPageOrder, type PageBoundary, sentDuring } from "../src/context/page-order.js";
 import type { ClaimReading, PageReadingRecord } from "../src/record/types.js";
 import { numberPageRequests } from "../src/step/evaluate-claims.js";
 
@@ -115,15 +115,6 @@ describe("which boundary a page sent a request in", () => {
     expect(sentDuring(opening, step)).toBe("earlier-step");
     expect(sentDuring(hook, step)).toBe("hook");
     expect(sentDuring(pause, step)).toBe("pause");
-  });
-});
-
-describe("traceIdOf", () => {
-  it("reads the trace id of a traceparent, in lowercase, and nothing else", () => {
-    expect(traceIdOf("00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01")).toBe("4bf92f3577b34da6a3ce929d0e0e4736");
-    expect(traceIdOf(null)).toBeNull();
-    expect(traceIdOf("00-4bf92f35-00f067aa0ba902b7-01")).toBeNull();
-    expect(traceIdOf("trace=4bf92f3577b34da6a3ce929d0e0e4736")).toBeNull();
   });
 });
 

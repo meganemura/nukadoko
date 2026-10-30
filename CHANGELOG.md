@@ -18,9 +18,13 @@ just until 0.1.
   context had open, the latest request whose response the page had
   finished receiving before the reading began (`last_response`) and every
   request in flight at some moment of the reading (`in_flight`), as
-  indexes into `page_requests` (`method`, `url`, `trace_id`,
+  indexes into `page_requests` (`method`, `url`, `trace_id`, `span_id`,
   `sent_at`, `finished_at`, `failed_at`, and `sent_during`: `this-step`,
-  `earlier-step` with its `step`, `hook`, or `pause`). The step's
+  `earlier-step` with its `step`, `hook`, or `pause`). The two ids
+  come from one read of the `traceparent` the request went out with:
+  every page of one step shares the step's trace id, so when three
+  pages each sent the same `GET` in one step, only the span id says
+  which of the program's three request lines is which page's. The step's
   `pages` are the reading its claims were judged on; under `poll`, each
   reading has `pages` too, and a reading whose pages changed is a change
   point. It is the order nukadoko received Playwright's `request`,
@@ -649,6 +653,18 @@ just until 0.1.
   too.
 
 ### Changed
+
+- **A page's http.jsonl line names the `traceparent` it went out with.**
+  A `via: "page"` line had no `traceparent`, so pages that sent the same
+  request in one step had lines a reader could not match to the
+  program's request lines, which all carry the step's trace id. Such a
+  line now has `traceparent`, as Playwright read it off the request once
+  its response arrived (nukadoko's, or the page's own), and
+  `traceparent_sent_to`, the origin of its `url`: each hop of a redirect
+  is a line of its own, so the origin is exact. The lines still follow
+  the order the responses arrived in. A line whose header Playwright did
+  not give within 500 ms has neither field. A `ctx.request()` line
+  already had both, so a reader handles both kinds the same way.
 
 - **A step that ran a command-line tool can have whole events.** A step
   that ran a `runCommand` process was never whole (`processes-unbounded`),

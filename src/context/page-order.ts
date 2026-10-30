@@ -1,6 +1,7 @@
 import type { BrowserContext, Page, Request as PlaywrightRequest } from "playwright";
 import type { EventsProducerRecord, PageRequestRecord } from "../record/types.js";
-import { stampsUrl } from "./trace-context.js";
+import { sentTraceparent } from "./browser-trace.js";
+import { stampsUrl, traceparentIds } from "./trace-context.js";
 
 // Responsibility: which requests to the world each page of a browser
 // context had finished receiving the response of, and which were still in
@@ -24,7 +25,7 @@ import { stampsUrl } from "./trace-context.js";
 // request's `traceparent` is read off the request once it ended:
 // `headerValue` for a request still waiting on its response did not
 // resolve within a second for 4 of 10 measured, so a request in flight
-// when the record is written has no trace id.
+// when the record is written has no trace id and no span id.
 //
 // Only a document, a `fetch`, and an XMLHttpRequest count, the kinds
 // browser-trace.ts stamps. An EventSource is left out: its response is a
@@ -204,47 +205,22 @@ export function sentDuring(sent: PageBoundary, current: PageBoundary): PageReque
   return sent.sender?.kind === "hook" ? "hook" : sent.sender?.kind === "pause" ? "pause" : "earlier-step";
 }
 
-/** The trace id of `traceparent`, lowercase, or `null` for a value that
- * is not one. Pure. */
-export function traceIdOf(traceparent: string | null): string | null {
-  const match = traceparent === null ? null : /^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$/i.exec(traceparent.trim());
-  return match === null ? null : match[1]!.toLowerCase();
-}
-
-// How long the record waits for an ended request's `traceparent`, which
-// Playwright already holds then (module header).
-const HEADER_WAIT_MS = 500;
-
 /** `entry` as a claim step's record keeps it, seen from the boundary
  * `current` the record is written in. */
 export async function pageRequestRecord(entry: PageRequest, current: PageBoundary): Promise<PageRequestRecord> {
   const ended = entry.finishedAt !== undefined || entry.failedAt !== undefined;
-  const traceId = ended ? await traceIdWithin(entry.request, HEADER_WAIT_MS) : undefined;
+  const header = ended ? await sentTraceparent(entry.request) : undefined;
+  const ids = header === undefined ? undefined : traceparentIds(header);
   const during = sentDuring(entry.boundary, current);
   const sender = entry.boundary.sender;
   return {
     method: entry.method,
     url: entry.url,
-    ...(traceId === undefined ? {} : { trace_id: traceId }),
+    ...(ids === undefined ? {} : { trace_id: ids?.traceId ?? null, span_id: ids?.spanId ?? null }),
     sent_at: new Date(entry.sentAt).toISOString(),
     finished_at: entry.finishedAt === undefined ? null : new Date(entry.finishedAt).toISOString(),
     ...(entry.failedAt === undefined ? {} : { failed_at: new Date(entry.failedAt).toISOString() }),
     sent_during: during,
     ...(during === "earlier-step" && sender?.kind === "step" ? { step: sender.step } : {}),
   };
-}
-
-/** The trace id the request went out with, `null` for none, or
- * `undefined` when Playwright did not say within `ms`. */
-async function traceIdWithin(request: PlaywrightRequest, ms: number): Promise<string | null | undefined> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<undefined>((resolve) => {
-    timer = setTimeout(() => resolve(undefined), ms);
-  });
-  try {
-    const value = await Promise.race([request.headerValue("traceparent").catch(() => null), late]);
-    return value === undefined ? undefined : traceIdOf(value);
-  } finally {
-    clearTimeout(timer);
-  }
 }

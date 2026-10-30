@@ -123,9 +123,10 @@ export interface HttpLogEntry {
   /** The request started after its step's record was written, so the
    * record does not count it (docs/spec.md "Records"). */
   after_step_end?: true;
-  /** Not `"page"`: the `traceparent` the request went out with,
-   * nukadoko's or the step's own (docs/spec.md "Program"). Absent when it
-   * went out with none. */
+  /** The `traceparent` the request went out with, nukadoko's or the
+   * step's own (docs/spec.md "Program"); for `"page"`, as the browser sent
+   * it (page-http-log.ts). Absent when it went out with none, or, for
+   * `"page"`, when Playwright did not give the header. */
   traceparent?: string;
   /** The origins that received `traceparent`, present exactly when it is
    * (this file's header). */

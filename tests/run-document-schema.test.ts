@@ -261,7 +261,7 @@ describe("parseRunDocument", () => {
   });
 
   it("reads the pages a Then read and the requests they name, and refuses a page that names a request the list does not hold", () => {
-    const withPages = (inFlight: number[]) => ({
+    const withPages = (inFlight: number[], ids: Record<string, unknown> = {}) => ({
       ...VALID,
       scenarios: [
         {
@@ -271,7 +271,7 @@ describe("parseRunDocument", () => {
               ...VALID.scenarios[0]!.steps[0],
               settled: { conditions: ['screen equal "scoring"'], stop: { reading: 4, actuals: [{ value: "scoring" }] } },
               pages: [{ as: null, page: 1, url: "http://localhost:1/room", last_response: 0, in_flight: inFlight }],
-              page_requests: [{ method: "GET", url: "http://localhost:1/state", sent_at: "2026-10-18T00:00:00.000Z", finished_at: null, sent_during: "earlier-step", step: { step_record_id: "s0", step: "a", line: 3 } }],
+              page_requests: [{ method: "GET", url: "http://localhost:1/state", ...ids, sent_at: "2026-10-18T00:00:00.000Z", finished_at: null, sent_during: "earlier-step", step: { step_record_id: "s0", step: "a", line: 3 } }],
             },
           ],
         },
@@ -280,6 +280,10 @@ describe("parseRunDocument", () => {
     expect(parseRunDocument(JSON.stringify(withPages([0])))).toHaveProperty("document");
     const refused = parseRunDocument(JSON.stringify(withPages([1])));
     expect("problem" in refused && refused.problem).toContain("each request a page names is one of page_requests");
+    expect(parseRunDocument(JSON.stringify(withPages([0], { trace_id: "a".repeat(32), span_id: "b".repeat(16) })))).toHaveProperty("document");
+    expect(parseRunDocument(JSON.stringify(withPages([0], { trace_id: null, span_id: null })))).toHaveProperty("document");
+    const badSpan = parseRunDocument(JSON.stringify(withPages([0], { trace_id: "a".repeat(32), span_id: 7 })));
+    expect("problem" in badSpan && badSpan.problem).toContain("page_requests.0.span_id");
   });
 
   it("refuses another schema version before it reads a field", () => {

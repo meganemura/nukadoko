@@ -74,6 +74,20 @@ export function traceparentOf(traceId: string, spanId: string): string {
   return `00-${traceId}-${spanId}-01`;
 }
 
+/** The two ids of one `traceparent`. */
+export interface TraceparentIds {
+  readonly traceId: string;
+  readonly spanId: string;
+}
+
+/** The ids `value` carries, in lowercase, or `null` for a value that is
+ * not a `traceparent`. One parse gives both, so a record's trace id and
+ * span id always come from the same header. */
+export function traceparentIds(value: string | null): TraceparentIds | null {
+  const match = value === null ? null : /^[0-9a-f]{2}-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/i.exec(value.trim());
+  return match === null ? null : { traceId: match[1]!.toLowerCase(), spanId: match[2]!.toLowerCase() };
+}
+
 /** The trace id `line` carries for the world whose ids start with
  * `prefix`, in lowercase: the first place in the line, in either case,
  * where the prefix begins 32 hexadecimal characters. `undefined` when no

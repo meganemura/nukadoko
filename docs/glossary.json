@@ -1074,11 +1074,11 @@
     },
     {
       "term": "trace id",
-      "why": "`traceparent` の 32 桁の部分。nukadoko では scenario の実行 1 回につき 1 つ。OpenTelemetry や Rails のログと同じ綴りで対応させる"
+      "why": "`traceparent` の 32 桁の部分。nukadoko では step(と hook)の境界 1 つにつき 1 つ。program.log の行を step に振り分ける鍵。OpenTelemetry や Rails のログと同じ綴りで対応させる"
     },
     {
       "term": "span id",
-      "why": "`traceparent` の 16 桁の部分。nukadoko では step(と hook)の境界 1 つにつき 1 つ。program.log の行を step に振り分ける鍵"
+      "why": "`traceparent` の 16 桁の部分。nukadoko ではリクエスト 1 つにつき 1 つ。同じ step の trace id を共有するリクエスト(1 つの step で同じ GET を送った複数のページなど)を見分ける鍵"
     },
     {
       "term": "tree",

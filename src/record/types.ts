@@ -935,8 +935,13 @@ export interface PageRequestRecord {
   readonly url: string;
   /** The trace id of the `traceparent` it went out with; `null` when
    * it went without one; absent when it had not ended when the record was
-   * written. */
+   * written, or Playwright did not give its header. */
   readonly trace_id?: string | null;
+  /** The span id of the same `traceparent`, under the same rules, so it
+   * is present exactly when `trace_id` is. Pages of one step share the
+   * step's trace id; the span id is what tells their requests apart, in
+   * the page's http.jsonl line and in the program's request line. */
+  readonly span_id?: string | null;
   readonly sent_at: string;
   /** When the page finished receiving its response; `null` when it had
    * not when the record was written, or the request failed. */

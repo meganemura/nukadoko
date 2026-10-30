@@ -10,6 +10,7 @@ import {
   stampsUrl,
   TRACE_PREFIX_LENGTH,
   traceIdIn,
+  traceparentIds,
   traceparentOf,
 } from "../src/context/trace-context.js";
 
@@ -50,6 +51,37 @@ describe("ids and traceparent", () => {
       const trace = tc.draw(hex(32));
       const span = tc.draw(hex(16));
       expect(traceparentOf(trace, span)).toBe(`00-${trace}-${span}-01`);
+    }));
+
+  it("reads back, from one parse, the two ids a traceparent was made of", () =>
+    hegel.test((tc) => {
+      const trace = tc.draw(hex(32).filter((id) => !/^0+$/.test(id)));
+      const span = tc.draw(hex(16).filter((id) => !/^0+$/.test(id)));
+      expect(traceparentIds(traceparentOf(trace, span))).toEqual({ traceId: trace, spanId: span });
+    }));
+
+  it("reads the ids of any well-formed traceparent in lowercase, whatever its version, flags, case, and surrounding space", () =>
+    hegel.test((tc) => {
+      const anyCase = (size: number) => gs.text({ alphabet: "0123456789abcdefABCDEF", minSize: size, maxSize: size });
+      const [version, trace, span, flags] = [tc.draw(anyCase(2)), tc.draw(anyCase(32)), tc.draw(anyCase(16)), tc.draw(anyCase(2))];
+      const space = tc.draw(gs.sampledFrom(["", " ", "\t", " \n"]));
+      expect(traceparentIds(`${space}${version}-${trace}-${span}-${flags}${space}`)).toEqual({ traceId: trace.toLowerCase(), spanId: span.toLowerCase() });
+    }));
+
+  it("reads no ids from a value one character away from a traceparent, or from no value", () =>
+    hegel.test((tc) => {
+      const value = traceparentOf(tc.draw(hex(32)), tc.draw(hex(16)));
+      const at = tc.draw(gs.integers({ minValue: 0, maxValue: value.length - 1 }));
+      const broken = tc.draw(
+        gs.sampledFrom([
+          value.slice(0, at) + value.slice(at + 1),
+          value.slice(0, at) + "a" + value.slice(at),
+          value.slice(0, at) + tc.draw(gs.sampledFrom(["g", "Z", "_", "."])) + value.slice(at + 1),
+          value.slice(0, at) + (value[at] === "-" ? "0" : "-") + value.slice(at + 1),
+        ]),
+      );
+      expect(traceparentIds(broken)).toBeNull();
+      expect(traceparentIds(null)).toBeNull();
     }));
 
   it("makes a different id each time from the system's random source", () => {
