@@ -918,6 +918,16 @@ describe("view and at", () => {
       expect(record).not.toHaveProperty("actual");
     }));
 
+  it("a path that is undefined names the first segment nothing was at, when that is above its last", () =>
+    hegel.testAsync(async (tc) => {
+      const { root, path } = tc.draw(rootWithPath);
+      const tail = tc.draw(gs.arrays(gs.sampledFrom(["zz", "yy"]), { minSize: 1, maxSize: 3 }));
+      const full = [path, ...tail].join(".");
+      const record = await judgeOne({ actual: full, compare: "equal", expected: "want" }, { want: 0 }, root);
+      expect(record.outcome).toBe("broken");
+      expect(record.reason).toBe(tail.length === 1 ? `observe:${full} is undefined` : `observe:${full} is undefined, since observe:${path} has nothing at ${tail[0]}`);
+    }));
+
   it("readAt on a path of a drawn object returns a copy of what walking the path reaches", () =>
     hegel.test((tc) => {
       const { root, path, value } = tc.draw(rootWithPath);
@@ -1946,13 +1956,24 @@ describe("the record of a claim", () => {
     });
   });
 
+  it("names the segment a from value has nothing at, or the from value that is missing, when that is above the last segment", async () => {
+    const read = async (actual: string, result: unknown) => {
+      const [judged] = await evaluateClaims([{ actual, compare: "equal", expected: "code" }], { ...base, args: readerNow({ code: 0, ...(result === undefined ? {} : { result }) }), observed: readerNow(undefined) });
+      return judged!.record.reason;
+    };
+    expect(await read("result.missing.deep", {})).toBe("from:run-tally@4.result.missing.deep is undefined, since from:run-tally@4.result has nothing at missing");
+    expect(await read("result.count.deep.er", { count: 3 })).toBe("from:run-tally@4.result.count.deep.er is undefined, since from:run-tally@4.result.count has nothing at deep");
+    expect(await read("result.count.deep", { count: 3 })).toBe("from:run-tally@4.result.count.deep is undefined");
+    expect(await read("result.deep", undefined)).toBe("from:run-tally@4.result.deep is undefined, since from:run-tally@4.result is undefined");
+  });
+
   it("reads own properties only, so a path through the prototype finds nothing", async () => {
     const [judged] = await evaluateClaims([{ actual: "result.constructor.name", compare: "equal", expected: "code" }], {
       ...base,
       args: readerNow({ code: "Object", result: {} }),
       observed: readerNow(undefined),
     });
-    expect(judged!.record).toMatchObject({ outcome: "broken", reason: "from:run-tally@4.result.constructor.name is undefined" });
+    expect(judged!.record).toMatchObject({ outcome: "broken", reason: "from:run-tally@4.result.constructor.name is undefined, since from:run-tally@4.result has nothing at constructor" });
   });
 
   it("breaks an expected value observe computed as a boolean, whatever it is", async () => {

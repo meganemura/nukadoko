@@ -834,7 +834,7 @@ export default defineStep({
     await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
     expect(lastClaimStep(rootDir).claims[0]).toMatchObject({
       outcome: "broken",
-      reason: "from:the-app-answers@3.cart.constructor.name is undefined",
+      reason: "from:the-app-answers@3.cart.constructor.name is undefined, since from:the-app-answers@3.cart has nothing at constructor",
     });
   });
 });

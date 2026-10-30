@@ -894,8 +894,17 @@ function refusalReason(place: ClaimPlace, refusal: Refusal): string {
 function sideOf(read: Read, base: ClaimPlace, rest: readonly string[], skip: number, name: (place: ClaimPlace) => string = nameOf): Side {
   const place = placeAt(base, rest.join("."));
   if ("refused" in read) return { place, unjudged: refusalReason(base, { ...read.refused, at: read.refused.at.slice(skip) }) };
-  if ("missing" in read) return { place, broken: `${name(place)} is undefined` };
+  if ("missing" in read) return { place, broken: `${name(place)} is undefined${firstMissing(read.missing - skip, base, rest)}` };
   return { place, value: read.value };
+}
+
+/** Where a path found nothing first, when that was above its last segment,
+ * so "body.profile.name is undefined" says whether body had no profile or
+ * profile had no name; "" when the last segment is what is missing. */
+function firstMissing(index: number, base: ClaimPlace, rest: readonly string[]): string {
+  if (index >= rest.length - 1) return "";
+  if (index < 0) return `, since ${nameOf(base)} is undefined`;
+  return `, since ${nameOf(placeAt(base, rest.slice(0, index).join(".")))} has nothing at ${rest[index]!}`;
 }
 
 function readArgSide(segments: readonly string[], inputs: ClaimInputs, name?: (place: ClaimPlace) => string): Side {
