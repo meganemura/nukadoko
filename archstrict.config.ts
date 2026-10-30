@@ -239,6 +239,7 @@ export default {
       name: "step",
       glob: "src/step/**",
       surface: [
+        "aria-snapshot.ts",
         "claims.ts",
         "context.ts",
         "define-step.ts",
