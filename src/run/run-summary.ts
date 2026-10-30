@@ -239,10 +239,17 @@ function renderCondition(document: RunDocument): string[] {
     }
   }
   const browser = browsers.size === 0 ? "- browser: none launched" : `- browser: ${[...browsers.values()].join(", ")}`;
+  // `nuka run` refuses `--tag` beside a `:line` target, so one of the two
+  // left the scenarios out.
+  const tagged = document.tag_selection;
   const selection =
     document.selection === "full"
-      ? "- selection: full"
-      : "- selection: partial (a line target left out other scenarios of its file)";
+      ? tagged === undefined
+        ? "- selection: full"
+        : `- selection: full (every scenario of the targeted files meets ${tagFlagsOf(tagged.expressions)})`
+      : tagged === undefined
+        ? "- selection: partial (a line target left out other scenarios of its file)"
+        : `- selection: partial (${tagFlagsOf(tagged.expressions)} left out ${countOf(tagged.left_out, "scenario", "scenarios")} of the targeted files)`;
   // Only a count other than the default is said, as `proven` reads
   // with it: a control's `(n runs)` in the table is measured against it.
   const proofRuns =
@@ -819,6 +826,11 @@ const UNMEASURED_SHOWN = 3;
 
 function countOf(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
+}
+
+/** The `--tag` flags of a run as one code span, quoted for a shell. */
+function tagFlagsOf(expressions: readonly string[]): string {
+  return codeSpan(expressions.map((expression) => `--tag ${JSON.stringify(expression)}`).join(" "));
 }
 
 const FLAG_VERDICTS = ["held", "proven", "failed", "unproven", "moved"] as const;

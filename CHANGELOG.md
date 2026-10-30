@@ -9,6 +9,21 @@ just until 0.1.
 
 ### Added
 
+- **`nuka run --tag` selects scenarios by tag.** `--tag "not @ios"` runs
+  only the scenarios whose tags, those of their `Feature:` line and
+  `Examples:` block included, meet the expression, `@name` or `not @name`;
+  repeated, a scenario has to meet every one. A suite whose scenarios need
+  different machines then splits by tag instead of by directory. The tags
+  narrow the targets before the static check. A run whose tags leave out
+  a scenario is `partial`, run.json's new `tag_selection` holds the
+  `expressions` and how many scenarios they `left_out`, and the
+  `selection` line of the summary's header names the flags and that count.
+  A run whose tags leave out every
+  scenario fails with `nothing-selected`, and another expression (`and`,
+  `or`, parentheses) or `--tag` beside a `:line` target is refused with
+  `invalid-value`. Under `--base`, a targeted file whose every scenario the
+  tags left out stays in the comparison, so its criteria do not read as
+  removed. The field is additive, so no `schema_version` changes.
 - **A claim can state the few fields of a large value.** `has-fields`
   holds when the actual object holds every field of the expected object
   with a value that fits, at every depth, whatever other fields it holds:

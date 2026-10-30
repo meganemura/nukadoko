@@ -114,6 +114,9 @@ interface RunArgs {
    * collects a repeated string flag into an array). Not `array: true`,
    * which would also swallow the feature targets that follow it. */
   env?: string | string[];
+  /** `--tag`: one expression, or every expression when the flag repeats,
+   * collected the way `--env` is. */
+  tag?: string | string[];
   /** Writes run.json's scenario entries to stdout, one per line; without
    * it stdout stays empty. */
   records?: boolean;
@@ -616,6 +619,13 @@ export async function runCli(
             "in one run with one cell per scenario and environment. Omitted, the run selects every environment that declares " +
             'conditions, or the "default" environment (the top-level settings, or environments.default) when none does',
         })
+        .option("tag", {
+          type: "string",
+          describe:
+            'run only the scenarios whose tags meet this expression, "@name" or "not @name"; a tag on the Feature: ' +
+            "line or an Examples: block counts for each scenario under it. Repeat it, and a scenario has to meet every " +
+            "one. When the tags leave a scenario out, the run is partial, and run.json and the summary say how many",
+        })
         .option("records", {
           type: "boolean",
           default: false,
@@ -682,6 +692,7 @@ export async function runCli(
         featureArgs: args.feature ?? [],
         check: args.check ?? true,
         envs: args.env === undefined ? [] : typeof args.env === "string" ? [args.env] : args.env,
+        tags: args.tag === undefined ? [] : typeof args.tag === "string" ? [args.tag] : args.tag,
         records: args.records ?? false,
         json: args.json ?? false,
         concurrency: args.concurrency ?? 1,

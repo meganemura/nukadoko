@@ -4876,7 +4876,7 @@ Rails lines of its own requests.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -4928,6 +4928,25 @@ names no single file for it to select inside. A directory holding no
 `nuka check`'s own `no-step-files-found`
 uses: it names exactly what it scanned, because a run that did nothing must
 say so loudly rather than exit 0 having run nothing at all.
+
+`--tag <expression>` keeps the scenarios whose tags meet the expression,
+`@name` or `not @name`. A scenario's tags are its own, its `Feature:`
+line's, and its `Examples:` block's, as Gherkin compiles them. Repeated,
+a scenario has to meet every expression. Any other expression (`and`,
+`or`, parentheses) is refused before anything runs, so a selection never
+rests on a guessed reading. The tags narrow the targets before the static
+check, so the check covers what runs. A run whose tags leave out a
+scenario is `partial`, and run.json's `tag_selection` and the summary's
+header say how many scenarios the tags left out. A run whose tags leave
+out every scenario fails with `nothing-selected`, as a run with nothing
+to check does. `--tag` beside a `:line` target is refused: the line
+already names its scenario, and the summary could not say which of the
+two left the others out. The flag is for a suite whose scenarios need
+different machines, such as a simulator that runs on one operating system
+only, so the suite splits by tag and its directories can follow the
+domain. Under `--base`, the rows are the scenarios the tags kept, and a
+targeted file whose every scenario the tags left out still stands in the
+comparison, so its criteria do not read as removed.
 
 `--concurrency <n>` runs more than one feature file at a time. The default
 is 1, and at 1 every other paragraph in this section describes what
@@ -5352,9 +5371,12 @@ to act on the run without opening another file:
   separators, so a script passes it to `nuka report` without knowing the
   state directory's layout. The paths inside run.json stay relative to
   that directory.
-- `selection` is `partial` when a `:line` target left out a scenario of its
-  file, and `full` otherwise. A partial run is a debugging result, not
+- `selection` is `partial` when a `:line` target or `--tag` left out a
+  scenario of its file, and `full` otherwise. A partial run is a debugging result, not
   what a reviewer should read as the feature passing (see "Review").
+- `tag_selection`, under `--tag` only: `expressions`, the expressions in
+  the order given, and `left_out`, how many scenarios of the targeted
+  files they left out.
 - `scenarios` has one entry per scenario execution, in the order each
   finished, with the `environment` it ran in and the `role` of its cell,
   `required` or `control` (see "Verdicts"). Under `--base`, an execution
@@ -8136,7 +8158,7 @@ The npm package is `nukadoko`. The one command it installs is `nuka`.
 `nuka --help` ends by naming `node_modules/nukadoko/llms.txt`, the file an agent with no skill loaded reads first.
 
 ```
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs <n>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--proof-runs <n>]
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before

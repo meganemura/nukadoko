@@ -671,8 +671,12 @@ export type RunFields = {
    * build wrote. */
   readonly worlds?: readonly RunWorld[];
   /** `partial` when a `:line` target left out some scenarios of its file,
-   * so the run covers less than the files it names. */
+   * or `--tag` left out a scenario, so the run covers less than the
+   * files it names. */
   readonly selection: "full" | "partial";
+  /** Under `--tag`: its expressions in the order given, and how many
+   * scenarios of the targeted files they left out. Absent without it. */
+  readonly tag_selection?: { readonly expressions: readonly string[]; readonly left_out: number };
   /** `skipped` for a run started with `--no-check`, so no static finding
    * held it back; `ran` otherwise. Absent in a run.json an earlier build
    * wrote. */

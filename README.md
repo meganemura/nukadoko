@@ -1159,7 +1159,7 @@ ask: `nuka run --records` writes each scenario's `run.json` entry there,
 one JSON line per scenario as it finishes, and `nuka run --json` prints
 `run.json` itself instead, the envelope every `--json` prints with the
 run's fields beside `findings`: the commit and whether the tree was dirty,
-each environment it ran in, whether a `:line` target made the run
+each environment it ran in, whether a `:line` target or `--tag` made the run
 `partial`, the counts, the verdict table (one row per criterion, one cell
 per environment, and each row `held`, `proven`, or `failed`), and each
 scenario's steps with their line, status, step record, a claim step's

@@ -1061,7 +1061,7 @@ stdout には、求めたときだけ出力されます。
 `nuka run --records` は、scenario が終わるたびに、その scenario の `run.json` のエントリを 1 行 1 件の JSON として stdout に出力します。
 `nuka run --json` は、代わりに `run.json` そのものを出力します。
 それはすべての `--json` が出力する envelope で、`findings` の隣に run のフィールドが入ります。
-そこにはコミットと作業ツリーが dirty だったかどうか、実行した各 environment、`:line` の対象が run を `partial` にしたかどうか、件数、断定の表(受け入れ基準ごとに 1 行、environment ごとに 1 つのセルで、各行は `held`、`proven`、`failed` のどれか)、各 scenario の step(行、status、step record、claim step ならその claim、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
+そこにはコミットと作業ツリーが dirty だったかどうか、実行した各 environment、`:line` の対象か `--tag` が run を `partial` にしたかどうか、件数、断定の表(受け入れ基準ごとに 1 行、environment ごとに 1 つのセルで、各行は `held`、`proven`、`failed` のどれか)、各 scenario の step(行、status、step record、claim step ならその claim、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
 `--json` のときは stderr は空で、警告は文書の中の finding になるので、エージェントのシェルに見えるのはその文書だけです。
 `run.json` と step record は、フラグにかかわらず run 自身のディレクトリ `.nukadoko/runs/<run_id>/` に書かれ、run サマリは `run.json` だけから描画されます。
 stdout や stderr が端末かどうかで変わる出力はありません。

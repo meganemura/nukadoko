@@ -25,7 +25,7 @@ check` notes it as `package-type-missing`), and fails to import under
 
 A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use`, `--fail-on`,
-`nuka run`'s `--env`, and `nuka scaffold`'s `--from` repeat, each value
+`nuka run`'s `--env` and `--tag`, and `nuka scaffold`'s `--from` repeat, each value
 kept in the order given.
 
 ## The program under test
@@ -135,7 +135,7 @@ there is not checked and not run, and the skip reports nothing.
    is what `npm run test:scenarios` does. When a scenario fails, diagnose it
    before repeating the whole run (see `references/diagnosing.md`) rather
    than treating a full re-run as the default first move. `<feature>:<line>`
-   is fine for narrowing this while iterating, but the run this step ends on
+   or `--tag <expression>` is fine for narrowing this while iterating, but the run this step ends on
    must cover the whole feature: a partial run's summary covers only the
    scenarios it selected, and says so with `selection: partial` in its
    header, as run.json's `selection` does. stderr does not say so.

@@ -1,13 +1,13 @@
 import type { ChildProcess } from "node:child_process";
 import { readdirSync, rmdirSync } from "node:fs";
 import path from "node:path";
-import { PickleStepType } from "@cucumber/messages";
+import { type Pickle, PickleStepType } from "@cucumber/messages";
 import { analyzeRunSelectionKeepingSteps } from "../check/analyze.js";
 import { checkBindings } from "../check/binding-check.js";
 import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback.js";
 import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
-import { validateTagExpression } from "../compat/tag-expression.js";
+import { hookApplies, validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
 import type { Program, ProgramRecipe } from "../config/program-schema.js";
@@ -294,6 +294,9 @@ export interface RunRunOptions {
    * (src/environment/resolve-environment.ts's `defaultEnvironmentNames`).
    * Each selected scenario runs once per environment, in this order. */
   envs: readonly string[];
+  /** `--tag`, in the order given: a scenario runs only when its tags meet
+   * every expression. Empty selects by the targets alone. */
+  tags: readonly string[];
   /** `--records`: write each scenario's run.json entry to stdout, one per
    * line, as the scenario finishes. The line is not held back for a
    * step's `program_log_late`, which the world's stop adds to run.json
@@ -614,12 +617,49 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         );
       }
     }
+    // An expression `--tag` cannot read would otherwise select by a guess.
+    for (const expression of options.tags) {
+      try {
+        validateTagExpression(expression);
+      } catch {
+        return refused(
+          `--tag ${JSON.stringify(expression)} is not an expression nuka run reads: give "@name" or "not @name", and repeat --tag for a scenario that has to meet more than one`,
+          "invalid-value",
+        );
+      }
+    }
+    const tagFlags = options.tags.flatMap((expression) => ["--tag", expression]);
+    // A `:line` target already names its scenario, so a tag could only
+    // leave it out, and a partial run would not say which of the two did.
+    const lineTarget = options.tags.length === 0 ? undefined : featureArgs.find((featureArg) => parseFeatureTarget(featureArg).line !== null);
+    if (lineTarget !== undefined) {
+      return refused(`--tag selects among whole files, and ${JSON.stringify(lineTarget)} already names one scenario`, "invalid-value", {
+        fix: "Drop --tag to run that scenario, or drop the :line to select by tag in its file.",
+      });
+    }
+    // `--tag` narrows the selection before the check, so the check covers
+    // what runs, and a worker reads the kept lines as it reads a `:line`.
+    let leftOutByTags = 0;
+    // The files before `--tag`: one whose every scenario the tags left out
+    // still stands in a ref's comparison, as one `--env` leaves out does.
+    let beforeTags: ReturnType<typeof selectPickles>["features"] | undefined;
+    const meetsTags = (pickle: Pickle): boolean => options.tags.every((expression) => hookApplies(expression, pickle.tags.map((tag) => tag.name)));
     const select = (): ReturnType<typeof selectPickles> | { refused: unknown } => {
       try {
-        return selectPickles(rootDir, featureArgs);
+        const selection = selectPickles(rootDir, featureArgs);
+        if (options.tags.length === 0) return selection;
+        beforeTags = selection.features;
+        leftOutByTags = 0;
+        const features = selection.features.flatMap((feature) => {
+          const kept = feature.pickles.filter(meetsTags);
+          leftOutByTags += feature.pickles.length - kept.length;
+          if (kept.length === feature.pickles.length) return [feature];
+          return kept.length === 0 ? [] : [{ ...feature, pickles: kept, selectedLines: kept.map((pickle) => pickle.location?.line ?? 0) }];
+        });
+        return { ...selection, features };
       } catch (error) {
         if (error instanceof DirectoryTargetLineError) {
-          const command = ["nuka", "run", ...error.targetsWithoutLine, ...rerunFlags].map(shellWord).join(" ");
+          const command = ["nuka", "run", ...error.targetsWithoutLine, ...rerunFlags, ...tagFlags].map(shellWord).join(" ");
           return { refused: new RefusalError("line-on-directory", error.message, { do: command }) };
         }
         return { refused: error };
@@ -702,14 +742,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       feature.pickles.map((pickle) => ({ feature, pickle })),
     );
 
-    // A `:line` target that leaves out other scenarios of its file makes
-    // the run cover less than the files it names. run.json says so, and the
-    // summary says so in its header, so a summary is not read as the whole
-    // feature. `:line` on a directory target is refused in setup, so a
-    // non-null line here always names one file.
-    const lineTargets = featureArgs.filter((featureArg) => parseFeatureTarget(featureArg).line !== null);
-    const selection: RunFields["selection"] =
-      lineTargets.length > 0 && targetedPickles.length < selected.totalPickles ? "partial" : "full";
+    // A `:line` target that leaves out other scenarios of its file, or a
+    // `--tag` that leaves out a scenario, makes the run cover less than
+    // the files it names. run.json says so, and the summary says so in its
+    // header, so a summary is not read as the whole feature.
+    const selection: RunFields["selection"] = targetedPickles.length < selected.totalPickles ? "partial" : "full";
 
     // Under `--env`, a criterion no named environment meets would have
     // only control cells, and nothing it showed would count. It is not
@@ -725,7 +762,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       options.envs.length === 0 || hasRequiredCell(pickle.tags.map((tag) => tag.name), tableEnvironments);
     const flatPickles = targetedPickles.filter(({ pickle }) => runsHere(pickle));
     const leftOut = targetedPickles.length - flatPickles.length;
-    const targetedFeatures = selected.features;
+    const targetedFeatures = beforeTags ?? selected.features;
     if (leftOut > 0) {
       selected = {
         ...selected,
@@ -860,6 +897,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // fix first, and precedes the env files, the probes, and the worlds:
     // nothing runs, so there is no evidence to write.
     if (flatPickles.length === 0) {
+      if (targetedPickles.length === 0 && leftOutByTags > 0) {
+        const scenarios = leftOutByTags === 1 ? "the 1 scenario" : `all ${leftOutByTags} scenarios`;
+        const finding: Finding = {
+          severity: "failed",
+          code: "nothing-selected",
+          message: `no scenario to run: ${tagFlags.map(shellWord).join(" ")} left out ${scenarios} of ${featureArgs.join(", ")}, so nothing was checked`,
+          fix: "Name a tag a scenario of the targets carries, or run without --tag.",
+        };
+        return stopRun([...notices, finding], FAILED_EXIT_CODE);
+      }
       return stopRun(
         [
           ...notices,
@@ -1478,6 +1525,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // Each world's record is redacted with its own values already.
         worlds,
         selection,
+        ...(options.tags.length > 0 ? { tag_selection: { expressions: options.tags, left_out: leftOutByTags } } : {}),
         check: options.check ? "ran" : "skipped",
         counts: countScenarios(runScenarios, table),
         scenarios: runScenarios,

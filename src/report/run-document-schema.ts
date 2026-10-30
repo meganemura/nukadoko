@@ -457,6 +457,7 @@ const document = z.looseObject({
     )
     .optional(),
   selection: z.enum(["full", "partial"]),
+  tag_selection: z.looseObject({ expressions: z.array(z.string()), left_out: z.number().int() }).optional(),
   check: z.enum(["ran", "skipped"]).optional(),
   counts: z.looseObject({
     scenarios: z.number().int(),

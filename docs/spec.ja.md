@@ -3823,7 +3823,7 @@ export default defineProgram({
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -3866,6 +3866,21 @@ nukadoko は scenario を `.feature` ファイルからだけ読むからです�
 `:line` は 1 つのファイルの中から 1 つの scenario を選ぶものであり、ディレクトリはその中から選ぶべき単一のファイルを名指ししていないからです。
 走査が見つけられる `.feature` ファイルを持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
 何もしなかった run は、exit 0 で何もしなかったことにするのではなく、それを大声で言わなければならないからです。
+
+`--tag <expression>` は、tag が式を満たす scenario だけを残します。
+式は `@name` か `not @name` です。
+scenario の tag は、Gherkin がコンパイルするとおり、その scenario 自身のもの、`Feature:` 行のもの、`Examples:` ブロックのものです。
+繰り返すと、scenario はすべての式を満たさなければなりません。
+それ以外の式(`and`、`or`、括弧)は何かが走る前に拒否されるので、選択が推測した読み方に頼ることはありません。
+tag は静的チェックの前に対象を絞るので、チェックは走るものを対象にします。
+tag が scenario を外した run は `partial` で、run.json の `tag_selection` とサマリの冒頭が、tag が外した scenario の数を言います。
+tag がすべての scenario を外した run は、チェックするものがない run と同じく `nothing-selected` で失敗します。
+`:line` の対象と並べた `--tag` は拒否されます。
+行がすでに scenario を名指ししていて、ほかを外したのがどちらなのかをサマリが言えないからです。
+このフラグは、scenario ごとに必要なマシンが違うスイートのためのものです。
+たとえば 1 つの OS でしか動かないシミュレーターです。
+スイートは tag で分かれ、ディレクトリはドメインに沿えます。
+`--base` のもとでは、行は tag が残した scenario で、すべての scenario を tag が外した対象のファイルも比較に残るので、その受け入れ基準が消えた(`removed`)と読まれることはありません。
 
 `--concurrency <n>` は、複数の feature ファイルを同時に実行します。
 既定値は 1 で、1 のときはこの節の他のすべての段落が説明するとおりに動きます。
@@ -4217,8 +4232,9 @@ run が終わったとき、最後の step record と run サマリの後に、�
 - `run_dir` は run ディレクトリを、プロジェクトのルートからの相対パスで `/` 区切りで示します。
   スクリプトは state ディレクトリの構成を知らずに、これを `nuka report` に渡せます。
   run.json の中のパスは、これまでどおりこのディレクトリからの相対パスです。
-- `selection` は、`:line` の対象がそのファイルの scenario を 1 つでも外したとき `partial` で、それ以外は `full` です。
+- `selection` は、`:line` の対象か `--tag` がそのファイルの scenario を 1 つでも外したとき `partial` で、それ以外は `full` です。
   部分実行はデバッグの結果であり、レビュアーが feature が通ったと読むべきものではありません(「レビュー」を参照)。
+- `tag_selection` は `--tag` のときだけあり、`expressions` は与えた順の式、`left_out` は対象のファイルの scenario のうち式が外した数です。
 - `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` と、そのセルの役割である `role`(`required` か `control` で、「断定」を参照)を持ちます。
   `--base` のもとでは、base か old の world の実行は `world`(`base` か `old`)と、それがセルである head の行の `feature` と `line` を持つ `row` を持ちます。
   base が `paths` のためだけに走らせた実行はセルではなく、`for_paths` も持ちます(「断定」を参照)。
@@ -6387,7 +6403,7 @@ npm パッケージは `nukadoko` で、それがインストールするただ 
 `nuka --help` は最後に、skill を読み込んでいない agent が最初に読むファイル `node_modules/nukadoko/llms.txt` を示します。
 
 ```
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs <n>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--proof-runs <n>]
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before
