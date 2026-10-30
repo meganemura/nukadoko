@@ -1,6 +1,6 @@
 import { fork } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -38,6 +38,18 @@ import { emit, emitRaw, newId } from "./events.mjs";
 const jobs = process.env.JOBS_DIR;
 mkdirSync(jobs, { recursive: true });
 fork(new URL("./worker.mjs", import.meta.url).pathname);
+
+// A job reaches the worker whole: it is written under a name the worker
+// skips, then renamed. Written in place, the worker could list the file
+// before its contents were in it, fail to parse it, and stop, and
+// `/scores` would then wait for the job forever.
+const enqueue = (job) => {
+  const file = path.join(jobs, `${job.job_id}.json`);
+  const draft = `${file}.draft`;
+  writeFileSync(draft, JSON.stringify(job));
+  renameSync(draft, file);
+  return file;
+};
 
 const held = new Set();
 const switchedOn = new Set();
@@ -95,8 +107,7 @@ createServer(async (req, res) => {
     const parked = url.searchParams.get("park") === "1";
     const job = { trace, name: "ScoreRecalcJob", queue: parked ? "parked" : "default", job_id: newId() };
     emit({ trace, kind: "job", id: newId(), parent: id, name: job.name, queue: job.queue, phase: "enqueue", job_id: job.job_id });
-    const file = path.join(jobs, `${job.job_id}.json`);
-    writeFileSync(file, JSON.stringify(job));
+    const file = enqueue(job);
     if (!parked) await waitUntilGone(file);
   } else if (url.pathname.startsWith("/orders/") || url.pathname === "/reorders") {
     route = url.pathname === "/reorders" ? "/reorders" : "/orders/:id";
@@ -112,7 +123,7 @@ createServer(async (req, res) => {
     status = 202;
     const job = { trace, name: "ReceiptJob", queue: "default", job_id: newId(), not_before: Date.now() + 600 };
     emit({ trace, kind: "job", id: newId(), parent: id, name: job.name, queue: job.queue, phase: "enqueue", job_id: job.job_id });
-    writeFileSync(path.join(jobs, `${job.job_id}.json`), JSON.stringify(job));
+    enqueue(job);
   } else if (url.pathname === "/spliced") {
     emitRaw(`{"trace":"${trace}","kind":"db",`);
     emit({ trace, kind: "flag", id: newId(), parent: id, name: "score_input_slider", side: "off" });

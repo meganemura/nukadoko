@@ -13,6 +13,8 @@ process.on("disconnect", () => process.exit(0));
 
 setInterval(() => {
   for (const name of readdirSync(dir)) {
+    // A draft is a job the server has not finished writing.
+    if (!name.endsWith(".json")) continue;
     const job = JSON.parse(readFileSync(path.join(dir, name), "utf8"));
     if (job.queue === "parked" || Date.now() < (job.not_before ?? 0)) continue;
     const id = newId();
