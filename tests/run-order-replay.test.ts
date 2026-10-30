@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -11,7 +11,7 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, removeTempDir } 
 // order every scenario passes, a shuffled order breaks the ones that need
 // an earlier scenario or that one pollutes, the seed is said on stderr, in
 // run.json, and in the summary, and each failed scenario's rerun line runs
-// the same failure again. The fixture's world holds its accounts in
+// the same failure again, under `--tag` too. The fixture's world holds its accounts in
 // memory: "nobody has signed up yet" passes only before "alice signs up",
 // and "alice signs in" passes only after it.
 
@@ -155,6 +155,44 @@ describe("nuka run --order", () => {
     const refusal = (JSON.parse(stdout.text()) as { findings: { code: string; message: string }[] }).findings[0]!;
     expect(refusal.code).toBe("invalid-value");
     expect(refusal.message).toContain('(got "random")');
+  });
+});
+
+describe("nuka run --order with --tag", () => {
+  let rootDir: string;
+
+  // A third scenario, tagged, after the two the seeds above are found
+  // for: a scenario's key does not depend on the others, so leaving it
+  // out keeps their order.
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("run-order-project");
+    const accounts = path.join(rootDir, NOBODY.feature);
+    const source = await readFile(accounts, "utf8");
+    await writeFile(accounts, `${source}\n  @slow\n  Scenario: bob signs up\n    When "bob" signs up\n    Then the account count is 2\n`);
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("names the lines of a file the tags left a scenario out of, so its rerun line needs no --tag", async () => {
+    const { document } = await run(rootDir, ["--tag", "not @slow", "--order", `shuffled:${polluting}`]);
+    expect(ran(document)).toEqual([`${at(ALICE_SIGNS_UP)} passed`, `${at(NOBODY)} failed`, `${at(ALICE_SIGNS_IN)} passed`]);
+    const failed = document.scenarios.find((scenario) => scenario.status === "failed")!;
+    expect(failed.do).toBe(`nuka run ${at(ALICE_SIGNS_UP)} ${at(NOBODY)} --order shuffled:${polluting}`);
+
+    const rerun = await run(rootDir, argsOf(failed.do!));
+    expect(ran(rerun.document)).toEqual([`${at(ALICE_SIGNS_UP)} passed`, `${at(NOBODY)} failed`]);
+  });
+
+  it("keeps --tag in the line that runs the run itself again", async () => {
+    const fileOrder = seedWhere((sequence) => sequence.join(" ") === [NOBODY, ALICE_SIGNS_UP, ALICE_SIGNS_IN].map(at).join(" "));
+    const { document } = await run(rootDir, ["--tag", "not @slow", "--order", `shuffled:${fileOrder}`, "--repeat", "2"]);
+    const failed = document.scenarios.filter((scenario) => scenario.status === "failed");
+    expect(failed.map((scenario) => scenario.do)).toEqual([`nuka run --tag 'not @slow' --order shuffled:${fileOrder} --repeat 2`]);
+
+    const rerun = await run(rootDir, ["--tag", "not @slow", "--order", `shuffled:${fileOrder}`, "--repeat", "2"]);
+    expect(ran(rerun.document)).toEqual(ran(document));
   });
 });
 
