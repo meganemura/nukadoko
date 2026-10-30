@@ -97,6 +97,12 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Write one of the kinds is-a names in the line (string, text, number, integer, boolean, list, array, object, null, uuid, date, timestamp, or url), or compare with another claim if the line states something else.",
   },
+  "claim-not-an-array": {
+    description:
+      "A claim counts the items of a value an earlier step returned, or an each claim reads each of its items, and that step's returns schema parses the value as something that is never an array: a string, a number, a boolean, an object, or a union, literal, or enum of only such values. count and each read an array alone, so the claim never holds, whatever the behaviour is. Only a value read with no view is checked, through the parsing wrappers (optional, nullable, readonly); a schema that may parse to an array (z.unknown, a transform, a default or a catch, whose own value skips the schema) is taken to be one.",
+    severity: "error",
+    fix: "Read the value through a view that makes an array (lines, comma-list, or json), point the claim at the array the step returns, or return the value as an array from the producing step.",
+  },
   "claim-path-unknown": {
     description:
       "A claim reads a path into a value an earlier step returned, and that step's returns schema has nothing at the path, so the value is undefined and the claim always breaks.",

@@ -46,7 +46,9 @@ import type { CheckIssue } from "./types.js";
 // producer's `returns` for a field: a `lacks-field` claim, or a `where`
 // that selects by one, on a value whose schema is an object that drops or
 // refuses every key it does not declare, and does not declare that field, so the field is
-// never there (`claim-field-stripped`). Two findings are per bound step:
+// never there (`claim-field-stripped`). A fifth reads the producer's
+// `returns` for a count or an each: a value it parses as something that is
+// never an array (`claim-not-an-array`). Two findings are per bound step:
 // a claim step whose `observe` reaches a browser page and does not state
 // `poll` (`claim-poll-unstated`), and an expected sentence key that a
 // parameter type with a transformer fills (`claim-expected-transformed`),
@@ -73,6 +75,7 @@ export interface ClaimCheckIssue {
     | "claim-compares-itself"
     | "claim-field-stripped"
     | "claim-kind-unknown"
+    | "claim-not-an-array"
     | "claim-path-unknown";
   readonly message: string;
 }
@@ -244,6 +247,55 @@ export function closedObjectKeysAt(schema: z.ZodTypeAny, segments: readonly stri
 export function droppingObjectKeysAt(schema: z.ZodTypeAny, segments: readonly string[]): readonly string[] | null {
   const object = closedObjectAt(schema, segments);
   return object?.undeclared === "dropped" ? object.keys : null;
+}
+
+const NON_ARRAY_NOUNS: Readonly<Record<string, string>> = {
+  string: "a string",
+  template_literal: "a string",
+  number: "a number",
+  boolean: "a boolean",
+  bigint: "a bigint",
+  null: "null",
+  undefined: "undefined",
+  object: "an object",
+  record: "an object",
+};
+
+/** What a value `schema` parses can be, as nouns, when none of them is an
+ * array: `null` when one may be, and for every schema this module cannot
+ * read for certain. Only the parsing wrappers are seen through, since a
+ * default or a catch hands back a value of its own. Pure. */
+export function nonArrayNouns(schema: z.ZodTypeAny): readonly string[] | null {
+  const def = defOf(schema);
+  const inner = (added: string | null): readonly string[] | null => {
+    const nouns = def.innerType === undefined ? null : nonArrayNouns(def.innerType);
+    return nouns === null || added === null || nouns.includes(added) ? nouns : [...nouns, added];
+  };
+  if (def.type === "optional") return inner("undefined");
+  if (def.type === "nullable") return inner("null");
+  if (PARSING_WRAPPERS.has(def.type)) return inner(null);
+  if (def.type === "pipe") return def.out === undefined ? null : nonArrayNouns(def.out);
+  if (def.type === "union") {
+    const nouns: string[] = [];
+    for (const option of def.options ?? []) {
+      const each = nonArrayNouns(option);
+      if (each === null) return null;
+      for (const noun of each) if (!nouns.includes(noun)) nouns.push(noun);
+    }
+    return nouns.length === 0 ? null : nouns;
+  }
+  if (def.type === "literal" || def.type === "enum") {
+    const values = def.type === "literal" ? (def as { values?: readonly unknown[] }).values : Object.values((def as { entries?: Record<string, unknown> }).entries ?? {});
+    const nouns: string[] = [];
+    for (const value of values ?? []) {
+      const noun = value === null ? "null" : NON_ARRAY_NOUNS[typeof value];
+      if (noun === undefined) return null;
+      if (!nouns.includes(noun)) nouns.push(noun);
+    }
+    return nouns.length === 0 ? null : nouns;
+  }
+  const noun = NON_ARRAY_NOUNS[def.type];
+  return noun === undefined ? null : [noun];
 }
 
 /** The producer a `from` key resolves to on line `stepIndex`: the nearest
@@ -428,6 +480,24 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
           `${field} is never there, so ${where ? "where never leaves an item out, whatever the behaviour is" : "the claim never breaks, whatever the behaviour is"}`,
       );
     };
+    // A count, or an each, on a from value the producer's returns parses
+    // as something that is never an array: `inside` is what the claim reads
+    // below the from path, and `what` names the place for the reader.
+    const notAnArray = (label: string, reads: string, path: string, inside: readonly string[], what: string): void => {
+      const segments = pathSegments(path);
+      if (segments === null || !fromKeys.has(segments[0]!)) return;
+      const producer = producerOf(segments[0]!);
+      if (producer === null) return;
+      const walk = walkSchema(producer.step.returns, [producer.key, ...segments.slice(1), ...inside], 0, PARSING_WRAPPERS);
+      const nouns = walk.kind === "schema" ? nonArrayNouns(walk.schema) : null;
+      if (nouns === null) return;
+      const line = lines[producer.lineIndex];
+      report(
+        "claim-not-an-array",
+        `Step "${stepName}"'s ${label} ${reads} ${what}, and step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`} returns ${nouns.join(" or ")} there, never an array, ` +
+          "so the claim never holds, whatever the behaviour is",
+      );
+    };
     // Every place of the step that `observe` must not receive, for the
     // observe check: each expected `{ from }` place, and each actual
     // `from` place whose claim takes its expected value from `observe`.
@@ -456,6 +526,8 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       const top = placeOf(actualSource, claim.actual, producerOf, lineOf);
       const actual = top === null ? null : shapedPlace(top, claim.view, claim.at, claim.count);
       if (isEachClaim(claim)) {
+        const eachAt = claim.view === undefined ? (claim.at === undefined ? [] : pathSegments(claim.at)) : null;
+        if (eachAt !== null) notAnArray(label, "reads each item of", claim.actual, eachAt, claim.at === undefined ? claim.actual : `${claim.actual} at ${claim.at}`);
         if (actualSchema !== null && claim.view === undefined && claim.at === undefined) {
           checkItemPaths(stepName, label, claim, actualSchema, report);
           const entries: readonly [string, ItemClaim, boolean][] = [
@@ -466,6 +538,7 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
             const inside = item.view === undefined ? itemSegmentsOf(item) : null;
             const named = inside === null || inside.length === 0 ? "each item" : `${inside.join(".")} of each item`;
             if (inside !== null) strippedField(itemLabel, item, claim.actual, ["0", ...inside], `${named} of ${claim.actual}`, where);
+            if (inside !== null && item.count === true) notAnArray(itemLabel, "counts the items of", claim.actual, ["0", ...inside], `${named} of ${claim.actual}`);
           }
         }
         const items: readonly [string, ItemClaim][] = [
@@ -495,6 +568,7 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
         checkFromPath(`${label}.expected.from`, claim.expected.from);
       }
       const at = claim.view === undefined ? (claim.at === undefined ? [] : pathSegments(claim.at)) : null;
+      if (at !== null && claim.count === true) notAnArray(label, "counts the items of", claim.actual, at, claim.at === undefined ? claim.actual : `${claim.actual} at ${claim.at}`);
       if (actualSchema !== null && at !== null) strippedField(label, claim, claim.actual, at, claim.at === undefined ? claim.actual : `${claim.actual} at ${claim.at}`, false);
       noteExpectedFrom(label, claim.expected);
       noteActualFrom(label, claim.expected, actual, actualSource);

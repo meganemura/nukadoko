@@ -3,7 +3,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
 import { z } from "zod";
-import { certainlySamePlace, closedObjectKeys, closedObjectKeysAt } from "../src/check/claim-check.js";
+import { certainlySamePlace, closedObjectKeys, closedObjectKeysAt, nonArrayNouns } from "../src/check/claim-check.js";
 import { type ChainedJsonType, wordLiteral } from "../src/cli/scaffold.js";
 import type { ClaimReading, StepRecord } from "../src/record/types.js";
 import { judgedBy, scenarioClaims } from "../src/run/run-document.js";
@@ -290,6 +290,82 @@ describe("an object schema that keeps no key it does not declare", () => {
     expect(kept(z.object(declared), { a: 1, zz: 1 })).toBe(false);
     expect(z.strictObject(declared).safeParse({ a: 1, zz: 1 }).success).toBe(false);
   });
+});
+
+describe("a value nuka check knows is never an array", () => {
+  /** A schema drawn from leaves, objects, arrays, and schemas the check
+   * cannot read, inside unions and wrappers, with whether it can hold an
+   * array as far as the drawing knows. */
+  const schemas: Generator<z.ZodTypeAny> = gs.composite((tc) => {
+    const leaf = (): z.ZodTypeAny => {
+      const kind = tc.draw(gs.sampledFrom(["string", "number", "boolean", "null", "literal", "enum", "object", "record", "array", "tuple", "unknown", "transform", "lines"] as const));
+      switch (kind) {
+        case "string":
+          return z.string();
+        case "number":
+          return z.number();
+        case "boolean":
+          return z.boolean();
+        case "null":
+          return z.null();
+        case "literal":
+          return z.literal(tc.draw(gs.sampledFrom(["a", 1, true, null] as const)));
+        case "enum":
+          return z.enum(["a", "b"]);
+        case "object":
+          return z.object({ a: z.number().optional() });
+        case "record":
+          return z.record(z.string(), z.number());
+        case "array":
+          return z.array(z.number());
+        case "tuple":
+          return z.tuple([z.number()]);
+        case "unknown":
+          return z.unknown();
+        case "transform":
+          return z.string().transform((text) => text);
+        case "lines":
+          return z.string().transform((text) => text.split("\n"));
+      }
+    };
+    const wrap = (schema: z.ZodTypeAny): z.ZodTypeAny => {
+      const wrapper = tc.draw(gs.sampledFrom(["none", "optional", "nullable", "readonly", "default", "catch"] as const));
+      if (wrapper === "optional") return schema.optional();
+      if (wrapper === "nullable") return schema.nullable();
+      if (wrapper === "readonly") return schema.readonly();
+      if (wrapper === "default") return schema.default([] as never);
+      if (wrapper === "catch") return schema.catch([] as never);
+      return schema;
+    };
+    const options = tc.draw(gs.integers({ minValue: 1, maxValue: 3 }));
+    const drawn = Array.from({ length: options }, () => wrap(leaf()));
+    return wrap(drawn.length === 1 ? drawn[0]! : z.union(drawn as [z.ZodTypeAny, z.ZodTypeAny]));
+  });
+  const INPUTS: readonly unknown[] = [undefined, null, "a", "a\nb", 1, true, {}, { a: 1 }, [], [1], ["a"]];
+  const nounOf = (value: unknown): string =>
+    value === null ? "null" : value === undefined ? "undefined" : typeof value === "object" ? "an object" : typeof value === "string" ? "a string" : `a ${typeof value}`;
+
+  it("names a schema never an array only when no value it parses is one, and names the type of every value it parses", () =>
+    hegel.testAsync(async (tc) => {
+      const schema = tc.draw(schemas);
+      const nouns = nonArrayNouns(schema);
+      if (nouns === null) return;
+      for (const input of INPUTS) {
+        const parsed = schema.safeParse(input);
+        if (!parsed.success) continue;
+        expect(Array.isArray(parsed.data)).toBe(false);
+        expect(nouns).toContain(nounOf(parsed.data));
+      }
+    }));
+
+  it("names every union of strings, numbers, booleans, nulls, literals, enums, objects, and records, inside wrappers that parse", () =>
+    hegel.testAsync(async (tc) => {
+      const parts = tc.draw(gs.arrays(gs.sampledFrom([z.string(), z.number(), z.boolean(), z.null(), z.literal("a"), z.enum(["a"]), z.object({}), z.record(z.string(), z.number())]), { minSize: 1, maxSize: 3 }));
+      const union = parts.length === 1 ? parts[0]! : z.union(parts as unknown as [z.ZodTypeAny, z.ZodTypeAny]);
+      const wrapper = tc.draw(gs.sampledFrom(["none", "optional", "nullable", "readonly"] as const));
+      const schema = wrapper === "none" ? union : wrapper === "optional" ? union.optional() : wrapper === "nullable" ? union.nullable() : union.readonly();
+      expect(nonArrayNouns(schema)).not.toBeNull();
+    }));
 });
 
 const OUTCOMES = ["held", "broken", "unobserved", "unjudged"] as const;

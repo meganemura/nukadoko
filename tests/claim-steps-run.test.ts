@@ -82,6 +82,13 @@ function feature(...lines: string[]): string {
   return ["Feature: claims", "  Scenario: one", ...lines.map((line) => `    ${line}`), ""].join("\n");
 }
 
+/** One scenario per claim line, each after `given`, so a claim that breaks
+ * does not keep the next one from running. Scenario k's claim is on line
+ * 4 + 3k. */
+function scenarios(given: string, claims: readonly string[]): string {
+  return ["Feature: claims", ...claims.flatMap((claim, index) => [`  Scenario: ${index}`, `    ${given}`, `    ${claim}`]), ""].join("\n");
+}
+
 describe("a schema that rewrites the value a claim reads is refused at defineStep", () => {
   const cases: readonly [string, string][] = [
     ["a transform", "z.number().transform(() => 0)"],
@@ -2341,9 +2348,14 @@ export default defineStep({
         "",
       ].join("\n"),
     });
+    // The output is a string in the producer's returns, so the check
+    // already knows the last count never holds; the run under --no-check
+    // breaks it the same way.
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
-    expect(checked.stdout).not.toContain("error\t");
-    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(checked.stdout.split("\n").filter((line) => line.startsWith("error\t"))).toEqual([
+      `error\tclaim-not-an-array\tfeatures/t.feature:12\tStep "the-output-holds-items"'s claims[0] counts the items of out, and step "the-app-answers" on line 11 returns a string there, never an array, so the claim never holds, whatever the behaviour is`,
+    ]);
+    const result = await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
     expect(result.exitCode).toBe(1);
     const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary.split("\n").filter((line) => line.startsWith("  - ") && line.includes("; measured: "))).toEqual([
@@ -2355,6 +2367,57 @@ export default defineStep({
     ]);
     const claim = latestRunJson(rootDir).scenarios[0].steps[1].claims[0];
     expect(claim).toMatchObject({ actual: 2, actual_from: "count of from:the-app-answers@3.cart.items", at: "items", count: true, outcome: "held" });
+  });
+});
+
+describe("a count or an each on a value that is never an array", () => {
+  /** A claim step that reads one key of the step that answers, through
+   * that step's own schema, so only the producer decides the shape. */
+  const step = (pattern: string, key: string, claim: string) => `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "${pattern}",
+  args: z.object({ ${key}: answer.returns.shape.${key} }),
+  from: { ${key}: [answer, "${key}"] },
+  claims: [${claim}],
+});
+`;
+
+  it("names the place and what the producer returns there, stays silent on an array, a view, or a value it cannot read, and the run breaks the claim the same way", async () => {
+    const rootDir = await project({
+      "features/steps/the-output-holds-three.ts": step("the output holds three items", "out", `{ actual: "out", count: true, compare: "equal", expected: { literal: 3 } }`),
+      "features/steps/every-char-is-a.ts": step("every char of the output is a", "out", `{ actual: "out", each: { claims: [{ compare: "equal", expected: { literal: "a" } }] } }`),
+      "features/steps/the-cart-count-has-one.ts": step("the cart count has one item", "cart", `{ actual: "cart", at: "count", count: true, compare: "equal", expected: { literal: 1 } }`),
+      "features/steps/every-title-has-one.ts": step("every title has one item", "cart", `{ actual: "cart.items", each: { claims: [{ actual: "title", count: true, compare: "equal", expected: { literal: 1 } }] } }`),
+      "features/steps/the-cart-holds-two.ts": step("the cart holds two items", "cart", `{ actual: "cart.items", count: true, compare: "equal", expected: { literal: 2 } }`),
+      "features/steps/the-output-has-one-line.ts": step("the output has one line", "out", `{ actual: "out", view: "lines", count: true, compare: "equal", expected: { literal: 1 } }`),
+      "features/steps/the-body-holds-two.ts": step("the body holds two items", "body", `{ actual: "body", count: true, compare: "equal", expected: { literal: 2 } }`),
+      "features/t.feature": scenarios("When the app answers", [
+        "Then the output holds three items",
+        "Then every char of the output is a",
+        "Then the cart count has one item",
+        "Then every title has one item",
+        "Then the cart holds two items",
+        "Then the output has one line",
+        "Then the body holds two items",
+      ]),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout.split("\n").filter((line) => line.startsWith("error\t"))).toEqual([
+      `error\tclaim-not-an-array\tfeatures/t.feature:4\tStep "the-output-holds-three"'s claims[0] counts the items of out, and step "the-app-answers" on line 3 returns a string there, never an array, so the claim never holds, whatever the behaviour is`,
+      `error\tclaim-not-an-array\tfeatures/t.feature:7\tStep "every-char-is-a"'s claims[0] reads each item of out, and step "the-app-answers" on line 6 returns a string there, never an array, so the claim never holds, whatever the behaviour is`,
+      `error\tclaim-not-an-array\tfeatures/t.feature:10\tStep "the-cart-count-has-one"'s claims[0] counts the items of cart at count, and step "the-app-answers" on line 9 returns a number there, never an array, so the claim never holds, whatever the behaviour is`,
+      `error\tclaim-not-an-array\tfeatures/t.feature:13\tStep "every-title-has-one"'s claims[0].each.claims[0] counts the items of title of each item of cart.items, and step "the-app-answers" on line 12 returns a string there, never an array, so the claim never holds, whatever the behaviour is`,
+    ]);
+    await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    const claims = (latestRunJson(rootDir).scenarios as Record<string, any>[]).slice(0, 4).map((scenario) => [scenario.steps[1].claims[0].outcome, scenario.steps[1].claims[0].reason]);
+    expect(claims).toEqual([
+      ["broken", "count reads an array, and the value is a string"],
+      ["broken", "each reads an array, and the value is a string"],
+      ["broken", "count reads an array, and the value is a number"],
+      ["broken", undefined],
+    ]);
   });
 });
 
