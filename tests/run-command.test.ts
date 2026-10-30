@@ -423,7 +423,14 @@ describe.runIf(process.platform !== "win32")("a signal to nukadoko while a step 
       }
       process.kill(nuka.pid!, "SIGTERM");
       expect(await closed).toBe(143);
-      expect(readFileSync(path.join(dir, "signals.txt"), "utf8").split("\n").filter((line) => line !== "").sort()).toEqual(["helper SIGTERM", "leader SIGTERM"]);
+      // nukadoko exits once it has sent the signal and torn down its
+      // fixtures, without waiting for the group to handle it, so under
+      // load a handler's line can land after the close.
+      const signals = (): string[] =>
+        existsSync(path.join(dir, "signals.txt")) ? readFileSync(path.join(dir, "signals.txt"), "utf8").split("\n").filter((line) => line !== "").sort() : [];
+      const deadline = Date.now() + 10_000;
+      while (signals().length < 2 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(signals()).toEqual(["helper SIGTERM", "leader SIGTERM"]);
     },
     120_000,
   );
