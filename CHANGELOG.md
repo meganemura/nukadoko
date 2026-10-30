@@ -311,7 +311,9 @@ just until 0.1.
   handler a request reached through another route (a PATCH beside the
   PUT of one resource), counts the requests to a route the world's list
   does not name and the ones no route matched, and names each world
-  whose list was not read. With no routes list read, `routes` is absent,
+  whose list was not read. When every world whose list was read names
+  the same routes, it counts them as the program's one list and says in
+  how many worlds it is the same. With no routes list read, `routes` is absent,
   so a list that was not read never reads as one whose every route went
   unrequested. The field is additive, so no `schema_version` changes.
 - **run.json's `flags` names the sides no criterion evaluated.** When a

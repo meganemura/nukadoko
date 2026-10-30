@@ -13,6 +13,8 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, r
 // handler of which the steps requested one, a request to a route the
 // list does not name, and a request the program matched to no route. A
 // list that was not read gives no `routes`, and the summary says why.
+// Two worlds whose lists name the same routes share one list in the
+// summary; two whose lists differ each count their own.
 
 const FEATURE = [
   "Feature: Rooms",
@@ -32,7 +34,7 @@ const FEATURE = [
   "",
 ].join("\n");
 
-function program(env = ""): string {
+function program(env = "", environments: readonly string[] = []): string {
   return [
     'import { defineProgram } from "./nukadoko-shim.js";',
     "",
@@ -40,6 +42,7 @@ function program(env = ""): string {
     '  serve: { command: "node app/server.mjs", ready: "/up" },',
     `  env: { PORT: "{port}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs", EXECUTION_EVENTS: "{events}"${env} },`,
     '  lists: { routes: "node app/list.mjs routes {url}" },',
+    ...(environments.length === 0 ? [] : ["  environments: {", ...environments.map((line) => `    ${line}`), "  },"]),
     "});",
     "",
   ].join("\n");
@@ -150,6 +153,42 @@ describe("run.json's routes", () => {
       "## Routes",
       "",
       "- World `default` read no routes list (`program-list-unread` under Findings), so none of its routes stands here.",
+    ]);
+  });
+
+  it("names the program's list once when two worlds list the same routes", async () => {
+    const environments = ['"reorder-off": { conditions: { quick_reorder: false } },', '"reorder-on": { conditions: { quick_reorder: true } },'];
+    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', QUICK_REORDER: "{condition.quick_reorder}"', environments));
+    expect(await run(rootDir)).toBe(0);
+
+    expect(routesSection(summaryOf(rootDir))).toEqual([
+      "## Routes",
+      "",
+      "Head steps requested 2 of the 7 routes the program's routes list names (the same in 2 worlds).",
+      "A request says which route the program matched, not that a step checked what it answered.",
+      "",
+      "- Never requested (4): `GET /orders/:id`, `DELETE /rooms/:id`, `POST /scores`, `GET /up`",
+      "- Never requested, though a route with its handler was (1): `PATCH /rooms/:id` through `PUT /rooms/:id`",
+      "- 2 requests to a route its world's list does not name: `GET /extra` 2",
+      "- 2 requests the program matched to no route: `GET` 2",
+    ]);
+  });
+
+  it("counts each world's list when two worlds list different routes", async () => {
+    const environments = ['"full-list": { conditions: { list_mode: "full" } },', '"short-list": { conditions: { list_mode: "short" } },'];
+    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "{condition.list_mode}"', environments));
+    expect(await run(rootDir)).toBe(0);
+
+    expect(routesSection(summaryOf(rootDir))).toEqual([
+      "## Routes",
+      "",
+      "Head steps requested 2 of the 7 routes the routes lists of 2 worlds name.",
+      "A request says which route the program matched, not that a step checked what it answered.",
+      "",
+      "- Never requested (4): `GET /orders/:id`, `DELETE /rooms/:id`, `POST /scores`, `GET /up`",
+      "- Never requested, though a route with its handler was (1): `PATCH /rooms/:id` through `PUT /rooms/:id`",
+      "- 2 requests to a route its world's list does not name: `GET /extra` 2",
+      "- 2 requests the program matched to no route: `GET` 2",
     ]);
   });
 

@@ -2,8 +2,9 @@
 // runs it: `node app/list.mjs <routes|flags|tables> <the world's URL>`. It asks
 // the running program first, so a list read before the program answers
 // fails. LIST_MODE, from the program file's env, makes the list a wrong
-// one: `fail` exits 3 after a line on stderr, and `malformed` prints a
-// routes line with a key the format does not have.
+// one: `fail` exits 3 after a line on stderr, `malformed` prints a
+// routes line with a key the format does not have, and `short` leaves the
+// last route out, as a world whose program lacks it would.
 const [kind, url] = process.argv.slice(2);
 const answer = await fetch(new URL("/up", url));
 if (!answer.ok) process.exit(4);
@@ -38,5 +39,6 @@ if (process.env.LIST_MODE === "fail") {
   process.exit(3);
 }
 const lines = LISTS[kind].map((entry) => JSON.stringify(entry));
+if (process.env.LIST_MODE === "short" && kind === "routes") lines.pop();
 if (process.env.LIST_MODE === "malformed") lines.splice(1, 0, JSON.stringify({ method: "GET", path: "/rooms/:id" }));
 process.stdout.write(`${lines.join("\n")}\n`);

@@ -928,7 +928,11 @@ function renderRoutes(document: RunDocument): string[] {
     return requests === 0 ? [] : [{ route, requests }];
   });
   const unmatched = routes.filter((route) => route.route === null && route.requests > 0);
-  const lists = read.size === 1 ? "the program's routes list names" : `the routes lists of ${read.size} worlds name`;
+  // Worlds of one program usually list the same routes; naming each world's
+  // list then reads as if they differed.
+  const same = listed.every((route) => [...read].every((name) => route.listed_in.includes(name)));
+  const lists =
+    read.size === 1 ? "the program's routes list names" : same ? `the program's routes list names (the same in ${read.size} worlds)` : `the routes lists of ${read.size} worlds name`;
   const lines = [
     ...(document.routes === undefined
       ? []
