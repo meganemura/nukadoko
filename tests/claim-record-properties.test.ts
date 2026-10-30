@@ -3,7 +3,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
 import { z } from "zod";
-import { certainlySamePlace, closedObjectKeys, closedObjectKeysAt, nonArrayNouns } from "../src/check/claim-check.js";
+import { certainlySamePlace, closedObjectKeys, closedObjectKeysAt, droppedByArgs, nonArrayNouns } from "../src/check/claim-check.js";
 import { type ChainedJsonType, wordLiteral } from "../src/cli/scaffold.js";
 import type { ClaimReading, StepRecord } from "../src/record/types.js";
 import { judgedBy, scenarioClaims } from "../src/run/run-document.js";
@@ -365,6 +365,37 @@ describe("a value nuka check knows is never an array", () => {
       const wrapper = tc.draw(gs.sampledFrom(["none", "optional", "nullable", "readonly"] as const));
       const schema = wrapper === "none" ? union : wrapper === "optional" ? union.optional() : wrapper === "nullable" ? union.nullable() : union.readonly();
       expect(nonArrayNouns(schema)).not.toBeNull();
+    }));
+});
+
+describe("a from path the claim step's args drops", () => {
+  const KEYS = ["a", "b", "c"] as const;
+
+  it("names the key a z.object in args drops only when it is a key the args object does not declare, and parsing the args drops it", () =>
+    hegel.testAsync(async (tc) => {
+      const declared = [...new Set(tc.draw(gs.arrays(gs.sampledFrom(KEYS), { maxSize: 2 })))];
+      const read = tc.draw(gs.sampledFrom(KEYS));
+      const returns = z.object({ user: z.looseObject({}) });
+      const args = z.object({ user: z.object(Object.fromEntries(declared.map((key) => [key, z.unknown().optional()]))) });
+      const dropped = droppedByArgs(args, returns, ["user", read], ["user", read]);
+      expect(dropped !== null).toBe(!declared.includes(read as never));
+      if (dropped === null) return;
+      expect(dropped).toEqual({ at: 1, keys: declared });
+      const parsed = args.parse({ user: { [read]: 1 } }) as { user: Record<string, unknown> };
+      expect(Object.hasOwn(parsed.user, read)).toBe(false);
+    }));
+
+  it("names nothing when args reads the value through the producer's own schema, or through one that keeps any key", () =>
+    hegel.testAsync(async (tc) => {
+      const declared = [...new Set(tc.draw(gs.arrays(gs.sampledFrom(KEYS), { maxSize: 2 })))];
+      const read = tc.draw(gs.sampledFrom(KEYS));
+      const user = z.looseObject(Object.fromEntries(declared.map((key) => [key, z.unknown()])));
+      const returns = z.object({ user });
+      const kept = tc.draw(gs.sampledFrom(["same", "loose", "catchall", "unknown", "default"] as const));
+      const narrow = z.object(Object.fromEntries(declared.map((key) => [key, z.unknown()])));
+      const argsUser =
+        kept === "same" ? user : kept === "loose" ? z.looseObject({}) : kept === "catchall" ? narrow.catchall(z.unknown()) : kept === "unknown" ? z.unknown() : narrow.default({});
+      expect(droppedByArgs(z.object({ user: argsUser }), returns, ["user", read], ["user", read])).toBeNull();
     }));
 });
 

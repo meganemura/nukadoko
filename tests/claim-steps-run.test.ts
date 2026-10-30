@@ -2421,6 +2421,66 @@ export default defineStep({
   });
 });
 
+describe("a from path the claim step's own args drops", () => {
+  /** A step that returns a user whose schema keeps every key it does not
+   * declare, so a password the step returns is there to read. */
+  const SIGN_UP = `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "A user signs up",
+  pattern: "a user signs up",
+  args: z.object({}),
+  returns: z.object({ user: z.looseObject({ name: z.string() }), users: z.array(z.looseObject({ name: z.string() })) }),
+  mutates: false,
+  run() {
+    return { user: { name: "aki", password: "pw" }, users: [{ name: "aki", password: "pw" }, { name: "kei" }] };
+  },
+});
+`;
+  const step = (pattern: string, key: string, args: string, claim: string) => `import { defineStep, z } from "nukadoko";
+import signUp from "./a-user-signs-up.ts";
+export default defineStep({
+  pattern: "${pattern}",
+  args: z.object({ ${key}: ${args} }),
+  from: { ${key}: [signUp, "${key}"] },
+  claims: [${claim}],
+});
+`;
+
+  it("names the args object and the key it drops on a path, a lacks-field claim, and a where clause, stays silent when args keeps the key, and the run leaves the claims unjudged", async () => {
+    const narrow = "z.object({ name: z.string() })";
+    const rootDir = await project({
+      "features/steps/a-user-signs-up.ts": SIGN_UP,
+      "features/steps/the-password-is-pw.ts": step("the password is pw", "user", narrow, `{ actual: "user.password", compare: "equal", expected: { literal: "pw" } }`),
+      "features/steps/the-user-has-no-password.ts": step("the user has no password", "user", narrow, `{ actual: "user", compare: "lacks-field", expected: { literal: "password" } }`),
+      "features/steps/every-user-without-a-password-is-kei.ts": step(
+        "every user without a password is named kei",
+        "users",
+        `z.array(${narrow})`,
+        `{ actual: "users", each: { where: [{ compare: "lacks-field", expected: { literal: "password" } }], claims: [{ actual: "name", compare: "equal", expected: { literal: "kei" } }] } }`,
+      ),
+      "features/steps/the-kept-password-is-pw.ts": step("the kept password is pw", "user", "signUp.returns.shape.user", `{ actual: "user.password", compare: "equal", expected: { literal: "pw" } }`),
+      "features/steps/the-loose-password-is-pw.ts": step("the loose password is pw", "user", "z.looseObject({ name: z.string() })", `{ actual: "user.password", compare: "equal", expected: { literal: "pw" } }`),
+      "features/t.feature": scenarios("When a user signs up", [
+        "Then the password is pw",
+        "Then the user has no password",
+        "Then every user without a password is named kei",
+        "Then the kept password is pw",
+        "Then the loose password is pw",
+      ]),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout.split("\n").filter((line) => line.startsWith("error\t"))).toEqual([
+      `error\tclaim-args-dropped\tfeatures/t.feature:4\tStep "the-password-is-pw"'s claims[0].actual reads user.password, and the step's own args declares user through an object schema that declares name, which drops password as a key it does not declare, or refuses it as a strict object. Step "a-user-signs-up" on line 3 may return a value there: the run leaves a claim unjudged when its args schema changed the value it reads, and breaks it when the value is undefined, so the claim never holds, whatever the behaviour is`,
+      `error\tclaim-args-dropped\tfeatures/t.feature:7\tStep "the-user-has-no-password"'s claims[0] is lacks-field "password" on user, and the step's own args declares that value through an object schema that declares name, which drops any key it does not declare. Step "a-user-signs-up" on line 6 may return password, and the run leaves a claim unjudged when its args schema took a key out of the value it reads, so the claim never breaks, whatever the behaviour is`,
+      `error\tclaim-args-dropped\tfeatures/t.feature:10\tStep "every-user-without-a-password-is-kei"'s claims[0].each.where[0] is lacks-field "password" on each item of users, and the step's own args declares that value through an object schema that declares name, which drops any key it does not declare. Step "a-user-signs-up" on line 9 may return password, and the run leaves a claim unjudged when its args schema took a key out of the value it reads, so where never leaves an item out, whatever the behaviour is`,
+    ]);
+    await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    const claims = (latestRunJson(rootDir).scenarios as Record<string, any>[]).map((scenario) => scenario.steps[1].claims[0].outcome);
+    expect(claims).toEqual(["unjudged", "unjudged", "unjudged", "held", "held"]);
+  });
+});
+
 describe("an absent field through a run", () => {
   it("tells a field the response leaves out from one it sets to null, names the field and its value when it is there, and breaks when the parent is missing", async () => {
     const server = createServer((request, response) => {

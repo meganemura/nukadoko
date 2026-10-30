@@ -48,7 +48,11 @@ import type { CheckIssue } from "./types.js";
 // refuses every key it does not declare, and does not declare that field, so the field is
 // never there (`claim-field-stripped`). A fifth reads the producer's
 // `returns` for a count or an each: a value it parses as something that is
-// never an array (`claim-not-an-array`). Two findings are per bound step:
+// never an array (`claim-not-an-array`). A sixth reads the claim step's
+// own `args`: an object there that drops a key a from path reads, or the
+// field a lacks-field claim names, while the producer may return it
+// (`claim-args-dropped`); the run judges a claim only on a value its args
+// schema left as it was. Two findings are per bound step:
 // a claim step whose `observe` reaches a browser page and does not state
 // `poll` (`claim-poll-unstated`), and an expected sentence key that a
 // parameter type with a transformer fills (`claim-expected-transformed`),
@@ -70,6 +74,7 @@ export interface ClaimCheckIssue {
   readonly stepIndex: number;
   readonly stepName: string;
   readonly code:
+    | "claim-args-dropped"
     | "claim-aria-snapshot-names-nothing"
     | "claim-aria-snapshot-unreadable"
     | "claim-compares-itself"
@@ -298,6 +303,26 @@ export function nonArrayNouns(schema: z.ZodTypeAny): readonly string[] | null {
   return noun === undefined ? null : [noun];
 }
 
+/** Where the claim step's own `args` loses a path the producer's
+ * `returns` may hold: the index into `argsSegments` of the first key an
+ * object schema in `args` does not declare and keeps no other key for, and
+ * the keys it declares. `null` when `returns` has nothing there for
+ * certain (`claim-path-unknown`), and when `args` may keep the key. Only
+ * the parsing wrappers are seen through in `args`, since a default or a
+ * catch hands back a value of its own. Index 0 is the from key itself,
+ * which `defineStep` requires `args` to declare. Pure. */
+export function droppedByArgs(
+  args: z.ZodTypeAny,
+  returns: z.ZodTypeAny,
+  argsSegments: readonly string[],
+  upstreamSegments: readonly string[],
+): { readonly at: number; readonly keys: readonly string[] } | null {
+  const walk = walkSchema(args, argsSegments, 0, PARSING_WRAPPERS);
+  if (walk.kind !== "missing" || walk.at < 1 || walk.keys === null) return null;
+  if (walkSchema(returns, upstreamSegments).kind === "missing") return null;
+  return { at: walk.at, keys: walk.keys };
+}
+
 /** The producer a `from` key resolves to on line `stepIndex`: the nearest
  * earlier line that runs the one candidate bound before it, or `null` when
  * none or several are (`from-order-violation` reports both). */
@@ -470,14 +495,28 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       const producer = producerOf(segments[0]!);
       if (producer === null) return;
       const keys = closedObjectKeysAt(producer.step.returns, [producer.key, ...segments.slice(1), ...inside]);
-      if (keys === null || keys.includes(field)) return;
       const line = lines[producer.lineIndex];
+      const outcome = where ? "where never leaves an item out, whatever the behaviour is" : "the claim never breaks, whatever the behaviour is";
+      if (keys === null || keys.includes(field)) {
+        // The producer may return the field, and the claim step's own args
+        // may still take it out: the run leaves a claim unjudged on a value
+        // its args schema changed, so lacks-field holds or is not judged.
+        const argsKeys = droppingObjectKeysAt(step.args, [...segments, ...inside]);
+        if (argsKeys === null || argsKeys.includes(field)) return;
+        report(
+          "claim-args-dropped",
+          `Step "${stepName}"'s ${label} is lacks-field ${JSON.stringify(field)} on ${path}, and the step's own args declares that value through an object schema that declares ` +
+            `${argsKeys.length === 0 ? "no keys" : argsKeys.join(", ")}, which drops any key it does not declare. Step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`} ` +
+            `may return ${field}, and the run leaves a claim unjudged when its args schema took a key out of the value it reads, so ${outcome}`,
+        );
+        return;
+      }
       const has = keys.length === 0 ? "no keys" : keys.join(", ");
       report(
         "claim-field-stripped",
         `Step "${stepName}"'s ${label} is lacks-field ${JSON.stringify(field)} on ${path}, and step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`} ` +
           `returns that value through an object schema that declares ${has}, which drops any key it does not declare, or refuses it as a strict object. ` +
-          `${field} is never there, so ${where ? "where never leaves an item out, whatever the behaviour is" : "the claim never breaks, whatever the behaviour is"}`,
+          `${field} is never there, so ${outcome}`,
       );
     };
     // A count, or an each, on a from value the producer's returns parses
@@ -497,6 +536,28 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
         `Step "${stepName}"'s ${label} ${reads} ${what}, and step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`} returns ${nouns.join(" or ")} there, never an array, ` +
           "so the claim never holds, whatever the behaviour is",
       );
+    };
+    // A from path the step's own args takes out of the value before a
+    // claim reads it: `segments` is the path the claim reads, from key
+    // first, and `path` names it for the reader.
+    const argsDrop = (label: string, path: string, segments: readonly string[] | null): void => {
+      if (segments === null || !fromKeys.has(segments[0]!)) return;
+      const producer = producerOf(segments[0]!);
+      if (producer === null) return;
+      const dropped = droppedByArgs(step.args, producer.step.returns, segments, [producer.key, ...segments.slice(1)]);
+      if (dropped === null) return;
+      const line = lines[producer.lineIndex];
+      const has = dropped.keys.length === 0 ? "no keys" : dropped.keys.join(", ");
+      report(
+        "claim-args-dropped",
+        `Step "${stepName}"'s ${label} reads ${path}, and the step's own args declares ${segments.slice(0, dropped.at).join(".")} through an object schema that declares ${has}, ` +
+          `which drops ${segments[dropped.at]!} as a key it does not declare, or refuses it as a strict object. Step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`} ` +
+          "may return a value there: the run leaves a claim unjudged when its args schema changed the value it reads, and breaks it when the value is undefined, " +
+          "so the claim never holds, whatever the behaviour is",
+      );
+    };
+    const expectedArgsDrop = (label: string, expected: ClaimExpected): void => {
+      if (typeof expected === "object" && "from" in expected) argsDrop(`${label}.expected.from`, expected.from, pathSegments(expected.from));
     };
     // Every place of the step that `observe` must not receive, for the
     // observe check: each expected `{ from }` place, and each actual
@@ -518,9 +579,12 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       // to check.
       if (!isEachClaim(claim) && (Object.hasOwn(step.events, claim.actual) || Object.hasOwn(step.files, claim.actual))) {
         if (typeof claim.expected === "object" && "from" in claim.expected) checkFromPath(`${label}.expected.from`, claim.expected.from);
+        expectedArgsDrop(label, claim.expected);
         noteExpectedFrom(label, claim.expected);
         return;
       }
+      const readPath = readSegmentsOf(claim.actual, claim.view, claim.at);
+      argsDrop(`${label}.actual`, readPlaceText(claim.actual, claim.view, claim.at), readPath);
       const actualSchema = checkFromPath(`${label}.actual`, claim.actual);
       const actualSource = fromKeys.has(pathSegments(claim.actual)?.[0] ?? "") ? "from" : "observe";
       const top = placeOf(actualSource, claim.actual, producerOf, lineOf);
@@ -547,6 +611,13 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
         ];
         for (const [itemLabel, item] of items) {
           if (typeof item.expected === "object" && "from" in item.expected) checkFromPath(`${itemLabel}.expected.from`, item.expected.from);
+          expectedArgsDrop(itemLabel, item.expected);
+          // After a view, the items are values of the view's own, which no
+          // args schema parsed.
+          const inItem = claim.view === undefined && readPath !== null ? readSegmentsOf(item.actual, item.view, item.at) : null;
+          if (inItem !== null) {
+            argsDrop(`${itemLabel}.actual`, `${readPlaceText(item.actual ?? "the item", item.view, item.at)} of each item of ${claim.actual}`, [...readPath!, "0", ...inItem]);
+          }
           noteExpectedFrom(itemLabel, item.expected);
           const itemSegments = item.actual === undefined ? [] : (pathSegments(item.actual) ?? null);
           if (actual === null || itemSegments === null) {
@@ -567,6 +638,7 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       if (typeof claim.expected === "object" && "from" in claim.expected) {
         checkFromPath(`${label}.expected.from`, claim.expected.from);
       }
+      expectedArgsDrop(label, claim.expected);
       const at = claim.view === undefined ? (claim.at === undefined ? [] : pathSegments(claim.at)) : null;
       if (at !== null && claim.count === true) notAnArray(label, "counts the items of", claim.actual, at, claim.at === undefined ? claim.actual : `${claim.actual} at ${claim.at}`);
       if (actualSchema !== null && at !== null) strippedField(label, claim, claim.actual, at, claim.at === undefined ? claim.actual : `${claim.actual} at ${claim.at}`, false);
@@ -599,6 +671,20 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     }
   });
   return issues;
+}
+
+/** The segments a claim reads before its view, the way the run reads
+ * them: its path, then its `at` when no view comes first. `undefined` is
+ * an item itself. `null` for a path that is not one. */
+function readSegmentsOf(path: string | undefined, view: ClaimView | undefined, at: string | undefined): readonly string[] | null {
+  const segments = path === undefined ? [] : pathSegments(path);
+  if (segments === null) return null;
+  return view === undefined && at !== undefined ? [...segments, ...at.split(".")] : segments;
+}
+
+/** How a message names the place `readSegmentsOf` reads. */
+function readPlaceText(path: string, view: ClaimView | undefined, at: string | undefined): string {
+  return view === undefined && at !== undefined ? `${path} at ${at}` : path;
 }
 
 /** The path an item claim reads inside its item, `actual` then `at`, or
