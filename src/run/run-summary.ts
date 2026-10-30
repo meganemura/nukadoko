@@ -16,6 +16,7 @@ import {
   type RunPathStep,
   type RunRoute,
   type RunScenario,
+  type RunStep,
   type RunTableCell,
   type RunTableRow,
   type RunWorld,
@@ -1141,6 +1142,15 @@ function afterWorldStopText(claim: RunClaim): string {
   return after === undefined || after.outcome === claim.outcome ? "" : `; after the world stopped, ${after.reason}, and the cell is broke`;
 }
 
+// A poll that declares settled conditions and did not pass says whether
+// it stopped because a reading settled or read until its timeout, since
+// the two are one broken claim otherwise.
+function settledText(step: RunStep): string {
+  if (step.settled === undefined || step.status !== "failed") return "";
+  const conditions = step.settled.conditions.join(" and ");
+  return step.settled.stop === undefined ? `, not settled (${conditions})` : `, settled on reading ${step.settled.stop.reading} (${conditions})`;
+}
+
 // One entry per Then that declared claims, and under it one line per claim
 // (src/report/summary/claim-line.ts): what was compared, with what, where
 // each value came from, and whether it held. A reader approving the run
@@ -1163,7 +1173,7 @@ function renderClaims(document: RunDocument): string[] {
       const environment = marks.length === 0 ? "" : ` (${marks.join(", ")})`;
       const attempts = step.attempts !== undefined && step.attempts > 1 ? `, ${step.attempts} readings` : "";
       const observation = step.observation === "unobserved" ? ", observed nothing" : "";
-      const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${observation}`;
+      const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${settledText(step)}${observation}`;
       if (step.claims.some((claim) => afterWorldStopText(claim) !== "")) anyLate = true;
       const lines = [head, ...step.claims.map((claim) => `  - ${cellText(`${claimLine(claim)}${afterWorldStopText(claim)}${measuredText(claim, step.step_record_id)}`)}`)];
       const key = lines.join("\n");

@@ -2931,3 +2931,99 @@ export default defineStep({
     expect(checked.stdout + checked.stderr).toContain(`defineStep ${message}.`);
   });
 });
+
+describe("a poll with settled conditions stops on a reading that cannot change", () => {
+  // The screen loads on the third reading and shows a spinbutton from then
+  // on, so the claim breaks on every reading the screen settled on.
+  const step = (settled: string, timeoutMs = 5000) => `import { defineStep, z } from "nukadoko";
+let calls = 0;
+export default defineStep({
+  pattern: "the scoring screen shows a slider",
+  args: z.object({}),
+  poll: { timeout_ms: ${timeoutMs}, settled: ${settled} },
+  observe() {
+    calls += 1;
+    return calls <= 2 ? { screen: "loading", control: "none" } : { screen: "scoring", control: "spinbutton" };
+  },
+  claims: [{ actual: "control", compare: "equal", expected: { literal: "slider" } }],
+});
+`;
+  const SCORING = '[{ actual: "screen", compare: "equal", expected: { literal: "scoring" } }]';
+
+  it("stops on two consecutive settled readings well before the timeout, and the record and the broken line say so", async () => {
+    const rootDir = await project({ "features/steps/the-scoring-screen-shows.ts": step(SCORING), "features/t.feature": feature("Then the scoring screen shows a slider") });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const broken =
+      'claim broken: "spinbutton" (observe:control) equal "slider" (literal:slider); the poll stopped on reading 4, before its 5000 ms timeout, since readings 3 and 4 settled (screen equal "scoring")';
+    expect(result.stderr).toContain(`      ${broken}\n`);
+    const entry = lastClaimStep(rootDir);
+    expect(entry.error).toEqual({ kind: "claim_broken", message: broken });
+    expect(entry.settled).toEqual({ conditions: ['screen equal "scoring"'], stop: { reading: 4, actuals: [{ value: "scoring" }] } });
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), entry.record, "record.json"), "utf8")) as Record<string, any>;
+    expect(record.attempts).toBe(4);
+    expect(record.settled).toEqual(entry.settled);
+    expect(record.readings.map((reading: Record<string, unknown>) => [reading.attempt, reading.held, reading.settled, reading.actuals])).toEqual([
+      [1, false, false, [{ value: "none" }]],
+      [2, false, false, [{ value: "none" }]],
+      [3, false, true, [{ value: "spinbutton" }]],
+      [4, false, true, [{ value: "spinbutton" }]],
+    ]);
+    // Four readings 100 ms apart, against a timeout of 5000 ms.
+    const tookMs = Date.parse(record.finished_at) - Date.parse(record.started_at);
+    expect(tookMs).toBeLessThan(2000);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain('- `features/t.feature:3` the scoring screen shows a slider, 4 readings, settled on reading 4 (screen equal "scoring")\n');
+  });
+
+  it("reads until the timeout as before when no two consecutive readings settle, and says so", async () => {
+    const rootDir = await project({
+      "features/steps/the-scoring-screen-shows.ts": step('[{ actual: "screen", compare: "equal", expected: { literal: "results" } }]', 300),
+      "features/t.feature": feature("Then the scoring screen shows a slider"),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const entry = lastClaimStep(rootDir);
+    expect(entry.error.message).toBe(
+      'claim broken: "spinbutton" (observe:control) equal "slider" (literal:slider); the poll read until its 300 ms timeout, and no two consecutive readings settled (screen equal "results")',
+    );
+    expect(entry.settled).toEqual({ conditions: ['screen equal "results"'] });
+    expect(entry.attempts).toBeGreaterThanOrEqual(4);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain(`- \`features/t.feature:3\` the scoring screen shows a slider, ${entry.attempts} readings, not settled (screen equal "results")\n`);
+  });
+
+  it("passes as before when the claims hold on settled readings", async () => {
+    const rootDir = await project({
+      "features/steps/the-scoring-screen-shows.ts": step(SCORING).replace('{ literal: "slider" }', '{ literal: "spinbutton" }').replace("shows a slider", "shows a spinbutton"),
+      "features/t.feature": feature("Then the scoring screen shows a spinbutton"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(0);
+    const entry = lastClaimStep(rootDir);
+    expect(entry.status).toBe("passed");
+    expect(entry.attempts).toBe(4);
+    expect(entry.settled).toEqual({ conditions: ['screen equal "scoring"'] });
+  });
+
+  it("shows each condition in nuka steps, and records the stop under nuka do", async () => {
+    const rootDir = await project({ "features/steps/the-scoring-screen-shows.ts": step(SCORING), "features/t.feature": feature("Then the scoring screen shows a slider") });
+    const steps = await cli(rootDir, ["steps"]);
+    expect(steps.stdout).toContain('  claim: control equal "slider"\n  settled: screen equal "scoring"\n');
+    const done = await cli(rootDir, ["do", "the-scoring-screen-shows", "--args", "{}"]);
+    expect(done.exitCode).toBe(1);
+    const record = JSON.parse(done.stdout) as Record<string, any>;
+    expect(record.settled).toEqual({ conditions: ['screen equal "scoring"'], stop: { reading: 4, actuals: [{ value: "scoring" }] } });
+  });
+
+  it("is refused at import when every claim is also a settled condition, so no reading could settle with a claim broken", async () => {
+    const rootDir = await project({
+      "features/steps/the-scoring-screen-shows.ts": step('[{ actual: "control", compare: "equal", expected: { literal: "slider" } }]'),
+      "features/t.feature": feature("Then the scoring screen shows a slider"),
+    });
+    const result = await cli(rootDir, ["check"]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain(
+      "error\tstep-file-import-failed\tfeatures/steps/the-scoring-screen-shows.ts\tdefineStep poll.settled names every claim of the step, so a reading settles only when every claim holds, and the poll never stops on a settled reading. Name the state that shows the reading is final, such as a heading or a count of busy elements.\n",
+    );
+  });
+});

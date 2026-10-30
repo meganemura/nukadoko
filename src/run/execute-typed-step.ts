@@ -8,12 +8,21 @@ import type { EventsProducer, EventsRequest } from "../context/events-read.js";
 import { describeSelection, resolveSelection } from "../execution-events/selection.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
-import type { ClaimComparisonRecord, ClaimEachRecord, ClaimReading, ErrorKind, EventsReadRecord, FixtureUsageEntry, ReturnsDrop } from "../record/types.js";
+import type {
+  ClaimComparisonRecord,
+  ClaimEachRecord,
+  ClaimReading,
+  ErrorKind,
+  EventsReadRecord,
+  FixtureUsageEntry,
+  ReturnsDrop,
+  SettledRecord,
+} from "../record/types.js";
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { types } from "node:util";
-import { eventsShapeOf, observeWithheldKeys, pathSegments, sentenceUnreadReason, type Claim } from "../step/claims.js";
+import { describeSettled, eventsShapeOf, observeWithheldKeys, pathSegments, sentenceUnreadReason, settledConditions, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
 import { isClaimStep, type ClaimStep, type RunStep, type Step } from "../step/define-step.js";
 import {
@@ -26,6 +35,7 @@ import {
   POLL_INTERVAL_MS,
   readerOf,
   readingOf,
+  readingValue,
   readKey,
   takeReads,
   claimsEndedEarly,
@@ -40,6 +50,7 @@ import {
   type JudgedClaim,
   type PatternTester,
   type PollClock,
+  type PollStop,
   type Reader,
   type Reading,
   type ReadingsLeftOut,
@@ -105,6 +116,9 @@ export interface ClaimExecution {
   readonly readings?: readonly ClaimReading[];
   /** A polled step whose log left readings out: how many. */
   readonly readingsLeftOut?: ReadingsLeftOut;
+  /** A polled step that declares `poll.settled` only: its conditions,
+   * and the reading the poll stopped on when it settled. */
+  readonly settled?: SettledRecord;
 }
 
 export type ValidatedStepOutcome =
@@ -468,7 +482,10 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const fromKeys = new Set(Object.keys(step.from));
   const eventsShape = eventsShapeOf(step.events);
   const filesKeys = new Set(Object.keys(step.files));
-  const reads = claimReads(step.claims, fromKeys, eventsShape, filesKeys);
+  // A settled condition reads what observe returns as a claim does, an
+  // ARIA snapshot included, so one reading serves both.
+  const settled = settledConditions(step.poll);
+  const reads = claimReads([...step.claims, ...settled], fromKeys, eventsShape, filesKeys);
   // A caller that took no snapshot before the schema ran (none does) gets
   // one of the validated args, so no claim reads a live value either way.
   const argReads = input.claimArgs ?? takeReads(args, reads.args);
@@ -542,15 +559,44 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     const kept = readings.kept();
     return kept.left_out === undefined ? { readings: kept.readings } : { readings: kept.readings, readingsLeftOut: kept.left_out };
   };
-  const judge = async (observed: Reader): Promise<ValidatedStepOutcome> => {
+  // What each settled condition read on the last reading of the poll.
+  let settledActuals: readonly JudgedClaim[] = [];
+  const settledField = (end: PollEnd | undefined): { readonly settled?: SettledRecord } => {
+    if (settled.length === 0) return {};
+    const conditions = settled.map(describeSettled);
+    if (end?.stop !== "settled") return { settled: { conditions } };
+    const actuals = settledActuals.map((entry) => readingValue(entry.rawActual, entry.record.reason));
+    return { settled: { conditions, stop: { reading: attempts, actuals } } };
+  };
+  // Why a poll that judged a claim broken stopped, on the failure's first
+  // line, which is the one a run prints, so a reading that settled is never
+  // mistaken for the timeout passing.
+  const withPollEnd = (message: string, end: PollEnd | undefined): string => {
+    if (settled.length === 0 || end === undefined || end.stop === "held") return message;
+    const conditions = settled.map(describeSettled).join(" and ");
+    const why =
+      end.stop === "settled"
+        ? `; the poll stopped on reading ${attempts}, before its ${end.timeoutMs} ms timeout, since readings ${attempts - 1} and ${attempts} settled (${conditions})`
+        : `; the poll read until its ${end.timeoutMs} ms timeout, and no two consecutive readings settled (${conditions})`;
+    const [first = "", ...rest] = message.split("\n");
+    return [`${first}${redact(why, input.secrets) as string}`, ...rest].join("\n");
+  };
+  const judge = async (observed: Reader, end?: PollEnd): Promise<ValidatedStepOutcome> => {
     const judged = await evaluateClaims(step.claims, claimInputs(observed));
-    const claims: ClaimExecution = { judged, observation: "observed", attempts: Math.max(attempts, 1), ...readingsField(), ...eventsField() };
+    const claims: ClaimExecution = {
+      judged,
+      observation: "observed",
+      attempts: Math.max(attempts, 1),
+      ...readingsField(),
+      ...settledField(end),
+      ...eventsField(),
+    };
     const records = judged.map((entry) => entry.record);
     if (records.every((record) => record.outcome === "held")) return { status: "passed", result: {}, fixtureUsage, claims };
     // A claim nukadoko failed to judge is never the criterion failing, so
     // it decides the kind even when another claim broke.
     const kind = records.some((record) => record.outcome === "unjudged") ? "claim_unjudged" : "claim_broken";
-    return { status: "failed", error: { message: failureMessage(records), kind }, thrown: undefined, fixtureUsage, claims };
+    return { status: "failed", error: { message: withPollEnd(failureMessage(records), end), kind }, thrown: undefined, fixtureUsage, claims };
   };
   // What a step whose reading did not end records: `unobserved` only when
   // `observe` itself threw; a fixture that failed to set up is the step's
@@ -574,7 +620,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       error: { message: kind === "unobserved" ? `the step observed nothing, so no claim was judged: ${messageOf(error)}` : messageOf(error), kind },
       thrown: error,
       fixtureUsage,
-      claims: { judged, observation: timedOut && read ? "observed" : "unobserved", attempts, ...readingsField(), ...eventsField() },
+      claims: { judged, observation: timedOut && read ? "observed" : "unobserved", attempts, ...readingsField(), ...settledField(undefined), ...eventsField() },
     };
   };
   // Static, so before any fixture is set up: a line whose docstring or
@@ -723,21 +769,27 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       return { ok: false, error };
     }
   };
-  const holds = async (value: unknown): Promise<boolean> => {
-    const judged = await evaluateClaims(step.claims, claimInputs(value as Reader));
-    const { reading, content } = readingOf(attempts, readingAt(), judged);
+  const judgeReading = async (value: unknown): Promise<{ readonly held: boolean; readonly settled: boolean }> => {
+    const inputs = claimInputs(value as Reader);
+    const judged = await evaluateClaims(step.claims, inputs);
+    let isSettled = false;
+    if (settled.length > 0) {
+      settledActuals = await evaluateClaims(settled, inputs);
+      isSettled = settledActuals.every((entry) => entry.record.outcome === "held");
+    }
+    const { reading, content } = readingOf(attempts, readingAt(), judged, settled.length > 0 ? isSettled : undefined);
     log.add(reading, content);
-    return reading.held;
+    return { held: reading.held, settled: isSettled };
   };
   // A poll does not outlast the step: the deadline's timer starts with the
   // poll, and the poll stops one interval before it, so its last reading
   // starts in time and is judged, where a poll longer than the step would
   // always end in the deadline, with no reading judged.
   const pollTimeout = deadline.ms === undefined ? poll.timeout_ms : Math.max(0, Math.min(poll.timeout_ms, deadline.ms - POLL_INTERVAL_MS));
-  let polled: { readonly last: Reading; readonly attempts: number };
+  let polled: { readonly last: Reading; readonly attempts: number; readonly stop: PollStop };
   try {
     polled = await runWithTimeout(
-      () => handle.recordingProcesses(() => pollReadings(read, holds, pollTimeout, clock)),
+      () => handle.recordingProcesses(() => pollReadings(read, judgeReading, pollTimeout, clock)),
       deadline.ms,
       "Step",
       name,
@@ -748,7 +800,13 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     return readNothing(error, true);
   }
   if (!polled.last.ok) return readNothing(polled.last.error, true);
-  return judge(polled.last.value as Reader);
+  return judge(polled.last.value as Reader, { stop: polled.stop, timeoutMs: pollTimeout });
+}
+
+/** How a poll ended, for the record and the failure message. */
+interface PollEnd {
+  readonly stop: PollStop;
+  readonly timeoutMs: number;
 }
 
 /** Whether `value` is a promise or another thenable `observe` returned. A

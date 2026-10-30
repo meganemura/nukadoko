@@ -1964,33 +1964,50 @@ export interface PollClock {
  * frame and not the same one read twice. */
 export const POLL_INTERVAL_MS = 100;
 
+/** What one reading showed: whether every claim held on it, and whether
+ * it settled (every settled condition held; never for a step that
+ * declares none). */
+export interface ReadingVerdict {
+  readonly held: boolean;
+  readonly settled: boolean;
+}
+
+/** Why a poll stopped: two consecutive readings held, two consecutive
+ * readings settled with a claim broken, or the timeout passed. */
+export type PollStop = "held" | "settled" | "timeout";
+
 /**
- * Reads until `holds` is true for two consecutive readings, or the deadline
- * passes; returns the last reading and how many there were. One reading
- * that holds is never enough on its own: a page between two renders can
- * show the expected state for one frame. When the deadline passes right
- * after a first hold, one more reading confirms it, so a pass always rests
- * on two. A reading that threw counts as not holding.
+ * Reads until two consecutive readings agree, or the deadline passes, and
+ * returns the last reading, how many there were, and why it stopped. Two
+ * agree when every claim held on both (`held`), or when both settled with
+ * a claim broken (`settled`). One reading is never enough on its own: a
+ * page between two renders can show a state for one frame, the expected
+ * one or a final-looking one. When the deadline passes right after a first
+ * hold, one more reading confirms it, so a pass always rests on two. A
+ * settled reading never makes a claim hold, and a reading that threw
+ * neither holds nor settles.
  */
 export async function pollReadings(
   read: () => Promise<Reading>,
-  holds: (value: unknown) => Promise<boolean>,
+  judge: (value: unknown) => Promise<ReadingVerdict>,
   timeoutMs: number,
   clock: PollClock,
-): Promise<{ readonly last: Reading; readonly attempts: number }> {
+): Promise<{ readonly last: Reading; readonly attempts: number; readonly stop: PollStop }> {
   const deadline = clock.now() + timeoutMs;
-  let consecutive = 0;
+  let held = 0;
+  let settled = 0;
   let attempts = 0;
-  let last: Reading;
   for (;;) {
-    last = await read();
+    const last = await read();
     attempts += 1;
-    consecutive = last.ok && (await holds(last.value)) ? consecutive + 1 : 0;
-    if (consecutive >= 2) break;
-    if (consecutive === 0 && clock.now() >= deadline) break;
+    const verdict = last.ok ? await judge(last.value) : { held: false, settled: false };
+    held = verdict.held ? held + 1 : 0;
+    settled = !verdict.held && verdict.settled ? settled + 1 : 0;
+    if (held >= 2) return { last, attempts, stop: "held" };
+    if (settled >= 2) return { last, attempts, stop: "settled" };
+    if (held === 0 && clock.now() >= deadline) return { last, attempts, stop: "timeout" };
     await clock.sleep(POLL_INTERVAL_MS);
   }
-  return { last, attempts };
 }
 
 // --- the readings of a polled claim step ---
@@ -2053,9 +2070,15 @@ function fullValue(raw: unknown, reason: string | undefined): unknown {
  * its content: whether it held and what each claim read, in full, so a
  * reading that differs from the one before only past the point where a
  * long value is cut is still a change point. `expecteds` is there when an
- * expected value comes from `observe`. Pure.
+ * expected value comes from `observe`, and `settled` when the step
+ * declares settled conditions. Pure.
  */
-export function readingOf(attempt: number, at: string, judged: readonly JudgedClaim[]): { readonly reading: ClaimReading; readonly content: string } {
+export function readingOf(
+  attempt: number,
+  at: string,
+  judged: readonly JudgedClaim[],
+  settled?: boolean,
+): { readonly reading: ClaimReading; readonly content: string } {
   const held = judged.every((entry) => entry.record.outcome === "held");
   const both = judged.some((entry) => entry.expectedOrigins.includes("observe"));
   const expected = judged.map((entry) => expectedOfRecord(entry.record));
@@ -2065,6 +2088,7 @@ export function readingOf(attempt: number, at: string, judged: readonly JudgedCl
     held,
     actuals: judged.map((entry) => readingValue(entry.rawActual, entry.record.reason)),
     ...(both ? { expecteds: judged.map((entry, index) => readingValue(expected[index], entry.record.reason)) } : {}),
+    ...(settled === undefined ? {} : { settled }),
   };
   let content: string;
   try {
@@ -2073,6 +2097,7 @@ export function readingOf(attempt: number, at: string, judged: readonly JudgedCl
       judged.map((entry) => fullValue(entry.rawActual, entry.record.reason)),
       both ? judged.map((entry, index) => fullValue(expected[index], entry.record.reason)) : null,
       null,
+      settled ?? null,
     ]);
   } catch {
     // A value that is not JSON is kept as its reason, so the cut form is
@@ -2114,7 +2139,7 @@ export interface ReadingsLog {
 /** What a reading read, without when it happened or its number: two
  * readings with one content read the same thing. */
 function readingContent(reading: ClaimReading): string {
-  return JSON.stringify([reading.held, reading.actuals ?? null, reading.expecteds ?? null, reading.error ?? null]);
+  return JSON.stringify([reading.held, reading.actuals ?? null, reading.expecteds ?? null, reading.error ?? null, reading.settled ?? null]);
 }
 
 export function createReadingsLog(cap = CLAIM_READINGS_CAP): ReadingsLog {

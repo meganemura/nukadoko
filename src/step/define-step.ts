@@ -5,7 +5,7 @@ import { argsSchemaRewrite, asObjectShape, isPlainString, isRequiredField, schem
 import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 import { selectionProblems, type DeclaredEventSelection } from "../execution-events/selection.js";
-import { claimsProblem, eventsShapeOf, pathSegments, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
+import { claimsProblem, eventsShapeOf, pathSegments, pollProblem, type Claim, type ClaimPoll, type ClaimStepShape } from "./claims.js";
 import { freezeInPlace, frozenCopy, type Keep } from "./frozen-copy.js";
 import { MAX_TIMER_DELAY_MS } from "../timer/max-delay.js";
 import type { FileChange } from "../record/types.js";
@@ -496,7 +496,10 @@ export interface ClaimStepDefinition<
   ): unknown;
   /** `{ timeout_ms }` re-runs `observe` until every claim holds on two
    * consecutive readings; `false` reads once. `nuka check` requires it to
-   * be stated when `observe` names `page`, `context`, or `pageAs`. */
+   * be stated when `observe` names `page`, `context`, or `pageAs`.
+   * `settled` names the state a reading cannot leave once it reaches it
+   * (a heading, no busy element): two consecutive readings in that state
+   * with a claim broken end the poll before its timeout. */
   poll?: ClaimPoll;
   /** Counts of an earlier step's execution events, by the key a claim's
    * actual names: nukadoko reads the lines the program wrote for that
@@ -818,26 +821,27 @@ function validateClaimStepDefinition(definition: DefinitionFields): void {
   const shape = asObjectShape(definition.args as z.ZodTypeAny);
   const fromKeys =
     typeof definition.from === "object" && definition.from !== null ? Object.keys(definition.from) : [];
+  const claimShape: ClaimStepShape = {
+    patterns,
+    argsKeys: shape === undefined ? null : new Set(Object.keys(shape)),
+    requiredArgsKeys:
+      shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isRequiredField(field)).map(([key]) => key)),
+    fromKeys: new Set(fromKeys),
+    captureKeys: patternCaptureKeys(patterns),
+    hasObserve: definition.observe !== undefined,
+    rewrittenArgs: new Map(
+      Object.entries(shape ?? {}).flatMap(([key, field]) => {
+        const rewrite = schemaRewrite(field);
+        return rewrite === null ? [] : [[key, rewrite] as const];
+      }),
+    ),
+    argsRewrite: argsSchemaRewrite(definition.args as z.ZodTypeAny),
+    stringArgs: shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isPlainString(field)).map(([key]) => key)),
+    events: eventsShapeOf(definition.events),
+    files: filesKeysOf(definition.files),
+  };
   const problem =
-    claimsProblem(definition.claims, {
-      patterns,
-      argsKeys: shape === undefined ? null : new Set(Object.keys(shape)),
-      requiredArgsKeys:
-        shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isRequiredField(field)).map(([key]) => key)),
-      fromKeys: new Set(fromKeys),
-      captureKeys: patternCaptureKeys(patterns),
-      hasObserve: definition.observe !== undefined,
-      rewrittenArgs: new Map(
-        Object.entries(shape ?? {}).flatMap(([key, field]) => {
-          const rewrite = schemaRewrite(field);
-          return rewrite === null ? [] : [[key, rewrite] as const];
-        }),
-      ),
-      argsRewrite: argsSchemaRewrite(definition.args as z.ZodTypeAny),
-      stringArgs: shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isPlainString(field)).map(([key]) => key)),
-      events: eventsShapeOf(definition.events),
-      files: filesKeysOf(definition.files),
-    }) ?? pollProblem(definition.poll, definition.observe !== undefined, MAX_STEP_TIMEOUT_MS);
+    claimsProblem(definition.claims, claimShape) ?? pollProblem(definition.poll, definition.claims as readonly Claim[], claimShape, MAX_STEP_TIMEOUT_MS);
   if (problem !== null) {
     throw new InvalidStepDefinitionError(`defineStep ${problem}.`);
   }

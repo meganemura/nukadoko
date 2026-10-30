@@ -18,6 +18,9 @@ import {
   literalStatement,
   NUMBER_WORDS,
   numberOfWord,
+  pollProblem,
+  SETTLED_COMPARES,
+  type SettledCondition,
   itemPathsOverlap,
   placeAt,
   placesOverlap,
@@ -1969,7 +1972,7 @@ describe("poll", () => {
       const sequence = tc.draw(kinds);
       const timeout = tc.draw(timeouts);
       const { read, seen } = readingsOf(sequence);
-      const result = await pollReadings(read, async (value) => value === true, timeout, fakeClock());
+      const result = await pollReadings(read, async (value) => ({ held: value === true, settled: false }), timeout, fakeClock());
       expect(result.attempts).toBe(seen.length);
       const passed = result.last.ok && result.last.value === true;
       if (passed) {
@@ -1988,15 +1991,91 @@ describe("poll", () => {
       const sequence = tc.draw(kinds);
       const timeout = tc.draw(timeouts);
       const { read } = readingsOf(sequence);
-      const result = await pollReadings(read, async (value) => value === true, timeout, fakeClock());
+      const result = await pollReadings(read, async (value) => ({ held: value === true, settled: false }), timeout, fakeClock());
       expect(result.attempts).toBeLessThanOrEqual(Math.ceil(timeout / POLL_INTERVAL_MS) + 2);
+    }));
+
+  it("stops for the timeout only, when no reading settles", () =>
+    hegel.testAsync(async (tc) => {
+      const { read } = readingsOf(tc.draw(kinds));
+      const result = await pollReadings(read, async (value) => ({ held: value === true, settled: false }), tc.draw(timeouts), fakeClock());
+      expect(result.stop).toBe(result.last.ok && result.last.value === true ? "held" : "timeout");
     }));
 
   it("reads exactly twice when every reading holds", () =>
     hegel.testAsync(async (tc) => {
       const timeout = tc.draw(timeouts);
-      const result = await pollReadings(async () => ({ ok: true, value: 1 }), async (value) => value === 1, timeout, fakeClock());
+      const result = await pollReadings(async () => ({ ok: true, value: 1 }), async (value) => ({ held: value === 1, settled: false }), timeout, fakeClock());
       expect(result.attempts).toBe(2);
+    }));
+});
+
+/** One reading of a poll that declares settled conditions: whether
+ * `observe` threw, every claim held, and the reading settled. */
+interface SettledReading {
+  readonly threw: boolean;
+  readonly held: boolean;
+  readonly settled: boolean;
+}
+
+/** A poll over `sequence` (past its end, readings that neither hold nor
+ * settle), judged with the settled conditions or without them. */
+async function pollOver(sequence: readonly SettledReading[], timeout: number, withSettled: boolean) {
+  let index = 0;
+  const read = async (): Promise<Reading> => {
+    const reading = sequence[index] ?? { threw: false, held: false, settled: false };
+    index += 1;
+    return reading.threw ? { ok: false, error: new Error("not there yet") } : { ok: true, value: reading };
+  };
+  const judge = async (value: unknown) => {
+    const reading = value as SettledReading;
+    return { held: reading.held, settled: withSettled && reading.settled };
+  };
+  return pollReadings(read, judge, timeout, fakeClock());
+}
+
+describe("a poll with settled conditions", () => {
+  const readings = gs.arrays(
+    gs.composite((tc) => ({ threw: tc.draw(gs.booleans()), held: tc.draw(gs.booleans()), settled: tc.draw(gs.booleans()) })),
+    { maxSize: 30 },
+  );
+  const timeouts = gs.integers({ minValue: 1, maxValue: 2000 });
+
+  it("ends as the poll without them whenever the claims held before two readings settled", () =>
+    hegel.testAsync(async (tc) => {
+      const sequence = tc.draw(readings);
+      const timeout = tc.draw(timeouts);
+      const without = await pollOver(sequence, timeout, false);
+      const withSettled = await pollOver(sequence, timeout, true);
+      if (withSettled.stop !== "settled") {
+        expect(withSettled).toEqual(without);
+        return;
+      }
+      // Stopping on settled readings only ever shortens the poll, and only
+      // where the poll without them had not passed yet.
+      expect(withSettled.attempts).toBeLessThanOrEqual(without.attempts);
+      if (withSettled.attempts === without.attempts) expect(without.stop).toBe("timeout");
+    }));
+
+  it("never stops with every claim held when it stops on settled readings", () =>
+    hegel.testAsync(async (tc) => {
+      const sequence = tc.draw(readings);
+      const result = await pollOver(sequence, tc.draw(timeouts), true);
+      if (result.stop !== "settled") return;
+      const last = sequence[result.attempts - 1]!;
+      const before = sequence[result.attempts - 2]!;
+      expect(result.attempts).toBeGreaterThanOrEqual(2);
+      for (const reading of [before, last]) expect(reading).toEqual({ threw: false, held: false, settled: true });
+    }));
+
+  it("stops on the first two consecutive readings that settled with a claim broken", () =>
+    hegel.testAsync(async (tc) => {
+      const sequence = tc.draw(readings);
+      const result = await pollOver(sequence, tc.draw(timeouts), true);
+      const settledBroken = (reading: SettledReading | undefined) => reading !== undefined && !reading.threw && !reading.held && reading.settled;
+      const firstPair = sequence.findIndex((reading, index) => settledBroken(reading) && settledBroken(sequence[index + 1]));
+      if (result.stop === "settled") expect(firstPair).toBe(result.attempts - 2);
+      else if (firstPair !== -1) expect(firstPair + 2).toBeGreaterThan(result.attempts);
     }));
 });
 
@@ -2662,4 +2741,60 @@ describe("an expected value a compare can never judge as the sentence means it",
     expect(claimsProblem([{ actual: "result", compare: "fits-text", expected: "out" }], literalShape("the build prints"))).toBeNull();
     expect(claimsProblem([{ actual: "result", compare: "fits-text", expected: { literal: "done" } }], literalShape("the build prints done"))).toBeNull();
   });
+});
+
+describe("settled conditions", () => {
+  const shape: ClaimStepShape = { ...literalShape("the control is a slider"), fromKeys: new Set(["result"]), hasObserve: true };
+  const claims: Claim[] = [{ actual: "control", compare: "equal", expected: { literal: "slider" } }];
+  const problem = (settled: unknown, stepClaims: readonly Claim[] = claims) => pollProblem({ timeout_ms: 5000, settled }, stepClaims, shape, 60_000);
+
+  it("accepts a literal no sentence states, since a settled condition never makes a claim hold", () => {
+    expect(problem([{ actual: "busy", count: true, compare: "equal", expected: { literal: 0 } }])).toBeNull();
+    expect(problem([{ actual: "page", compare: "fits-aria-snapshot", expected: { literal: '- heading "Scoring"' } }])).toBeNull();
+  });
+
+  it("refuses a condition the run would judge one way on every reading", () => {
+    expect(problem([{ actual: "result.screen", compare: "equal", expected: { literal: "scoring" } }])).toBe(
+      'poll.settled[0].actual starts with "result", which is not a value observe returns, and only a value observe reads again can change between readings, so the condition would hold on every reading or on none. Name a key observe returns',
+    );
+    expect(problem([{ actual: "screen", compare: "starts-with-text", expected: { literal: "" } }])).toBe(
+      'poll.settled[0] compares with starts-with-text, and its expected value "" is not a text with something in it, so the condition never holds and never stops a poll',
+    );
+    expect(problem([{ actual: "busy", count: true, compare: "equal", expected: { literal: "none" } }])).toBe(
+      'poll.settled[0] counts the items of its actual value, which makes a number, and its expected value is the literal "none", so the condition never holds and never stops a poll',
+    );
+    expect(problem([{ actual: "screen", compare: "is-a", expected: { literal: "screen" } }])).toBe(
+      `poll.settled[0] compares with is-a, and "screen" is not one of the kinds ${VALUE_KINDS.join(", ")}, so the condition never holds and never stops a poll`,
+    );
+    expect(problem([{ actual: "page", compare: "fits-aria-snapshot", expected: { literal: "# a comment" } }])).toBe(
+      "poll.settled[0] compares with fits-aria-snapshot, and its expected ARIA snapshot names no node, which the run breaks on every page, so the condition never holds and never stops a poll",
+    );
+  });
+
+  it("refuses an expected value that is not a literal, and a boolean observe would compute", () => {
+    expect(problem([{ actual: "screen", compare: "equal", expected: "screen" }])).toBe(
+      'poll.settled[0].expected must be { literal } with a string, a finite number, null, or []; got "screen". A settled condition compares what observe read with a value the step declares',
+    );
+    expect(problem([{ actual: "ready", compare: "equal", expected: { literal: true } }])).toBe(
+      "poll.settled[0].expected is the boolean true, and its actual comes from observe. A boolean computed by observe is a judgment made in code: return the thing measured (a count, a text, a list) and let the condition compare it",
+    );
+    expect(problem([{ actual: "screen", compare: "matches", expected: { literal: "x" } }])).toBe(
+      `poll.settled[0].compare must be one of ${SETTLED_COMPARES.join(", ")}; got "matches"`,
+    );
+    expect(problem([])).toBe("poll.settled must be a non-empty array of conditions, or left out");
+  });
+
+  const literals = gs.sampledFrom(["slider", "spinbutton", "scoring"]);
+  const comparison = gs.composite((tc): SettledCondition => ({ actual: tc.draw(gs.sampledFrom(["control", "screen"])), compare: "equal", expected: { literal: tc.draw(literals) } }));
+
+  it("refuses a list that names every claim, and only such a list, since then a reading settles only when the claims hold", () =>
+    hegel.test((tc) => {
+      const stepClaims = tc.draw(gs.arrays(comparison, { minSize: 1, maxSize: 3 }));
+      const settled = tc.draw(gs.arrays(comparison, { minSize: 1, maxSize: 4 }));
+      const same = (a: SettledCondition, b: SettledCondition) => a.actual === b.actual && a.expected.literal === b.expected.literal;
+      const coversEvery = stepClaims.every((claim) => settled.some((condition) => same(claim, condition)));
+      const refused = problem(settled, stepClaims);
+      expect(refused === null ? false : refused.startsWith("poll.settled names every claim of the step")).toBe(coversEvery);
+      if (!coversEvery) expect(refused).toBeNull();
+    }));
 });

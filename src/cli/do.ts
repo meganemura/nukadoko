@@ -886,6 +886,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             attempts: outcome.claims.attempts,
             ...(outcome.claims.readings === undefined ? {} : { readings: [...outcome.claims.readings] }),
             ...(outcome.claims.readingsLeftOut === undefined ? {} : { readings_left_out: { ...outcome.claims.readingsLeftOut } }),
+            ...(outcome.claims.settled === undefined ? {} : { settled: outcome.claims.settled }),
             ...(outcome.claims.eventsRead === undefined ? {} : { events_read: outcome.claims.eventsRead }),
           };
 

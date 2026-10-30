@@ -1,5 +1,6 @@
 import { selectionSentenceValues } from "../execution-events/selection.js";
 import type { ClaimCompare, ClaimView } from "../record/types.js";
+import { expectedProblemReason, expectedSnapshotProblem } from "./aria-snapshot.js";
 
 // Responsibility: what a claim step declares in place of `run`
 // (docs/spec.md "Claims"), and the rules a declaration must pass before
@@ -124,9 +125,49 @@ export interface EachClaim {
 
 export type Claim = ComparisonClaim | EachClaim;
 
+/** A state a polled reading can reach and never leave: a comparison of a
+ * value `observe` returned with a value the step declares. It never makes
+ * a claim hold; two consecutive readings on which it holds and a claim
+ * does not end the poll before its timeout. */
+export interface SettledCondition {
+  readonly actual: string;
+  readonly view?: ClaimView;
+  readonly at?: string;
+  readonly count?: true;
+  readonly compare: SettledCompare;
+  readonly expected: { readonly literal: ClaimLiteral };
+}
+
+/** The compares a settled condition may name: each reads a literal the
+ * step can write and that `defineStep` can tell holds on some value and
+ * not on every one. */
+export const SETTLED_COMPARES = [
+  "equal",
+  "not-equal",
+  "contains-text",
+  "starts-with-text",
+  "ends-with-text",
+  "has-item",
+  "fits-aria-snapshot",
+  "is-a",
+  "greater-than",
+  "at-least",
+  "less-than",
+  "at-most",
+] as const satisfies readonly ClaimCompare[];
+
+export type SettledCompare = (typeof SETTLED_COMPARES)[number];
+
 /** `poll: { timeout_ms }` re-reads until every claim holds on two
- * consecutive readings; `false` reads once. */
-export type ClaimPoll = false | { readonly timeout_ms: number };
+ * consecutive readings; `settled` also stops it on two consecutive
+ * readings that settled with a claim broken; `false` reads once. */
+export type ClaimPoll = false | { readonly timeout_ms: number; readonly settled?: readonly SettledCondition[] };
+
+/** The settled conditions `poll` declares; none for a step that reads
+ * once or declares none. */
+export function settledConditions(poll: ClaimPoll | undefined): readonly SettledCondition[] {
+  return typeof poll === "object" ? (poll.settled ?? []) : [];
+}
 
 export function isEachClaim(claim: Claim): claim is EachClaim {
   return claim.each !== undefined;
@@ -1125,9 +1166,10 @@ export function claimsProblem(claims: unknown, shape: ClaimStepShape): string | 
   return problemOf(() => validateClaims(claims, shape));
 }
 
-/** Why this `poll` value is refused, or `null`. Pure. */
-export function pollProblem(poll: unknown, hasObserve: boolean, maxMs: number): string | null {
-  return problemOf(() => validatePoll(poll, hasObserve, maxMs));
+/** Why this `poll` value is refused, or `null`. `claims` are the
+ * step's own, already accepted. Pure. */
+export function pollProblem(poll: unknown, claims: readonly Claim[], shape: ClaimStepShape, maxMs: number): string | null {
+  return problemOf(() => validatePoll(poll, claims, shape, maxMs));
 }
 
 function problemOf(check: () => void): string | null {
@@ -1436,21 +1478,138 @@ function describeItemPath(segments: readonly string[]): string {
   return segments.length === 0 ? "the item itself" : `the item at ${segments.join(".")}`;
 }
 
-function validatePoll(poll: unknown, hasObserve: boolean, maxMs: number): void {
+function validatePoll(poll: unknown, claims: readonly Claim[], shape: ClaimStepShape, maxMs: number): void {
   if (poll === undefined) return;
   if (poll !== false) {
     const timeout = typeof poll === "object" && poll !== null ? (poll as { timeout_ms?: unknown }).timeout_ms : undefined;
-    if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0 || timeout > maxMs || Object.keys(poll as object).length !== 1) {
+    const unknownKey = typeof poll === "object" && poll !== null && Object.keys(poll).some((key) => key !== "timeout_ms" && key !== "settled");
+    if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0 || timeout > maxMs || unknownKey) {
       throw new InvalidClaimError(
-        `poll must be false or { timeout_ms } with a number of milliseconds greater than 0 and at most ${maxMs}; got ${describe(poll)}`,
+        `poll must be false or { timeout_ms, settled? } with a number of milliseconds greater than 0 and at most ${maxMs}; got ${describe(poll)}`,
       );
     }
   }
-  if (poll !== false && !hasObserve) {
+  if (poll !== false && !shape.hasObserve) {
     throw new InvalidClaimError(
       "poll re-runs observe, and the step has no observe. Values from earlier steps do not change between readings",
     );
   }
+  if (poll !== false && (poll as { settled?: unknown }).settled !== undefined) validateSettled((poll as { settled: unknown }).settled, claims, shape);
+}
+
+// --- settled conditions ---
+//
+// A settled condition says when a reading is final, so the poll can stop
+// waiting for a claim that broke on it. It is a declaration about the
+// world's timing, not a criterion: it never makes a claim hold, and the
+// most a wrong one can do is end a poll early on a broken claim. So its
+// expected value is a literal the step writes, which no sentence has to
+// state, and the record names it as the step's declaration. A condition
+// the run would judge one way on every reading is refused here: one that
+// never holds never stops a poll, and one that holds whenever every claim
+// holds never stops it either.
+
+const SETTLED_KEYS = ["actual", "view", "at", "count", "compare", "expected"] as const;
+
+function validateSettled(settled: unknown, claims: readonly Claim[], shape: ClaimStepShape): void {
+  if (!Array.isArray(settled) || settled.length === 0) {
+    throw new InvalidClaimError("poll.settled must be a non-empty array of conditions, or left out");
+  }
+  settled.forEach((raw: unknown, index) => {
+    const label = `poll.settled[${index}]`;
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      throw new InvalidClaimError(`${label} must be an object with actual, compare, and expected`);
+    }
+    checkSettledCondition(label, raw as Record<string, unknown>, shape);
+  });
+  const conditions = settled as readonly SettledCondition[];
+  if (claims.every((claim) => conditions.some((condition) => sameComparison(claim, condition)))) {
+    throw new InvalidClaimError(
+      "poll.settled names every claim of the step, so a reading settles only when every claim holds, and the poll never stops on a settled reading. Name the state that shows the reading is final, such as a heading or a count of busy elements",
+    );
+  }
+}
+
+function checkSettledCondition(label: string, condition: Record<string, unknown>, shape: ClaimStepShape): void {
+  checkKeys(label, condition, SETTLED_KEYS, "a settled condition");
+  checkPath(`${label}.actual`, condition.actual, false);
+  const head = pathSegments(condition.actual as string)![0]!;
+  const readings = new Set([...(shape.events?.keys ?? []), ...(shape.files ?? [])]);
+  if (shape.fromKeys.has(head) || readings.has(head) || shape.argsKeys?.has(head) === true) {
+    throw new InvalidClaimError(
+      `${label}.actual starts with "${head}", which is not a value observe returns, and only a value observe reads again can change between readings, so the condition would hold on every reading or on none. Name a key observe returns`,
+    );
+  }
+  checkCommon(label, condition);
+  if (!(SETTLED_COMPARES as readonly unknown[]).includes(condition.compare)) {
+    throw new InvalidClaimError(`${label}.compare must be one of ${SETTLED_COMPARES.join(", ")}; got ${describe(condition.compare)}`);
+  }
+  const expected = condition.expected;
+  const literal = literalOf(expected);
+  if (literal === null || Object.keys(expected as object).length !== 1 || !isLiteralValue(literal.literal)) {
+    throw new InvalidClaimError(
+      `${label}.expected must be { literal } with a string, a finite number, null, or []; got ${describe(expected)}. A settled condition compares what observe read with a value the step declares`,
+    );
+  }
+  const value = literal.literal;
+  const compare = condition.compare as SettledCompare;
+  if (typeof value === "boolean") {
+    throw new InvalidClaimError(
+      `${label}.expected is the boolean ${String(value)}, and its actual comes from observe. A boolean computed by observe is a judgment made in code: return the thing measured (a count, a text, a list) and let the condition compare it`,
+    );
+  }
+  const never = (why: string): never => {
+    throw new InvalidClaimError(`${label} ${why}, so the condition never holds and never stops a poll`);
+  };
+  if (condition.count !== undefined && typeof value !== "number") never(`counts the items of its actual value, which makes a number, and its expected value is the literal ${describe(value)}`);
+  checkCount(label, condition);
+  checkActualView(label, condition);
+  if (ORDER_COMPARES.has(compare) && typeof value !== "number") never(`compares with ${compare}, which holds only on two numbers, and its expected value is the literal ${describe(value)}`);
+  if (TEXT_COMPARES.has(compare) && (typeof value !== "string" || value.trim() === "")) {
+    never(`compares with ${compare}, and its expected value ${describe(value)} is not a text with something in it`);
+  }
+  if (compare === "is-a") {
+    const kind = typeof value === "string" ? kindNamed(value) : undefined;
+    if (kind === undefined) never(`compares with is-a, and ${describe(value)} is not one of the kinds ${VALUE_KINDS.join(", ")}`);
+    COMPARE_SIDES["is-a"]!(label, condition);
+  }
+  if (compare === ARIA_SNAPSHOT_COMPARE) {
+    for (const key of ["view", "at", "count"] as const) {
+      if (condition[key] === undefined) continue;
+      throw new InvalidClaimError(
+        `${label} has ${key}, and fits-aria-snapshot takes the ARIA snapshot of the locator or page at actual, with nothing between the value and the snapshot. Name the locator or page in actual, and drop ${key}`,
+      );
+    }
+    if (typeof value !== "string") never(`compares with fits-aria-snapshot, and its expected value ${describe(value)} is not an ARIA snapshot`);
+    const problem = expectedSnapshotProblem(value as string);
+    if (problem !== null) {
+      never(
+        problem.kind === "unreadable"
+          ? `compares with fits-aria-snapshot, and ${expectedProblemReason(problem)}`
+          : "compares with fits-aria-snapshot, and its expected ARIA snapshot names no node, which the run breaks on every page",
+      );
+    }
+  }
+}
+
+/** The compares that read the expected value as a text to find. */
+const TEXT_COMPARES: ReadonlySet<string> = new Set(["contains-text", "starts-with-text", "ends-with-text"]);
+
+/** Whether a claim and a settled condition compare one value the same
+ * way with one literal, so the condition holds exactly when the claim
+ * does. Pure. */
+function sameComparison(claim: Claim, condition: SettledCondition): boolean {
+  if (isEachClaim(claim)) return false;
+  const literal = literalOf(claim.expected);
+  if (literal === null || claim.expected_view !== undefined) return false;
+  return (
+    claim.actual === condition.actual &&
+    claim.view === condition.view &&
+    claim.at === condition.at &&
+    claim.count === condition.count &&
+    claim.compare === condition.compare &&
+    JSON.stringify(literal.literal) === JSON.stringify(condition.expected.literal)
+  );
 }
 
 // --- one line per claim, for nuka steps and nuka describe ---
@@ -1468,6 +1627,12 @@ function describeComparison(claim: ItemClaim, actual: string): string {
   const expectedView = claim.expected_view === undefined ? "" : ` as ${claim.expected_view}`;
   const count = claim.count === true ? "count of " : "";
   return `${count}${actual}${view}${at} ${claim.compare} ${describeExpected(claim.expected)}${expectedView}`;
+}
+
+/** A settled condition as one line, as `describeClaim` writes a claim
+ * with a literal: `count of busy equal 0`. Pure. */
+export function describeSettled(condition: SettledCondition): string {
+  return describeComparison(condition, condition.actual);
 }
 
 /** A declared claim as one line: `result.exit_code equal code`, with a

@@ -234,6 +234,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
             claims: claimsForRun(stepRecord.claims),
             ...(stepRecord.observation === undefined ? {} : { observation: stepRecord.observation }),
             ...(stepRecord.attempts === undefined ? {} : { attempts: stepRecord.attempts }),
+            ...(stepRecord.settled === undefined ? {} : { settled: stepRecord.settled }),
           }),
       ...(stepRecord?.events_read === undefined ? {} : { events_read: stepRecord.events_read }),
     };

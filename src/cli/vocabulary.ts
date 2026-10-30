@@ -17,7 +17,7 @@ import { playwrightImportMissing } from "../check/playwright-check.js";
 import type { Finding } from "../finding/finding.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { describeSelection, type DeclaredEventSelection } from "../execution-events/selection.js";
-import { describeClaim, type Claim, type ClaimPoll } from "../step/claims.js";
+import { describeClaim, describeSettled, settledConditions, type Claim, type ClaimPoll } from "../step/claims.js";
 import { describeChangedFiles, producersOf, fixtureSourceOf, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type ChangedFiles, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
@@ -679,6 +679,9 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   }
   for (const claim of s.claims ?? []) {
     lines.push(...wrapIndented(`claim: ${describeClaim(claim)}`, width));
+  }
+  for (const condition of settledConditions(s.poll)) {
+    lines.push(...wrapIndented(`settled: ${describeSettled(condition)}`, width));
   }
   if (s.needs_error !== undefined) {
     lines.push(...wrapIndented(`needs: ${s.needs_error}`, width));

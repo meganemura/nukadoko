@@ -211,6 +211,7 @@ function claimsAttachment(stepRecord: StepRecord, testCaseStartedId: string, tes
           attempts: stepRecord.attempts,
           ...(stepRecord.readings === undefined ? {} : { readings: stepRecord.readings }),
           ...(stepRecord.readings_left_out === undefined ? {} : { readings_left_out: stepRecord.readings_left_out }),
+          ...(stepRecord.settled === undefined ? {} : { settled: stepRecord.settled }),
         }),
         contentEncoding: AttachmentContentEncoding.IDENTITY,
         mediaType: CLAIMS_MEDIA_TYPE,

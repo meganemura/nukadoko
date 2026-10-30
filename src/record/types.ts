@@ -908,14 +908,27 @@ export type ClaimReadingValue =
  * readings, when it happened, whether every claim held on it, and either
  * what each claim read (`actuals`, in claim order, and `expecteds` too
  * when an expected value comes from `observe`) or the first line of the
- * error `observe` threw. */
+ * error `observe` threw. A step that declares `poll.settled` also
+ * records whether every settled condition held on a reading that read a
+ * value (`settled`). */
 export interface ClaimReading {
   readonly attempt: number;
   readonly at: string;
   readonly held: boolean;
   readonly actuals?: readonly ClaimReadingValue[];
   readonly expecteds?: readonly ClaimReadingValue[];
+  readonly settled?: boolean;
   readonly error?: string;
+}
+
+/** A polled claim step's `poll.settled`, as its record keeps it: each
+ * condition as `nuka steps` prints it, a declaration of the step's and
+ * never a measurement, and, only when the poll stopped because two
+ * consecutive readings settled with a claim broken, the reading it
+ * stopped on and what each condition read there. */
+export interface SettledRecord {
+  readonly conditions: readonly string[];
+  readonly stop?: { readonly reading: number; readonly actuals: readonly ClaimReadingValue[] };
 }
 
 /** A claim as the step record carries it (docs/spec.md "Claims"):
@@ -1271,6 +1284,9 @@ export interface StepRecordBase {
    * how many of them were change points (0 when every change point is in
    * `readings`). */
   readings_left_out?: { readings: number; change_points: number };
+  /** A polled claim step that declares `poll.settled` only: its
+   * conditions, and the reading the poll stopped on when it settled. */
+  settled?: SettledRecord;
   /** A claim step that reads execution events only: each `events` key,
    * as it read (docs/spec.md "Execution events"). A claim measured on one
    * names `events_read.<key>` as its channel. */

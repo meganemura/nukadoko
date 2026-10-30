@@ -94,7 +94,7 @@ export type {
   StepDefinitionInput,
   StepRunResult,
 } from "./step/define-step.js";
-export type { Claim, ClaimExpected, ClaimLiteral, ClaimPoll, ComparisonClaim, EachClaim, ItemClaim } from "./step/claims.js";
+export type { Claim, ClaimExpected, ClaimLiteral, ClaimPoll, ComparisonClaim, EachClaim, ItemClaim, SettledCompare, SettledCondition } from "./step/claims.js";
 // What a claim step's `events` declares, and what its record holds of each
 // reading: a step file names the selection, and a reader of a record the
 // range, the gaps, and the lines that may match.
