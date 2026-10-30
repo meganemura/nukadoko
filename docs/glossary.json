@@ -622,6 +622,11 @@
       "note": "fits-text の期待するテキストで、実行ごとに変わる部分の代わりに書く `...`(任意の数の行)と `[..]`(1 行の中の任意の文字)。記号そのものはコードスパンで書く"
     },
     {
+      "en": ["named stand-in", "named stand-ins", "reads (a named stand-in reads a text)"],
+      "ja": "名前付きの代わりの記号 / 読む",
+      "note": "fits-text の期待するテキストの `[..:name]`。`[..]` と同じように合い、同じ名前のものは同じテキストを、異なる名前のものは異なるテキストを読む。名前はコードスパンで英語のまま"
+    },
+    {
       "en": ["kind (is-a)", "kinds"],
       "ja": "種類",
       "note": "is-a の期待値が名指す値の種類(string、uuid、timestamp など)。種類の名前はコードスパンで英語のまま。変化の種類(change kind)とは別の語"

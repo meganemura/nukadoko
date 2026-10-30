@@ -2227,6 +2227,32 @@ export default defineStep({
       ),
     ]);
   });
+
+  it("fits-text holds when the run a line created is the run a later line finished, and names the two texts one named stand-in read", async () => {
+    const run = await holdsThenBreaks(
+      `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the runner prints",
+  args: z.object({ expected: z.string() }),
+  observe() {
+    const id = () => Math.random().toString(16).slice(2, 10);
+    const run = "r" + id();
+    return { out: "created run " + run + "\\nstep 1\\nfinished run " + run + "\\ncleaned run s" + id() + "\\n" };
+  },
+  claims: [{ actual: "out", compare: "fits-text", expected: "expected" }],
+});
+`,
+      ["Then the runner prints", '  """', "  created run [..:run]", "  ...", "  finished run [..:run]", "  cleaned run [..:old]", '  """'],
+      ["Then the runner prints", '  """', "  created run [..:run]", "  ...", "  cleaned run [..:run]", '  """'],
+    );
+    expect(run.exitCode).toBe(1);
+    expect(run.claimLines).toEqual([
+      expect.stringMatching(/ \(sentence:expected\) held; measured: none$/),
+      expect.stringMatching(
+        / \(sentence:expected\) broken; every expected line fits, but \[\.\.:run\] reads "(r[0-9a-f]+)" and then "s[0-9a-f]+" in actual lines 1 and 4: actual "created run \1", then "cleaned run s[0-9a-f]+"; measured: none$/,
+      ),
+    ]);
+  });
 });
 
 describe("is-a through a run", () => {
@@ -2838,12 +2864,12 @@ export default defineStep({
     [
       "fits-text with an expected text an earlier step returned",
       step("the output is the same", "said: z.string()", `{ actual: "printed", compare: "fits-text", expected: { from: "said" } }`),
-      'claims[0].expected reads { from: "said" }, a value a step returned, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal',
+      'claims[0].expected reads { from: "said" }, a value a step returned, and fits-text reads each "..." line, each "[..]", and each "[..:name]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal',
     ],
     [
       "fits-text with an expected text observe read",
       step("the output is the same", "said: z.string()", `{ actual: "said", compare: "fits-text", expected: { observe: "printed" } }`),
-      'claims[0].expected reads { observe: "printed" }, a value observe read, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal',
+      'claims[0].expected reads { observe: "printed" }, a value observe read, and fits-text reads each "..." line, each "[..]", and each "[..:name]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal',
     ],
     [
       "is-a with a literal that names no kind",

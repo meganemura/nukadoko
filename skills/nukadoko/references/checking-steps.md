@@ -124,7 +124,7 @@ order), `has-fields` (the expected fields at any depth, each array whole),
 `lacks-field` (no key of the expected name: "has no password field" is
 `expected: { literal: "password" }`, and a field set to `null` is a key),
 `fits-text` (line by line; a line `...` is any lines, `[..]` any text in its
-line), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
+line, `[..:id]` too, one text per name, no two alike), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
 `url`), `fits-aria-snapshot` (a page by role and name, below), `matches`,
 `greater-than`, `at-least`, `less-than`, `at-most`. A JSON docstring
 (`expected_view: "json"`) claims a whole response with `equal` (a
@@ -133,7 +133,7 @@ field it leaves out breaks it, a `null` one too) or some of its fields with
 or `{ observe }`. Two values of different JSON types break the claim (`is-a` and
 `lacks-field` aside), and so does an expected value nearly every value holds (a
 blank text or field name, a pattern matching `""`, an object with no field, only
-`...` and `[..]`). Each side is a plain JSON copy, and `observe` gets a clone of
+stand-ins). Each side is a plain JSON copy, and `observe` gets a clone of
 its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a `Proxy`, or
 nesting past 256 levels leaves the claim `unjudged` (return an ISO string or a
 number). Each claim or item the step's deadline cuts off, a running `matches`
@@ -175,13 +175,12 @@ so it is one step; "is in trial" and "is not in trial" are two steps.
 ## A page by role and name
 
 A When may still wait with Playwright's `expect` before it acts (outside
-`playwright test`, on Playwright 1.61.1, a failing `expect.soft` throws at
-once, and `toMatchAriaSnapshot`, `toHaveScreenshot`, and `toMatchSnapshot`
-throw `"<name>() must be called during the test"`). For what a page shows, a
-Then returns the page or a locator from `observe` and claims
-`fits-aria-snapshot` against the docstring (the one required `args` key no
-capture or `from` fills); nukadoko takes the ARIA snapshot, and the record
-keeps it whole:
+`playwright test`, on Playwright 1.61.1, a failing `expect.soft` throws at once,
+and `toMatchAriaSnapshot`, `toHaveScreenshot`, and `toMatchSnapshot` throw
+`"<name>() must be called during the test"`). For what a page shows, a Then
+returns the page or a locator from `observe` and claims `fits-aria-snapshot`
+against the docstring (the one required `args` key no capture or `from` fills);
+nukadoko takes the ARIA snapshot, and the record keeps it whole:
 
 ```ts
 import { defineStep, z } from "nukadoko";

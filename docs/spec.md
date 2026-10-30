@@ -2201,6 +2201,41 @@ with no `...` costs time linear in its lines, one with many costs its
 lines times the actual lines at most, and neither costs a number of tries
 that grows with each `...`.
 
+A named stand-in, `[..:name]`, says that two changing parts are one
+value without stating it: the run one line created is the run a later
+line finished. Its name is one or more letters, digits, `_`, or `-`. It
+fits as `[..]` does, and then every named stand-in of one name must have
+read the same text, anywhere in the text, and stand-ins of two names two
+texts:
+
+```gherkin
+Then the runner prints
+  """
+  created run [..:run] at [..]
+  ...
+  finished run [..:run]
+  cleaned run [..:old]
+  """
+```
+
+A name never moves a line. nukadoko fits the text as though every named
+stand-in were `[..]`, takes the first way it fits, and reads the names
+there: each `...` takes as few actual lines as it can, from the top, and
+each stand-in as few characters as it can, from the left, as long as the
+rest still fits. So when two actual lines start `created run`, the
+first of them is the one the line above reads, and `[..:a]-[..:a]`
+reads `x` and then `y-x-y` in `x-y-x-y`. A name used once still says
+that its text differs from every other name's; a part that only changes
+takes `[..]`. Finding a way the names agree among every way the `...`
+lines could split the text kept a state for each pair of lines two names
+could read, and took 5 seconds on a 20,400-line output where each name
+could read 200 lines, so judging names costs one more walk of the
+expected lines, from the end, and no search. A `[..` that `]` or a
+name and `]` do not follow is ordinary text, and no escape makes
+`[..:name]` literal. The colon keeps it apart from a range a compiler
+quotes from a source line, such as Rust's `&buf[..n]`, which stays
+ordinary text.
+
 `is-a` lets a sentence name the kind of a value it cannot state, such as
 an id or a time the system generated: "the order id is a UUID". The
 expected value is a string that names a kind, read after trimming and
@@ -2363,7 +2398,8 @@ an expected object with no field, at the top or at any depth, breaks the
 same way, since every object holds it, and the reason names where it
 sits: `has-fields has an expected object with no field at items.0, which
 every object holds`. Under `fits-text`, an expected text with nothing but
-whitespace outside its `...` lines and its `[..]` breaks too.
+whitespace outside its `...` lines, its `[..]`, and its named stand-ins
+breaks too.
 
 `matches` tests the regular expression on a worker thread, which nukadoko
 starts outside the step's recorded actions. A regular expression cannot be
@@ -2766,7 +2802,12 @@ far the expected text fit and the first expected line that fits nothing
 after that, with the actual line where it stopped, or `nothing` past the
 end; when every expected line fits, it names the first actual line left
 over (`; expected lines 1 to 2 fit, and expected line 3 fits nothing from
-actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`). One line per broken claim, with the first item that broke under an `each`
+actual line 2: actual "wrote dist/a.js", expected "wrote dist/c.js"`), or
+the first two named stand-ins that break it, with what each read and the
+actual lines it read them in (`; every expected line fits, but [..:run]
+reads "r1" and then "r2" in actual lines 1 and 4: actual "created run r1
+at 12:00", then "finished run r2"`, or `[..:old] and [..:new] both read
+"r1"`). One line per broken claim, with the first item that broke under an `each`
 on the line below it, named by its index and its `identity` when it has one,
 or, under an `each` that nukadoko could not judge, the first item it could not judge.
 A claim nukadoko could not judge fails the step with `claim_unjudged`

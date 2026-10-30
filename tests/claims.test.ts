@@ -472,9 +472,9 @@ describe("compares", () => {
 
   it("fits-text reads two strings, and breaks on an expected text of only whitespace, ... lines, and [..]", async () => {
     expect(await compare("fits-text", ["a"], "a")).toEqual({ reason: "fits-text reads two strings, and compares an array with a string" });
-    for (const expected of ["", "\n", "...", "...\n[..]\n  ", " [..] \n..."]) {
+    for (const expected of ["", "\n", "...", "...\n[..]\n  ", " [..] \n...", "[..:id]\n...\n [..:id][..] "]) {
       expect(await compare("fits-text", "anything", expected)).toEqual({
-        reason: "fits-text has an expected text of only whitespace, ... lines, and [..], which almost every text holds",
+        reason: "fits-text has an expected text of only whitespace, ... lines, [..], and [..:name], which almost every text holds",
       });
     }
   });
@@ -504,6 +504,170 @@ describe("compares", () => {
     // Walking every actual line for each expected line took 25 seconds
     // here; one walk takes milliseconds, so a loaded machine stays far
     // inside the bound.
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  /** An expected text of fixed lines, `...` lines, and named stand-ins,
+   * with an actual text made from it: each name's value put in for each of
+   * its stand-ins, and each `...` taken by lines no expected line fits.
+   * Every fixed line starts with a fixed character and every stand-in sits
+   * between two fixed parts of letters, so the values, written in digits,
+   * are read whole, and the first way the text fits is the way it was
+   * made. */
+  const madeFromTemplate = (tc: hegel.TestCase) => {
+    const names = tc.draw(gs.arrays(gs.sampledFrom(["id", "run", "t1", "a-b"]), { minSize: 1, maxSize: 3, unique: true }));
+    const values = new Map(names.map((name) => [name, tc.draw(gs.text({ alphabet: "0123", minSize: 1, maxSize: 3 }))]));
+    tc.assume(new Set(values.values()).size === names.length);
+    const fixed = () => tc.draw(gs.text({ alphabet: "ab ", minSize: 1, maxSize: 3 }));
+    type Template = { readonly any: true } | { readonly lead: string; readonly marks: readonly (readonly [string, string])[] };
+    const template: Template[] = tc.draw(
+      gs.arrays(
+        gs.composite((inner): Template => {
+          if (inner.draw(gs.booleans())) return { any: true };
+          const marks = inner.draw(gs.arrays(gs.composite((cell) => [cell.draw(gs.sampledFrom(names)), cell.draw(gs.text({ alphabet: "ab ", minSize: 1, maxSize: 3 }))] as const), { maxSize: 3 }));
+          return { lead: `${inner.draw(gs.sampledFrom(["a", "b"]))}${fixed()}`, marks };
+        }),
+        { minSize: 1, maxSize: 6 },
+      ),
+    );
+    const write = (line: Template, valueOf: (name: string) => string): string => ("any" in line ? "..." : `${line.lead}${line.marks.map(([name, after]) => `${valueOf(name)}${after}`).join("")}`);
+    const expected = template.map((line) => write(line, (name) => `[..:${name}]`));
+    const actualOf = (valueOf: (name: string, line: number, place: number) => string): string[] =>
+      template.flatMap((line, index) =>
+        "any" in line
+          ? Array.from({ length: tc.draw(gs.integers({ minValue: 0, maxValue: 2 })) }, (_, at) => `#filler ${index} ${at}`)
+          : [`${line.lead}${line.marks.map(([name, after], place) => `${valueOf(name, index, place)}${after}`).join("")}`],
+      );
+    return { template, expected: expected.join("\n"), values, actualOf };
+  };
+
+  it("fits-text holds for a text made by putting one value in for every named stand-in of a name, and another for each other name", () =>
+    hegel.test((tc) => {
+      const { expected, values, actualOf } = madeFromTemplate(tc);
+      expect(textFit(actualOf((name) => values.get(name)!).join("\n"), expected)).toEqual({ fits: true });
+    }));
+
+  it("fits-text breaks when one named stand-in reads another value than the rest of its name, or the value of another name, and names the two readings", () =>
+    hegel.test((tc) => {
+      const { template, expected, values, actualOf } = madeFromTemplate(tc);
+      const marks = template.flatMap((line, index) => ("any" in line ? [] : line.marks.map(([name], place) => ({ name, index, place }))));
+      const changed = tc.draw(gs.sampledFrom(marks.length === 0 ? [null] : marks));
+      tc.assume(changed !== null);
+      const others = [...new Set(marks.map((mark) => mark.name))].filter((name) => name !== changed!.name);
+      const fresh = tc.draw(gs.booleans()) || others.length === 0;
+      tc.assume(!fresh || marks.filter((mark) => mark.name === changed!.name).length > 1);
+      const value = fresh ? "9" : values.get(tc.draw(gs.sampledFrom(others)))!;
+      const lines = actualOf((name, index, place) => (index === changed!.index && place === changed!.place ? value : values.get(name)!));
+      const fit = textFit(lines.join("\n"), expected);
+      expect(fit.fits).toBe(false);
+      if (!("readings" in fit)) throw new Error(`expected two readings, got ${JSON.stringify(fit)}`);
+      const [first, then] = fit.readings;
+      expect(first.name === then.name ? first.text !== then.text : first.text === then.text).toBe(true);
+      expect([first, then].some((reading) => reading.text === value && lines[reading.at - 1] === reading.line)).toBe(true);
+    }));
+
+  it("a named stand-in never moves a line: a text fits with names wherever it fits with [..] in their place, and breaks there the same way", () =>
+    hegel.test((tc) => {
+      const have = tc.draw(gs.arrays(gs.text({ alphabet: "ab1", maxSize: 4 }), { maxSize: 5 }));
+      const named = tc.draw(
+        gs.arrays(
+          gs.oneOf<string>(
+            gs.just("..."),
+            gs.text({ alphabet: "ab", maxSize: 3 }),
+            gs.composite((inner) => `${inner.draw(gs.text({ alphabet: "ab", maxSize: 2 }))}${inner.draw(gs.sampledFrom(["[..]", "[..:x]", "[..:y]"]))}${inner.draw(gs.text({ alphabet: "ab", maxSize: 2 }))}`),
+          ),
+          { maxSize: 4 },
+        ),
+      ).join("\n");
+      const plain = named.replaceAll(/\[\.\.:[xy]\]/g, "[..]");
+      const actual = have.join("\n");
+      const withNames = textFit(actual, named);
+      const withoutNames = textFit(actual, plain);
+      if (withoutNames.fits) expect(withNames.fits || "readings" in withNames).toBe(true);
+      else if ("expected" in withNames) expect({ ...withNames, expected: withNames.expected?.replaceAll(/\[\.\.:[xy]\]/g, "[..]") }).toEqual(withoutNames);
+      else expect(withNames).toEqual(withoutNames);
+    }));
+
+  /** The actual line each expected line takes in the first way the text
+   * fits, found by trying every number of lines each `...` could take,
+   * fewest first, with each other line as an anchored regular expression
+   * whose stand-ins take as little as they can from the left; `null` when
+   * no way fits. Slow, and plainly what "the first way" means. */
+  function firstWayByTrying(want: readonly string[], have: readonly string[], from = 0): (RegExpExecArray | null)[] | null {
+    if (want.length === 0) return have.length === from ? [] : null;
+    const [line, ...rest] = want as [string, ...string[]];
+    if (line === "...") {
+      for (let start = from; start <= have.length; start += 1) {
+        const way = firstWayByTrying(rest, have, start);
+        if (way !== null) return [null, ...way];
+      }
+      return null;
+    }
+    const parts = line.split(/\[\.\.(?::[xy])?\]/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const pattern = new RegExp(`^${parts.map((part, index) => (index === parts.length - 1 ? part : `${part}(${index === parts.length - 2 ? "[^]*" : "[^]*?"})`)).join("")}$`);
+    const found = from < have.length ? pattern.exec(have[from]!) : null;
+    if (found === null) return null;
+    const way = firstWayByTrying(rest, have, from + 1);
+    return way === null ? null : [Object.assign(found, { index: from }), ...way];
+  }
+
+  it("fits-text judges named stand-ins on the first way the lines fit, as trying every way, fewest lines first, finds it", () =>
+    hegel.test((tc) => {
+      // Few letters and short lines, so one expected line often fits several
+      // actual lines that read different texts, which is where the first
+      // way differs from another.
+      const have = tc.draw(gs.arrays(gs.text({ alphabet: "a12", maxSize: 2 }), { maxSize: 6 }));
+      const stands = gs.sampledFrom(["[..]", "[..:x]", "[..:y]"]);
+      const want = tc.draw(
+        gs.arrays(
+          gs.oneOf<string>(
+            gs.just("..."),
+            gs.text({ alphabet: "a1", maxSize: 2 }),
+            gs.composite((inner) => `${inner.draw(gs.text({ alphabet: "a", maxSize: 1 }))}${inner.draw(stands)}${inner.draw(gs.sampledFrom(["", "a", `a${inner.draw(stands)}`]))}`),
+          ),
+          { maxSize: 5 },
+        ),
+      );
+      const fit = textFit(have.join("\n"), want.join("\n"));
+      const way = firstWayByTrying(fitLines(want.join("\n")), fitLines(have.join("\n")));
+      if (way === null) return expect("readings" in fit || fit.fits).toBe(false);
+      const readings = way.flatMap((found, index) =>
+        found === null ? [] : [...want[index]!.matchAll(/\[\.\.(?::([xy]))?\]/g)].flatMap((mark, place) => (mark[1] === undefined ? [] : [{ name: mark[1], text: found[place + 1]!, at: found.index + 1, line: found.input }])),
+      );
+      const broken = readings.flatMap((reading, index) => {
+        const before = readings.slice(0, index).find((other) => (other.name === reading.name) !== (other.text === reading.text));
+        return before === undefined ? [] : [[before, reading]];
+      })[0];
+      expect(fit).toEqual(broken === undefined ? { fits: true } : { fits: false, readings: broken });
+    }, { testCases: 1000 }));
+
+  it("a named stand-in reads what [..] would read in its place, so a line read twice in its first fit breaks", () => {
+    const out = "created run r1 at 12:00\nstep 1\ncreated run r2 at 12:01\nfinished run r2\n";
+    expect(textFit(out, "...\ncreated run [..:a] at [..]\n...\ncreated run [..:b] at [..]\n...")).toEqual({ fits: true });
+    expect(textFit(out, "...\ncreated run [..:run] at [..]\n...\nfinished run [..:run]")).toEqual({
+      fits: false,
+      readings: [
+        { name: "run", text: "r1", at: 1, line: "created run r1 at 12:00" },
+        { name: "run", text: "r2", at: 4, line: "finished run r2" },
+      ],
+    });
+    expect(textFit("x-y-x-y", "[..:a]-[..:a]")).toMatchObject({ fits: false, readings: [{ text: "x" }, { text: "y-x-y" }] });
+    expect(lineFits("took [..:]ms and [..:a b]", "took [..:]ms and [..:a b]")).toBe(true);
+    expect(lineFits("took [..:]ms", "took 4ms")).toBe(false);
+    expect(textFit("&buf[..n]", "&buf[..n]")).toEqual({ fits: true });
+    expect(textFit("&buf[..n] &buf[..m]", "&buf[..:n] &buf[..:n]")).toMatchObject({ fits: false, readings: [{ name: "n", text: "[..n]" }, { name: "n", text: "[..m]" }] });
+  });
+
+  it("fits-text judges a 200000-line text with named stand-ins in a time linear in its lines", () => {
+    const log = Array.from({ length: 200_000 }, (_, index) => (index === 10 ? "created run r10" : index === 199_990 ? "finished run r10" : `step ${index} took ${index % 97}ms`));
+    const actual = log.join("\n");
+    const started = performance.now();
+    expect(textFit(actual, "...\ncreated run [..:run]\n...\nfinished run [..:run]\n...")).toEqual({ fits: true });
+    expect(textFit(actual, "...\ncreated run [..:run]\n...\nfinished run [..:other]\n...")).toMatchObject({ fits: false, readings: [{ name: "run" }, { name: "other" }] });
+    expect(textFit(actual.replace("finished run r10", "finished run r11"), "...\ncreated run [..:run]\n...\nfinished run [..:run]\n...")).toMatchObject({
+      fits: false,
+      readings: [{ at: 11 }, { at: 199_991 }],
+    });
     expect(performance.now() - started).toBeLessThan(1000);
   });
 
@@ -2370,6 +2534,21 @@ describe("a broken fits-text names how far the expected text fit, and where it s
     expect(fitsDifference(out, "built [..]\nwrote dist/a.js\nwrote dist/b.js\ndone\nexit 0")).toBe('expected lines 1 to 4 fit, and expected line 5 fits nothing from actual line 5: actual nothing, expected "exit 0"');
     expect(fitsDifference(out, "built [..]\nwrote dist/a.js")).toBe('every expected line fits, and actual line 3 is left over: actual "wrote dist/b.js"');
   });
+
+  it("names the named stand-in that read two texts, or the two that read one, with what each read and the actual lines", () => {
+    const out = "created run r1 at 12:00\nmoved r1 to r1\ncreated run r2 at 12:01\nfinished run r2\n";
+    expect(fitsDifference(out, "created run [..:run] at [..]\n...\nfinished run [..:run]")).toBe(
+      'every expected line fits, but [..:run] reads "r1" and then "r2" in actual lines 1 and 4: actual "created run r1 at 12:00", then "finished run r2"',
+    );
+    expect(fitsDifference(out, "created run [..:old] at [..]\n...\ncreated run [..:new] at [..]\n...")).toBeNull();
+    expect(fitsDifference(out, "created run [..:old] at [..]\nmoved [..:old] to [..:new]\n...")).toBe(
+      'every expected line fits, but [..:old] and [..:new] both read "r1" in actual lines 1 and 2: actual "created run r1 at 12:00", then "moved r1 to r1"',
+    );
+    expect(fitsDifference(out, "...\nmoved [..:a] to [..:b]\n...")).toBe('every expected line fits, but [..:a] and [..:b] both read "r1" in actual line 2: actual "moved r1 to r1"');
+    expect(fitsDifference(out, "created run [..:run] at [..]\n...\nfinished run [..:run]\nexit 0")).toBe(
+      'expected lines 1 to 3 fit, and expected line 4 fits nothing from actual line 5: actual nothing, expected "exit 0"',
+    );
+  });
 });
 
 describe("an each line counts the items it read", () => {
@@ -2477,7 +2656,7 @@ describe("an expected value a compare can never judge as the sentence means it",
 
   it("refuses fits-text whose expected text a step returned or observe read, and takes one the sentence states", () => {
     const observed = { ...literalShape("the build prints done"), hasObserve: true };
-    const stands = 'fits-text reads each "..." line and each "[..]" of its expected text as a stand-in';
+    const stands = 'fits-text reads each "..." line, each "[..]", and each "[..:name]" of its expected text as a stand-in';
     expect(claimsProblem([{ actual: "result", compare: "fits-text", expected: { observe: "printed" } }], observed)).toContain(stands);
     expect(claimsProblem([{ actual: "printed", compare: "fits-text", expected: { from: "result.out" } }], observed)).toContain(stands);
     expect(claimsProblem([{ actual: "result", compare: "fits-text", expected: "out" }], literalShape("the build prints"))).toBeNull();

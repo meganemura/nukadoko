@@ -200,8 +200,47 @@ export function fieldlessObject(value: unknown, path: readonly string[] = []): r
 export const ANY_LINES = "...";
 
 /** Inside any other expected line, a stand-in for any run of characters
- * in that one line. */
-export const ANY_TEXT = "[..]";
+ * in that one line is `[..]`, or `[..:name]`, a named stand-in, with a
+ * name that matches this. The colon keeps the spelling apart from a range
+ * a compiler quotes from a source line, such as Rust's `&buf[..n]`, which
+ * a name right after the dots would read as a stand-in. */
+const STAND_IN_NAME = /^[A-Za-z0-9_-]+$/;
+
+/** An expected line other than `...`, split at its stand-ins: `parts`
+ * holds the fixed texts, and `names` maps the index of each named
+ * stand-in, counted from 0 between `parts[0]` and `parts[1]`, to its
+ * name; every other stand-in is `[..]`. */
+interface FixedLine {
+  readonly parts: readonly string[];
+  readonly names: ReadonlyMap<number, string>;
+}
+
+const NO_NAMES: ReadonlyMap<number, string> = new Map();
+
+/** An expected line split at its stand-ins, found from the left: a `[..`
+ * that `]` or a name and `]` do not follow is ordinary text. Found by
+ * `indexOf`, since a regular expression took more than twice as long on
+ * 200000 lines of `[..]`. Pure. */
+function fixedLine(line: string): FixedLine {
+  const parts: string[] = [];
+  let names: Map<number, string> | undefined;
+  let from = 0;
+  let open = line.indexOf("[..");
+  while (open !== -1) {
+    const close = line.indexOf("]", open + 3);
+    const name = close === open + 3 ? null : line[open + 3] === ":" && close !== -1 && STAND_IN_NAME.test(line.slice(open + 4, close)) ? line.slice(open + 4, close) : undefined;
+    if (name === undefined) {
+      open = line.indexOf("[..", open + 1);
+      continue;
+    }
+    if (name !== null) (names ??= new Map()).set(parts.length, name);
+    parts.push(line.slice(from, open));
+    from = close + 1;
+    open = line.indexOf("[..", from);
+  }
+  parts.push(line.slice(from));
+  return { parts, names: names ?? NO_NAMES };
+}
 
 /** A text's lines: split at each "\n" or "\r\n", with one final empty line
  * dropped, so the newline a program prints last does not count as a line.
@@ -214,19 +253,21 @@ export function fitLines(text: string): readonly string[] {
   return lines;
 }
 
-/** Whether `line` fits the expected line `pattern`, where each `[..]`
- * stands for any characters. Pure. */
+/** Whether `line` fits the expected line `pattern`, where each `[..]` and
+ * each named stand-in stands for any characters. Pure. */
 export function lineFits(pattern: string, line: string): boolean {
-  return partsFit(pattern.split(ANY_TEXT), line);
+  return partsFit(fixedLine(pattern).parts, line);
 }
 
-/** Whether `line` fits an expected line already split at each `[..]`. The
- * first part is a prefix, the last a suffix, and each part between is found
- * leftmost after the one before it, which is enough when a stand-in matches
- * anything: a later find never needs an earlier part placed further right.
- * No backtracking, so a line costs time in its length, whatever an expected
- * line holds. */
-function partsFit(parts: readonly string[], line: string): boolean {
+/** Whether `line` fits an expected line already split at its stand-ins.
+ * The first part is a prefix, the last a suffix, and each part between is
+ * found leftmost after the one before it, which is enough when a stand-in
+ * matches anything: a later find never needs an earlier part placed
+ * further right. No backtracking, so a line costs time in its length,
+ * whatever an expected line holds. When `reads` is given, it receives the
+ * text each stand-in took, in order, so a stand-in reads as few characters
+ * as it can from the left. */
+function partsFit(parts: readonly string[], line: string, reads?: string[]): boolean {
   if (parts.length === 1) return parts[0] === line;
   const first = parts[0]!;
   const last = parts.at(-1)!;
@@ -237,31 +278,55 @@ function partsFit(parts: readonly string[], line: string): boolean {
     const part = parts[index]!;
     const found = line.indexOf(part, at);
     if (found === -1 || found + part.length > end) return false;
+    reads?.push(line.slice(at, found));
     at = found + part.length;
   }
+  reads?.push(line.slice(at, end));
   return true;
 }
 
-/** How far an expected text fits an actual one under `fits-text`. When it
- * does not, `fitted` counts the expected lines that fit from the first,
- * `expected` is the next expected line, which fits nothing from actual
- * line `at` (1-based) on, and `actual` is that line; `expected` is absent
- * when every expected line fit and actual lines are left over from `at`.
- * An `actual` that is absent is past the end of the actual text. */
+/** What one named stand-in read: its name, the text, and the actual line
+ * (1-based) it read it in, with that line. */
+export interface StandInReading {
+  readonly name: string;
+  readonly text: string;
+  readonly at: number;
+  readonly line: string;
+}
+
+/** How far an expected text fits an actual one under `fits-text`. When its
+ * lines do not fit, `fitted` counts the expected lines that fit from the
+ * first, `expected` is the next expected line, which fits nothing from
+ * actual line `at` (1-based) on, and `actual` is that line; `expected` is
+ * absent when every expected line fit and actual lines are left over from
+ * `at`. An `actual` that is absent is past the end of the actual text.
+ * When the lines fit and two named stand-ins break the text, `readings`
+ * holds them in the order they were read: one name that read two texts,
+ * or two names that read one text. */
 export type TextFit =
   | { readonly fits: true }
-  | { readonly fits: false; readonly fitted: number; readonly expected?: string; readonly at: number; readonly actual?: string };
+  | { readonly fits: false; readonly fitted: number; readonly expected?: string; readonly at: number; readonly actual?: string }
+  | { readonly fits: false; readonly readings: readonly [StandInReading, StandInReading] };
 
 /** The actual lines the expected lines so far can end just before: every
  * index from `from` on, which a `...` line makes, or the indexes in `at`,
  * ascending, which any other line makes. */
 type Reach = { readonly from: number } | { readonly at: readonly number[] };
 
+/** The actual lines the expected lines from one on can start at and use up
+ * the rest of the actual text from: every index up to `upTo`, which a
+ * `...` line makes, or the indexes in `at`, ascending, which any other
+ * line makes. */
+type Rest = { readonly upTo: number } | { readonly at: readonly number[] };
+
 /** Whether `expected` fits `actual` line by line: a line that is exactly
  * `...` takes any run of actual lines, `[..]` any characters inside one
  * line, and every other character matches itself, until both texts are
- * used up. The run judges with this function and the run summary names
- * where it stopped fitting with it, so the two never disagree.
+ * used up. A named stand-in fits as `[..]` does, and then, in the first
+ * way the text fits, every one of one name must have read the same text,
+ * and two names two texts. The run judges with this function and the run
+ * summary names where it stopped fitting with it, so the two never
+ * disagree.
  *
  * It walks the expected lines once and tries each against the actual
  * lines it can start at alone. A `...` line opens every later line, and
@@ -274,34 +339,103 @@ type Reach = { readonly from: number } | { readonly at: readonly number[] };
 export function textFit(actual: string, expected: string): TextFit {
   const have = fitLines(actual);
   const lines = fitLines(expected);
-  const want = lines.map((line) => (line === ANY_LINES ? null : line.split(ANY_TEXT)));
+  const want = lines.map((line) => (line === ANY_LINES ? null : fixedLine(line)));
   let reach: Reach = { at: [0] };
-  for (const [index, parts] of want.entries()) {
+  for (const [index, line] of want.entries()) {
     const earliest: number = "from" in reach ? reach.from : reach.at[0]!;
-    if (parts === null) {
+    if (line === null) {
       reach = { from: earliest };
       continue;
     }
     const next: number[] = [];
     const tryAt = (j: number): void => {
-      if (j < have.length && partsFit(parts, have[j]!)) next.push(j + 1);
+      if (j < have.length && partsFit(line.parts, have[j]!)) next.push(j + 1);
     };
     if ("from" in reach) for (let j = reach.from; j < have.length; j += 1) tryAt(j);
     else for (const j of reach.at) tryAt(j);
     if (next.length === 0) return { fits: false, fitted: index, expected: lines[index]!, at: earliest + 1, ...(have[earliest] === undefined ? {} : { actual: have[earliest] }) };
     reach = { at: next };
   }
-  if ("from" in reach) return { fits: true };
-  const left = reach.at.at(-1)!;
-  if (left === have.length) return { fits: true };
-  return { fits: false, fitted: want.length, at: left + 1, actual: have[left]! };
+  if (!("from" in reach)) {
+    const left = reach.at.at(-1)!;
+    if (left !== have.length) return { fits: false, fitted: want.length, at: left + 1, actual: have[left]! };
+  }
+  if (!want.some((line) => line !== null && line.names.size > 0)) return { fits: true };
+  return namesFit(have, want, firstFit(have, want));
+}
+
+/** The actual line each expected line takes in the first way the text
+ * fits, `null` for a `...` line: each `...` takes as few lines as it can
+ * from the top, as long as the rest still fits. A named stand-in never
+ * moves a line, so its readings are judged on this one way, and a text
+ * that fits costs one more walk, from its end, to learn which lines the
+ * rest can start at. Trying every way the `...` lines could split the text
+ * for one whose names agree kept a state for each pair of lines two names
+ * could take: 5 seconds on 20400 lines with 200 lines each name could
+ * read. Only called on a text that fits. */
+function firstFit(have: readonly string[], want: readonly (FixedLine | null)[]): readonly (number | null)[] {
+  const rests: Rest[] = [];
+  let rest: Rest = { at: [have.length] };
+  for (let index = want.length - 1; index >= 0; index -= 1) {
+    const line = want[index]!;
+    if (line === null) rest = { upTo: "upTo" in rest ? rest.upTo : rest.at.at(-1)! };
+    else {
+      const starts: number[] = [];
+      const tryAt = (j: number): void => {
+        if (j < have.length && partsFit(line.parts, have[j]!)) starts.push(j);
+      };
+      if ("upTo" in rest) for (let j = 0; j < rest.upTo; j += 1) tryAt(j);
+      else for (const end of rest.at) if (end > 0) tryAt(end - 1);
+      rest = { at: starts };
+    }
+    rests[index] = rest;
+  }
+  const taken: (number | null)[] = [];
+  let at = 0;
+  let open = false;
+  for (const [index, line] of want.entries()) {
+    if (line === null) {
+      open = true;
+      taken.push(null);
+      continue;
+    }
+    const starts = rests[index] as { readonly at: readonly number[] };
+    if (open) at = starts.at.find((j) => j >= at)!;
+    taken.push(at);
+    at += 1;
+    open = false;
+  }
+  return taken;
+}
+
+/** Whether the named stand-ins of a text that fits agree in the way
+ * `taken` fits it: the readings in expected order, each line's from the
+ * left, so the first two that break the text are the ones named. */
+function namesFit(have: readonly string[], want: readonly (FixedLine | null)[], taken: readonly (number | null)[]): TextFit {
+  const byName = new Map<string, StandInReading>();
+  const byText = new Map<string, StandInReading>();
+  for (const [index, line] of want.entries()) {
+    if (line === null || line.names.size === 0) continue;
+    const at = taken[index]!;
+    const reads: string[] = [];
+    partsFit(line.parts, have[at]!, reads);
+    for (const [place, name] of line.names) {
+      const reading: StandInReading = { name, text: reads[place]!, at: at + 1, line: have[at]! };
+      const before = byName.get(name) ?? byText.get(reading.text);
+      if (before === undefined) {
+        byName.set(name, reading);
+        byText.set(reading.text, reading);
+      } else if (before.name !== name || before.text !== reading.text) return { fits: false, readings: [before, reading] };
+    }
+  }
+  return { fits: true };
 }
 
 /** Whether an expected text states nothing beyond its stand-ins: every
- * character outside `...` lines and `[..]` is whitespace, so nearly
- * every text fits it. Pure. */
+ * character outside `...` lines, `[..]`, and named stand-ins is
+ * whitespace, so nearly every text fits it. Pure. */
 export function onlyStandIns(expected: string): boolean {
-  return fitLines(expected).every((line) => line === ANY_LINES || line.split(ANY_TEXT).join("").trim() === "");
+  return fitLines(expected).every((line) => line === ANY_LINES || fixedLine(line).parts.join("").trim() === "");
 }
 
 function isLeapYear(year: number): boolean {
@@ -497,7 +631,7 @@ export async function compareValues(
         return { reason: `fits-text reads two strings, and compares ${article(actualType)} with ${article(expectedType)}` };
       }
       if (onlyStandIns(expected as string)) {
-        return { reason: "fits-text has an expected text of only whitespace, ... lines, and [..], which almost every text holds" };
+        return { reason: "fits-text has an expected text of only whitespace, ... lines, [..], and [..:name], which almost every text holds" };
       }
       return { holds: textFit(actual as string, expected as string).fits };
     }

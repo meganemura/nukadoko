@@ -123,6 +123,23 @@ just until 0.1.
   stopped (`; expected lines 1 to 2 fit, and expected line 3 fits
   nothing from actual line 2: actual "wrote dist/a.js", expected "wrote
   dist/c.js"`).
+- **A `fits-text` claim can say two changing parts are one value, or two.**
+  A named stand-in, `[..:name]`, fits as `[..]` does, and then every
+  one of a name must have read the same text, and two names two texts, so
+  `created run [..:run]`, `...`, `finished run [..:run]` claims the run
+  that finished is the run that was created without stating its id. A
+  name never moves a line: the text fits as though each were `[..]`, the
+  first way it fits is taken (each `...` and each stand-in taking as
+  little as it can, from the top and the left), and the names are read
+  there, so judging stays one more walk of the expected lines rather than
+  a search, which took 5 seconds on a 20,400-line output where two names
+  could each read 200 lines. A broken line names the stand-ins, what
+  each read, and the actual lines (`; every expected line fits, but
+  [..:run] reads "r1" and then "r2" in actual lines 1 and 4: actual
+  "created run r1 at 12:00", then "finished run r2"`). A `[..` that `]`
+  or a name and `]` do not follow stays ordinary text, so a range a
+  compiler quotes, such as `&buf[..n]`, still fits only itself; a text
+  that read `[..:name]` literally before now reads a stand-in there.
 - **A claim can name the kind of a value the sentence cannot state.**
   `is-a` holds when the actual value is of the kind its expected text
   names, read after trimming and ignoring case: `string` or `text`,

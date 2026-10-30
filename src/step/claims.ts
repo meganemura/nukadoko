@@ -919,7 +919,7 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
     if (source === null) return;
     const [key, what] = source;
     throw new InvalidClaimError(
-      `${label}.expected reads { ${key}: ${describe((expected as Record<string, unknown>)[key!])} }, ${what}, and fits-text reads each "..." line and each "[..]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal`,
+      `${label}.expected reads { ${key}: ${describe((expected as Record<string, unknown>)[key!])} }, ${what}, and fits-text reads each "..." line, each "[..]", and each "[..:name]" of its expected text as a stand-in, so a value that holds one lets text nobody stated fit. Take the expected text from the sentence: a docstring, a capture, or a literal`,
     );
   },
   // A literal is the one expected value known before a line binds, so it

@@ -2,7 +2,7 @@ import { describeRange } from "../../execution-events/count.js";
 import { describeCounted, describeLeftOut } from "../../execution-events/counted.js";
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
 import { snapshotDifference, snapshotExcerpt } from "../../step/aria-snapshot.js";
-import { deepEqual, fieldMisfit, textFit } from "../../step/evaluate-claims.js";
+import { deepEqual, fieldMisfit, textFit, type StandInReading } from "../../step/evaluate-claims.js";
 
 // Responsibility: one claim record as one line of plain text, the words
 // every reader of a claim sees (docs/spec.md "Claims"): the run summary,
@@ -204,15 +204,32 @@ export function fieldsDifference(actual: unknown, expected: unknown): string | n
 
 /** How far a broken `fits-text` claim's expected text fit, and the first
  * expected line that fits nothing after that, with the actual line where
- * it stopped, found by the matcher the claim was judged with; `null` when
- * the two fit, or for a value that is not a text. Pure. */
+ * it stopped, or, when every line fits, the two named stand-ins that broke
+ * it, with what each read and where. Found by the matcher the claim was
+ * judged with; `null` when the two fit, or for a value that is not a
+ * text. Pure. */
 export function fitsDifference(actual: unknown, expected: unknown): string | null {
   if (typeof actual !== "string" || typeof expected !== "string") return null;
   const fit = textFit(actual, expected);
   if (fit.fits) return null;
+  if ("readings" in fit) return readingsDifference(...fit.readings);
   if (fit.expected === undefined) return `every expected line fits, and actual line ${fit.at} is left over: actual ${sideText(fit.actual)}`;
   const fitted = fit.fitted === 0 ? "" : fit.fitted === 1 ? "expected line 1 fits, and " : `expected lines 1 to ${fit.fitted} fit, and `;
   return `${fitted}expected line ${fit.fitted + 1} fits nothing from actual line ${fit.at}: actual ${sideText(fit.actual)}, expected ${valueText(fit.expected)}`;
+}
+
+/** Two readings of named stand-ins that break a text whose lines fit:
+ * one name that read two texts, or two names that read one. */
+function readingsDifference(first: StandInReading, then: StandInReading): string {
+  const where =
+    first.at === then.at
+      ? `in actual line ${first.at}: actual ${valueText(first.line)}`
+      : `in actual lines ${first.at} and ${then.at}: actual ${valueText(first.line)}, then ${valueText(then.line)}`;
+  const read =
+    first.name === then.name
+      ? `[..:${first.name}] reads ${valueText(first.text)} and then ${valueText(then.text)}`
+      : `[..:${first.name}] and [..:${then.name}] both read ${valueText(first.text)}`;
+  return `every expected line fits, but ${read} ${where}`;
 }
 
 /** The first expected line of a broken `fits-aria-snapshot` claim that
