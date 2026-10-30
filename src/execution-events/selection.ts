@@ -292,6 +292,12 @@ export function matchLine(selection: EventSelection, line: ReadableLine): LineMa
   return "committed" in selection && selection.committed !== undefined ? "commit-state" : "yes";
 }
 
+/** Every write whose change persisted, as "nothing was written" selects
+ * them: a statement that can change data, whose commit state is
+ * `persisted`. Naming no table, it counts the tables that hold state
+ * (tables.ts). */
+export const PERSISTED_WRITES: EventSelection = { kind: "db", op: ["insert", "update", "delete", "other"], committed: true };
+
 /** A value as a label names it: a word of letters, digits, and `_:/.@-`
  * as it is, any other value as JSON, and a value from the sentence as
  * `sentence:<capture>`. Pure. */

@@ -11,6 +11,7 @@ import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
 import { parseList, type ListedPlaces, type ListKind } from "../execution-events/lists.js";
 import type { StepPath } from "../execution-events/path.js";
+import type { CountedGroup } from "../execution-events/counted.js";
 import { NO_MARKED_TABLES, tablesOf, type WorldTables } from "../execution-events/tables.js";
 import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldList, RunWorldName } from "../record/run-result.js";
 import type { EventsSlice } from "../record/types.js";
@@ -152,6 +153,10 @@ export interface WorldStop {
    * in the events file, a late one included. Empty when the world has no
    * events file. */
   readonly paths: ReadonlyMap<string, StepPath>;
+  /** Each step's writes that persisted to a table that holds state, by
+   * trace id: only a step that has one. Empty when the world has no
+   * events file. */
+  readonly stateWrites: ReadonlyMap<string, readonly CountedGroup[]>;
   /** One per recount the stop was given, in order, counted over every
    * line of the file. Empty when the world has no events file. */
   readonly recounted: readonly Recounted[];
@@ -574,6 +579,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
             }
             let eventsLate: ReadonlyMap<string, LateSlice> = new Map();
             let paths: ReadonlyMap<string, StepPath> = new Map();
+            let stateWrites: ReadonlyMap<string, readonly CountedGroup[]> = new Map();
             let recounted: readonly Recounted[] = [];
             if (events !== undefined) {
               try {
@@ -584,6 +590,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
                 const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy, recounts, tables);
                 eventsLate = found.late;
                 paths = found.paths;
+                stateWrites = found.stateWrites;
                 recounted = found.recounted;
                 worldEvents = {
                   file: found.copied ? options.recordPath(copy) : null,
@@ -603,6 +610,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               late,
               eventsLate,
               paths,
+              stateWrites,
               recounted,
             };
           },

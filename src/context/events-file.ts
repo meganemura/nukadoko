@@ -3,7 +3,7 @@ import path from "node:path";
 import { ownerOf, parseEventLine, type ParsedLine } from "../execution-events/format.js";
 import type { CountedGroup } from "../execution-events/counted.js";
 import { createPathFold, type PathFold, type StepPath } from "../execution-events/path.js";
-import type { EventSelection } from "../execution-events/selection.js";
+import { PERSISTED_WRITES, type EventSelection } from "../execution-events/selection.js";
 import { NO_MARKED_TABLES, type WorldTables } from "../execution-events/tables.js";
 import { createKindsSeen, createTraceTally, readingGaps, type EventsGap, type KindsSeen, type SelectionCount, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
 import type { EventsSlice } from "../record/types.js";
@@ -20,9 +20,11 @@ import { traceIdIn } from "./trace-context.js";
 // step ends, and, once the world has stopped, the world's redacted copy,
 // each step's lines that arrived after its record, each step's coarse
 // path (src/execution-events/path.ts: the flags it evaluated and the
-// requests it sent among them), read in that one pass so a late line
-// counts as one in the slice does, and each count a claim step took of a
-// step's lines, taken again over all of them. Boundary: owns no file (the
+// requests it sent among them), each step's writes that persisted to a
+// table that holds state, which a step that declares `mutates: false` is
+// set against (src/run/undeclared-writes.ts), read in that one pass so a
+// late line counts as one in the slice does, and each count a claim step
+// took of a step's lines, taken again over all of them. Boundary: owns no file (the
 // program writes it, src/program/world.ts makes and removes it), and
 // decides nothing a line says (src/execution-events/ does).
 // Reading forward, the wait, the cap, and the late pass are
@@ -252,6 +254,10 @@ export interface WorldEvents {
   /** Each step's coarse path, by trace id, from every line of its trace
    * the file holds: its slice and its late lines alike. */
   readonly paths: ReadonlyMap<string, StepPath>;
+  /** Each step's writes that persisted to a table that holds state, as
+   * PERSISTED_WRITES counts them under the world's tables list, by trace
+   * id: only a step that has one. */
+  readonly stateWrites: ReadonlyMap<string, readonly CountedGroup[]>;
   /** One per recount the stop was given, in order. */
   readonly recounted: readonly Recounted[];
 }
@@ -276,6 +282,7 @@ export function collectWorldEvents(
   let unreadable = 0;
   const undefinedKinds = new Map<string, number>();
   const folds = new Map<string, PathFold>(steps.map((step) => [step.traceId, createPathFold(step.inputs)]));
+  const writes = new Map<string, TraceTally>(steps.map((step) => [step.traceId, createTraceTally({ ...step.inputs, selections: [PERSISTED_WRITES], tables })]));
   const kinds = createKindsSeen();
   const tallies = recounts.map((recount) => createTraceTally({ ...recount.inputs, selections: [recount.selection], tables }));
   const talliesOf = new Map<string, TraceTally[]>();
@@ -319,10 +326,12 @@ export function collectWorldEvents(
         const id = traceIdIn(line.text, prefix);
         if (id !== undefined) {
           folds.get(id)?.damaged();
+          writes.get(id)?.damaged();
           for (const tally of talliesOf.get(id) ?? []) tally.damaged();
         }
       } else if (owner !== undefined) {
         folds.get(owner)?.owned(parsed);
+        writes.get(owner)?.owned(parsed);
         for (const tally of talliesOf.get(owner) ?? []) tally.owned(parsed);
       }
       if (!copied) return;
@@ -335,6 +344,14 @@ export function collectWorldEvents(
   withoutChannelRecording(flush);
   // Nothing is kept, so nothing is cut.
   const paths = new Map(steps.map((step) => [step.traceId, folds.get(step.traceId)!.path({ truncated: false, replaced: step.replaced })]));
+  // Only a write the lines say persisted counts: one whose commit state
+  // no line decides, or whose table the tables cannot place, is not named.
+  const stateWrites = new Map(
+    steps.flatMap((step) => {
+      const counted = writes.get(step.traceId)!.reading({ truncated: false, replaced: step.replaced }).counts[0]!.counted;
+      return counted.length === 0 ? [] : [[step.traceId, redact(counted, secrets) as CountedGroup[]] as const];
+    }),
+  );
   const recounted = recounts.map((recount, index): Recounted => {
     // Nothing is kept, so nothing is cut.
     const reading = tallies[index]!.reading({ truncated: false, replaced: recount.replaced });
@@ -343,5 +360,5 @@ export function collectWorldEvents(
     const count = { ...reading.counts[0]!, counted: redact(reading.counts[0]!.counted, secrets) as CountedGroup[] };
     return { lines: reading.lines, unreadable: reading.unreadable, count, open: readingGaps(reading.open, recount.selection.kind, kinds) };
   });
-  return { copied, lines, owned, unowned, unreadable, undefinedKinds: Object.fromEntries(undefinedKinds), late, paths, recounted };
+  return { copied, lines, owned, unowned, unreadable, undefinedKinds: Object.fromEntries(undefinedKinds), late, paths, stateWrites, recounted };
 }

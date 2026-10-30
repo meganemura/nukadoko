@@ -163,6 +163,12 @@ const RUN_CODES = {
     description: "A Playwright trace has a version nukadoko cannot read, so its actions are not in the step record.",
     fix: "Install the Playwright version nukadoko is tested against.",
   },
+  "undeclared-write": {
+    severity: "note",
+    description:
+      "A step that declares mutates: false has, in its trace, a write the program committed to a table that holds state: the execution events say the step changed what a later step may read, and its declaration says it did not. A write to a table the program's tables list marks as bookkeeping or infrastructure is not one, and neither is a write that rolled back or whose commit state no line decides.",
+    fix: 'Declare mutates: true on the step when it is meant to write, or stop the write in the program when it is not; a table that holds bookkeeping or infrastructure is marked so in the program\'s tables list (docs/spec.md "Lists").',
+  },
   "version-probe-failed": {
     severity: "warning",
     description: "The environment's version probe did not answer, so the records have no target version.",

@@ -209,3 +209,57 @@ describe("a count at the base under the base's own tables list", () => {
     expect(nothing!.claims![0]).toMatchObject({ actual: 0, left_out: LEFT_OUT, outcome: "held" });
   });
 });
+
+describe("a step that declares mutates: false, set beside the writes its trace holds", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("events-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("notes a committed write to state, after the step's record too, and not a bookkeeping or infrastructure write, nor one that rolled back", async () => {
+    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program());
+    await writeFile(
+      path.join(rootDir, "features", "events.feature"),
+      [
+        "Feature: Reads",
+        "",
+        "  Scenario: reads that write",
+        '    When the client gets "/dashboard"',
+        '    And the client gets "/scores?rollback=1"',
+        '    And the client gets "/after"',
+        '    And the client posts to "/scores"',
+        "",
+      ].join("\n"),
+    );
+    const { exitCode, stderr } = await cli(rootDir, ["run"]);
+    // A note gates nothing.
+    expect(exitCode, stderr).toBe(0);
+    const notes = (latestRunJson(rootDir).findings as { code: string }[]).filter((finding) => finding.code === "undeclared-write");
+    expect(notes).toEqual([
+      {
+        severity: "note",
+        code: "undeclared-write",
+        file: "features/events.feature",
+        line: 6,
+        message:
+          "reads that write: the step at line 6, get, declares mutates: false, and its trace holds writes the program committed to tables that hold state, 1 line: db insert into scores",
+        fix: 'Declare mutates: true on the step when it is meant to write, or stop the write in the program when it is not; a table that holds bookkeeping or infrastructure is marked so in the program\'s tables list (docs/spec.md "Lists").',
+      },
+    ]);
+    expect(stderr).toContain("note\tundeclared-write\tfeatures/events.feature:6\treads that write: the step at line 6, get, declares mutates: false");
+  });
+
+  it("names no write when the tables list was not read, since any table may hold bookkeeping", async () => {
+    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "fail"'));
+    await writeFile(path.join(rootDir, "features", "events.feature"), ["Feature: Reads", "", "  Scenario: a read that writes", '    When the client gets "/after"', ""].join("\n"));
+    await cli(rootDir, ["run"]);
+    const codes = (latestRunJson(rootDir).findings as { code: string }[]).map((finding) => finding.code);
+    expect(codes).toContain("program-list-unread");
+    expect(codes).not.toContain("undeclared-write");
+  });
+});

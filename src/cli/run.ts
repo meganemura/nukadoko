@@ -50,6 +50,7 @@ import {
 } from "../run/progress-log.js";
 import { buildTable, executionOutcome, foldCell, foldHeadCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
+import type { CountedGroup } from "../execution-events/counted.js";
 import type { FlagEvaluation, ServedRequest } from "../execution-events/format.js";
 import type { ListedPlaces } from "../execution-events/lists.js";
 import { flagRows } from "../run/flag-rows.js";
@@ -66,6 +67,7 @@ import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { judgedEarlyFindings, readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
+import { undeclaredWriteFindings } from "../run/undeclared-writes.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
@@ -972,6 +974,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // What each of head's worlds read of the program's lists, by
     // environment, for run.json's `flags` and `routes`.
     const listedPlaces = new Map<string, Partial<ListedPlaces>>();
+    // Each step's writes that persisted to a table that holds state, by
+    // events trace id, from every world's stop.
+    const stateWrites = new Map<string, readonly CountedGroup[]>();
     // Starts the pass's world, or reports why it did not start. `null`
     // when the tree has no program file: the pass runs with no world.
     // A start a signal aborted is no failure of the program's, and the
@@ -1031,7 +1036,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             ];
           }),
         );
-      const { exitedEarly, late, eventsLate, paths, recounted } = await world.stop(steps, recounts);
+      const { exitedEarly, late, eventsLate, paths, stateWrites: written, recounted } = await world.stop(steps, recounts);
+      for (const [traceId, groups] of written) stateWrites.set(traceId, groups);
       worlds.push(world.record());
       // Read here, where every line of the world has its owner, so a flag
       // or request line that came after its step's record counts too. Both
@@ -1435,6 +1441,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // A cell a claim judged too early made broke may sit under a
       // scenario that passed, whose line says nothing failed.
       rows.push(...judgedEarlyFindings(runScenarios, conditionsOf));
+      // A step that declares it changes nothing and whose trace holds a
+      // committed write to state is set beside that write.
+      rows.push(...undeclaredWriteFindings(runScenarios, (traceId) => stateWrites.get(traceId), conditionsOf));
       runFindings.push(...rows);
       // Each environment whose flags list was read, in the run's order.
       const listedFlags = passes.flatMap((pass) => {
