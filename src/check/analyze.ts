@@ -40,6 +40,7 @@ import { findDescriptionTodos } from "./description-todo.js";
 import { findTransformedExpected, findUnstatedPolls } from "./claim-check.js";
 import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
+import { findUnmeasuredMcpTransports } from "./mcp-unmeasured.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
 import { findUndescribedFields } from "./missing-describe.js";
 import { missingTsSourceSentence } from "./missing-ts-source.js";
@@ -741,6 +742,7 @@ function projectNotes(
     ...findUndescribedFields(vocabulary),
     ...findUnusedParameterTypes(vocabulary, config.parameterTypes).map(inConfigFile),
     ...findUnusedFixtures(vocabulary, fixtureGraph).map(inConfigFile),
+    ...findUnmeasuredMcpTransports(vocabulary, config).map((issue) => (issue.fixture === undefined ? issue : inConfigFile(issue))),
     ...findTypelessPackageJsons(rootDir, loadedFiles),
   ];
 }

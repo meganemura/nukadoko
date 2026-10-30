@@ -282,6 +282,12 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Rename the capture: a letter or an underscore first, then only letters, digits, and underscores.",
   },
+  "mcp-transport-unmeasured": {
+    description:
+      "A config fixture or a typed step connects an MCP client to a transport it builds inside the connect call, so measureMcp never wraps it and the client's calls reach no step record.",
+    severity: "note",
+    fix: "Pass the transport through measureMcp (from nukadoko): client.connect(measureMcp(new StdioClientTransport(...))).",
+  },
   "no-step-files-found": {
     description:
       "featuresDir exists, but no .ts/.mts/.js/.mjs step file was found while scanning it, so no step can ever be registered.",
