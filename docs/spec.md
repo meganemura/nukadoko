@@ -4109,7 +4109,7 @@ rows came to:
 The run summary gives each row one line under "Flags":
 
 ```text
-- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
+- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`
 ```
 
 The run compares the steps' paths of two sides of each criterion, so a
@@ -7165,7 +7165,7 @@ holds:
 - "Flags", when run.json has `flags`: one line per flag and side, with
   how many criteria evaluated it there, their counts by verdict,
   `only in controls` for the ones seen there only in controls, and each
-  gate its lines named, `none named` for a line that named none, then
+  gate its lines named (a line that named none adds nothing), then
   `only this side was evaluated` for a flag's only side, and `no flags
   list that was read declares this side` for a side no list declares; a
   declared side no criterion evaluated says so instead; and each world

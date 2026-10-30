@@ -138,8 +138,8 @@ describe("run.json's flags", () => {
     // The summary gives each row one line: its counts, and the gates.
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     expect(summary.filter((line) => line.startsWith("- `quick_reorder`"))).toEqual([
-      "- `quick_reorder` `off`, 5 criteria: 2 held, 1 failed, 2 only in controls; gates `boolean`, none named",
-      "- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named",
+      "- `quick_reorder` `off`, 5 criteria: 2 held, 1 failed, 2 only in controls; gates `boolean`",
+      "- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`",
     ]);
 
     // `nuka report` reads the same document, flags included.

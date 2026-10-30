@@ -861,7 +861,9 @@ function renderFlags(document: RunDocument): string[] {
     const counts = FLAG_VERDICTS.filter((verdict) => row.counts[verdict] > 0).map((verdict) => `${row.counts[verdict]} ${verdict}`);
     if (row.counts.controls > 0) counts.push(`${row.counts.controls} only in controls`);
     const gates = [...new Set(row.criteria.flatMap((criterion) => criterion.cells.flatMap((cell) => cell.gates)))].sort(byGate);
-    const named = gates.map((gate) => (gate === null ? "none named" : codeSpan(programWord(gate))));
+    // A side no gate turned on has no gate to name, so a line without one
+    // is no gap in what the program wrote; run.json keeps it as `null`.
+    const named = gates.flatMap((gate) => (gate === null ? [] : [codeSpan(programWord(gate))]));
     const counted = counts.length === 0 ? "" : `: ${counts.join(", ")}`;
     const tail = [
       ...(named.length === 0 ? [] : [`gates ${named.join(", ")}`]),
@@ -879,6 +881,7 @@ function renderFlags(document: RunDocument): string[] {
       : [
           "Each line counts the criteria whose steps evaluated the flag on the side the program's lines named, by their verdict in the table.",
           "One seen on that side only in controls is counted apart, since its verdict is about another side.",
+          "`gates` lists the gates those lines named, and a line may name none.",
           "",
         ]),
     ...lines,

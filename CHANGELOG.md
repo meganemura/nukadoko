@@ -214,7 +214,8 @@ just until 0.1.
   evidence to join with the program's own record of the flag by `name`
   and `side`; nukadoko does not judge whether a flag may be turned on.
   The run summary gives each row one line under "Flags", with its
-  counts and the gates its lines named. The field is additive, so no
+  counts and the gates its lines named; a line that named none adds
+  nothing, since a side no gate turned on has none to name. The field is additive, so no
   `schema_version` changes.
 - **A Then can claim what the program did inside an earlier step.** A
   claim step's new `events` key names a count of an earlier step's

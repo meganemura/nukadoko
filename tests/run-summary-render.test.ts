@@ -768,10 +768,11 @@ describe("the flags lines of the summary", () => {
     counts: { held: 0, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0, ...counts },
   });
 
-  it("gives each flag and side one line with its counts and the gates its lines named, after the removed criteria", () => {
+  it("gives each flag and side one line with its counts and the gates its lines named, after the removed criteria, and no gate for a line that named none", () => {
     const flags = [
       flagRow("quick_reorder", "off", [criterion(4, "proven", ["boolean"]), criterion(7, "held", ["boolean"]), criterion(17, "held", [null])], { held: 2, controls: 1 }),
       flagRow("quick_reorder", "on", [criterion(4, "proven", ["boolean"]), criterion(7, "held", ["actor", "boolean"]), criterion(21, "failed", [null, "manual"])], { held: 1, proven: 1, failed: 1 }),
+      flagRow("slider_input", "off", [criterion(9, "held", [null])], { held: 1 }),
     ];
     const markdown = renderRunSummary({ ...base, flags });
     expect(markdown.slice(markdown.indexOf("\n## Flags")).split("\n")).toEqual([
@@ -780,9 +781,11 @@ describe("the flags lines of the summary", () => {
       "",
       "Each line counts the criteria whose steps evaluated the flag on the side the program's lines named, by their verdict in the table.",
       "One seen on that side only in controls is counted apart, since its verdict is about another side.",
+      "`gates` lists the gates those lines named, and a line may name none.",
       "",
-      "- `quick_reorder` `off`, 3 criteria: 2 held, 1 only in controls; gates `boolean`, none named",
-      "- `quick_reorder` `on`, 3 criteria: 1 held, 1 proven, 1 failed; gates `boolean`, `actor`, `manual`, none named",
+      "- `quick_reorder` `off`, 3 criteria: 2 held, 1 only in controls; gates `boolean`",
+      "- `quick_reorder` `on`, 3 criteria: 1 held, 1 proven, 1 failed; gates `boolean`, `actor`, `manual`",
+      "- `slider_input` `off`, 1 criterion: 1 held",
       "",
     ]);
     expect(renderRunSummary(base)).not.toContain("## Flags");
@@ -799,7 +802,7 @@ describe("the flags lines of the summary", () => {
         ),
       );
       const markdown = renderRunSummary({ ...base, flags });
-      const section = markdown.slice(markdown.indexOf("\n## Flags\n")).split("\n").slice(6, -1);
+      const section = markdown.slice(markdown.indexOf("\n## Flags\n")).split("\n").slice(7, -1);
       expect(section).toHaveLength(flags.length);
       for (const line of section) expect(line).toMatch(/^- `.*, 1 criterion: 1 held(; gates .+)?$/);
     }));

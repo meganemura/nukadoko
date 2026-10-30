@@ -3210,7 +3210,7 @@ flag を全員に有効にするかを決める読み手が、どの受け入れ
 run サマリは、各要素に「Flags」の下の 1 行を付けます:
 
 ```text
-- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`, none named
+- `quick_reorder` `on`, 5 criteria: 3 held, 1 proven, 1 failed; gates `boolean`, `actor`
 ```
 
 run は、各受け入れ基準の 2 つの側の step の実行経路を比べます。
@@ -5489,7 +5489,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   組ごとに、それが切り替えるものを名指す見出しと数の行を付け、実行経路が変わったか `open` の受け入れ基準を 20 まで、各 step の違いと一緒に載せます。
   そのあとに、記帳か基盤を持つテーブルでの違いを載せます(「実行イベント」を参照)。
 - run.json が `flags` を持つときは「Flags」。
-  flag と側の組ごとに 1 行で、そこで flag を評価した受け入れ基準の数、断定ごとの数、その側で対照にしか現れなかったものの `only in controls`、行が名指した各ゲート(ゲートを名指さなかった行は `none named`)を載せます。
+  flag と側の組ごとに 1 行で、そこで flag を評価した受け入れ基準の数、断定ごとの数、その側で対照にしか現れなかったものの `only in controls`、行が名指した各ゲート(ゲートを名指さなかった行は何も足しません)を載せます。
   そのあとに、flag の唯一の側には `only this side was evaluated` を、どの一覧も宣言しない側には `no flags list that was read declares this side` を続けます。
   一覧が宣言し、どの受け入れ基準も評価しなかった側は、そのことを代わりに言います。
   flag の一覧を読まなかった world も、それぞれ名指します(「実行イベント」を参照)。
