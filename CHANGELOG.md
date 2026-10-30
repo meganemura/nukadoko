@@ -41,7 +41,13 @@ just until 0.1.
   fits nothing, the actual node it was looked for under, and the nearest
   actual node (`; expected line 2 (button "Submit") fits no child of form
   "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual
-  line 7)`). A snapshot the browser could not take, such as a locator
+  line 7)`); when no node there has the expected role, it names the
+  actual child at the place the expected line would go, the one after
+  the child its previous sibling fit (`, and no node there is a
+  spinbutton; the child at that place is slider "Points": "50" (actual
+  line 7)`). The line shows the actual side as the numbered snapshot
+  lines the misfit points at, at most 12, rather than the page's first
+  characters (`(lines 5 to 7 of ARIA snapshot of observe:page)`). A snapshot the browser could not take, such as a locator
   that matched no element or more than one, leaves the claim `unjudged`
   with the browser's first line. `defineStep` refuses the compare on an
   actual from `from`, inside `each`, or with `view`, `at`, or `count`, and

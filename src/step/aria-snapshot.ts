@@ -749,9 +749,11 @@ export type SnapshotMisfit =
 
 /** How the nearest actual node stands to the expected one: a child of the
  * node it was looked for under, the child at its place under a children
- * mode, a node deeper than a child, or one that fits its line, which the
- * alignment gave to an earlier expected line or which sits out of order. */
-export type Nearness = "child" | "at-place" | "deeper" | "fits";
+ * mode, a node deeper than a child, one that fits its line, which the
+ * alignment gave to an earlier expected line or which sits out of order,
+ * or, when no node there is of its role, the child that stands where it
+ * would go: the one after the child its previous sibling fit. */
+export type Nearness = "child" | "at-place" | "deeper" | "fits" | "instead";
 
 /** The text an expected line states after its key (`- listitem: one`),
  * which the line reads as part of the node it names. */
@@ -880,12 +882,12 @@ function* below(node: ActualRole): Generator<ActualNode> {
   for (const child of node.children) yield* everyNode(child);
 }
 
-function unmatched(expected: ExpectedNode, inside: ActualRole | null, root: ActualRole): SnapshotMisfit {
+function unmatched(expected: ExpectedNode, inside: ActualRole | null, root: ActualRole, place?: ActualNode): SnapshotMisfit {
   const near = (node: ActualNode | null, relation: Nearness): SnapshotMisfit => ({
     kind: "unmatched",
     expected,
     inside,
-    nearest: node === null ? null : { node, relation: relation === "child" && lineFits(node, expected) ? "fits" : relation },
+    nearest: node === null ? (place === undefined ? null : { node: place, relation: "instead" }) : { node, relation: relation === "child" && lineFits(node, expected) ? "fits" : relation },
   });
   if (inside === null) return near(mostAlike(expected, below(root)), "child");
   const child = mostAlike(expected, inside.children);
@@ -913,7 +915,7 @@ function explainAt(scores: Scores, expected: ExpectedNode, actual: ActualNode, d
   const { pairs } = scores.aligned(expected.children, node.children);
   for (const [index, child] of expected.children.entries()) {
     const at = pairs.get(index);
-    if (at === undefined) return unmatched(child, inside, root);
+    if (at === undefined) return unmatched(child, inside, root, node.children[(pairs.get(index - 1) ?? -1) + 1]);
     const deeper = explainAt(scores, child, node.children[at]!, false, root);
     if (deeper !== null) return deeper;
   }
@@ -1013,6 +1015,8 @@ export function misfitText(misfit: SnapshotMisfit): string {
           return `${head}; nearest: ${actualNamed(nearest.node)}, which sits deeper than a child`;
         case "fits":
           return `${head}; nearest: ${actualNamed(nearest.node)}, which fits the line but an earlier line took it, or it sits out of the order the lines give`;
+        case "instead":
+          return `${head}, and no node there is ${roleWords(misfit.expected)}; the child at that place is ${actualNamed(nearest.node)}`;
       }
     }
   }
@@ -1062,9 +1066,56 @@ export function judgeSnapshots(actualText: string, expectedText: string): { read
  * they fit or either does not read (the claim's reason says why then).
  * Pure. */
 export function snapshotDifference(actualText: string, expectedText: string): string | null {
+  const misfit = misfitOf(actualText, expectedText);
+  return misfit === null ? null : misfitText(misfit);
+}
+
+function misfitOf(actualText: string, expectedText: string): SnapshotMisfit | null {
   const expected = expectedTree(expectedText);
   const actual = readActualSnapshot(actualText);
   if ("problem" in expected || "problem" in actual) return null;
-  const misfit = snapshotMisfit(actual.root, expected.root);
-  return misfit === null ? null : misfitText(misfit);
+  return snapshotMisfit(actual.root, expected.root);
+}
+
+/** The most actual lines an excerpt shows. */
+const EXCERPT_LINES = 12;
+
+function lastLine(node: ActualNode): number {
+  let last = node.line;
+  for (const each of everyNode(node)) last = Math.max(last, each.line);
+  return last;
+}
+
+/** The actual lines a misfit points at, so a line that cuts a long
+ * snapshot shows where the fix goes, not the top of the page: from the
+ * node the expected line was looked for under to the nearest node, the
+ * end of the node with a child missing, or the extra child; the last
+ * `EXCERPT_LINES` of them when there are more. `null` when the two fit,
+ * when either does not read, or when the misfit names no actual line.
+ * Pure. */
+export function snapshotExcerpt(actualText: string, expectedText: string): { readonly first: number; readonly last: number; readonly text: string } | null {
+  const misfit = misfitOf(actualText, expectedText);
+  if (misfit === null) return null;
+  const span = ((): readonly [number, number] | null => {
+    switch (misfit.kind) {
+      case "missing":
+        return [misfit.inside.line, lastLine(misfit.inside)];
+      case "extra":
+        return [misfit.actual.line, misfit.extra.line];
+      case "unmatched": {
+        if (misfit.nearest === null) return misfit.inside === null ? null : [misfit.inside.line, lastLine(misfit.inside)];
+        const lines = [misfit.inside?.line ?? misfit.nearest.node.line, misfit.nearest.node.line];
+        return [Math.min(...lines), Math.max(...lines)];
+      }
+    }
+  })();
+  if (span === null) return null;
+  const last = span[1];
+  const first = Math.max(1, span[0], last - EXCERPT_LINES + 1);
+  const text = actualText
+    .split(/\r?\n/)
+    .slice(first - 1, last)
+    .map(sourceText)
+    .join("\n");
+  return { first, last, text };
 }

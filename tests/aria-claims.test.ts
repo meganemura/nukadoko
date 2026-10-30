@@ -200,7 +200,7 @@ describe("judging a claim on the snapshot nukadoko took", () => {
     expect(record.outcome).toBe("broken");
     expect(record.reason).toBeUndefined();
     expect(claimLine(record)).toMatch(
-      /^".*" \(ARIA snapshot of observe:page\) fits-aria-snapshot ".*" \(sentence:tree\) broken; expected line 2 \(button "Submit"\) fits no child of form "Scores" \(actual line 2\); nearest: button "Skip" \[disabled\] \(actual line 4\)$/,
+      /^".*" \(lines 2 to 4 of ARIA snapshot of observe:page\) fits-aria-snapshot ".*" \(sentence:tree\) broken; expected line 2 \(button "Submit"\) fits no child of form "Scores" \(actual line 2\); nearest: button "Skip" \[disabled\] \(actual line 4\)$/,
     );
   });
 

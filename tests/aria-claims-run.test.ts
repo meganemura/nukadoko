@@ -101,10 +101,11 @@ describe("nuka run with fits-aria-snapshot", () => {
     expect(breaks!.steps.map((step) => step.status)).toEqual(["passed", "failed"]);
     const failed = breaks!.steps[1]!;
     expect(failed.error!.kind).toBe("claim_broken");
-    // The line cuts a value past 120 characters of its JSON; the record
-    // keeps it whole.
+    // The line shows the snapshot lines the misfit points at, from the
+    // form it was looked for under to the nearest button; the record keeps
+    // the snapshot whole.
     expect(failed.error!.message).toBe(
-      `claim broken: ${JSON.stringify(PRINTED).slice(0, 120)}... (ARIA snapshot of observe:page) fits-aria-snapshot ${JSON.stringify('- form "Scores":\n  - button "Submit"')} (sentence:tree); ` +
+      `claim broken: ${JSON.stringify(PRINTED.split("\n").slice(2, 7).join("\n"))} (lines 3 to 7 of ARIA snapshot of observe:page) fits-aria-snapshot ${JSON.stringify('- form "Scores":\n  - button "Submit"')} (sentence:tree); ` +
         'expected line 2 (button "Submit") fits no child of form "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual line 7)',
     );
   }, 60_000);

@@ -6,6 +6,7 @@ import {
   readActualSnapshot,
   readExpectedSnapshot,
   snapshotDifference,
+  snapshotExcerpt,
   snapshotFits,
   snapshotMisfit,
   type ActualNode,
@@ -189,6 +190,18 @@ describe("snapshotFits", () => {
       tc.assume(expected.named > 0);
       expect(snapshotMisfit(actual.root, expected.root) === null).toBe(snapshotFits(actual.root, expected.root));
     }));
+
+  it("excerpts the actual's own lines, at most 12, whenever the misfit names an actual line", () =>
+    hegel.test((tc) => {
+      const actualPage = drawPage(tc);
+      const expectedText = print(drawPage(tc).trees.map((tree) => cut(tc, tree))).join("\n");
+      const difference = snapshotDifference(actualPage.text, expectedText);
+      const excerpt = snapshotExcerpt(actualPage.text, expectedText);
+      expect(excerpt !== null).toBe(difference !== null && difference.includes("(actual line "));
+      if (excerpt === null) return;
+      expect(excerpt.last - excerpt.first).toBeLessThan(12);
+      expect(excerpt.text).toBe(actualPage.text.split("\n").slice(excerpt.first - 1, excerpt.last).map((line) => (line.length > 120 ? `${line.slice(0, 120)}...` : line)).join("\n"));
+    }));
 });
 
 // What `page.locator("body").ariaSnapshot()` printed for the fixture's
@@ -238,6 +251,8 @@ describe("judgeSnapshots on a real page's snapshot", () => {
       '- button "Skip" [disabled=false]',
       "- dialog",
       "- /url: /about\n- /url: /about",
+      '- heading "Room 7"\n- spinbutton',
+      '- form "Scores":\n  - textbox "Nickname"\n  - spinbutton',
     ].map((expected) => snapshotDifference(ROOM, expected));
     expect(differences).toEqual([
       'expected line 3 (button "Submit") fits no child of form "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual line 7)',
@@ -250,6 +265,29 @@ describe("judgeSnapshots on a real page's snapshot", () => {
       'expected line 1 (button "Skip" [disabled=false]) fits no node of the snapshot; nearest: button "Skip" [disabled] (actual line 7), which prints [disabled]',
       "expected line 1 (dialog) fits no node of the snapshot, and no node there is a dialog",
       'expected line 1 (/url: /about) fits no node of the snapshot; nearest: link "Help" (actual line 9), whose /url is /help',
+      'expected line 2 (spinbutton) fits no child of main (actual line 1), and no node there is a spinbutton; the child at that place is form "Scores" (actual line 3)',
+      'expected line 3 (spinbutton) fits no child of form "Scores" (actual line 3), and no node there is a spinbutton; the child at that place is button "Score" (actual line 6)',
+    ]);
+  });
+
+  it("excerpts the actual lines from where the expected line was looked for to the node the misfit names", () => {
+    const excerpts = [
+      '- heading "Room 7"\n- spinbutton',
+      '- heading "Lobby"',
+      "- list:\n  - /children: equal\n  - listitem: one\n  - listitem: two\n  - listitem: three",
+      "- list:\n  - /children: equal\n  - listitem: one",
+      '- heading "Room 7"\n- form "Scores":\n  - button "Submit"',
+      "- dialog",
+      '- heading "Room 7"',
+    ].map((expected) => snapshotExcerpt(ROOM, expected));
+    expect(excerpts).toEqual([
+      { first: 1, last: 3, text: '- main:\n  - heading "Room 7" [level=1]\n  - form "Scores":' },
+      { first: 2, last: 2, text: '  - heading "Room 7" [level=1]' },
+      { first: 11, last: 13, text: "  - list:\n    - listitem: one\n    - listitem: two" },
+      { first: 11, last: 13, text: "  - list:\n    - listitem: one\n    - listitem: two" },
+      { first: 3, last: 7, text: ROOM.split("\n").slice(2, 7).join("\n") },
+      null,
+      null,
     ]);
   });
 

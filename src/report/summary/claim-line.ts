@@ -1,7 +1,7 @@
 import { describeRange } from "../../execution-events/count.js";
 import { describeCounted, describeLeftOut } from "../../execution-events/counted.js";
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
-import { snapshotDifference } from "../../step/aria-snapshot.js";
+import { snapshotDifference, snapshotExcerpt } from "../../step/aria-snapshot.js";
 import { deepEqual, fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 
 // Responsibility: one claim record as one line of plain text, the words
@@ -43,11 +43,24 @@ function expectedText(record: { readonly expected?: unknown; readonly expected_f
  * source label already names its `view` and `at`. */
 function comparisonText(record: ClaimComparisonRecord): string {
   const actual = hasKey(record, "actual")
-    ? `${valueText(record.actual)} (${record.actual_from})`
+    ? (snapshotExcerptText(record) ?? `${valueText(record.actual)} (${record.actual_from})`)
     : record.actual_range !== undefined
       ? `${describeRange(record.actual_range)} (${record.actual_from})`
       : record.actual_from;
   return `${actual} ${record.compare} ${expectedText(record)}`;
+}
+
+/** The actual side of a broken `fits-aria-snapshot` claim as the lines
+ * the misfit points at, with their numbers, since a page's snapshot is
+ * longer than the line shows and its first lines are seldom where the two
+ * part; `null` for any other claim, which shows the value's start. */
+function snapshotExcerptText(record: ClaimComparisonRecord): string | null {
+  if (record.compare !== "fits-aria-snapshot" || record.outcome !== "broken" || record.reason !== undefined) return null;
+  if (typeof record.actual !== "string" || typeof record.expected !== "string") return null;
+  const excerpt = snapshotExcerpt(record.actual, record.expected);
+  if (excerpt === null) return null;
+  const lines = excerpt.first === excerpt.last ? `line ${excerpt.first}` : `lines ${excerpt.first} to ${excerpt.last}`;
+  return `${JSON.stringify(excerpt.text)} (${lines} of ${record.actual_from})`;
 }
 
 /** An item claim as declared: the path inside the item (counted, when the
