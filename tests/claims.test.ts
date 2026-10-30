@@ -1539,6 +1539,60 @@ describe("where", () => {
       expect(record).toMatchObject({ each: { items: rows.length, selected: selected.length } });
     }));
 
+  it("an is-a claim of a kind that is the where clause's type alone always breaks, and any other kind is judged on the data", () =>
+    hegel.testAsync(async (tc) => {
+      const where = tc.draw(gs.sampledFrom(leaves));
+      const bound = tc.draw(gs.integers({ minValue: -5, maxValue: 5 }));
+      const kind = tc.draw(gs.sampledFrom(VALUE_KINDS));
+      const items = tc.draw(gs.arrays(gs.sampledFrom([-3, 0, 2, 2.5, 7]), { minSize: 1, maxSize: 6 }));
+      const claim: Claim = {
+        actual: "result",
+        each: { where: [{ actual: "n", compare: where, expected: "least" }], claims: [{ actual: "n", compare: "is-a", expected: "kind" }] },
+      };
+      expect(claimsProblem([claim], { ...shape, argsKeys: new Set(["least", "kind", "result"]), requiredArgsKeys: new Set(["least", "kind", "result"]) })).toBeNull();
+      // Every item where selects is a number, since an order compare or a
+      // not-equal against a number breaks on any other type.
+      const implied = kind === "number";
+      expect(whereImplies(where, bound, "is-a", kind)).toBe(implied);
+      const record = await judgeOne(claim, { least: bound, kind, result: items.map((n) => ({ n })) }, undefined, ["result"]);
+      if (implied) {
+        expect(record.reason).toBe(
+          `each.where[0] selects the items whose n is ${where} ${bound}, and every such item holds each.claims[0], is-a "number", whatever the data, so the claim measures nothing`,
+        );
+        return;
+      }
+      const selected = items.filter((n) => holds(where, n, bound));
+      const isKind = (n: number) => kind === "integer" && Number.isInteger(n);
+      expect(record.outcome).toBe(selected.length > 0 && selected.every(isKind) ? "held" : "broken");
+      expect(record.reason ?? "").not.toContain("whatever the data");
+    }));
+
+  it("whereImplies takes is-a after a not-equal exactly when the kind is the not-equal value's JSON type alone", () =>
+    hegel.test((tc) => {
+      const value = tc.draw(jsonValues);
+      const kind = tc.draw(gs.sampledFrom(VALUE_KINDS));
+      const types: Record<string, string> = { string: "string", text: "string", number: "number", boolean: "boolean", list: "array", array: "array", object: "object", null: "null" };
+      expect(whereImplies("not-equal", value, "is-a", kind)).toBe(types[kind] === jsonType(value));
+      expect(whereImplies("not-equal", value, "is-a", kind.toUpperCase())).toBe(types[kind] === jsonType(value));
+    }));
+
+  it("refuses at import an order or not-equal literal where clause beside an is-a literal claim of its type alone on one value, and takes any other pair", () => {
+    const shape = { ...literalShape("every price over 10 that is not free is a number and a string and an integer"), argsKeys: null };
+    const problem = (where: Record<string, unknown>, item: Record<string, unknown>) => claimsProblem([{ actual: "result", each: { where: [where], claims: [item] } } as unknown as Claim], shape);
+    const over = { actual: "price", compare: "greater-than", expected: { literal: 10 } };
+    expect(problem(over, { actual: "price", compare: "is-a", expected: { literal: "number" } })).toBe(
+      'claims[0].each.where[0] selects by the item at price with greater-than, which holds only on a number, and claims[0].each.claims[0] claims is-a "number" on the same value, so every item where selects holds it, whatever the data, and the claim measures nothing. Claim what the value is beyond its type, or drop the claim',
+    );
+    expect(problem({ at: "price", compare: "at-most", expected: { literal: 10 } }, { actual: "price", compare: "is-a", expected: { literal: "number" } })).toContain("claims is-a \"number\" on the same value");
+    expect(problem({ actual: "price", compare: "not-equal", expected: { literal: "free" } }, { actual: "price", compare: "is-a", expected: { literal: "string" } })).toContain(
+      "with not-equal, which holds only on a string, and claims[0].each.claims[0] claims is-a \"string\" on the same value",
+    );
+    expect(problem(over, { actual: "price", compare: "is-a", expected: { literal: "integer" } })).toBeNull();
+    expect(problem(over, { actual: "cost", compare: "is-a", expected: { literal: "number" } })).toBeNull();
+    expect(problem(over, { actual: "price", view: "json", compare: "is-a", expected: { literal: "number" } })).toBeNull();
+    expect(problem({ actual: "price", compare: "not-equal", expected: { literal: 10 } }, { actual: "price", compare: "is-a", expected: { literal: "string" } })).toBeNull();
+  });
+
   it("a pair read through one view is one value only when its at names one path too, and any other pair is judged on the data", () =>
     hegel.testAsync(async (tc) => {
       const pair = tc.draw(orderPair);

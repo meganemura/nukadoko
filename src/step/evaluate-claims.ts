@@ -16,10 +16,12 @@ import { judgeSnapshots } from "./aria-snapshot.js";
 import {
   ARIA_SNAPSHOT_COMPARE,
   isEachClaim,
+  KIND_JSON_TYPES,
   kindNamed,
   NO_EVENTS,
   NO_FILES,
   literalStatedByAll,
+  ORDER_COMPARES,
   pathSegments,
   placeAriaSnapshot,
   placeAt,
@@ -1539,8 +1541,16 @@ async function judgeEach(claim: EachClaim, rawActual: Side, readSegments: readon
  * `not-equal` against the same value. Then the claim holds on every
  * item `where` selects, and "every item" measures nothing. A pair it does
  * not imply (`greater-than 10` then `at-most 100`) can break on the data.
- * Pure. */
+ * An order compare, or a not-equal, holds only on a value of its expected
+ * value's JSON type, and a `where` that cannot compare an item breaks the
+ * `each`, so an `is-a` claim of a kind that is that type alone
+ * (`KIND_JSON_TYPES`) is implied too. Pure. */
 export function whereImplies(where: ClaimCompare, whereValue: unknown, claim: ClaimCompare, claimValue: unknown): boolean {
+  if (claim === "is-a") {
+    const kind = typeof claimValue === "string" ? kindNamed(claimValue) : undefined;
+    const type = where === "not-equal" ? jsonType(whereValue) : ORDER_COMPARES.has(where) && typeof whereValue === "number" ? "number" : null;
+    return kind !== undefined && type !== null && KIND_JSON_TYPES[kind] === type;
+  }
   if (where === "not-equal") return claim === "not-equal" && jsonType(whereValue) === jsonType(claimValue) && deepEqual(whereValue, claimValue);
   if (typeof whereValue !== "number" || typeof claimValue !== "number") return false;
   const up = (compare: ClaimCompare): boolean => compare === "greater-than" || compare === "at-least";
@@ -1580,8 +1590,6 @@ function whereImplication(claim: EachClaim, inputs: ClaimInputs): string | null 
   }
   return null;
 }
-
-const ORDER_COMPARES: ReadonlySet<ClaimCompare> = new Set(["greater-than", "at-least", "less-than", "at-most"]);
 
 /** `observeReceived` for every declaration of an `each`, before any item:
  * it does not depend on an item, and an empty array would hide it. A

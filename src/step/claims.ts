@@ -938,7 +938,7 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
     }
     const view = claim.view as (typeof CLAIM_VIEWS)[number] | undefined;
     const made = view === undefined || claim.at !== undefined ? null : VIEW_MAKES[view];
-    if (made === null || VIEW_KIND_TYPES[kind] !== made) return;
+    if (made === null || KIND_JSON_TYPES[kind] !== made) return;
     const instead = made === "string" ? "Name a kind a string may not be, such as uuid, date, timestamp, or url, or claim the value itself" : "Claim what its items are with each, or claim the value itself";
     throw new InvalidClaimError(
       `${label} reads its actual value through view ${view}, which always makes ${article(made)}, so is-a ${describe(literal.literal)} holds whenever the view applies and states nothing. ${instead}`,
@@ -946,8 +946,18 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
   },
 };
 
-/** Each kind that holds for every value of one JSON type, with that type. */
-const VIEW_KIND_TYPES: Partial<Record<ValueKind, "string" | "array">> = { string: "string", text: "string", list: "array", array: "array" };
+/** Each kind that holds for every value of one JSON type, with that type:
+ * an is-a claim of such a kind states the type and nothing more. */
+export const KIND_JSON_TYPES: Partial<Record<ValueKind, "null" | "array" | "object" | "string" | "number" | "boolean">> = {
+  string: "string",
+  text: "string",
+  number: "number",
+  boolean: "boolean",
+  list: "array",
+  array: "array",
+  object: "object",
+  null: "null",
+};
 
 function article(word: string): string {
   return /^[aeiou]/.test(word) ? `an ${word}` : `a ${word}`;
@@ -1229,6 +1239,26 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
         `${label}.each.where[${whereIndex}] selects by ${describeItemPath(place)} with ${String(entry["compare"])}, and ${label}.each.claims[${overlapping}] reads ${describeItemPath(other)}, ${relation}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
       );
     });
+    // An order compare holds only on two numbers, and a where clause that
+    // cannot compare an item breaks the each, so every item it selects
+    // holds a number at its place: an item claim that the value there is
+    // a number states nothing. A not-equal literal pins the type the same
+    // way. The run judges a kind the line fills (`whereImplies`).
+    ((each.where ?? []) as Record<string, unknown>[]).forEach((entry, whereIndex) => {
+      const literal = literalOf(entry["expected"]);
+      const type = ORDER_COMPARES.has(entry["compare"] as string) ? "number" : entry["compare"] === "not-equal" && literal !== null ? literalJsonType(literal.literal) : null;
+      if (type === null) return;
+      const claimIndex = (each.claims as Record<string, unknown>[]).findIndex((item) => {
+        const named = literalOf(item["expected"])?.literal;
+        const kind = typeof named === "string" ? kindNamed(named) : undefined;
+        return item["compare"] === "is-a" && kind !== undefined && KIND_JSON_TYPES[kind] === type && readOneItemValue(entry, item);
+      });
+      if (claimIndex === -1) return;
+      const kind = String(literalOf((each.claims as Record<string, unknown>[])[claimIndex]!["expected"])!.literal);
+      throw new InvalidClaimError(
+        `${label}.each.where[${whereIndex}] selects by ${describeItemPath(itemPath(entry))} with ${String(entry["compare"])}, which holds only on ${article(type)}, and ${label}.each.claims[${claimIndex}] claims is-a ${JSON.stringify(kind)} on the same value, so every item where selects holds it, whatever the data, and the claim measures nothing. Claim what the value is beyond its type, or drop the claim`,
+      );
+    });
   });
   // An observe no claim reads changes no verdict, and the likely cause is
   // a key it returns under a from key's name: the from value wins, so the
@@ -1341,6 +1371,18 @@ export function claimArgKeysRead(claims: readonly Claim[]): ReadonlySet<string> 
  * item claim's: each decides the value there, or selects by a part or a
  * kind of it that the claim cannot be told apart from. */
 const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "has-same-items", "has-fields", "lacks-field", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"]);
+
+/** The compares that hold only on two numbers. */
+export const ORDER_COMPARES: ReadonlySet<string> = new Set(["greater-than", "at-least", "less-than", "at-most"]);
+
+/** The JSON type of a literal's value: `[]` is the empty array. */
+function literalJsonType(literal: unknown): "null" | "array" | "string" | "number" | "boolean" | null {
+  if (literal === null) return "null";
+  if (Array.isArray(literal)) return "array";
+  if (typeof literal === "string") return "string";
+  if (typeof literal === "number") return "number";
+  return typeof literal === "boolean" ? "boolean" : null;
+}
 
 /** Whether two places inside one item overlap: one path is the start of
  * the other, after `actual` and `at` are joined (`itemPath`). Pure. */
