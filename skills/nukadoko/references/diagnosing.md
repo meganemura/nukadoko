@@ -86,6 +86,12 @@ the run summary lists every claim under "Claims" with its outcome. A
 broken claim is fixed in the implementation or by asking the person,
 never by a weaker compare.
 
+A polled claim that broke says why its poll stopped. `; the poll stopped on
+reading 4, before its 5000 ms timeout, since readings 3 and 4 settled (screen
+equal "scoring")` means the page reached the state the step declares final;
+`the poll read until its 5000 ms timeout, and no two consecutive readings
+settled` means it never did. Each reading's `settled` in the record says which.
+
 A claim on a count of execution events ends with what the count counted,
 grouped by what each line reports, whatever the outcome:
 

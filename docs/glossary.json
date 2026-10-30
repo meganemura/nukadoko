@@ -482,6 +482,11 @@
       "note": "claim step の observe を 1 回呼んで得た値。poll では成り立つまで繰り返し、step record の `readings` が各読み取りを残す。フィールド名 `readings` はコードスパンで英語のまま"
     },
     {
+      "en": ["settled", "settles", "a reading settles", "settled condition"],
+      "ja": "落ち着く / 落ち着きの条件",
+      "note": "poll の読み取りが、一度たどり着くと変わらない状態にあること。step が `poll.settled` に宣言する条件がすべて成り立つ読み取りは 落ち着いている。claim が成り立つことではない。フィールド名 `settled` はコードスパンで英語のまま。環境の `conditions`(keep_english の condition)とは別の、一般語の 条件"
+    },
+    {
       "en": ["place (where a claim side reads)", "the same place"],
       "ja": "場所",
       "note": "claim の一辺が読む出所(observe、値を返した step の record、文のキー)と、view と at を含む完全なパスの組。自分自身との比較は、両辺が同じ場所かで決まる"

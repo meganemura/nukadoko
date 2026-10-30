@@ -161,12 +161,13 @@ behind it. Give every `args` and `returns` field of a step you write or rewrite
 a `.describe()`, so `nuka describe` connects a criterion's wording to the field
 that answers it; a note on a step you are not changing is a report.
 
-`poll: { timeout_ms }` runs `observe` again every 100 ms until every claim
-holds on two readings in a row, then judges the last reading once (a poll
-longer than the step's deadline stops 100 ms before it). `readings` keep
-what each reading read (past 40, the first, the last, and the change
-points). A claim step whose `observe` reaches `page`, `context`, or
-`pageAs` states `poll`, as `{ timeout_ms }` or `false` (`claim-poll-unstated`).
+`poll: { timeout_ms }` runs `observe` every 100 ms until every claim holds on
+two readings in a row, then judges the last; `readings` keep what each read. A
+Then whose `observe` reaches `page`, `context`, or `pageAs` states `poll` or
+`poll: false` (`claim-poll-unstated`). A broken poll waits out its timeout,
+unless `settled: [{ actual, compare, expected: { literal } }]` names a state the
+page cannot leave once reached (no busy element): two readings in a row in it
+with a claim broken stop the poll, and it never makes a claim hold.
 
 **One step per claim, or the expected value in the line?** Let the sentence a
 non-engineer agreed to decide: "the total is {expected:int}" carries its value,
@@ -194,6 +195,6 @@ export default defineStep({
 });
 ```
 
-The docstring states part of the tree (`writing-the-feature.md`). A name
-between slashes, `[active]`, and a tree that names nothing are refused
+The docstring states part of the tree (`writing-the-feature.md`). A name between
+slashes, `[active]`, and a tree that names nothing are refused
 (`claim-aria-snapshot-unreadable`, `claim-aria-snapshot-names-nothing`).

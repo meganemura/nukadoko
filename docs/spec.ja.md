@@ -2006,11 +2006,64 @@ step の締め切りは step が読み始めたときに始まり、タイムア
 そうすれば最後の読み取りが間に合って始まり、判定されます。
 締め切りにぶつかった poll は、どの読み取りも判定されないまま終わります。
 
+成り立つ claim の poll は 2 回の読み取りで止まりますが、成り立たない claim の poll はタイムアウトまで読みます。
+そのため、成り立たない Then はタイムアウトをまるごと費やします。
+多くの Then は、一度たどり着くと変わらない状態を読みます。
+読み込みを終えた画面はスライダーかスピンボタンを見せ、そのあとも見せ続けます。
+`timeout_ms` の隣の `settled` はその状態を名指し、その状態で成り立たなかった claim を待つのを poll にやめさせます。
+
+```ts
+args: z.object({ tree: z.string() }),
+observe: async ({ page }) => ({ page, busy: await page.locator("[aria-busy=true]").allTextContents() }),
+poll: { timeout_ms: 5000, settled: [{ actual: "busy", count: true, compare: "equal", expected: { literal: 0 } }] },
+claims: [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }],
+```
+
+落ち着きの条件は、`observe` が返す値とリテラルの比較です。
+持つのは `actual`、`view`、`at`、`count`、`compare`、`expected: { literal }` です。
+`actual` は `observe` が返すキーで、`from`、`events`、`files`、args のキーにはなれません。
+読み取りの間に変わりうるのは、読み直す値だけだからです。
+`compare` は `equal`、`not-equal`、`contains-text`、`starts-with-text`、`ends-with-text`、`has-item`、`fits-aria-snapshot`、`is-a`、`greater-than`、`at-least`、`less-than`、`at-most` のどれかです。
+リテラルは step 自身の宣言で、文が述べる必要はありません。
+落ち着きの条件は受け入れ基準ではなく、読み取りが最終のものになったときを述べるからです。
+すべての落ち着きの条件がその読み取りで成り立つとき、読み取りは落ち着いています。
+poll は、一致する連続した 2 回の読み取りで止まります。
+一致するとは、これまでどおり両方ですべての claim が成り立ったか、両方が落ち着いていて claim が成り立たなかったかです。
+落ち着いた読み取りが 1 回だけでは足りません。
+成り立つ読み取りが 1 回では足りないのと同じく、2 回の描画の間のページは 1 フレームだけある状態を見せることがあるからです。
+そのあと最後の読み取りをいつもどおり一度だけ判定するので、claim は成り立ちません。
+落ち着いた読み取りが claim を成り立たせることはありません。
+すべての claim が成り立つ読み取りは、落ち着いていてもいなくても、これまでどおり確かめられます。
+一度も成り立たない落ち着きの条件や、claim が成り立つ読み取りでだけ成り立つ落ち着きの条件は、poll を変えません。
+すべての claim が成り立つかタイムアウトが過ぎるまで読みます。
+`settled` を宣言しない step は、これまでとまったく同じに poll します。
+
+失敗メッセージは、poll が止まった理由を、最初の行、つまり `nuka run` が表示する行の終わりで述べます。
+そのため、落ち着いた読み取りをタイムアウトが過ぎたことと読み違えることはありません。
+
+```text
+claim broken: "spinbutton" (observe:control) equal "slider" (literal:slider); the poll stopped on reading 4, before its 5000 ms timeout, since readings 3 and 4 settled (screen equal "scoring")
+claim broken: "spinbutton" (observe:control) equal "slider" (literal:slider); the poll read until its 5000 ms timeout, and no two consecutive readings settled (screen equal "scoring")
+```
+
+record は `settled` を残します。
+各条件を `nuka steps` が表示する形で持ち(`conditions`)、読み取りが落ち着いたので poll が止まったときだけ `stop` を持ちます。
+`stop` は、止まった読み取りと、そこで各条件が読んだもの(`actuals`、読み取りと同じ形で残します)です。
+各読み取りは `settled` を持ち、すべての落ち着きの条件がその読み取りで成り立ったかどうかを述べます。
+`nuka steps` は、各条件を claim の下に `settled: <condition>` として表示します。
+
+`defineStep` は、どの読み取りでも同じ判定になる落ち着きの条件を拒否します。
+真偽値のリテラル(claim と同じく、コードの中で下した判断です)、数ではないリテラルとの count や大小の比較、中身のあるテキストではないリテラルとのテキストの比較、種類を名指さない `is-a` のリテラルや view がいつも作る種類、読めないか何のノードも名指さない `fits-aria-snapshot` のリテラル、`view`、`at`、`count` を持つ `fits-aria-snapshot` です。
+そのような条件は一度も成り立たないので、poll を止めることがなく、そのことを何も言いません。
+step のすべての claim を、同じ actual、compare、リテラルで名指す `settled` の並びも拒否します。
+そのとき読み取りはすべての claim が成り立つときだけ落ち着くので、その並びは poll を止めないからです。
+
 `poll` は、直前の読み取りが成り立ったかどうかを `observe` に伝えます。
 claim が成り立たない間だけ、もう一度呼ぶからです。
 成り立つまで読む仕組みはどれもこの性質を持ち、呼ばれた回数を数える `observe` はそれを使って、期待値へ近づいていく値を返せます。
 そのため step record は読み取りを残します(`readings`)。
 各読み取りについて、試行の番号、時刻、すべての claim が成り立ったかどうか、各 claim の実際の値(`actuals`)か、`observe` が throw した内容の最初の行を残します。
+`settled` を宣言する step では、読み取りが落ち着いたかどうかも残します。
 期待値も `observe` から来るときは、各読み取りに各 claim の期待値も残します(`expecteds`)。
 `each` の claim では、宣言の期待値をラベルごとに残します。
 動いていく値が期待値の側のこともあるからです。
@@ -2090,6 +2143,7 @@ claim step の record には、次の固有のフィールドがあります(「
   `observe` の呼び出しを 1 回ずつ数え、`observe` のない step は `from` の値を一度だけ読み、何も読まなかった step(`observe` が一度も動かなかったか、nukadoko が先に判定を断った step)は `0` を記録します。
 - `readings`: poll するときだけあり、step が残した読み取りです(「poll」を参照)。
   すべては残さなかったときは `readings_left_out` もあります。
+- `settled`: `settled` を宣言する `poll` のときだけあり、その `conditions` と、読み取りが落ち着いたので poll が止まったときの `stop` です(「poll」を参照)。
 - `events_read`: `events` を持つ step にだけあり、各キーの、前の step の実行イベントの読みです(「実行イベントの数についての claim」を参照)。
 
 `measured` は、生の実際の値と内容が等しい、記録されたチャネルを名指しします。
@@ -4460,7 +4514,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   step record を読み戻せなかった step は、その代わりに `record_unreadable: true` を持ち、`step-record-unreadable` の警告がそのファイルを名指します。
   失敗した step、または理由があって始まらなかった step(`undefined`、`ambiguous`)は、step record の `kind`(step record が言わなければ `null`)と最初のメッセージを持つ `error` を持ちます。
   `from` で前の結果を読んで失敗した step は `used` を持ち、各 producer の step、record、読んだ結果を載せます。
-  claim step は、その step record と同じ `claims`、`observation`、`attempts` を持ちます(「Claims」を参照)。
+  claim step は、その step record と同じ `claims`、`observation`、`attempts` を持ち、poll する step は `settled` も持ちます(「Claims」を参照)。
   そのため、成り立たない claim は step record を開かずに読めます。
   `events_read` も持ち、world が止まったときの数え直しが違う判定をした claim は `after_world_stop` を持ちます(「実行イベントの数についての claim」を参照)。
   record を書いたあとに届いたプログラムのログの行を持つ step は `program_log_late` を、実行イベントの行を持つ step は `events_late` を持ちます(「テスト対象のプログラム」を参照)。
@@ -5291,6 +5345,7 @@ scenario record は独立したファイルではなく、その run の `run.js
 - `claims`、`observation`、`attempts` は claim step の record にだけ現れます。
   比較した値とそれぞれの出所を持つ各 claim、step が値を読めたかどうか、値を何回読んだかです。
   poll する claim step は `readings` も持ち、残した読み取りの実際の値を載せます。
+  `settled` を宣言する step は `settled` も持ちます。
   各フィールドは「Claims」が述べます。
   claim step の `result` は `{}` です。
   後の step が読めるものを何も返さないからです。
@@ -5784,7 +5839,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   一覧のルートのうち head の step がリクエストした数、一度もリクエストしなかったルート(ハンドラに別のルートからリクエストが届いたものは分けます)、world の一覧が名指さないルートへのリクエストと、プログラムがどのルートにも一致させなかったリクエスト(それぞれの数とともに)、ルートの一覧を読まなかった各 world を載せます(「一覧」を参照)。
   1 行が名指すルートは 20 までで、残りは数だけを書きます。
 - 「Claims」。
-  claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
+  claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数、`settled` を宣言して失敗した step なら落ち着いた読み取り(`settled on reading 4 (screen equal "scoring")`)か `not settled` を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
   要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、どの claim も判定しなかったこと(判定したかもしれない compat step が Then の位置にあればそのこと)を載せます。
 - 「Unmeasured actions」。
@@ -6502,7 +6557,7 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   そのためスキーマが開いていたとしても、part がここで取る形はありません(「Parts」を参照)。
   Allure がそれを入れ子にできるのは、Allure 自身のモデルがそうしているからです。
 - Attachment は step が自分自身について宣言したものだけを含みます: `declared` の attachment、ログの行、claim step の claim です。
-  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` と、poll する step では `readings` と `readings_left_out` を持ちます(「Claims」を参照)。
+  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` と、poll する step では `readings`、`readings_left_out`、`settled` を持ちます(「Claims」を参照)。
   claim は、step ファイルが確かめると宣言したものであり、比べた値を伴い、読み取りは各読み取りが読んだものを示します。
   ログの行は cucumber-js の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)を使います。
   trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。

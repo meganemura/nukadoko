@@ -2568,13 +2568,77 @@ milliseconds before it instead, so its last reading starts in time and is
 judged. A poll that ran into the deadline would end with no reading
 judged.
 
+A broken claim that polls reads until its timeout, while a passing one
+stops after two readings, so a broken Then costs the whole timeout. Many
+Thens read a state that cannot change once it is reached: a screen that
+loaded shows a slider or a spinbutton, and goes on showing it. `settled`
+beside `timeout_ms` names that state, so the poll stops waiting for a
+claim that broke on it:
+
+```ts
+args: z.object({ tree: z.string() }),
+observe: async ({ page }) => ({ page, busy: await page.locator("[aria-busy=true]").allTextContents() }),
+poll: { timeout_ms: 5000, settled: [{ actual: "busy", count: true, compare: "equal", expected: { literal: 0 } }] },
+claims: [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }],
+```
+
+A settled condition is a comparison of a value `observe` returns with a
+literal: `actual` (a key `observe` returns, never a `from`, `events`,
+`files`, or args key, since only a value read again can change between
+readings), `view`, `at`, `count`, `compare` (`equal`, `not-equal`,
+`contains-text`, `starts-with-text`, `ends-with-text`, `has-item`,
+`fits-aria-snapshot`, `is-a`, `greater-than`, `at-least`, `less-than`,
+or `at-most`), and `expected: { literal }`. The literal is the step's own
+declaration, and no sentence has to state it: a settled condition is not a
+criterion, it says when a reading is final. A reading settles when every
+settled condition holds on it. The poll stops on two consecutive readings
+that agree: every claim held on both, as before, or both settled with a
+claim broken. One settled reading is not enough, for the reason one
+reading that holds is not: a page between two renders can show a state
+for one frame. The last reading is then judged once, as it always is, so
+the claim breaks. A settled reading never makes a claim hold, and a
+reading on which every claim holds is confirmed as before, settled or
+not. A settled condition that never holds, or holds only on readings
+where the claims hold, leaves the poll as it was: it reads until every
+claim holds or the timeout passes. A step that declares no `settled`
+polls exactly as before.
+
+The failure message says why the poll stopped, at the end of its first
+line, the one `nuka run` prints, so a reading that settled is never read
+as the timeout passing:
+
+```text
+claim broken: "spinbutton" (observe:control) equal "slider" (literal:slider); the poll stopped on reading 4, before its 5000 ms timeout, since readings 3 and 4 settled (screen equal "scoring")
+claim broken: "spinbutton" (observe:control) equal "slider" (literal:slider); the poll read until its 5000 ms timeout, and no two consecutive readings settled (screen equal "scoring")
+```
+
+The record keeps `settled`: each condition as `nuka steps` prints it
+(`conditions`), and, only when the poll stopped because the reading
+settled, `stop`: the reading it stopped on and what each condition read
+there (`actuals`, kept as a reading's are). Each reading has `settled`,
+whether every settled condition held on it. `nuka steps` prints each
+condition under the claims as `settled: <condition>`.
+
+`defineStep` refuses a settled condition the run would judge one way on
+every reading: a boolean literal (a judgment made in code, as for a
+claim), a count or an order compare with a literal that is not a number,
+a text compare with a literal that is not a text with something in it,
+an `is-a` literal that names no kind, or a kind the view always makes,
+and a `fits-aria-snapshot` literal that does not read or names no node,
+or one with a `view`, an `at`, or a `count`. Such a condition never
+holds, so it would never stop a poll and nothing would say so. It also
+refuses a `settled` list that names every claim of the step with the
+same actual, compare, and literal: a reading then settles only when every
+claim holds, so the list never stops a poll.
+
 `poll` tells `observe` whether its last reading held: it is called again
 only while the claims do not hold. Any read-until-it-holds has this
 property, and an `observe` that counts its calls can use it to return a
 value that walks toward the expected one. So the step record keeps the
 readings (`readings`): for each, its attempt number, its time, whether
 every claim held on it, and each claim's actual value (`actuals`), or the
-first line of what `observe` threw. When an expected value comes from
+first line of what `observe` threw, and, for a step that declares
+`settled`, whether the reading settled. When an expected value comes from
 `observe` too, each reading also keeps each claim's expected value
 (`expecteds`, an `each` claim's as its declarations' expected values by
 label), since the value that walks can be the expected one. Each
@@ -2699,6 +2763,9 @@ A claim step's record has these fields of its own (see "Records"):
   to judge it first) records `0`.
 - `readings`, under `poll` only: the readings the step kept (see "Poll"),
   and `readings_left_out` when it did not keep them all.
+- `settled`, under a `poll` that declares `settled` only: its
+  `conditions`, and `stop` when the poll stopped because the reading
+  settled (see "Poll").
 - `events_read`, for a step with `events`: each key's reading of an
   earlier step's execution events (see "A claim on a count of events").
 
@@ -5710,7 +5777,8 @@ to act on the run without opening another file:
   record's `kind` (`null` when no step record says) and its first message.
   A failed step that read earlier results through `from` has `used`, each
   producer's step, record, and the result it read. A claim step has its
-  `claims`, `observation`, and `attempts`, the same values its step
+  `claims`, `observation`, and `attempts`, and a polled step's
+  `settled`, the same values its step
   record holds (see "Claims"), so a broken claim is read without opening
   the step record, and its `events_read`, and `after_world_stop` on a
   claim the world's stop judged otherwise (see "A claim on a count of
@@ -6822,7 +6890,7 @@ its scenario record's id, so either record leads to the other.
   record only: each claim with the values it compared and where each came
   from, whether the step read its values, and how many times it read them.
   A claim step that polls also has `readings`, the actual values of the
-  readings it kept.
+  readings it kept, and one that declares `settled` has `settled`.
   "Claims" describes each field. A claim step's `result` is `{}`: it
   returns nothing a later step can read.
 - The harness collects evidence; the step never reports it: Playwright
@@ -7585,7 +7653,9 @@ holds:
   A line names 20 routes at most and counts the rest;
 - "Claims", one entry per Then that declared claims: its location and
   sentence, its environment in a run of several, `control` for a
-  control's, the number of readings when there was more than one, and under
+  control's, the number of readings when there was more than one, for a
+  failed step that declares `settled` the reading it settled on (`settled
+  on reading 4 (screen equal "scoring")`) or `not settled`, and under
   it one line per claim, in the words of its failure message with the
   outcome after them and `measured: <channel>` or `measured: none`, then
   `expected measured` for an expected value from `from` or `observe`
@@ -8343,8 +8413,8 @@ manifest, so retention and `nuka clean` remove it with the run.
   attachments and log lines, and a claim step's claims. The claims are a
   `claims.json` attachment of media type
   `application/vnd.nukadoko.claims+json`, holding `claims`,
-  `observation`, and `attempts`, and a polled step's `readings` and
-  `readings_left_out`, as the step record has them (see "Claims"): a
+  `observation`, and `attempts`, and a polled step's `readings`,
+  `readings_left_out`, and `settled`, as the step record has them (see "Claims"): a
   claim is what the step file declared it checks, with the values it
   compared, and the readings show what each reading read. Log lines use cucumber-js's
   `text/x.cucumber.log+plain` media type (the one `this.log()` produces).

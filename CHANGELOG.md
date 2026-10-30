@@ -9,6 +9,32 @@ just until 0.1.
 
 ### Added
 
+- **A polled Then stops once its reading has settled.** A broken claim
+  that polls read until `poll.timeout_ms`, so while a scenario was being
+  written, when most rounds break, each broken Then cost the whole
+  timeout (5 s, against 0.1 to 0.3 s for one that holds). `poll: {
+  timeout_ms, settled }` names a state a reading cannot leave once it
+  reaches it (no busy element, the screen that loaded), as comparisons of
+  a key `observe` returns with a literal the step writes. Two consecutive
+  readings on which every settled condition holds and a claim does not end
+  the poll, and the last reading is judged as before. A settled reading
+  never makes a claim hold, and a step with no `settled` polls exactly as
+  before. The failure message's first line ends with why the poll stopped
+  (`; the poll stopped on reading 4, before its 5000 ms timeout, since
+  readings 3 and 4 settled (screen equal "scoring")`, or `; the poll read
+  until its 5000 ms timeout, and no two consecutive readings settled
+  (...)`). The step record, run.json, and the cucumber-messages claims
+  attachment carry `settled`: the `conditions`, and `stop` with the
+  reading and what each condition read there. Each reading has `settled`.
+  The summary's Claims entry says `settled on reading 4 (...)` or `not
+  settled (...)` for a failed step, `nuka steps` prints each condition,
+  and `nuka do` records the same fields. `defineStep` refuses a condition
+  that would hold on no reading (a count or an order compare with a
+  literal that is not a number, a blank text, an `is-a` that names no
+  kind, an ARIA snapshot that names no node), a boolean literal, a key
+  `observe` does not return, and a list that names every claim of the
+  step, which would never stop a poll. The record fields are additive, so
+  no `schema_version` changes.
 - **A Then claims on the files an earlier step's commands changed.** A
   claim step's `files: { written: { of: runBuild, change?, under? } }`
   names a list that nukadoko makes from the producer's step record: the
