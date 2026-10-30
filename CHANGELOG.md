@@ -24,6 +24,37 @@ just until 0.1.
   `invalid-value`. Under `--base`, a targeted file whose every scenario the
   tags left out stays in the comparison, so its criteria do not read as
   removed. The field is additive, so no `schema_version` changes.
+- **A claim can state what a page shows by role and name.**
+  `fits-aria-snapshot` judges the ARIA snapshot of a page or a locator
+  that `observe` returns against an expected snapshot the line states,
+  written in the YAML that Playwright's `ariaSnapshot()` prints, and asks
+  nothing the expected snapshot does not name: each expected node fits an
+  actual node of the same role and name at any depth, its children are
+  found in order among the actual node's children with others between
+  them (`/children: equal` and `deep-equal` ask for exactly those), and a
+  state or a prop must be the one the actual line prints. nukadoko takes
+  the snapshot itself, right after `observe` returns, through the
+  `ariaSnapshot()` of the value's class, so a string or a plain object
+  step code wrote breaks the claim rather than standing in for the page;
+  the record keeps the whole snapshot as `actual`, labeled `ARIA snapshot
+  of observe:<path>`. A broken line names the first expected line that
+  fits nothing, the actual node it was looked for under, and the nearest
+  actual node (`; expected line 2 (button "Submit") fits no child of form
+  "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual
+  line 7)`). A snapshot the browser could not take, such as a locator
+  that matched no element or more than one, leaves the claim `unjudged`
+  with the browser's first line. `defineStep` refuses the compare on an
+  actual from `from`, inside `each`, or with `view`, `at`, or `count`, and
+  on an expected value that is a literal, `{ from }`, `{ observe }`, read
+  through `expected_view`, or not a plain `z.string()`, since the expected
+  snapshot is the text the line states and a tree a program wrote could
+  be the actual one copied. A name or text between slashes, the `[active]`
+  state, a prop beside a single top-level node, and a plain text YAML
+  reads as another value are refused with their line, and an expected
+  snapshot that names no node breaks the claim, since every page holds
+  it. `nuka check` reports a docstring or a capture whose expected
+  snapshot does not read (`claim-aria-snapshot-unreadable`) or names
+  nothing (`claim-aria-snapshot-names-nothing`).
 - **A claim can state the few fields of a large value.** `has-fields`
   holds when the actual object holds every field of the expected object
   with a value that fits, at every depth, whatever other fields it holds:

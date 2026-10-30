@@ -871,6 +871,21 @@
       "en": ["replay (a rerun line replays what ran before)", "replays"],
       "ja": "再現する",
       "note": "シャッフルした run の `do:` 行が、失敗した scenario の前に同じ pass で走った scenario を同じ順序で走らせること"
+    },
+    {
+      "en": ["ARIA snapshot", "expected ARIA snapshot", "fits-aria-snapshot"],
+      "ja": "ARIA スナップショット",
+      "note": "ページかロケーターのアクセシビリティツリーをブラウザのライブラリの ariaSnapshot() が出力する YAML のテキスト。fits-aria-snapshot の claim が判定するもので、期待する ARIA スナップショット は docstring か capture が述べるその一部。ARIA を付けずに スナップショット とだけ書くと claim の各辺の素の JSON のコピー(snapshot)と混ざるので、必ず ARIA を付ける。比較の名前 `fits-aria-snapshot` とラベル `ARIA snapshot of observe:<path>` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["accessibility tree"],
+      "ja": "アクセシビリティツリー",
+      "note": "ブラウザがページの役割、名前、状態から組み立てるツリー。world のコードの置き場所を指す keep_english の tree とは別の語で、カタカナのまま ツリー と書く"
+    },
+    {
+      "en": ["locator"],
+      "ja": "ロケーター",
+      "note": "ブラウザのライブラリがページの要素を指すために返すオブジェクト。fits-aria-snapshot では observe がページかロケーターを返し、nukadoko がその ARIA スナップショットを取る"
     }
   ],
   "keep_english": [

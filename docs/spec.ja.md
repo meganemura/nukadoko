@@ -608,6 +608,7 @@ Then は claim を宣言します(「Claims」を参照)。
 実行する step は、操作の前にある状態を待つために、`import { expect } from "playwright/test"` で直接インポートすることはできます。
 matcher が Playwright のテストと同じようにアサーションするかどうかは呼び出し対象だけでは決まらず、`toMatchAriaSnapshot`(locator)、`toHaveScreenshot`(`page`)、`toMatchSnapshot`(値そのもの)は、`toBeVisible`、`toBe`、`expect.poll` と同じ 3 種類の対象を取りますが、runner の外ではいずれも `"<name>() must be called during the test"` を投げます(Playwright 1.61.1 で計測)。
 違いを決めるのは matcher が runner の現在のテストに紐づく snapshot ファイルを読み書きするかであり、step には現在のテストがありません。
+Then がロケーターのツリーに問うことは、nukadoko が ARIA スナップショットを取る `fits-aria-snapshot` の claim で述べます(「Claims」を参照)。
 これは他の fixture と同じ規則から生じます: fixture は executor が注入する必要のあるものだけを運び、`expect` は executor が所有するものを必要とせず、アサーションの証跡はすでに trace の `actions` を通じて step record に届くため(「Records」を参照)、fixture にすると Playwright が公開済みの export の裏に何もないメンバーを追加するだけです。
 
 `browser` も fixture ではなく、これは省略ではなく拒否です。
@@ -1491,6 +1492,9 @@ claim の actual が `from` から読むキーを `observe` が返したとき�
 claim が計測する `from` のキーの args スキーマも、期待値のキーと同じ理由で、値を書き換えてはいけません。
 record のラベルは、`view`、`at`、`count` を含めて、場所全体を名指しします(`from:run-tally@16.stdout as json at sections.git.0.dirty_count`、数える claim では `count of from:list-orders@3.orders`)。
 
+`fits-aria-snapshot` の claim は、パスにある値を読みません。
+実際の値は、`observe` がそこに返すページかロケーターについて nukadoko が取る ARIA スナップショットなので、`view`、`at`、`count` を取らず、ラベルがそれを名指しします(`ARIA snapshot of observe:page`、「比較」を参照)。
+
 `undefined` に解決される実際の値では、claim は必ず成り立たず、record はその場所を名指しします。
 `nuka check` は、各 `from` のパスを値を返す step の `returns` スキーマと照らし合わせ、スキーマが宣言していないパスを報告します(`claim-path-unknown`)。
 そのような claim は、成り立たないことしかありえないからです。
@@ -1514,6 +1518,9 @@ step のコードがまだ持っている値は、読んだあとで変わるこ
 - 文の値は、その parameter type が行を読んだあと、args スキーマが動く前にコピーします。
   `expected_view` はそのあとでコピーを読みます。
 - poll の各読み取りは、読んだときに取る、それぞれのコピーです。
+- `fits-aria-snapshot` の claim は、実際の側でコピーを読みません。
+  そこにある値はページかロケーターで、コピーには収まらないからです。
+  nukadoko は同じ読み取りのコピーを取った直後にその ARIA スナップショットを取り、判定され、record が示すのはそのテキストです(「比較」を参照)。
 
 コピーは、claim が読む場所だけのもので、その隣のものは含みません。
 その場所とは、`view` が間に立たないときは `at` をつないだ `actual` のパス、期待値のパス、`each` では配列です。
@@ -1573,7 +1580,7 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 
 #### 比較
 
-`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`lacks-field`(実際のオブジェクトに期待する名前のフィールドがない)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`is-a`(実際の値が、期待するテキストが名指す種類である)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`lacks-field`(実際のオブジェクトに期待する名前のフィールドがない)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`is-a`(実際の値が、期待するテキストが名指す種類である)、`fits-aria-snapshot`(nukadoko がページかロケーターから取る ARIA スナップショットが、docstring が述べるその一部を含む)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
 そのため、2 つのオブジェクトへの `equal` は、それぞれのフィールドちょうどを述べ、ほかのフィールドを許しません。
@@ -1682,6 +1689,65 @@ literal が種類を名指す文字列でない `is-a` の claim は、どの行
 `view: "text"` での `string` と `text`、`view: "lines"` か `view: "comma-list"` での `list` と `array` です。
 そのような claim は view が当てはまるたびに成り立つので、何も述べていません。
 capture の値は行でしかわからないので、`{word}`、`{string}`、無名の capture が、`is-a` の claim が読むただの文字列のキーを種類でない名前で埋める行は、`nuka check` が報告します(`claim-kind-unknown`)。
+
+`fits-aria-snapshot` は、ページが見せるものを役割と名前で文が述べられるようにし、文が名指さないものは問いません(「the room page shows the heading Room 7, and a Score button inside the form」)。
+期待値は行が埋める文のキー(docstring か、1 行のツリーなら capture)で、ARIA スナップショット、つまり Playwright の `ariaSnapshot()` がページのアクセシビリティツリーについて出力する YAML として書きます。
+実際の値は、claim のパスにある値ではありません。
+`observe` はそのキーにページかロケーターを返し、nukadoko は `observe` が返した直後に、その値のクラスの `ariaSnapshot()` を通して ARIA スナップショットを取ります。
+
+```ts
+args: z.object({ tree: z.string() }),
+observe: ({ page }) => ({ page }),
+poll: { timeout_ms: 5000 },
+claims: [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }],
+```
+
+```gherkin
+Then the page shows
+  """
+  - heading "Room 7" [level=1]
+  - form "Scores":
+    - button "Score"
+  """
+```
+
+期待する ARIA スナップショットは、名指したものだけを問います。
+その各ノードは、同じ役割で同じ名前の実際のノードに、どの深さにあっても合います。
+名前のないノード(`- button`)は、どの名前にも合います。
+ノードの子は、実際のノードの直接の子の中から、その順に、あいだにほかの子があってもかまわずに探します。
+ただし `/children: equal` の行はちょうどその子だけを求め、`/children: deep-equal` の行はノードの下のすべてがちょうどそのとおりであることを求めます。
+テキストは、空白の並びをそれぞれ 1 つの空白にしたうえで等しいテキストに合います。
+角括弧の状態(`[disabled]`、`[checked=mixed]`、`[expanded]`、`[invalid]`、`[level=2]`、`[pressed]`、`[selected]`)は、実際の行が出力する状態と同じでなければなりません。
+`false` にした状態は、その状態を出力しない行で成り立ちます。
+プロパティの行(`- /url: /help`)は、実際のプロパティと等しくなければなりません。
+最上位にある 2 つ以上の行は、その子がそれらをその順に持つ、どれか 1 つのノードに合います。
+期待する ARIA スナップショットが合えば、claim は成り立ちます。
+合わなければ、成り立たなかった claim の行は、何にも合わない最初の期待する行、それを探した実際のノード、もっとも近い実際のノードを、違う状態かプロパティとともに名指しします。
+
+```text
+... broken; expected line 2 (button "Submit") fits no child of form "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual line 7)
+```
+
+record は ARIA スナップショット全体を `actual` として持つので、読み手はページがほかに何を見せていたかを見られます。
+それは nukadoko が取ったテキストで、step のコードが書いたものではありません。
+文字列や、その名前の関数を持つただのオブジェクトのように、クラスに `ariaSnapshot()` のない値では claim は成り立たず、それが何かを名指しします(`observe:page is a string, and fits-aria-snapshot takes the ARIA snapshot of a locator or page that observe returns`)。
+ブラウザが ARIA スナップショットを取れなかったときは、claim は判定できなかったものになり、ブラウザのメッセージの最初の行を示します。
+ページ自身のタイムアウト(step が別の値を設定しなければ 30 秒)までにどの要素にも一致しなかったロケーターや、2 つ以上の要素に一致したロケーターです。
+step の締め切りは、`observe` と同じように ARIA スナップショットも区切ります。
+poll の終わりに合わせたタイムアウトは採りませんでした。
+終わり近くでは読み取りに数ミリ秒しか残らず、Playwright 1.61.1 では、そこにある要素の ARIA スナップショットが 5 ms のタイムアウトで失敗したからです。
+
+形式が述べられても nukadoko が正確に判定できないものは、その行と書き方を示して拒否します。
+スラッシュで囲んだ名前やテキスト(pattern)、nukadoko が取る ARIA スナップショットが出力しない `[active]` の状態、最上位で 1 つのノードの隣にあってどのノードも表さないプロパティ、YAML が別の値として読むただのテキスト(`3.50` を 3.5、`null`、`true`)です。
+最後のものは、書いたとおりに述べるには引用符で囲みます。
+何も名指さない期待する ARIA スナップショット(コメントだけ、`- text: ""`、`/children` の行)はどのページにも合うので、claim は成り立ちません。
+判定は両方の ARIA スナップショットを 1 度ずつ読みます。
+3 つのページから切り出した 420 の期待する ARIA スナップショットの判定に、およそ 100 ms かかりました。
+
+実際の値が前の step の返した値(素の JSON で、ページではありえません)である `fits-aria-snapshot` の claim、`each` の中の claim、`view`、`at`、`count` を持つ claim は、`defineStep` が拒否します。
+literal、`{ from }`、`{ observe }` の期待値、`expected_view` を通して読む期待値、ただの `z.string()` でない args のキーも拒否します。
+期待する ARIA スナップショットは行が述べるテキストであり、プログラムが書いたものは実際のものを写したものでありうるからです。
+docstring と capture は行でしかわからないので、期待する ARIA スナップショットが読めない行(`claim-aria-snapshot-unreadable`)と何も名指さない行(`claim-aria-snapshot-names-nothing`)は `nuka check` が報告し、`--no-check` の run も同じ理由でそれらの claim を成り立たないものにします。
 
 どの比較の前でも、両辺は素の JSON です。
 つまり `null`、真偽値、文字列、有限の数値(整数なら `Number.MAX_SAFE_INTEGER` 以下)、穴も他のキーもない配列、プロトタイプが `Object.prototype` か `null` で自分のプロパティがすべて文字列キーの列挙可能なデータプロパティであるオブジェクトです。
@@ -1911,6 +1977,8 @@ step のコードが書いた値や導いた値は、どのチャネルにもあ
 JSON のレスポンス本文から取り出したタイトルや、プログラムの出力の 1 行も `null` です。
 そのため `null` は、claim が空であることを意味しません。
 どこを見ればよいかを読み手に伝えるもので、run サマリはそれを各 claim の行に `measured: none`、または `measured: <channel>`(別の step のチャネルなら `of <step record id>` 付き)として出力します。
+`fits-aria-snapshot` の claim の実際の値は nukadoko が取った ARIA スナップショットで、記録されたどのチャネルも持たないので、その `measured` も `null` です。
+nukadoko が取ったことを示すのは、そのラベル `ARIA snapshot of observe:<path>` です。
 
 `expected_measured` は、`from`(値を返した step の record)か `observe`(claim step 自身の record)から来た期待値について、同じ探索をしたものです。
 文が述べる値やリテラルは feature が持っているので、`expected_measured` はありません。

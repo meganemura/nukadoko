@@ -722,6 +722,8 @@ during the test"` outside the runner (measured against Playwright 1.61.1),
 the same three shapes `toBeVisible`, `toBe`, and `expect.poll` take
 without incident. What decides it is whether the matcher reads or writes a
 snapshot file keyed to the runner's current test, and a step has none.
+What a Then would ask of a locator's tree it claims with
+`fits-aria-snapshot`, whose ARIA snapshot nukadoko takes (see "Claims").
 This follows from the same rule every other fixture answers to: a
 fixture carries only what the executor must inject, and `expect` needs
 nothing the executor owns (assertion evidence already reaches the step
@@ -1814,6 +1816,11 @@ reason as an expected key's. The record's label names the whole place,
 sections.git.0.dirty_count`, and `count of from:list-orders@3.orders`
 for a claim that counts.
 
+A `fits-aria-snapshot` claim reads no value at its path: its actual is
+the ARIA snapshot nukadoko takes of the page or the locator `observe`
+returns there, so it takes no `view`, `at`, or `count`, and its label
+names it: `ARIA snapshot of observe:page` (see "The compares").
+
 An actual value that resolves to `undefined` always breaks, and the record
 names the place. `nuka check` reads each `from` path against the producing
 step's `returns` schema and reports a path that schema does not declare
@@ -1842,6 +1849,11 @@ and the next another, so two reads of it are not one value.
 - A sentence value is copied after its parameter type has read the line
   and before the args schema runs. `expected_view` then reads the copy.
 - Each reading of a poll is its own copy, taken when it is read.
+- A `fits-aria-snapshot` claim reads no copy on its actual side: the
+  value there is a page or a locator, which no copy can hold. nukadoko
+  takes its ARIA snapshot right after the copies of the same reading,
+  and that text is what is judged and what the record shows (see "The
+  compares").
 
 The copy is of the place the claim reads and nothing beside it: the
 `actual` path joined with its `at` when no `view` stands between them,
@@ -1944,6 +1956,8 @@ expected text), `has-item` (the array has an item equal to the expected value),
 `fits-text` (the actual text fits the expected one line by line, with
 stand-ins for the parts that change), `is-a` (the actual value is of the
 kind the expected text names),
+`fits-aria-snapshot` (the ARIA snapshot nukadoko takes of a page or a
+locator holds the part of one the docstring states),
 `matches` (the expected text, as a regular expression, matches),
 `greater-than`, `at-least`, `less-than`, and `at-most`. Equality is
 structural over JSON values: object key order does not count, and `0`
@@ -2093,6 +2107,94 @@ applies, so it states nothing. A capture's value is known only on a
 line, so `nuka check` reports a line whose `{word}`, `{string}`, or
 anonymous capture fills an `is-a` claim's plain string key with a name
 that is no kind (`claim-kind-unknown`).
+
+`fits-aria-snapshot` lets a sentence state what a page shows by role and
+name, and leaves unasked whatever the sentence does not name: "the room
+page shows the heading Room 7, and a Score button inside the form". The
+expected value is a sentence key the line fills (its docstring, or a
+capture for a tree of one line), written as an
+ARIA snapshot, the YAML that Playwright's `ariaSnapshot()` prints for a
+page's accessibility tree. The actual value is not a value at the
+claim's path: `observe` returns the page or a locator under that key,
+and nukadoko takes its ARIA snapshot right after `observe` returns,
+through the `ariaSnapshot()` of the value's class:
+
+```ts
+args: z.object({ tree: z.string() }),
+observe: ({ page }) => ({ page }),
+poll: { timeout_ms: 5000 },
+claims: [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }],
+```
+
+```gherkin
+Then the page shows
+  """
+  - heading "Room 7" [level=1]
+  - form "Scores":
+    - button "Score"
+  """
+```
+
+The expected snapshot asks only what it names. Each of its nodes fits an
+actual node of the same role with the same name, found at any depth; a
+node with no name (`- button`) fits any name. A node's children are
+found among the actual node's own children, in their order, with other
+children between them, unless a `/children: equal` line asks for
+exactly those children, or `/children: deep-equal` for exactly that
+tree below the node. A text fits a text that is equal once each run of
+whitespace is one space. A state in brackets (`[disabled]`,
+`[checked=mixed]`, `[expanded]`, `[invalid]`, `[level=2]`,
+`[pressed]`, `[selected]`) must be the state the actual line prints,
+and a state set to `false` holds on a line that prints no such state. A
+prop line (`- /url: /help`) must equal the actual one. Two or more
+lines at the top fit any one node whose children hold them in that
+order. The claim holds when the expected snapshot fits; when it does
+not, the broken line names the first expected line that fits nothing,
+the actual node it was looked for under, and the nearest actual node,
+with the state or the prop that differs:
+
+```text
+... broken; expected line 2 (button "Submit") fits no child of form "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual line 7)
+```
+
+The record keeps the whole snapshot as `actual`, so a reader sees what
+else the page showed. It is a text nukadoko took and never one step code
+wrote: a value whose class has no `ariaSnapshot()`, such as a string or
+a plain object with a function of that name, breaks the claim and names
+what it is (`observe:page is a string, and fits-aria-snapshot takes the
+ARIA snapshot of a locator or page that observe returns`). A snapshot
+the browser could not take leaves the claim `unjudged` with the first
+line of the browser's message: a locator that matched no element before
+the page's own timeout (30 seconds unless the step set another), or one
+that matched more than one. The step's deadline bounds the snapshot as
+it bounds `observe`. A timeout tied to a poll's end was refused: near
+its end it would leave a reading a few milliseconds, and on Playwright
+1.61.1 a snapshot of an element that is there failed under a timeout of
+5 ms.
+
+What the format can state and nukadoko cannot judge exactly is refused,
+with its line and how to write it: a name or a text between slashes (a
+pattern), the `[active]` state, which the snapshot nukadoko takes does
+not print, a prop at the top beside a single node, which describes no
+node, and a plain text that YAML reads as another value (`3.50` as 3.5,
+`null`, `true`), which is quoted to state it as written. An expected
+snapshot that names nothing (only comments, `- text: ""`, or a
+`/children` line) fits every page, so it breaks the claim. Judging
+reads both snapshots once; 420 trees cut from three pages were judged in
+about 100 ms.
+
+`defineStep` refuses a `fits-aria-snapshot` claim whose actual is a
+value an earlier step returned, which is plain JSON and never a page,
+one inside `each`, and one with a `view`, an `at`, or a `count`. It
+refuses an expected value that is a literal, `{ from }`, or `{ observe
+}`, one read through `expected_view`, and an args key that is not a
+plain `z.string()`, since the expected snapshot is the text the line
+states, and a tree a program wrote could be the actual one copied. The
+docstring and a capture are known only on a line, so `nuka check`
+reports a line whose expected snapshot does not read
+(`claim-aria-snapshot-unreadable`) or names nothing
+(`claim-aria-snapshot-names-nothing`), and under `--no-check` the run
+breaks those claims with the same reasons.
 
 Both sides are plain JSON before any compare runs: `null`, a boolean, a
 string, a finite number (an integer no larger than
@@ -2443,7 +2545,10 @@ out of a JSON response body, or one line of a program's output, is
 `null` too. So `null` does not mean the claim is hollow. It tells a
 reader where to look, and the run summary prints it on every claim's line
 as `measured: none`, or `measured: <channel>` (with `of <step record id>`
-for a channel of another step).
+for a channel of another step). A `fits-aria-snapshot` claim's actual is
+the ARIA snapshot nukadoko took, which no recorded channel holds, so its
+`measured` is `null` too; its label, `ARIA snapshot of observe:<path>`,
+is what says nukadoko took it.
 
 `expected_measured` is the same search for an expected value that came
 from `from` (in the producing step's record) or `observe` (in the claim

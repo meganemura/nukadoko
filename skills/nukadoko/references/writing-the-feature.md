@@ -127,3 +127,28 @@ step, so `nuka check` warns `scenario-without-then`, and run.json marks
 a scenario in which no Then claim was judged with `judged_by`. Add the Then line that names
 what the reader must observe afterwards; a step that checks something
 but sits under Given or When belongs under Then instead.
+
+## A Then about a page
+
+State what a page shows by role and name, in a docstring written as an ARIA
+snapshot (the YAML `ariaSnapshot()` prints for an accessibility tree), cut to
+what the criterion names; the step claims it with `fits-aria-snapshot`
+(`checking-steps.md`, "A page by role and name"):
+
+```gherkin
+Then the page shows
+  """
+  - heading "Room 7" [level=1]
+  - form "Scores":
+    - button "Score"
+  """
+```
+
+Each node is found at any depth, its children in their order with others
+between (a `- /children: equal` line asks for exactly those), and a node with
+no name (`- button`) fits any name. What the tree leaves out is not asked, so
+the page may show more. Write the tree from the criterion, never from the
+page's printed snapshot: a tree copied from the page holds whatever the page
+shows. A broken claim names the first expected line that fits nothing and the
+nearest node (`expected line 2 (button "Submit") fits no child of form
+"Scores" (actual line 3); nearest: button "Skip" [disabled] (actual line 7)`).

@@ -125,8 +125,9 @@ order), `has-fields` (the expected fields at any depth, each array whole),
 `expected: { literal: "password" }`, and a field set to `null` is a key),
 `fits-text` (line by line; a line `...` is any lines, `[..]` any text in its
 line), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
-`url`), `matches`, `greater-than`, `at-least`, `less-than`, `at-most`. A JSON
-docstring (`expected_view: "json"`) claims a whole response with `equal` (a
+`url`), `fits-aria-snapshot` (a page by role and name, below), `matches`,
+`greater-than`, `at-least`, `less-than`, `at-most`. A JSON docstring
+(`expected_view: "json"`) claims a whole response with `equal` (a
 field it leaves out breaks it, a `null` one too) or some of its fields with
 `has-fields`; output that changes each run takes `fits-text`, never `{ from }`
 or `{ observe }`. Two values of different JSON types break the claim (`is-a` and
@@ -171,30 +172,29 @@ points). A claim step whose `observe` reaches `page`, `context`, or
 non-engineer agreed to decide: "the total is {expected:int}" carries its value,
 so it is one step; "is in trial" and "is not in trial" are two steps.
 
-## `expect` in a step that runs
+## A page by role and name
 
-A When may still wait with Playwright's `expect` before it acts. Outside
-`playwright test` (measured on Playwright 1.61.1), the locator and plain-value
-matchers and `expect.poll` work as there; a failing `expect.soft` throws at
-once, since no runner collects it; `toMatchAriaSnapshot`, `toHaveScreenshot`,
-and `toMatchSnapshot` throw `"<name>() must be called during the test"`, since
-a step has no test to key a snapshot file to. In place of a snapshot, a Then
-observes the one property the scenario cares about and claims it against the
-docstring, which binds to the one required `args` key that no capture or
-`from` fills (here `expected`; "Typed steps" in `docs/spec.md`):
+A When may still wait with Playwright's `expect` before it acts (outside
+`playwright test`, on Playwright 1.61.1, a failing `expect.soft` throws at
+once, and `toMatchAriaSnapshot`, `toHaveScreenshot`, and `toMatchSnapshot`
+throw `"<name>() must be called during the test"`). For what a page shows, a
+Then returns the page or a locator from `observe` and claims
+`fits-aria-snapshot` against the docstring (the one required `args` key no
+capture or `from` fills); nukadoko takes the ARIA snapshot, and the record
+keeps it whole:
 
 ```ts
 import { defineStep, z } from "nukadoko";
 
 export default defineStep({
-  pattern: "the results are titled, in this order",
-  args: z.object({
-    expected: z.string().describe("Expected titles, one per line, in render order"),
-  }),
-  async observe({ page }) {
-    return { titles: await page.locator(".result h2").allTextContents() };
-  },
+  pattern: "the scores form shows",
+  args: z.object({ tree: z.string().describe("Part of the form's ARIA snapshot") }),
+  observe: ({ page }) => ({ form: page.getByRole("form", { name: "Scores" }) }),
   poll: { timeout_ms: 5000 },
-  claims: [{ actual: "titles", compare: "equal", expected: "expected", expected_view: "lines" }],
+  claims: [{ actual: "form", compare: "fits-aria-snapshot", expected: "tree" }],
 });
 ```
+
+The docstring states part of the tree (`writing-the-feature.md`). A name
+between slashes, `[active]`, and a tree that names nothing are refused
+(`claim-aria-snapshot-unreadable`, `claim-aria-snapshot-names-nothing`).

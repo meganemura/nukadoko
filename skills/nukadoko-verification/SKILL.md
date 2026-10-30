@@ -72,6 +72,11 @@ already import (for example `features/steps/lib/`). A step declares its
 contract and calls one function; the control CLI calls the same function.
 A Then's `observe` calls a read, and its claims judge what the read
 returned; the CLI prints what the same read returns.
+For what a page shows, the read returns the locator (or the page), and the
+Then claims `fits-aria-snapshot` on it against a docstring that names roles
+and names, so nukadoko takes the ARIA snapshot; the CLI's `snapshot` command
+prints the same locator's `ariaSnapshot()`. That print is output, so it
+explores the page and never becomes the expected tree (section 1).
 Keep the library under the features tree and let the CLI import it: steps
 that import from the agent's skill directory make the acceptance suite
 depend on it.
