@@ -85,6 +85,15 @@ function nukaRun(rootDir: string, args: readonly string[]): Walked {
   return { child, stdout, stderr, closed };
 }
 
+// The walk file and the run's stderr are two outputs of the run's process
+// with no order between them, so a test that has seen the walk pause waits,
+// bounded, for the line the run prints about it.
+async function expectStderrToContain(run: Walked, text: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (!run.stderr().includes(text) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(run.stderr()).toContain(text);
+}
+
 interface StepOutput {
   readonly code: number;
   readonly stdout: string;
@@ -172,7 +181,7 @@ describe("nuka run --step and nuka step", () => {
       await settle(500);
       expect(run.child.exitCode).toBeNull();
       expect(walkState(rootDir)).toMatchObject({ state: "paused", number: 1, pause: { pause: 1, of: 3, remaining: 2 } });
-      expect(run.stderr()).toContain("paused after step 1/3 (passed): a cart with 2 items\n  do: nuka step next 1 --walk 1   (or: nuka step stop 1 --walk 1)\n");
+      await expectStderrToContain(run, "paused after step 1/3 (passed): a cart with 2 items\n  do: nuka step next 1 --walk 1   (or: nuka step stop 1 --walk 1)\n");
 
       // A wait at a pause reports that pause again, and answers nothing.
       expect((await nukaStep(rootDir, "wait")).stdout).toBe(first.stdout);
@@ -264,7 +273,7 @@ describe("nuka run --step and nuka step", () => {
       const paused = await nukaStep(rootDir, "wait", ...FIRST_WAIT);
       expect(paused.stdout).toMatch(/^walk 2 paused after step 1\/3/);
       expect(paused.stdout).toContain("  do: nuka step next 1 --walk 2   (or: nuka step stop 1 --walk 2)\n");
-      expect(second.stderr()).toContain("  do: nuka step next 1 --walk 2   (or: nuka step stop 1 --walk 2)\n");
+      await expectStderrToContain(second, "  do: nuka step next 1 --walk 2   (or: nuka step stop 1 --walk 2)\n");
 
       // The stop that ended walk 1, run again: it names walk 1, so walk 2
       // stays at its pause.
@@ -451,7 +460,7 @@ describe("nuka run --step and nuka step", () => {
       expect(failed.stdout).not.toContain("nuka step stop");
       expect(failed.stderr).toMatch(/^failed\twalk-failed\t-\tstep 2 failed: the cart is empty\n/);
       expect(walkState(rootDir)).toMatchObject({ pause: { status: "failed", remaining: 0, failure: { by: "step", message: "the cart is empty" } } });
-      expect(run.stderr()).toContain("  failure: step 2 failed: the cart is empty\n  do: nuka step next 2 --walk 1\n");
+      await expectStderrToContain(run, "  failure: step 2 failed: the cart is empty\n  do: nuka step next 2 --walk 1\n");
       const json = await nukaStepJson(rootDir, "wait");
       expect(json.code).toBe(1);
       expect(json.document).toMatchObject({ verdict: "failed", walk: "paused", pause: { pause: 2, failure: { by: "step" } } });
@@ -493,7 +502,7 @@ describe("nuka run --step and nuka step", () => {
       expect(paused.stdout).toContain("  do: nuka step next 1 --walk 1\n");
       expect(paused.stdout).not.toContain("nuka step stop");
       expect(paused.stderr).toContain("failed\twalk-failed\t-\tan AfterStep hook after step 1 failed: the cart check broke\n");
-      expect(run.stderr()).toContain("  failure: an AfterStep hook after step 1 failed: the cart check broke\n");
+      await expectStderrToContain(run, "  failure: an AfterStep hook after step 1 failed: the cart check broke\n");
       expect(walkState(rootDir)).toMatchObject({ pause: { status: "passed", remaining: 0, failure: { by: "hook", message: "the cart check broke" } } });
 
       const end = await nukaStep(rootDir, "next", "1", "--walk", "1");
