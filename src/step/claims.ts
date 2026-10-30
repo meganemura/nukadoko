@@ -1362,6 +1362,21 @@ export function itemPath(claim: { readonly actual?: unknown; readonly at?: unkno
   return [...split(claim.actual), ...split(claim.at)];
 }
 
+/** Whether two claims on one item read one value: one view, a count on
+ * both or neither, and one path. With no view, `actual` and `at` join
+ * into that path (`itemPath`); after a view, `at` reads inside the viewed
+ * value, so the two `actual` paths and the two `at` paths each have to
+ * match. Pure. */
+export function readOneItemValue(
+  a: { readonly actual?: unknown; readonly view?: unknown; readonly at?: unknown; readonly count?: unknown },
+  b: { readonly actual?: unknown; readonly view?: unknown; readonly at?: unknown; readonly count?: unknown },
+): boolean {
+  if (a.view !== b.view || a.count !== b.count) return false;
+  const same = (x: readonly string[], y: readonly string[]): boolean => x.length === y.length && x.every((segment, index) => segment === y[index]);
+  if (a.view === undefined) return same(itemPath(a), itemPath(b));
+  return same(itemPath({ actual: a.actual }), itemPath({ actual: b.actual })) && same(itemPath({ at: a.at }), itemPath({ at: b.at }));
+}
+
 /** The place inside an item a claim reads to judge it: its path, and
  * for a lacks-field claim whose field is a literal, that field under it,
  * so a where clause that selects the items with no deleted_at field

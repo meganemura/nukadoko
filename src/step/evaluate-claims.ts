@@ -26,6 +26,7 @@ import {
   placeCounted,
   placesOverlap,
   placeViewed,
+  readOneItemValue,
   samePlace,
   type Claim,
   type ClaimLiteral,
@@ -1551,7 +1552,7 @@ export function whereImplies(where: ClaimCompare, whereValue: unknown, claim: Cl
 }
 
 /** The first pair of a `where` clause and an item claim that read one
- * value (one path and one view) where the clause implies the claim
+ * value (`readOneItemValue`) where the clause implies the claim
  * (`whereImplies`), as the reason that breaks the `each`; `null` when
  * there is none. `defineStep` already refuses an overlapping clause whose
  * compare decides the value; this is the rest, which only the expected
@@ -1565,12 +1566,12 @@ function whereImplication(claim: EachClaim, inputs: ClaimInputs): string | null 
     if (where.compare !== "not-equal" && !ORDER_COMPARES.has(where.compare)) continue;
     const place = itemSegments(where);
     for (const [claimIndex, entry] of claim.each.claims.entries()) {
-      const other = itemSegments(entry);
-      if (where.view !== entry.view || where.count !== entry.count || other.length !== place.length || !other.every((segment, index) => segment === place[index])) continue;
+      if (!readOneItemValue(where, entry)) continue;
       const whereValue = expectedValue(where);
       const claimValue = expectedValue(entry);
       if (whereValue === null || claimValue === null || !whereImplies(where.compare, whereValue.value, entry.compare, claimValue.value)) continue;
-      const what = `${where.count === true ? "count of " : ""}${place.length === 0 ? "value" : place.join(".")}${where.view === undefined ? "" : ` as ${where.view}`}`;
+      const viewed = where.view === undefined ? "" : ` as ${where.view}${where.at === undefined ? "" : ` at ${where.at}`}`;
+      const what = `${where.count === true ? "count of " : ""}${place.length === 0 ? "value" : place.join(".")}${viewed}`;
       return (
         `each.where[${whereIndex}] selects the items whose ${what} is ${where.compare} ${JSON.stringify(whereValue.value)}, ` +
         `and every such item holds each.claims[${claimIndex}], ${entry.compare} ${JSON.stringify(claimValue.value)}, whatever the data, so the claim measures nothing`

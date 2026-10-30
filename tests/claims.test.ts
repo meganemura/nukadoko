@@ -1538,6 +1538,34 @@ describe("where", () => {
       expect(record.outcome).toBe(expected);
       expect(record).toMatchObject({ each: { items: rows.length, selected: selected.length } });
     }));
+
+  it("a pair read through one view is one value only when its at names one path too, and any other pair is judged on the data", () =>
+    hegel.testAsync(async (tc) => {
+      const pair = tc.draw(orderPair);
+      const whereAt = tc.draw(gs.sampledFrom(["a", "b"]));
+      const claimAt = tc.draw(gs.sampledFrom(["a", "b"]));
+      const others = tc.draw(gs.arrays(gs.integers({ minValue: -8, maxValue: 8 }), { minSize: pair.items.length, maxSize: pair.items.length }));
+      const fields = pair.items.map((a, index) => ({ a, b: others[index]! }));
+      const claim: Claim = {
+        actual: "result",
+        each: {
+          where: [{ actual: "raw", view: "json", at: whereAt, compare: pair.where, expected: "least" }],
+          claims: [{ actual: "raw", view: "json", at: claimAt, compare: pair.claim, expected: "limit" }],
+        },
+      };
+      const rows = fields.map((value) => ({ raw: JSON.stringify(value) }));
+      const record = await judgeOne(claim, { least: pair.whereBound, limit: pair.claimBound, result: rows }, undefined, ["result"]);
+      if (whereAt === claimAt && whereImplies(pair.where, pair.whereBound, pair.claim, pair.claimBound)) {
+        expect(record.reason).toBe(
+          `each.where[0] selects the items whose raw as json at ${whereAt} is ${pair.where} ${pair.whereBound}, and every such item holds each.claims[0], ${pair.claim} ${pair.claimBound}, whatever the data, so the claim measures nothing`,
+        );
+        return;
+      }
+      const selected = fields.filter((value) => holds(pair.where, value[whereAt as "a" | "b"], pair.whereBound));
+      const expected = selected.length > 0 && selected.every((value) => holds(pair.claim, value[claimAt as "a" | "b"], pair.claimBound)) ? "held" : "broken";
+      expect(record.outcome).toBe(expected);
+      expect(record.reason ?? "").not.toContain("whatever the data");
+    }));
 });
 
 describe("a value the line states", () => {
