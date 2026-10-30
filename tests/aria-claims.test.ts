@@ -83,6 +83,12 @@ describe("defineStep and fits-aria-snapshot", () => {
     );
   });
 
+  it("refuses an expected key that is not a plain string, which a table or another schema would fill", () => {
+    expect(claimsProblem([ON_PAGE], shape({ stringArgs: new Set(["earlier"]) }))).toBe(
+      "claims[0].expected is args.tree, which is not a plain z.string(), and fits-aria-snapshot reads the expected ARIA snapshot from the text the line states, so a table or a schema of another type would never reach it as that text. Declare args.tree as z.string(), and fill it with the docstring",
+    );
+  });
+
   it("reads the snapshot's path apart from the plain values observe returned", () => {
     const reads = claimReads([ON_PAGE, { actual: "count", compare: "equal", expected: "tree" }], new Set());
     expect(reads.ariaSnapshots).toEqual([["page"]]);

@@ -6,7 +6,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 export default defineStep({
   pattern: "the scores form shows",
   description: "Judge the scores form's accessibility tree against the tree the docstring states",
-  args: z.object({ tree: z.string() }),
+  args: z.object({ tree: z.string().describe("Part of the ARIA snapshot the page shows") }),
   observe: ({ page }) => ({ form: page.getByRole("form", { name: "Scores" }) }),
   poll: { timeout_ms: 5000 },
   claims: [{ actual: "form", compare: "fits-aria-snapshot", expected: "tree" }],

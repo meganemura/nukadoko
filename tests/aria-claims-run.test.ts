@@ -108,4 +108,28 @@ describe("nuka run with fits-aria-snapshot", () => {
         'expected line 2 (button "Submit") fits no child of form "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual line 7)',
     );
   }, 60_000);
+
+  it("nuka check reports a docstring or a capture whose tree names nothing or does not read, and the run breaks the same claims", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    expect(await runCli(["check"], { rootDir, stdout, stderr })).toBe(1);
+    const would = ", so the claim would break whatever the page shows";
+    const nothing = "fits-aria-snapshot has an expected ARIA snapshot that names no node, which every page holds";
+    const slashes =
+      "the expected ARIA snapshot does not read: line 1 names heading with a pattern between slashes, which fits-aria-snapshot does not judge: state the name in double quotes, or claim the part that changes with another claim";
+    expect(stdout.text().split("\n").filter((line) => line.startsWith("error"))).toEqual([
+      `error\tclaim-aria-snapshot-names-nothing\tfeatures/unfit-trees.feature:5\tStep "page-shows"'s claims[0].expected is args.tree, which this line's docstring fills, and ${nothing}${would}`,
+      `error\tclaim-aria-snapshot-unreadable\tfeatures/unfit-trees.feature:12\tStep "page-shows"'s claims[0].expected is args.tree, which this line's docstring fills, and ${slashes}${would}`,
+      `error\tclaim-aria-snapshot-names-nothing\tfeatures/unfit-trees.feature:19\tStep "page-shows-node"'s claims[0].expected is args.tree, which this line's capture fills, and ${nothing}${would}`,
+    ]);
+
+    const runOut = createCaptureSink();
+    expect(await runCli(["run", "--no-check", "--records", "features/unfit-trees.feature"], { rootDir, stdout: runOut, stderr: createCaptureSink() })).toBe(1);
+    const reasons = runOut
+      .text()
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => (JSON.parse(line) as { steps: StepLine[] }).steps[1]!.error!.message);
+    expect(reasons).toEqual([nothing, slashes, nothing].map((reason) => expect.stringContaining(reason)));
+  }, 60_000);
 });

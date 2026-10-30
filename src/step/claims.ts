@@ -917,7 +917,7 @@ function checkCount(label: string, claim: Record<string, unknown>): void {
  * read as it is: a tree a step returned or `observe` read would be one a
  * program wrote, so it could be the actual tree copied, and the claim
  * would hold whatever the page shows. */
-function checkAriaSnapshot(label: string, claim: Record<string, unknown>, where: Where, actualFromObserve: boolean): void {
+function checkAriaSnapshot(label: string, claim: Record<string, unknown>, shape: ClaimStepShape, where: Where, actualFromObserve: boolean): void {
   const takes = "fits-aria-snapshot takes the ARIA snapshot of a locator or page that observe returns";
   if (where === "item") {
     throw new InvalidClaimError(
@@ -953,6 +953,11 @@ function checkAriaSnapshot(label: string, claim: Record<string, unknown>, where:
       `${label}.expected_view is ${describe(claim.expected_view)}, and fits-aria-snapshot reads the expected ARIA snapshot from the text the line states, as it is. Drop expected_view`,
     );
   }
+  if (typeof expected === "string" && shape.stringArgs !== null && !shape.stringArgs.has(expected)) {
+    throw new InvalidClaimError(
+      `${label}.expected is args.${expected}, which is not a plain z.string(), and fits-aria-snapshot reads the expected ARIA snapshot from the text the line states, so a table or a schema of another type would never reach it as that text. Declare args.${expected} as z.string(), and fill it with the docstring`,
+    );
+  }
 }
 
 function checkComparison(label: string, claim: Record<string, unknown>, shape: ClaimStepShape, where: Where, actualFromObserve: boolean): void {
@@ -971,7 +976,7 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   COMPARE_SIDES[claim.compare as ClaimCompare]?.(label, claim);
   // Not a row of COMPARE_SIDES: it needs to know where the claim sits and
   // what its actual reads.
-  if (claim.compare === ARIA_SNAPSHOT_COMPARE) checkAriaSnapshot(label, claim, where, actualFromObserve);
+  if (claim.compare === ARIA_SNAPSHOT_COMPARE) checkAriaSnapshot(label, claim, shape, where, actualFromObserve);
 }
 
 /** Whether a top-level claim's `actual` reads observe: it is not an

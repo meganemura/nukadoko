@@ -61,6 +61,18 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Make the capture type and the args field type agree: change the {key:type} in the pattern, or declare the field with z.coerce.",
   },
+  "claim-aria-snapshot-names-nothing": {
+    description:
+      "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with an ARIA snapshot that names no node: only comments, an empty text, a /children line, or nothing at all. Every page holds such a tree, so the claim would hold whatever the page shows. nuka run breaks such a claim too, so --no-check does not let it hold.",
+    severity: "error",
+    fix: "State in the docstring at least one node the page must show: a role with its name in double quotes, a text, or a /url, as the browser's ARIA snapshot prints it.",
+  },
+  "claim-aria-snapshot-unreadable": {
+    description:
+      "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with a text that does not read as an ARIA snapshot, or that states what nukadoko does not judge: a name or a text between slashes, the [active] state, a prop that would describe no node, or a plain text that YAML reads as a number, a boolean, or null. The claim would break whatever the page shows, so the finding names the line of the docstring and how to write it.",
+    severity: "error",
+    fix: "Write the docstring line the finding names as the browser's ARIA snapshot prints it: a YAML list, each item starting with \"- \", a name in double quotes, and a text that YAML reads as something else in quotes.",
+  },
   "claim-compares-itself": {
     description:
       "A claim's actual value and its expected value resolve to the same place: the same path of the same earlier line's result, or the same observe path, with a view and an at counted as steps of the path. Such a claim holds whatever the behaviour is. Also reported for a claim step whose observe receives a from value that an expected from reads, or one that holds it or that it holds, so observe could return the expected value as the actual one, and for one whose observe receives another from key that holds, or sits inside, the from value an actual reads when that claim's expected value is { observe }, so observe could return the actual value as the expected one. observe never receives the expected key itself, nor the actual from key of a claim whose expected value is { observe }. nuka run and nuka do break such a claim at run time too, so --no-check does not let it hold.",

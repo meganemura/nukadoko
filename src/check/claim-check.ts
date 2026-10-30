@@ -2,12 +2,14 @@ import type { Pickle } from "@cucumber/messages";
 import type { z } from "zod";
 import type { ParameterTypeConfig } from "../binding/parameter-type-config.js";
 import { stripCaptureNames } from "../binding/pattern.js";
-import { asObjectShape, isPlainString } from "../binding/schema-shape.js";
+import { asObjectShape, isPlainString, unconsumedRequiredKeys } from "../binding/schema-shape.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
+import { expectedProblemReason, expectedSnapshotProblem } from "../step/aria-snapshot.js";
 import {
   ANY_INDEX,
+  ARIA_SNAPSHOT_COMPARE,
   isEachClaim,
   kindNamed,
   observeWithheldKeys,
@@ -37,7 +39,10 @@ import type { CheckIssue } from "./types.js";
 // the value an actual `from` reads when the expected value is
 // `{ observe }`. A third reads the line's own words: an `is-a` claim
 // whose expected sentence key a capture fills with a name that is no kind
-// (`claim-kind-unknown`). A fourth reads the producer's `returns` for a
+// (`claim-kind-unknown`), and a `fits-aria-snapshot` claim whose expected
+// key the docstring or a capture fills with a tree that does not read
+// (`claim-aria-snapshot-unreadable`) or names no node, which every page
+// holds (`claim-aria-snapshot-names-nothing`). A fourth reads the producer's `returns` for a
 // field: a `lacks-field` claim, or a `where` that selects by one, on a
 // value whose schema is an object that drops or refuses every key it
 // does not declare, and does not declare that field, so the field is
@@ -62,7 +67,13 @@ export interface ClaimCheckIssue {
   /** 0-based index into `pickle.steps`: the claim step's line. */
   readonly stepIndex: number;
   readonly stepName: string;
-  readonly code: "claim-compares-itself" | "claim-field-stripped" | "claim-kind-unknown" | "claim-path-unknown";
+  readonly code:
+    | "claim-aria-snapshot-names-nothing"
+    | "claim-aria-snapshot-unreadable"
+    | "claim-compares-itself"
+    | "claim-field-stripped"
+    | "claim-kind-unknown"
+    | "claim-path-unknown";
   readonly message: string;
 }
 
@@ -392,6 +403,7 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     reportUnknownKinds(step, match(pickle.steps[stepIndex]!.text).matched, pickle.steps[stepIndex]!.text, (message) =>
       report("claim-kind-unknown", `Step "${stepName}"'s ${message}`),
     );
+    reportUnfitTrees(step, match(pickle.steps[stepIndex]!.text).matched, pickle.steps[stepIndex]!, (code, message) => report(code, `Step "${stepName}"'s ${message}`));
     const captured = capturedTexts(match(pickle.steps[stepIndex]!.text).matched, pickle.steps[stepIndex]!.text);
     const argsShape = asObjectShape(step.args) ?? null;
     // A lacks-field claim, or a where clause, on a value the producer's
@@ -586,6 +598,41 @@ function reportUnknownKinds(step: ClaimStep, matched: CheckedPattern | undefined
         `${entryLabel}.expected is args.${entry.expected}, which this line fills with ${JSON.stringify(named)}, and is-a names one of the kinds ${VALUE_KINDS.join(", ")}, so the claim would always break`,
       );
     }
+  });
+}
+
+/** `claim-aria-snapshot-unreadable` and `claim-aria-snapshot-names-nothing`:
+ * a `fits-aria-snapshot` claim whose expected sentence key this line
+ * fills with a tree the run breaks the claim on, whatever the page shows.
+ * The key holds the text of a capture, or the docstring when it is the one
+ * required key no capture and no `from` fills (the key a run gives it). */
+function reportUnfitTrees(
+  step: ClaimStep,
+  matched: CheckedPattern | undefined,
+  line: Pickle["steps"][number],
+  report: (code: "claim-aria-snapshot-names-nothing" | "claim-aria-snapshot-unreadable", message: string) => void,
+): void {
+  if (!step.claims.some((claim) => !isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE)) return;
+  const captured = capturedTexts(matched, line.text);
+  const docString = line.argument?.docString?.content;
+  const shape = asObjectShape(step.args);
+  const docStringKeys =
+    docString === undefined || shape === undefined || matched === undefined
+      ? []
+      : unconsumedRequiredKeys(shape, new Set([...matched.captures.map((capture) => capture.key), ...Object.keys(step.from)]));
+  step.claims.forEach((claim, index) => {
+    if (isEachClaim(claim) || claim.compare !== ARIA_SNAPSHOT_COMPARE || typeof claim.expected !== "string") return;
+    const key = claim.expected;
+    const fromCapture = captured.get(key);
+    const text = fromCapture ?? (docStringKeys.length === 1 && docStringKeys[0] === key ? docString : undefined);
+    if (text === undefined) return;
+    const problem = expectedSnapshotProblem(text);
+    if (problem === null) return;
+    const source = fromCapture === undefined ? "docstring" : "capture";
+    report(
+      problem.kind === "unreadable" ? "claim-aria-snapshot-unreadable" : "claim-aria-snapshot-names-nothing",
+      `claims[${index}].expected is args.${key}, which this line's ${source} fills, and ${expectedProblemReason(problem)}, so the claim would break whatever the page shows`,
+    );
   });
 }
 

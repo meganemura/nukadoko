@@ -6,7 +6,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 export default defineStep({
   pattern: "a person opens room {room:int}",
   description: "Open the page of one room",
-  args: z.object({ room: z.number() }),
+  args: z.object({ room: z.number().describe("The number of the room") }),
   returns: z.object({}),
   mutates: false,
   async run({ page, baseURL }, { room }) {

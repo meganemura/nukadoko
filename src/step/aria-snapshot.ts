@@ -1018,18 +1018,28 @@ export function misfitText(misfit: SnapshotMisfit): string {
   }
 }
 
-/** The expected text of a claim as a tree, or why it is none: a text
- * that does not read, or a tree that names no node, which every page
- * holds. Either breaks the claim on every page. */
-function expectedTree(expectedText: string): { readonly root: ExpectedNode } | { readonly problem: string } {
+/** Why an expected text is no tree a claim can be judged on: a text that
+ * does not read (`line` names its line and how to write it), or a tree
+ * that names no node, which every page holds. Either breaks the claim on
+ * every page. */
+export type ExpectedSnapshotProblem = { readonly kind: "unreadable"; readonly line: string } | { readonly kind: "names-nothing" };
+
+/** The reason a claim breaks with for `problem`. Pure. */
+export function expectedProblemReason(problem: ExpectedSnapshotProblem): string {
+  return problem.kind === "unreadable"
+    ? `the expected ARIA snapshot does not read: ${problem.line}`
+    : "fits-aria-snapshot has an expected ARIA snapshot that names no node, which every page holds";
+}
+
+function expectedTree(expectedText: string): { readonly root: ExpectedNode } | { readonly problem: ExpectedSnapshotProblem } {
   const expected = readExpectedSnapshot(expectedText);
-  if ("problem" in expected) return { problem: `the expected ARIA snapshot does not read: ${expected.problem}` };
-  return expected.named === 0 ? { problem: "fits-aria-snapshot has an expected ARIA snapshot that names no node, which every page holds" } : { root: expected.root };
+  if ("problem" in expected) return { problem: { kind: "unreadable", line: expected.problem } };
+  return expected.named === 0 ? { problem: { kind: "names-nothing" } } : { root: expected.root };
 }
 
 /** Why an expected text breaks a claim on every page, or `null`: what
  * the check reports from the line alone, before a run. Pure. */
-export function expectedSnapshotProblem(expectedText: string): string | null {
+export function expectedSnapshotProblem(expectedText: string): ExpectedSnapshotProblem | null {
   const tree = expectedTree(expectedText);
   return "problem" in tree ? tree.problem : null;
 }
@@ -1042,7 +1052,7 @@ export function expectedSnapshotProblem(expectedText: string): string | null {
  * says nothing about the page. Pure. */
 export function judgeSnapshots(actualText: string, expectedText: string): { readonly fits: boolean } | { readonly broken: string } | { readonly unjudged: string } {
   const expected = expectedTree(expectedText);
-  if ("problem" in expected) return { broken: expected.problem };
+  if ("problem" in expected) return { broken: expectedProblemReason(expected.problem) };
   const actual = readActualSnapshot(actualText);
   if ("problem" in actual) return { unjudged: `the ARIA snapshot nukadoko took does not read: ${actual.problem}, so the claim was not judged` };
   return { fits: snapshotFits(actual.root, expected.root) };
