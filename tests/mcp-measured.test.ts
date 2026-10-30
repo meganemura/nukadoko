@@ -52,6 +52,10 @@ function jsonLines<T>(rootDir: string, step: StepFacts, file: string): T[] {
     .map((line) => JSON.parse(line) as T);
 }
 
+function recordOf(rootDir: string, step: StepFacts): { evidence: { mcp?: string } } {
+  return JSON.parse(readFileSync(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as { evidence: { mcp?: string } };
+}
+
 function spanOf(traceparent: string | undefined, traceId: string): string | undefined {
   return new RegExp(`^00-${traceId}-([0-9a-f]{16})-01$`).exec(traceparent ?? "")?.[1];
 }
@@ -82,6 +86,7 @@ describe("MCP calls through measureMcp", () => {
     // world's request line for it closes the call.
     const milk = step('the agent adds the note "milk" over HTTP');
     expect(milk.observed.mcp).toBe(1);
+    expect(recordOf(rootDir, milk).evidence.mcp).toBe("mcp.jsonl");
     const [call, ...more] = jsonLines<McpCallLine>(rootDir, milk, "mcp.jsonl");
     expect(more).toEqual([]);
     const traceId = milk.observed.events!.trace_id;

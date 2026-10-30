@@ -1290,6 +1290,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
     const stepFinishedAt = new Date();
     const httpLogExists = existsSync(path.join(begun.recordDir, "http.jsonl"));
+    const mcpLogExists = existsSync(path.join(begun.recordDir, "mcp.jsonl"));
     const claimFields = claimExecution === undefined ? {} : claimRecordFields(claimExecution, begun, observed, httpLogExists, argsOrigin);
 
     const stepRecord: StepRecord =
@@ -1316,6 +1317,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               dir: begun.relativeRecordDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
+              ...(mcpLogExists ? { mcp: "mcp.jsonl" } : {}),
               ...traceFileFields(traceEvidence),
               ...evidenceMetaFields(evidenceSnapshot),
             },
@@ -1370,6 +1372,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               dir: begun.relativeRecordDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
+              ...(mcpLogExists ? { mcp: "mcp.jsonl" } : {}),
               ...traceFileFields(traceEvidence),
               ...evidenceMetaFields(evidenceSnapshot),
             },
@@ -2341,6 +2344,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const traceEvidence = await collectTraceEvidence(began.recordDir, onUnknownTraceVersion, "trace.zip", contextHandle.namedContexts());
         const stepFinishedAt = new Date();
         const httpLogExists = existsSync(path.join(began.recordDir, "http.jsonl"));
+        const mcpLogExists = existsSync(path.join(began.recordDir, "mcp.jsonl"));
         const usedEntries = contextHandle.usedSnapshot();
         // Same backstop-only read as `observed`/`used` just above —
         // whatever labels this step
@@ -2401,6 +2405,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             dir: began.relativeRecordDir,
             screenshots: [],
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
+            ...(mcpLogExists ? { mcp: "mcp.jsonl" } : {}),
             ...traceFileFields(traceEvidence),
             ...evidenceMetaFields(evidenceSnapshot),
           },

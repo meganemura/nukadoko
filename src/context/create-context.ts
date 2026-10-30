@@ -347,6 +347,7 @@ export interface EvidenceResult {
   requests_trace?: string;
   screenshots: ScreenshotEntry[];
   http?: string;
+  mcp?: string;
 }
 
 export interface DisposeResult {
@@ -1371,6 +1372,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     // log dir advances again.
     if (existsSync(path.join(boundaryDir, "http.jsonl"))) {
       evidence.http = "http.jsonl";
+    }
+    if (existsSync(path.join(boundaryDir, "mcp.jsonl"))) {
+      evidence.mcp = "mcp.jsonl";
     }
 
     return {

@@ -1176,6 +1176,9 @@ export interface EvidenceMeta {
   screenshots: ScreenshotEntry[];
   /** Present only when at least one `ctx.request()` call was logged. */
   http?: string;
+  /** `mcp.jsonl`, the MCP calls the boundary sent through a transport
+   * `measureMcp` wrapped. Present only when at least one was logged. */
+  mcp?: string;
   /** Application-specific evidence `evidence.attach`/`evidence.path` added
    * this execution — this file's own header, above. Present
    * only when non-empty; capped at 100 entries, sorted by `at`. The true
