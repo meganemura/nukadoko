@@ -42,10 +42,10 @@ import type { CheckIssue } from "./types.js";
 // (`claim-kind-unknown`), and a `fits-aria-snapshot` claim whose expected
 // key the docstring or a capture fills with a tree that does not read
 // (`claim-aria-snapshot-unreadable`) or names no node, which every page
-// holds (`claim-aria-snapshot-names-nothing`). A fourth reads the producer's `returns` for a
-// field: a `lacks-field` claim, or a `where` that selects by one, on a
-// value whose schema is an object that drops or refuses every key it
-// does not declare, and does not declare that field, so the field is
+// holds (`claim-aria-snapshot-names-nothing`). A fourth reads the
+// producer's `returns` for a field: a `lacks-field` claim, or a `where`
+// that selects by one, on a value whose schema is an object that drops or
+// refuses every key it does not declare, and does not declare that field, so the field is
 // never there (`claim-field-stripped`). Two findings are per bound step:
 // a claim step whose `observe` reaches a browser page and does not state
 // `poll` (`claim-poll-unstated`), and an expected sentence key that a
