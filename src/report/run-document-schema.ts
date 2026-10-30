@@ -215,6 +215,7 @@ const step = z.looseObject({
   claims: z.array(z.union([eachClaim, comparisonClaim])).optional(),
   observation: z.enum(["observed", "unobserved"]).optional(),
   attempts: z.number().int().optional(),
+  settled: z.looseObject({ conditions: z.array(z.string()), stop: z.looseObject({ reading: z.number().int() }).optional() }).optional(),
   events_read: z.record(z.string(), eventsRead).optional(),
   path: stepPath.optional(),
 });
