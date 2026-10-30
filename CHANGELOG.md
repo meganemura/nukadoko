@@ -458,6 +458,24 @@ just until 0.1.
   own line, so a reader goes first to what a sentence is about and still
   sees a telemetry write that another reader of that table, such as a
   guard that turns a flag off, depends on.
+- **`nuka run --order shuffled` runs each pass in an order a seed
+  names.** The scenarios of one environment share one world, so a
+  scenario that passes only because an earlier one left data in the
+  program, or only because the one that spoils it runs later, passes on
+  every run in file order. A shuffled run sorts the feature files, then
+  each file's scenarios, by a key made from the seed and each path or
+  line; a file stays whole, so one seed names one order at every
+  `--concurrency`, and `@nukadoko:serial` keeps its meaning. nukadoko
+  draws the seed, and `--order shuffled:<seed>` runs that order again.
+  The seed is on stderr before the first scenario (`order
+  shuffled:<seed>`), in run.json's new `order` field (`{ "kind": "file"
+  }` otherwise), in the summary's condition list, and in every rerun
+  command. A failed scenario's `do:` line in a shuffled run names the
+  scenarios that ran before it in its pass, then it, since the line that
+  runs it alone passes; under `--repeat` or `--concurrency` above 1 it is
+  the run itself. Under `--base` the base and the old world run their
+  cells in the order head ran the rows. File order stays the default,
+  and its rerun lines are unchanged.
 
 ### Changed
 

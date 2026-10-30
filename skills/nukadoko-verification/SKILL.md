@@ -211,6 +211,11 @@ the program did differently, step by step, on the side with the fix.
   editing anything, and never edit a Then to match the product. A `held`
   row whose control passed is a scenario that no longer tells its switch
   apart.
+- `nuka run --order shuffled`: a scenario that passes only on what an
+  earlier scenario left in the instance they share. A red one's `do:` line
+  replays the scenarios that ran before it in that order. Red again there
+  is an order dependence, fixed by a scenario that stands alone, never by a
+  fixed order.
 - `nuka run --base <ref>`: which criteria changed since the map was last
   checked, and, when the steps changed, whether an unchanged one still
   means what it meant (a `moved` row says it does not).

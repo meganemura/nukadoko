@@ -80,8 +80,9 @@ export interface SelectedFeature {
   /** The text the document was parsed from, which the run keeps in its
    * sources.json so `nuka report` parses the same scenarios later. */
   readonly source: string;
-  /** `null` selects the full file. Otherwise, workers use these lines to
-   * preserve this file's partial selection. */
+  /** `null` selects the full file, in file order. Otherwise a worker runs
+   * these lines in the order listed: line order here, and a shuffled order
+   * once src/run/run-order.ts has put the file in the run's order. */
   readonly selectedLines: readonly number[] | null;
 }
 

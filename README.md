@@ -382,7 +382,7 @@ Everything past the loop above, one line each:
 - [Wrong before it runs](#wrong-before-it-runs): what `nuka check` catches before anything executes, and running one step alone with `nuka do`.
 - [The compat door](#the-compat-door): bring an existing cucumber-js suite in by switching one import.
 - [Reports fill themselves](#reports-fill-themselves): `nuka report`, which renders a finished run as Allure results, a cucumber-messages stream, or the Markdown summary.
-- [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, and `--repeat`.
+- [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, `--repeat`, and `--order`.
 - Environments and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Program" and "Environments and secrets" in [docs/spec.md](docs/spec.md#program)): named environments, redaction.
 - [Skills for coding agents](#skills-for-coding-agents): the two skills an agent loads to run this loop.
 - [The bed has to be tended](#the-bed-has-to-be-tended): the notes `nuka check` adds for what is rotting rather than broken.
@@ -1236,6 +1236,15 @@ build to keep a growing suite's PR gate fast.
 invocation, for a failure that reproduces one time in several. Each
 execution is its own record under one run id, and a scenario that failed
 at least once is tallied after the summary, `<passed> of <n> passed`.
+
+`nuka run --order shuffled` runs the same selection in an order a seed
+names, for a scenario that passes only because an earlier one left data in
+the program. The feature files are sorted, then each file's scenarios, so
+a file stays whole at any `--concurrency`. The seed is on stderr, in
+`run.json`, and in the summary, and `--order shuffled:<seed>` runs that
+order again. A failed scenario's `do:` line names the scenarios that ran
+before it, so an order dependence fails on it again, where running the
+scenario alone would pass. File order stays the default.
 
 `nuka run --env a --env b` runs every selected scenario once in each
 environment, in one run with one run id: all of `a` first, then all of

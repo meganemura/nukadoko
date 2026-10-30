@@ -372,7 +372,7 @@ Feature: greet API
 - [Wrong before it runs](#wrong-before-it-runs): 何かが実行される前に `nuka check` が捕まえるもの、および `nuka do` で 1 つの step だけを実行すること。
 - [The compat door](#the-compat-door): import を 1 つ切り替えて、既存の cucumber-js のスイートを取り込む。
 - [Reports fill themselves](#reports-fill-themselves): 終わった run を Allure の結果、cucumber-messages のストリーム、Markdown のサマリとして描き出す `nuka report`。
-- [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`。
+- [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`、`--order`。
 - environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」と「Environment、secret」): 名前付きの environment、redact。
 - [Skills for coding agents](#skills-for-coding-agents): agent がこのループを回すために読み込む 3 つの skill。
 - [The bed has to be tended](#the-bed-has-to-be-tended): 壊れているものではなく腐りつつあるもののために `nuka check` が加える注記。
@@ -1120,6 +1120,13 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 数回に 1 回だけ再現する失敗のためのものです。
 各実行は 1 つの run id の下でそれぞれ自分の record になります。
 1 回でも失敗した scenario は、summary の後に `<passed> of <n> passed` の形で集計されます。
+
+`nuka run --order shuffled` は、同じ選択を seed が名指す順序で実行します。
+前の scenario がプログラムに残したデータのおかげで通る scenario のためのものです。
+feature ファイルを並べ、次に各ファイルの scenario を並べるので、どの `--concurrency` でもファイルは分かれません。
+seed は stderr、`run.json`、サマリに出て、`--order shuffled:<seed>` がその順序をもう一度実行します。
+失敗した scenario の `do:` 行はその前に走った scenario を名指すので、順序への依存なら、単独で走らせれば通る場合でも、その行でもう一度失敗します。
+既定はこれまでどおりファイル順です。
 
 `nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。
 まず `a` ですべてを実行し、次に `b` ですべてを実行します。

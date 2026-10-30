@@ -37,8 +37,8 @@ import { serializeWorldView, type WorldView } from "../program/world-view.js";
 // into `@nukadoko:serial` and not (the `Feature:` line's own tags — never a pickle's
 // own merged `tags`, which would make a Scenario-level `@nukadoko:serial` and a
 // Feature-level one indistinguishable), hands the non-`@nukadoko:serial` files to
-// `min(concurrency, file count)` worker processes round-robin in the fixed
-// byte order `nuka run` already selected them in, waits for all of them,
+// `min(concurrency, file count)` worker processes round-robin in the run's
+// order (src/run/run-order.ts: file order, or a seed's), waits for all of them,
 // then runs every `@nukadoko:serial` file afterward, one worker at a time. Actually
 // executing one file is src/run/run-worker-entry.ts's job, in a process
 // spawned by src/run/spawn-run-worker.ts — see those two files' own headers
