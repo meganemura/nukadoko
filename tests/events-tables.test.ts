@@ -170,6 +170,17 @@ describe("a count under the program's tables list", () => {
     expect(written.stderr).toContain("lists started: node app/list.mjs tables");
     expect((JSON.parse(written.stdout) as Step).claims![0]).toMatchObject({ actual: 0, left_out: LEFT_OUT, outcome: "held" });
   });
+
+  it("names a tables list nuka do could not read, whose claim it leaves unjudged", async () => {
+    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "fail"'));
+    const get = await cli(rootDir, ["do", "get", "--args", JSON.stringify({ path: "/dashboard" })]);
+    expect(get.exitCode, get.stderr).toBe(0);
+    const id = (JSON.parse(get.stdout) as { step_record_id: string }).step_record_id;
+    const written = await cli(rootDir, ["do", "nothing-was-written", "--args", "{}", "--use", id]);
+    expect(written.exitCode).toBe(1);
+    expect(written.stderr).toMatch(/warning\tprogram-list-unread\t-\tworld default: the tables list was not read: lists\.tables command node app\/list\.mjs tables http:\/\/localhost:\d+ exited with code 3; see \.nukadoko\/do\/step-[\w-]+\/world\/program\.log\n/);
+    expect((JSON.parse(written.stdout) as Step).claims![0]).toMatchObject({ outcome: "unjudged", actual_range: { at_least: 0, at_most: 2 } });
+  });
 });
 
 describe("a count at the base under the base's own tables list", () => {

@@ -515,6 +515,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         return FAILED_EXIT_CODE;
       }
       world = started;
+      // A tables list the world did not read leaves the step's counts
+      // unjudged, and the warning says why, as `nuka run`'s does.
+      for (const [kind, list] of Object.entries(started.record().lists ?? {})) {
+        if (list.error === null) continue;
+        const log = started.view.log === null ? "" : `; see ${path.relative(rootDir, started.view.log)}`;
+        warnings("program-list-unread").write(`world ${started.view.name}: the ${kind} list was not read: ${list.error}${log}\n`);
+      }
       // The program outlives the fixtures, whose teardown may still talk
       // to it, on the signal path as on the normal one.
       stopWorld = runOnce(async () => {
