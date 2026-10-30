@@ -149,6 +149,11 @@ between (a `- /children: equal` line asks for exactly those), and a node with
 no name (`- button`) fits any name. What the tree leaves out is not asked, so
 the page may show more. Write the tree from the criterion, never from the
 page's printed snapshot: a tree copied from the page holds whatever the page
-shows. A broken claim names the first expected line that fits nothing and the
-nearest node (`expected line 2 (button "Submit") fits no child of form
-"Scores" (actual line 3); nearest: button "Skip" [disabled] (actual line 7)`).
+shows. When the project keeps UI strings out of its features, leave the
+name off a node whose name is a UI string (`- slider`), name a node only by
+what the sentence already states as data (an act or a person, `- heading
+"Alpha"`), and let the step choose a named region with its locator, where UI
+strings may live. A broken claim names the first expected line that fits
+nothing and the nearest node (`expected line 2 (button "Submit") fits no
+child of form "Scores" (actual line 3); nearest: button "Skip" [disabled]
+(actual line 7)`).
