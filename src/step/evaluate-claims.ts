@@ -6,6 +6,7 @@ import type {
   ClaimItemIdentity,
   ClaimItemRecord,
   ClaimReading,
+  PageReadingRecord,
   ClaimReadingValue,
   ClaimView,
   MeasuredChannel,
@@ -2070,14 +2071,17 @@ function fullValue(raw: unknown, reason: string | undefined): unknown {
  * its content: whether it held and what each claim read, in full, so a
  * reading that differs from the one before only past the point where a
  * long value is cut is still a change point. `expecteds` is there when an
- * expected value comes from `observe`, and `settled` when the step
- * declares settled conditions. Pure.
+ * expected value comes from `observe`, `settled` when the step
+ * declares settled conditions, and `pages` when the step read with a page
+ * open: a reading on which a page received a response, or a request went
+ * in flight, is then a change point too. Pure.
  */
 export function readingOf(
   attempt: number,
   at: string,
   judged: readonly JudgedClaim[],
   settled?: boolean,
+  pages?: readonly PageReadingRecord[],
 ): { readonly reading: ClaimReading; readonly content: string } {
   const held = judged.every((entry) => entry.record.outcome === "held");
   const both = judged.some((entry) => entry.expectedOrigins.includes("observe"));
@@ -2089,6 +2093,7 @@ export function readingOf(
     actuals: judged.map((entry) => readingValue(entry.rawActual, entry.record.reason)),
     ...(both ? { expecteds: judged.map((entry, index) => readingValue(expected[index], entry.record.reason)) } : {}),
     ...(settled === undefined ? {} : { settled }),
+    ...(pages === undefined ? {} : { pages }),
   };
   let content: string;
   try {
@@ -2098,6 +2103,7 @@ export function readingOf(
       both ? judged.map((entry, index) => fullValue(expected[index], entry.record.reason)) : null,
       null,
       settled ?? null,
+      pages ?? null,
     ]);
   } catch {
     // A value that is not JSON is kept as its reason, so the cut form is
@@ -2139,7 +2145,7 @@ export interface ReadingsLog {
 /** What a reading read, without when it happened or its number: two
  * readings with one content read the same thing. */
 function readingContent(reading: ClaimReading): string {
-  return JSON.stringify([reading.held, reading.actuals ?? null, reading.expecteds ?? null, reading.error ?? null, reading.settled ?? null]);
+  return JSON.stringify([reading.held, reading.actuals ?? null, reading.expecteds ?? null, reading.error ?? null, reading.settled ?? null, reading.pages ?? null]);
 }
 
 export function createReadingsLog(cap = CLAIM_READINGS_CAP): ReadingsLog {
@@ -2202,4 +2208,38 @@ export function keptReadings(readings: readonly ClaimReading[], cap = CLAIM_READ
   const log = createReadingsLog(cap);
   for (const reading of readings) log.add(reading);
   return log.kept();
+}
+
+/**
+ * The page requests `readings` and `pages` name, numbered from 0 in the
+ * order they are first named (the readings oldest first, then `pages`),
+ * with each reference changed to that number. `order[n]` is the id the
+ * request numbered `n` was named by. A reading the log left out names no
+ * request, so the record's `page_requests` holds only those it shows.
+ * Pure.
+ */
+export function numberPageRequests(
+  readings: readonly ClaimReading[] | undefined,
+  pages: readonly PageReadingRecord[] | undefined,
+): { readonly readings?: ClaimReading[]; readonly pages?: PageReadingRecord[]; readonly order: number[] } {
+  const numbers = new Map<number, number>();
+  const order: number[] = [];
+  const numberOf = (id: number): number => {
+    let number = numbers.get(id);
+    if (number === undefined) {
+      number = order.length;
+      order.push(id);
+      numbers.set(id, number);
+    }
+    return number;
+  };
+  const renumbered = (entries: readonly PageReadingRecord[]): PageReadingRecord[] =>
+    entries.map((page) => ({ ...page, last_response: page.last_response === null ? null : numberOf(page.last_response), in_flight: page.in_flight.map(numberOf) }));
+  const numberedReadings = readings?.map((reading) => (reading.pages === undefined ? reading : { ...reading, pages: renumbered(reading.pages) }));
+  const numberedPages = pages === undefined ? undefined : renumbered(pages);
+  return {
+    ...(numberedReadings === undefined ? {} : { readings: numberedReadings }),
+    ...(numberedPages === undefined ? {} : { pages: numberedPages }),
+    order,
+  };
 }

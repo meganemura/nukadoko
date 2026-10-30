@@ -197,6 +197,22 @@ const stepPath = z.looseObject({
   open: z.array(eventsGap),
 });
 
+// What the summary reads of the pages a claim step read (run-summary.ts's
+// `inFlightText`): each index a page names is one of `page_requests`.
+const pageReading = z.looseObject({
+  as: z.string().nullable(),
+  page: z.number().int().min(1),
+  url: z.string(),
+  last_response: z.number().int().min(0).nullable(),
+  in_flight: z.array(z.number().int().min(0)),
+});
+const pageRequest = z.looseObject({
+  method: z.string(),
+  url: z.string(),
+  sent_during: z.enum(["this-step", "earlier-step", "hook", "pause"]),
+  step: z.looseObject({ line: z.number().int().nullable() }).optional(),
+});
+
 const step = z.looseObject({
   line: z.number().int().nullable(),
   text: z.string(),
@@ -216,9 +232,14 @@ const step = z.looseObject({
   observation: z.enum(["observed", "unobserved"]).optional(),
   attempts: z.number().int().optional(),
   settled: z.looseObject({ conditions: z.array(z.string()), stop: z.looseObject({ reading: z.number().int() }).optional() }).optional(),
+  pages: z.array(pageReading).optional(),
+  page_requests: z.array(pageRequest).optional(),
   events_read: z.record(z.string(), eventsRead).optional(),
   path: stepPath.optional(),
-});
+}).refine(
+  (entry) => (entry.pages ?? []).every((page) => [page.last_response, ...page.in_flight].every((index) => index === null || index < (entry.page_requests?.length ?? 0))),
+  { message: "each request a page names is one of page_requests" },
+);
 
 const declared = z.looseObject({
   attachments: z.array(z.string()).optional(),

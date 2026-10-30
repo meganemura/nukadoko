@@ -260,6 +260,28 @@ describe("parseRunDocument", () => {
     expect("problem" in refused && refused.problem).toContain("scenarios.0.steps.1.claims.0: ");
   });
 
+  it("reads the pages a Then read and the requests they name, and refuses a page that names a request the list does not hold", () => {
+    const withPages = (inFlight: number[]) => ({
+      ...VALID,
+      scenarios: [
+        {
+          ...VALID.scenarios[0],
+          steps: [
+            {
+              ...VALID.scenarios[0]!.steps[0],
+              settled: { conditions: ['screen equal "scoring"'], stop: { reading: 4, actuals: [{ value: "scoring" }] } },
+              pages: [{ as: null, page: 1, url: "http://localhost:1/room", last_response: 0, in_flight: inFlight }],
+              page_requests: [{ method: "GET", url: "http://localhost:1/state", sent_at: "2026-10-18T00:00:00.000Z", finished_at: null, sent_during: "earlier-step", step: { step_record_id: "s0", step: "a", line: 3 } }],
+            },
+          ],
+        },
+      ],
+    });
+    expect(parseRunDocument(JSON.stringify(withPages([0])))).toHaveProperty("document");
+    const refused = parseRunDocument(JSON.stringify(withPages([1])));
+    expect("problem" in refused && refused.problem).toContain("each request a page names is one of page_requests");
+  });
+
   it("refuses another schema version before it reads a field", () => {
     expect(parseRunDocument(JSON.stringify({ schema_version: 2 }))).toEqual({ problem: "has schema_version 2, and this release reads 4" });
     expect(parseRunDocument("[")).toEqual({ problem: "does not parse as JSON: Unexpected end of JSON input" });

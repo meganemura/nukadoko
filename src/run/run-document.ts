@@ -235,6 +235,8 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
             ...(stepRecord.observation === undefined ? {} : { observation: stepRecord.observation }),
             ...(stepRecord.attempts === undefined ? {} : { attempts: stepRecord.attempts }),
             ...(stepRecord.settled === undefined ? {} : { settled: stepRecord.settled }),
+            ...(stepRecord.pages === undefined ? {} : { pages: stepRecord.pages }),
+            ...(stepRecord.page_requests === undefined ? {} : { page_requests: stepRecord.page_requests }),
           }),
       ...(stepRecord?.events_read === undefined ? {} : { events_read: stepRecord.events_read }),
     };

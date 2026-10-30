@@ -616,6 +616,52 @@ describe("renderRunSummary", () => {
       if (failed > 0) counts.push(`${failed} failed`);
       expect(title).toBe(`# nukadoko run ${verdict}: ${counts.join(", ")}`);
     }));
+
+  it("names each request in flight on the judged reading of a Then, with its page and the boundary it was sent in, and nothing for a page with none", () => {
+    const request = (url: string, during: "this-step" | "earlier-step" | "hook" | "pause", line?: number | null) => ({
+      method: "GET",
+      url,
+      sent_at: "2026-10-15T12:00:10.000Z",
+      finished_at: null,
+      sent_during: during,
+      ...(line === undefined ? {} : { step: { step_record_id: "stp-4", step: "a-step", line } }),
+    });
+    const claim = { actual: "3", actual_from: "observe:score", compare: "equal" as const, expected: "3", expected_from: "sentence:score", expected_text: "3", outcome: "held" as const, measured: null };
+    const markdown = renderRunSummary(
+      run({
+        scenarios: [
+          scenario("features/room.feature", 3, "everyone sees the score", "passed", 100, {
+            steps: [
+              step("everyone sees 3", {
+                line: 6,
+                record: "steps/stp-6",
+                claims: [claim],
+                pages: [
+                  { as: null, page: 1, url: "http://aki.localhost:4100/r/AB", last_response: 0, in_flight: [1, 2] },
+                  { as: "ben", page: 2, url: "http://localhost:4100/r/AB", last_response: null, in_flight: [3, 4] },
+                  { as: null, page: 2, url: "http://chi.localhost:4100/r/AB", last_response: 0, in_flight: [] },
+                ],
+                page_requests: [
+                  { ...request("http://aki.localhost:4100/r/AB", "earlier-step", 5), finished_at: "2026-10-15T12:00:10.100Z" },
+                  request("http://aki.localhost:4100/r/AB", "this-step"),
+                  request("http://aki.localhost:4100/r/AB?v=2", "earlier-step", null),
+                  request("http://localhost:4100/r/AB", "hook"),
+                  request("http://localhost:4100/r/AB?v=3", "pause"),
+                ],
+              }),
+              step("the room shows the score", { line: 7, record: "steps/stp-7", claims: [claim], pages: [{ as: null, page: 1, url: "http://aki.localhost:4100/r/AB", last_response: 0, in_flight: [] }], page_requests: [request("http://aki.localhost:4100/r/AB", "earlier-step", 5)] }),
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(markdown).toContain(
+      "- `features/room.feature:6` everyone sees 3, read with 4 requests in flight (GET http://aki.localhost:4100/r/AB on page 1, sent during this step; GET http://aki.localhost:4100/r/AB?v=2 on page 1, sent during an earlier step; GET http://localhost:4100/r/AB on page 2 of ben, sent during a hook; GET http://localhost:4100/r/AB?v=3 on page 2 of ben, sent during a pause)\n",
+    );
+    expect(markdown).toContain("- `features/room.feature:7` the room shows the score\n");
+    expect(markdown).toContain("An entry read with a request in flight names each request");
+  });
+
 });
 
 // A world record as `nuka run` writes it.

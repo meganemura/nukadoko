@@ -15,6 +15,7 @@ import type {
   HttpOmittedCounts,
   ObservedCounts,
   PageEventsSnapshot,
+  PageRequestRecord,
   PollRecord,
   ScreenshotEntry,
   SectionEntry,
@@ -55,6 +56,10 @@ import { createHttpLogFailedCollector } from "./http-log-failed.js";
 import { createHttpOmittedCollector } from "./http-omitted.js";
 import { type AfterStepEnd, createObservedCollector, finalizeOpenRequests } from "./observed.js";
 import { createPageEventsCollector } from "./page-events.js";
+import { type BoundarySender, type ContextPageAtReading, type PageBoundary, type PageRequest, pageRequestRecord } from "./page-order.js";
+
+// The names a claim step's reading of the pages hands the run layer.
+export type { BoundarySender, ContextPageAtReading, PageAtReading, PageBoundary, PageRequest } from "./page-order.js";
 import { createEventsReader } from "./events-file.js";
 import { readEvents, type EventsProducer, type EventsRequest } from "./events-read.js";
 import { NO_MARKED_TABLES, type WorldTables } from "../execution-events/tables.js";
@@ -356,6 +361,12 @@ export interface DisposeResult {
   browser?: { readonly type: string; readonly version: string };
 }
 
+/** One page as a reading of a claim step found it, with its browser
+ * context's name (`null` for the default one). */
+export interface PageAtReadingOf extends ContextPageAtReading {
+  readonly as: string | null;
+}
+
 export interface StepContextHandle {
   ctx: StepContext;
   /** Closes whatever this execution opened (browser, request context),
@@ -461,6 +472,16 @@ export interface StepContextHandle {
    * browser was launched. `nuka run --step` calls it at a pause, between
    * two steps. Never exposed on `ctx`. */
   viewOpenPages(dir: string, recordedAs: string): Promise<PageView[]>;
+  /** Executor-only: opens a reading of a claim step on every page each
+   * browser context has open, in `viewOpenPages`' order, and returns
+   * what closes it with what each page had received from the world
+   * (page-order.ts). Each page's entry is empty-handed without a world, and
+   * there are none before a browser launched. Never exposed on `ctx`. */
+  beginPageReading(): { end(): PageAtReadingOf[] };
+  /** Executor-only: `requests` as a claim step's record keeps them, with
+   * the boundary each was sent in seen from the current one. Never exposed
+   * on `ctx`. */
+  pageRequestRecords(requests: readonly PageRequest[]): Promise<PageRequestRecord[]>;
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
    * even for a call that went on to throw `MissingEnvError`. Never exposed on `ctx` — same rule as
@@ -515,9 +536,11 @@ export interface StepContextHandle {
    * `chunkFileName` defaults to `"trace.zip"` when omitted (this file's own
    * header) — a step call site never needs to pass one; a hook call site
    * always does, since several hook invocations can share one scenario
-   * evidence dir. Never exposed on `ctx` — same executor-only rule as
-   * `dispose`. */
-  beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void>;
+   * evidence dir. `sender` says what the new boundary is for (a step,
+   * a hook, or a pause), so a page request sent in it names that step in a
+   * later claim step's record (page-order.ts). Never exposed on `ctx` —
+   * same executor-only rule as `dispose`. */
+  beginStep(dir: string, title?: string, chunkFileName?: string, sender?: BoundarySender): Promise<void>;
   /** Executor-only (covering hook boundaries too): closes the current
    * boundary's own trace chunk,
    * if one is open, writing it to the current boundary's own directory (the
@@ -721,6 +744,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // meaningful when `pendingChunkTitle !== undefined`; `beginStep` is the
   // only thing that ever changes it.
   let pendingChunkFileName = "trace.zip";
+  // This boundary, by identity, and what it was opened for: a page request
+  // remembers the boundary it was sent in (page-order.ts).
+  let pageBoundary: PageBoundary = { sender: undefined };
   // One collector for this ctx's whole lifetime; `beginStep` resets what it
   // holds, never replaces the object itself. The state directory is where this run writes step records and traces
   // while a step runs, so a `runCommand` snapshot would otherwise read the
@@ -1186,6 +1212,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
                 traceparentFor: (url: string) => observed.traceparentFor(url),
                 unstamped: (detail: string) => observed.markUnmeasured({ kind: "page_request", detail }),
               },
+              pageBoundary: () => pageBoundary,
             }),
       });
       const opened: OpenedContext = { as, handle, chunkOpen: false };
@@ -1404,9 +1431,20 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return [...contexts.keys()].filter((as): as is string => as !== undefined);
   }
 
+  function beginPageReading(): { end(): PageAtReadingOf[] } {
+    const windows = openedInOrder().map((opened) => ({ as: opened.as ?? null, window: opened.handle.beginPageReading() }));
+    return { end: () => windows.flatMap(({ as, window }) => (window === undefined ? [] : window.end().map((page) => ({ as, ...page })))) };
+  }
+
+  // The default context first, then each `pageAs` context in the order
+  // it opened.
+  function openedInOrder(): OpenedContext[] {
+    return [...contexts.values()].sort((a, b) => Number(a.as !== undefined) - Number(b.as !== undefined));
+  }
+
   async function viewOpenPages(dir: string, recordedAs: string): Promise<PageView[]> {
     const views: PageView[] = [];
-    for (const opened of [...contexts.values()].sort((a, b) => Number(a.as !== undefined) - Number(b.as !== undefined))) {
+    for (const opened of openedInOrder()) {
       views.push(...(await opened.handle.viewPages(dir, recordedAs)));
     }
     return views;
@@ -1432,7 +1470,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return { ...(await evidence.snapshot()), scratch: scratch.snapshot() };
   }
 
-  async function beginStep(dir: string, title?: string, chunkFileName?: string): Promise<void> {
+  async function beginStep(dir: string, title?: string, chunkFileName?: string, sender?: BoundarySender): Promise<void> {
     // Closes the *previous* boundary's own chunk before this boundary's own
     // `boundaryDir`/`pendingChunkTitle`/`pendingChunkFileName` overwrite the
     // state that closing needs (this file's own header) — a no-op in normal
@@ -1443,6 +1481,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     boundaryDir = dir;
     pendingChunkTitle = title;
     pendingChunkFileName = chunkFileName ?? "trace.zip";
+    pageBoundary = { sender };
     requestStage?.beginStep(title);
     observed.reset();
     used.reset();
@@ -1498,6 +1537,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     pollsSnapshot,
     namedContexts,
     viewOpenPages,
+    beginPageReading,
+    pageRequestRecords: (requests) => Promise.all(requests.map((request) => pageRequestRecord(request, pageBoundary))),
     envReadsSnapshot,
     pageEventsSnapshot,
     httpOmittedSnapshot,

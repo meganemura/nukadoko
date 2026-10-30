@@ -1098,7 +1098,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     observed: StepRecord["observed"],
     httpLogExists: boolean,
     argsOrigin: Record<string, ArgOrigin> | undefined,
-  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings" | "readings_left_out" | "settled" | "events_read"> {
+  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings" | "readings_left_out" | "settled" | "pages" | "page_requests" | "events_read"> {
     const claims = withMeasured(execution.judged, {
       ownRecordId: begun.recordId,
       ownChannels: recordedChannels({ observed, dir: begun.recordDir, ...(httpLogExists ? { http: "http.jsonl" } : {}) }),
@@ -1119,6 +1119,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       ...(execution.readings === undefined ? {} : { readings: [...execution.readings] }),
       ...(execution.readingsLeftOut === undefined ? {} : { readings_left_out: { ...execution.readingsLeftOut } }),
       ...(execution.settled === undefined ? {} : { settled: execution.settled }),
+      ...(execution.pages === undefined ? {} : { pages: [...execution.pages] }),
+      ...(execution.pageRequests === undefined ? {} : { page_requests: [...execution.pageRequests] }),
       ...(execution.eventsRead === undefined ? {} : { events_read: execution.eventsRead }),
     };
   }
@@ -1533,7 +1535,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   for (const hook of beforeHooks) {
     const title = hookDisplayTitle("Before", hook.name);
     const chunkFileName = hookChunkFileName("before", hook.registrationOrder);
-    await contextHandle.beginStep(scenarioDir, hookChunkTitle("before", hook.name), chunkFileName);
+    await contextHandle.beginStep(scenarioDir, hookChunkTitle("before", hook.name), chunkFileName, { kind: "hook" });
     // Same per-boundary point for the World's own instrumentation — a
     // Before hook's own World reads/writes get tallied here but are
     // discarded by the next `beginStep()` call (the next Before hook, or
@@ -1713,7 +1715,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // invocations needs its own chunk, never overwriting the previous
       // one's.
       const chunkFileName = hookChunkFileName("after_step", hook.registrationOrder, stepIndex);
-      await contextHandle.beginStep(scenarioDir, hookChunkTitle("after_step", hook.name, stepIndex), chunkFileName);
+      await contextHandle.beginStep(scenarioDir, hookChunkTitle("after_step", hook.name, stepIndex), chunkFileName, { kind: "hook" });
       worldInstrumentation.beginStep();
       // Same per-hook declared boundary as the Before/After loops —
       // reset right before, read right
@@ -1821,7 +1823,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       ...failureAt(due),
       remaining,
       holdPages: async (dir, recordedAs) => {
-        await contextHandle.beginStep(dir);
+        await contextHandle.beginStep(dir, undefined, undefined, { kind: "pause" });
         return contextHandle.viewOpenPages(dir, recordedAs);
       },
     });
@@ -1981,7 +1983,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — the trace chunk `ctx.page()` opens lazily
         // during this step, if it does, self-identifies the same way.
-        await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep));
+        const producedAt = lineOfStep(stepIndex);
+        await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep), undefined, {
+          kind: "step",
+          step: { step_record_id: recordId, step: outcome.stepName, line: producedAt },
+        });
         worldInstrumentation.beginStep();
         declaredCollector.beginStep(recordDir);
         began = {
@@ -1994,7 +2000,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           rawArgs: undefined,
           originOf: undefined,
         };
-        const producedAt = lineOfStep(stepIndex);
         if (producedAt !== null) recordLines.set(recordId, producedAt);
 
         const bindResult = bindStepArgs(
@@ -2179,7 +2184,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const relativeRecordDir = stepRecordRelativeDir(recordsStateDir, runId, recordId);
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — same as the typed branch above.
-        await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep));
+        await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep), undefined, {
+          kind: "step",
+          step: { step_record_id: recordId, step: outcome.stepName, line: lineOfStep(stepIndex) },
+        });
         worldInstrumentation.beginStep();
         declaredCollector.beginStep(recordDir);
         began = {
@@ -2460,7 +2468,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   for (const hook of afterHooks) {
     const title = hookDisplayTitle("After", hook.name);
     const chunkFileName = hookChunkFileName("after", hook.registrationOrder);
-    await contextHandle.beginStep(scenarioDir, hookChunkTitle("after", hook.name), chunkFileName);
+    await contextHandle.beginStep(scenarioDir, hookChunkTitle("after", hook.name), chunkFileName, { kind: "hook" });
     worldInstrumentation.beginStep();
     // Same per-hook declared boundary as the Before loop above — reset
     // right before, read right after, so one After

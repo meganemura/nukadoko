@@ -22,6 +22,7 @@ import { contextFileName } from "./context-name.js";
 import { loadPlaywright } from "./load-playwright.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
+import { type ContextPageAtReading, type PageBoundary, subscribePageOrder } from "./page-order.js";
 import { secretMasks } from "./secret-masks.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
@@ -252,6 +253,10 @@ export interface TracedContextOptions {
   /** Puts a `traceparent` on the page requests to the world
    * (browser-trace.ts). Absent without a world URL. */
   stamp?: PageStamp;
+  /** The step boundary current now, for the order each page received its
+   * responses to the world in (page-order.ts). Read only with `stamp`,
+   * whose origin is the world's. */
+  pageBoundary?: () => PageBoundary;
 }
 
 export interface TracedContextHandle {
@@ -270,6 +275,10 @@ export interface TracedContextHandle {
   /** Waits for every page-issued http.jsonl append this context has kicked
    * off *so far* to settle (page-http-log.ts's `PageHttpLogHandle.flush`). */
   flushPageHttpLog(): Promise<void>;
+  /** Opens a reading on every page this context has open, and returns
+   * what closes it with what each page had received (page-order.ts);
+   * `undefined` without a world. */
+  beginPageReading(): { end(): ContextPageAtReading[] } | undefined;
   /** Writes a screenshot and an ARIA snapshot of each page this context
    * has open into `dir` (`page.png` and `page.aria.yml` for the first page,
    * `page-<n>.*` for the others, with the context's name before the
@@ -399,6 +408,8 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       options.httpLogFailed,
       as,
     );
+    const pageOrder =
+      options.stamp === undefined || options.pageBoundary === undefined ? undefined : subscribePageOrder(context, options.stamp.origin, options.pageBoundary);
     await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();
 
@@ -418,6 +429,7 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       async flushPageHttpLog(): Promise<void> {
         await pageHttpLog.flush();
       },
+      beginPageReading: () => pageOrder?.begin(),
       async viewPages(dir: string, recordedAs: string): Promise<PageView[]> {
         const views: PageView[] = [];
         const redacted = (text: string): string => redactString(text, options.secrets);

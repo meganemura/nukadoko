@@ -21,7 +21,7 @@ import {
   type RunTableRow,
   type RunWorld,
 } from "../record/run-result.js";
-import type { MeasuredChannel } from "../record/types.js";
+import type { MeasuredChannel, PageRequestRecord } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
@@ -1151,6 +1151,37 @@ function settledText(step: RunStep): string {
   return step.settled.stop === undefined ? `, not settled (${conditions})` : `, settled on reading ${step.settled.stop.reading} (${conditions})`;
 }
 
+// A reading taken while a request of a page to the world was in flight
+// may have read a page that was about to change, so a held claim on it
+// can rest on a stale page. The entry names each such request. It is an
+// order nukadoko measured, never a verdict: the claims stand as judged.
+function inFlightText(step: RunStep): string {
+  const requests = step.page_requests ?? [];
+  const named = (step.pages ?? []).flatMap((page) =>
+    page.in_flight.flatMap((index) => {
+      const request = requests[index];
+      if (request === undefined) return [];
+      const where = page.as === null ? `page ${page.page}` : `page ${page.page} of ${page.as}`;
+      return [`${request.method} ${request.url} on ${where}, sent ${sentDuringText(request)}`];
+    }),
+  );
+  if (named.length === 0) return "";
+  return `, read with ${named.length === 1 ? "a request" : `${named.length} requests`} in flight (${named.join("; ")})`;
+}
+
+function sentDuringText(request: PageRequestRecord): string {
+  switch (request.sent_during) {
+    case "this-step":
+      return "during this step";
+    case "earlier-step":
+      return request.step?.line === null || request.step?.line === undefined ? "during an earlier step" : `during the step at line ${request.step.line}`;
+    case "hook":
+      return "during a hook";
+    case "pause":
+      return "during a pause";
+  }
+}
+
 // One entry per Then that declared claims, and under it one line per claim
 // (src/report/summary/claim-line.ts): what was compared, with what, where
 // each value came from, and whether it held. A reader approving the run
@@ -1162,6 +1193,7 @@ function renderClaims(document: RunDocument): string[] {
   const named = document.environments.length > 1;
   let anyControl = false;
   let anyLate = false;
+  let anyInFlight = false;
   const entries = new Map<string, { readonly sortKey: [string, number]; readonly lines: readonly string[] }>();
   for (const scenario of headScenarios(document)) {
     for (const step of scenario.steps) {
@@ -1173,7 +1205,9 @@ function renderClaims(document: RunDocument): string[] {
       const environment = marks.length === 0 ? "" : ` (${marks.join(", ")})`;
       const attempts = step.attempts !== undefined && step.attempts > 1 ? `, ${step.attempts} readings` : "";
       const observation = step.observation === "unobserved" ? ", observed nothing" : "";
-      const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${settledText(step)}${observation}`;
+      const inFlight = inFlightText(step);
+      if (inFlight !== "") anyInFlight = true;
+      const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${settledText(step)}${cellText(inFlight)}${observation}`;
       if (step.claims.some((claim) => afterWorldStopText(claim) !== "")) anyLate = true;
       const lines = [head, ...step.claims.map((claim) => `  - ${cellText(`${claimLine(claim)}${afterWorldStopText(claim)}${measuredText(claim, step.step_record_id)}`)}`)];
       const key = lines.join("\n");
@@ -1189,7 +1223,10 @@ function renderClaims(document: RunDocument): string[] {
     "",
     "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does, or when another channel holds the same number). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`." +
       (anyControl ? " An entry marked `control` is a control's: a claim it broke is evidence that the scenario tells the behaviour apart, not a failure." : "") +
-      (anyLate ? " A claim on a count of execution events that the world's stop counted again and judged otherwise says what the whole count came to, after its outcome: it was judged on lines still on their way." : ""),
+      (anyLate ? " A claim on a count of execution events that the world's stop counted again and judged otherwise says what the whole count came to, after its outcome: it was judged on lines still on their way." : "") +
+      (anyInFlight
+        ? " An entry read with a request in flight names each request a page sent to the world that was in flight during the reading the claims were judged on: its response had not finished when the reading began, or the page sent it while it read. The page may have changed while it was read or just after. This is the order nukadoko received the page's events in, never what the page drew, and the claims stand as judged."
+        : ""),
     "",
     ...sorted.flatMap((entry) => entry.lines),
   ];

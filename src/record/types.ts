@@ -919,6 +919,50 @@ export interface ClaimReading {
   readonly expecteds?: readonly ClaimReadingValue[];
   readonly settled?: boolean;
   readonly error?: string;
+  /** A reading of a step whose browser contexts had a page open, in a run
+   * with a world: what each page had received (`PageReadingRecord`). */
+  readonly pages?: readonly PageReadingRecord[];
+}
+
+/** A request a page sent to the world, as a claim step's record keeps it
+ * in `page_requests` (docs/spec.md "What the pages had received"): when
+ * it was sent and ended, as nukadoko received Playwright's events, and the
+ * step boundary current when the page sent it. The page sends a request
+ * on its own as often as for a step, so `sent_during` says when, never
+ * what made the page send it. */
+export interface PageRequestRecord {
+  readonly method: string;
+  readonly url: string;
+  /** The trace id of the `traceparent` it went out with; `null` when
+   * it went without one; absent when it had not ended when the record was
+   * written. */
+  readonly trace_id?: string | null;
+  readonly sent_at: string;
+  /** When the page finished receiving its response; `null` when it had
+   * not when the record was written, or the request failed. */
+  readonly finished_at: string | null;
+  /** When the request ended without a response. */
+  readonly failed_at?: string;
+  readonly sent_during: "this-step" | "earlier-step" | "hook" | "pause";
+  /** The step, when `sent_during` is `earlier-step` and nukadoko knows
+   * which. */
+  readonly step?: EventsProducerRecord;
+}
+
+/** One page open when a reading ended: its browser context's name
+ * (`null` for the default one), its place among that context's open
+ * pages, from 1, its URL, the latest request whose response it had
+ * finished receiving before the reading began (`last_response`, `null`
+ * when none had), and every request of it that was in flight at some
+ * moment of the reading (`in_flight`), each as its index in the record's
+ * `page_requests`. An order, never a claim that the page drew from that
+ * response. */
+export interface PageReadingRecord {
+  readonly as: string | null;
+  readonly page: number;
+  readonly url: string;
+  readonly last_response: number | null;
+  readonly in_flight: readonly number[];
 }
 
 /** A polled claim step's `poll.settled`, as its record keeps it: each
@@ -1287,6 +1331,12 @@ export interface StepRecordBase {
   /** A polled claim step that declares `poll.settled` only: its
    * conditions, and the reading the poll stopped on when it settled. */
   settled?: SettledRecord;
+  /** A claim step whose `observe` read with a page open, in a run with a
+   * world: what each page had received on the reading its claims were
+   * judged on (the last, under `poll`). */
+  pages?: PageReadingRecord[];
+  /** The requests `pages` and each reading's `pages` name by index. */
+  page_requests?: PageRequestRecord[];
   /** A claim step that reads execution events only: each `events` key,
    * as it read (docs/spec.md "Execution events"). A claim measured on one
    * names `events_read.<key>` as its channel. */

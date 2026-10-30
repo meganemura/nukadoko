@@ -3,7 +3,7 @@ import { returnsDropped } from "../step/returns-dropped.js";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import { parseStepReturns } from "../step/parse-returns.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import type { StepContextHandle } from "../context/create-context.js";
+import type { PageAtReadingOf, PageRequest, StepContextHandle } from "../context/create-context.js";
 import type { EventsProducer, EventsRequest } from "../context/events-read.js";
 import { describeSelection, resolveSelection } from "../execution-events/selection.js";
 import type { FixtureGraph } from "../fixture/graph.js";
@@ -15,6 +15,8 @@ import type {
   ErrorKind,
   EventsReadRecord,
   FixtureUsageEntry,
+  PageReadingRecord,
+  PageRequestRecord,
   ReturnsDrop,
   SettledRecord,
 } from "../record/types.js";
@@ -41,6 +43,7 @@ import {
   claimsEndedEarly,
   unobservedClaims,
   judgingBudget,
+  numberPageRequests,
   type ArgSide,
   type ClaimInputs,
   type ClaimReads,
@@ -60,6 +63,7 @@ import { inputCopy, readAt, snapshotKeys, type Read, type Refusal, type Snapshot
 import { filesSide, type FilesSource } from "./changed-files.js";
 import { startPatternWorker, testPatternInWorker } from "./pattern-worker.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
+import { stepNeeds } from "../fixture/step-needs.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { ariaSnapshotReader, takeAriaSnapshots } from "./aria-reads.js";
 import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
@@ -119,6 +123,12 @@ export interface ClaimExecution {
   /** A polled step that declares `poll.settled` only: its conditions,
    * and the reading the poll stopped on when it settled. */
   readonly settled?: SettledRecord;
+  /** A step whose `observe` read with a page open, in a run with a
+   * world: what each page had received on the reading the claims were
+   * judged on. */
+  readonly pages?: readonly PageReadingRecord[];
+  /** The requests `pages` and the readings' `pages` name by index. */
+  readonly pageRequests?: readonly PageRequestRecord[];
 }
 
 export type ValidatedStepOutcome =
@@ -559,6 +569,49 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     const kept = readings.kept();
     return kept.left_out === undefined ? { readings: kept.readings } : { readings: kept.readings, readingsLeftOut: kept.left_out };
   };
+  // Each page request a reading named, by the id the readings use until
+  // the record numbers them (`numberPageRequests`), and what the pages
+  // had received on the latest reading.
+  const pageRequestIds = new Map<PageRequest, number>();
+  const pageRequestsById: PageRequest[] = [];
+  const pageRequestId = (request: PageRequest): number => {
+    let id = pageRequestIds.get(request);
+    if (id === undefined) {
+      id = pageRequestsById.length;
+      pageRequestsById.push(request);
+      pageRequestIds.set(request, id);
+    }
+    return id;
+  };
+  let latestPages: readonly PageReadingRecord[] | undefined;
+  const pagesOf = (found: readonly PageAtReadingOf[]): readonly PageReadingRecord[] | undefined =>
+    found.length === 0
+      ? undefined
+      : found.map((page) => ({
+          as: page.as,
+          page: page.page,
+          url: page.url,
+          last_response: page.last === null ? null : pageRequestId(page.last),
+          in_flight: page.inFlight.map(pageRequestId),
+        }));
+  // The readings, the judged reading's pages when `judged`, and the
+  // requests both name, numbered from 0 in the order the record shows
+  // them.
+  const pageFields = async (
+    judged: boolean,
+  ): Promise<{ readonly readings?: readonly ClaimReading[]; readonly readingsLeftOut?: ReadingsLeftOut; readonly pages?: readonly PageReadingRecord[]; readonly pageRequests?: readonly PageRequestRecord[] }> => {
+    const kept = readingsField();
+    const pages = judged ? latestPages : undefined;
+    const numbered = numberPageRequests(kept.readings, pages);
+    if (numbered.order.length === 0 && pages === undefined) return kept;
+    const pageRequests = await handle.pageRequestRecords(numbered.order.map((id) => pageRequestsById[id]!));
+    return {
+      ...kept,
+      ...(numbered.readings === undefined ? {} : { readings: numbered.readings }),
+      ...(numbered.pages === undefined ? {} : { pages: numbered.pages }),
+      pageRequests,
+    };
+  };
   // What each settled condition read on the last reading of the poll.
   let settledActuals: readonly JudgedClaim[] = [];
   const settledField = (end: PollEnd | undefined): { readonly settled?: SettledRecord } => {
@@ -587,7 +640,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       judged,
       observation: "observed",
       attempts: Math.max(attempts, 1),
-      ...readingsField(),
+      ...(await pageFields(true)),
       ...settledField(end),
       ...eventsField(),
     };
@@ -604,7 +657,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   // `observe` ran, or between two readings, is `timeout`, and it is
   // nukadoko's limit rather than `observe` failing, so each claim is
   // `unjudged`, with the readings read so far.
-  const readNothing = (error: unknown, whileObserving: boolean): ValidatedStepOutcome => {
+  const readNothing = async (error: unknown, whileObserving: boolean): Promise<ValidatedStepOutcome> => {
     const caught = classifyCaughtError(error);
     const kind = caught === "timeout" ? "timeout" : whileObserving ? "unobserved" : caught;
     const timedOut = caught === "timeout" && whileObserving;
@@ -620,7 +673,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       error: { message: kind === "unobserved" ? `the step observed nothing, so no claim was judged: ${messageOf(error)}` : messageOf(error), kind },
       thrown: error,
       fixtureUsage,
-      claims: { judged, observation: timedOut && read ? "observed" : "unobserved", attempts, ...readingsField(), ...settledField(undefined), ...eventsField() },
+      claims: { judged, observation: timedOut && read ? "observed" : "unobserved", attempts, ...(await pageFields(false)), ...settledField(undefined), ...eventsField() },
     };
   };
   // Static, so before any fixture is set up: a line whose docstring or
@@ -731,10 +784,35 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   // callback, on the next reading) is not what the claims read. An ARIA
   // snapshot asks the browser, so it comes after the plain ones, within
   // the same reading and under the same deadline.
+  // A reading spans the call and the ARIA snapshots after it, so what the
+  // pages had received is taken around both. Only for an `observe` that
+  // reaches `page`, `context`, or `pageAs`, as `claim-poll-unstated`
+  // reads it: a page another step left open is not what this one read.
+  let readsPages: boolean;
+  try {
+    readsPages = stepNeeds(step, input.fixtureGraph).needsBrowser;
+  } catch {
+    readsPages = false;
+  }
   const callObserve = (): Reader | Promise<Reader> => {
     attempts += 1;
-    const returned: unknown = observe(fixtures, observeInputs(copies, withheld, name));
-    return isThenable(returned) ? Promise.resolve(returned).then(takeObserved) : takeObserved(returned);
+    const reading = readsPages ? handle.beginPageReading() : undefined;
+    const close = (): void => {
+      if (reading !== undefined) latestPages = pagesOf(reading.end());
+    };
+    let taken: Reader | Promise<Reader>;
+    try {
+      const returned: unknown = observe(fixtures, observeInputs(copies, withheld, name));
+      taken = isThenable(returned) ? Promise.resolve(returned).then(takeObserved) : takeObserved(returned);
+    } catch (error) {
+      close();
+      throw error;
+    }
+    if (!(taken instanceof Promise)) {
+      close();
+      return taken;
+    }
+    return taken.finally(close);
   };
   const poll = step.poll;
   if (poll === undefined || poll === false) {
@@ -777,7 +855,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       settledActuals = await evaluateClaims(settled, inputs);
       isSettled = settledActuals.every((entry) => entry.record.outcome === "held");
     }
-    const { reading, content } = readingOf(attempts, readingAt(), judged, settled.length > 0 ? isSettled : undefined);
+    const { reading, content } = readingOf(attempts, readingAt(), judged, settled.length > 0 ? isSettled : undefined, latestPages);
     log.add(reading, content);
     return { held: reading.held, settled: isSettled };
   };
