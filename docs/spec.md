@@ -2638,14 +2638,16 @@ value that walks toward the expected one. So the step record keeps the
 readings (`readings`): for each, its attempt number, its time, whether
 every claim held on it, and each claim's actual value (`actuals`), or the
 first line of what `observe` threw, and, for a step that declares
-`settled`, whether the reading settled. When an expected value comes from
+`settled`, whether the reading settled, and, for a step that reads a
+page, what the pages had received (`pages`, see "What the pages had
+received"). When an expected value comes from
 `observe` too, each reading also keeps each claim's expected value
 (`expecteds`, an `each` claim's as its declarations' expected values by
 label), since the value that walks can be the expected one. Each
 reading's value is its own snapshot, taken when it was read. A poll of up to 40 readings keeps them all. A longer
 one keeps its first reading, its last, and every reading whose content
 (whether it held, and what each claim read, in full before a long value
-is cut, or what `observe` threw) differs from the reading just before it, up to 38 of these change
+is cut, or what `observe` threw, and its `settled` and `pages`) differs from the reading just before it, up to 38 of these change
 points: the earliest 19 and the latest 19. The record then says how many
 readings it left out and how many of those were change points
 (`readings_left_out: { readings, change_points }`), and the attempt
@@ -2662,6 +2664,99 @@ the step file.
 state `poll`, as `poll: { timeout_ms }` or `poll: false`
 (`claim-poll-unstated`). Whether such a step reads once or until the page
 settles is a choice the step file has to make visibly.
+
+#### What the pages had received
+
+A Then that reads a page sends no request of its own, so nothing in its
+own requests says which state of the world the page showed. A page draws
+what the world answered it, and it often fetches again on its own: a
+notice says the state changed, and the page swaps in the answer to a
+`GET`. So the record of a claim step whose `observe` reaches `page`,
+`context`, or `pageAs`, in a run with a world, names what each open
+page had received from the world when the step read it:
+
+```json
+"pages": [{ "as": null, "page": 1, "url": "http://localhost:43223/room", "last_response": 0, "in_flight": [1] }],
+"page_requests": [
+  { "method": "GET", "url": "http://localhost:43223/state", "trace_id": "a899bf5d1c04fb3ac3b325e7e865ec35",
+    "sent_at": "2026-10-30T07:33:32.355Z", "finished_at": "2026-10-30T07:33:32.367Z",
+    "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-rqe9", "step": "aki-opens-the-room", "line": 8 } },
+  { "method": "GET", "url": "http://localhost:43223/state?hold=1500", "sent_at": "2026-10-30T07:33:32.450Z", "finished_at": null,
+    "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-vk55", "step": "the-room-starts-a-refresh", "line": 9 } }
+]
+```
+
+- `pages` has one entry for each page a browser context had open when
+  the reading ended, the default context first and then each `pageAs`
+  context in the order it opened: `as` (`null` for the default
+  context), `page` (its place among that context's open pages, from 1),
+  and `url`. Every open page is listed, because nothing in Playwright
+  says which page step code read, and a wrapper around the page object
+  would change the object the step reads. The reader matches the page by
+  `as` and `url`.
+- `last_response` is the latest request of the page whose response the
+  page had finished receiving before the reading began, or `null` when
+  it had none.
+- `in_flight` is every request of the page that was in flight at some
+  moment of the reading: its response had not finished when the reading
+  began, or the page sent it while the reading ran. A reading is the
+  `observe` call and the ARIA snapshots nukadoko takes after it.
+- Both are indexes into `page_requests`, which holds each request they
+  name: `method`, `url`, `trace_id` (from the `traceparent` the
+  request went out with; `null` when it went without one; absent when it
+  had not ended when the record was written), `sent_at`, `finished_at`
+  (`null` when the page had not finished receiving the response, or the
+  request failed), `failed_at` when it ended without a response,
+  `sent_during`, and `step`.
+- `sent_during` is the boundary that was current when the page sent the
+  request, the rule that puts the request's line in that step's
+  http.jsonl: `this-step`, `earlier-step` (with `step`, the
+  `step_record_id`, `step`, and `line` of that step), `hook`, or
+  `pause` (a pause of `nuka run --step`). A page sends requests on its
+  own as often as for a step, so `sent_during` says when the page sent
+  it, never what made the page send it.
+- The step's `pages` are the reading its claims were judged on: the only
+  reading of a step that reads once, and the last reading of a poll.
+  Under `poll`, each reading has `pages` too, and a reading whose pages
+  differ from the reading before it is a change point (see "Poll").
+
+This is a measurement of order, never of what a page drew. "Before the
+reading began" means that nukadoko had received Playwright's
+`requestfinished` event for the request when the reading began. That a
+reading came after a response finished does not show that the page drew
+from it, and a request in flight does not show that the page was out of
+date. In a measurement on Chromium 153.0.8010.12 and Playwright 1.61.1,
+none of 300 readings that read text a page swapped in from a response
+came before that response's `requestfinished` event. No outcome rests
+on it: each claim is judged as it was before. A claim that held on a
+reading with a request in flight can have held on a page that was about
+to change, so the run summary's entry for that Then names each such
+request:
+
+```text
+- `features/room.feature:10` the room shows "ready", read with a request in flight (GET http://localhost:43223/state?hold=1500 on page 1, sent during the step at line 9)
+```
+
+The requests are a page's documents, `fetch` calls, and XMLHttpRequests
+to the world's origin (or, for a world at `localhost`, a name below it at
+the same port): the kinds nukadoko stamps. An EventSource is left out,
+because its response is a stream that stays open, so it would be in
+flight on every reading. A WebSocket sends no request to count, and a
+service worker's request belongs to no page. The order comes from
+Playwright's `request`, `requestfinished`, and `requestfailed` events,
+which every engine sends, so a Firefox or WebKit page has `pages` too,
+with `trace_id: null`, since its requests go without a `traceparent`.
+The DevTools session that stamps the requests could report the same
+order on Chromium, but asking Chromium for its Network events on a second
+session made a page that loads 200 images and makes 50 fetches take 457
+ms against 414 ms (the median of six runs each). The trace id is read
+from the request once it ended: Playwright did not answer within a second
+for 4 of 10 requests still waiting for their responses. A run without a
+world has no `pages`.
+
+`nuka check` reports nothing about it. Whether a request is in flight
+when a step reads depends on the program's timing in the run, so no fact
+about a step file ends only one way.
 
 #### Self-comparison
 
@@ -2766,6 +2861,10 @@ A claim step's record has these fields of its own (see "Records"):
 - `settled`, under a `poll` that declares `settled` only: its
   `conditions`, and `stop` when the poll stopped because the reading
   settled (see "Poll").
+- `pages` and `page_requests`, for a step whose `observe` reaches
+  `page`, `context`, or `pageAs`, in a run with a world: what each
+  open page had received from the world on the reading the claims were
+  judged on (see "What the pages had received").
 - `events_read`, for a step with `events`: each key's reading of an
   earlier step's execution events (see "A claim on a count of events").
 
@@ -7655,7 +7754,10 @@ holds:
   sentence, its environment in a run of several, `control` for a
   control's, the number of readings when there was more than one, for a
   failed step that declares `settled` the reading it settled on (`settled
-  on reading 4 (screen equal "scoring")`) or `not settled`, and under
+  on reading 4 (screen equal "scoring")`) or `not settled`, each request
+  that was in flight on the reading the claims were judged on (`read with
+  a request in flight (GET <url> on page 1, sent during the step at line
+  9)`, see "What the pages had received"), and under
   it one line per claim, in the words of its failure message with the
   outcome after them and `measured: <channel>` or `measured: none`, then
   `expected measured` for an expected value from `from` or `observe`
@@ -8413,8 +8515,9 @@ manifest, so retention and `nuka clean` remove it with the run.
   attachments and log lines, and a claim step's claims. The claims are a
   `claims.json` attachment of media type
   `application/vnd.nukadoko.claims+json`, holding `claims`,
-  `observation`, and `attempts`, and a polled step's `readings`,
-  `readings_left_out`, and `settled`, as the step record has them (see "Claims"): a
+  `observation`, and `attempts`, a polled step's `readings`,
+  `readings_left_out`, and `settled`, and the `pages` and `page_requests`
+  of a step that read a page, as the step record has them (see "Claims"): a
   claim is what the step file declared it checks, with the values it
   compared, and the readings show what each reading read. Log lines use cucumber-js's
   `text/x.cucumber.log+plain` media type (the one `this.log()` produces).

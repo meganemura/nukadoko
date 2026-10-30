@@ -68,27 +68,25 @@ measured there, not that nothing happened):
   environment differed from the runner's: each name, with a value only when it
   is an existing absolute path, a decimal integer, or a boolean, else its
   `hidden_bytes`).
-- `http` counts the requests the step sent. Each is a line in
-  `http.jsonl` with its method, URL, status, request body, and response
-  body. A line marked `after_step_end` started after the record was
-  written, so the record does not count it; the run summary names it and
-  its file. A body marked `incomplete` was still arriving when nukadoko
-  stopped waiting; one with an `error` failed on its own. A line's
-  `traceparent` is the value the request went out with, nukadoko's or
-  the step's own, and `traceparent_sent_to` the origins that received
-  it; nukadoko's value names the id the program's log lines carry.
+- `http` counts the requests the step sent. Each is a line in `http.jsonl` with
+  its method, URL, status, request body, and response body. A line marked
+  `after_step_end` started after the record was written, so the record does not
+  count it; the run summary names it and its file. A body marked `incomplete`
+  was still arriving when nukadoko stopped waiting; one with an `error` failed
+  on its own. A line's `traceparent` is the value the request went out with,
+  nukadoko's or the step's own, and `traceparent_sent_to` the origins that
+  received it; nukadoko's value names the id the program's log lines carry.
 - `program_log` counts the step's lines of the program's log, in
   `program-log.txt` (late ones in `program-log-late.txt`): what the server
   did for this step. `lines: 0` with `stamped` above 0 is explained by the
   run summary's line for the world (`program.md`); `null`: a `url` world.
 - `events` counts the step's execution events by kind, in `events.jsonl`
   (late ones in `events-late.jsonl`); `open` names why `whole` is false.
-- `files` lists the paths the step changed in a scratch directory or
-  wrote through `node:fs`, each with its content after the step. A file
-  the step asked Playwright to write (a screenshot saved to a path, a
-  trace from `tracing.stop({ path })`) is listed; what Playwright's
-  server writes on its own (trace chunks, a HAR, a video) is not, whoever
-  launched the browser.
+- `files` lists the paths the step changed in a scratch directory or wrote
+  through `node:fs`, each with its content after the step. A file the step asked
+  Playwright to write (a screenshot saved to a path, a trace from
+  `tracing.stop({ path })`) is listed; what Playwright's server writes on its
+  own (trace chunks, a HAR, a video) is not, whoever launched the browser.
 - `unmeasured` lists what the step did that nukadoko saw but cannot measure:
   a process started without `runCommand` (its program and argument count
   only), a `Worker`, a connection that carries no recorded request, a UDP
@@ -102,11 +100,15 @@ The other fields:
 - `args_origin` says where each argument came from (a capture, the
   docstring, the table, an earlier step's result, the command line, or
   the schema), which names the input to fix when an argument is wrong.
-- `used` names the earlier step records this step read through `from`,
-  and the values it took from them.
+- `used` names the earlier step records read through `from`, and their values.
 - `evidence` points at the screenshots, the trace, `http.jsonl` (each
   request the step or its page sent), and any attachment the step made.
   Name the file the person can open.
+- `pages`, when `observe` reached a page: per open page, the latest response
+  it finished receiving before the reading (`last_response`) and the requests
+  in flight during it (`in_flight`), indexes into `page_requests` with
+  `sent_during`, per reading of a poll too. An order, not what the page drew:
+  a claim judged with one in flight (the summary line names it) may be stale.
 
 ## 3. Judge it with fresh eyes
 
@@ -168,33 +170,31 @@ number it printed (`walk 1 paused ...`), as the `do` line spells it:
   run, After hooks and teardown do, and the record says the scenario was
   `stopped` at that step, not that it failed (`walk-stopped`).
 
-A call whose output you lost, or that printed `starting` or `running`,
-is safe to run again: an answer is written once, and the same answer
-again prints what followed it. `pause-answered` means another answer
-reached that pause first, `pause-not-current` that the walk is
-elsewhere, and `walk-not-current` that a later walk replaced the one
-the answer names: show the person what the `nuka step wait --walk <w>`
-of its `do` prints before you answer again. A pause where the scenario
-failed (a step, or an AfterStep hook after it) prints `failure:`, exits
-1 with `walk-failed`, and offers only `next`: show the failure and the
-views, answer `next` once the person has seen them, and go to
-`diagnosing.md`. A walk a signal ended (the host's background limit,
-Ctrl-C) prints `interrupted`; one whose run was killed prints
-`walk-gone`, and its `do:` starts it again.
+A call whose output you lost, or that printed `starting` or `running`, is safe
+to run again: an answer is written once, and the same answer again prints what
+followed it. `pause-answered` means another answer reached that pause first,
+`pause-not-current` that the walk is elsewhere, and `walk-not-current` that a
+later walk replaced the one the answer names: show the person what the
+`nuka step wait --walk <w>` of its `do` prints before you answer again. A pause
+where the scenario failed (a step, or an AfterStep hook after it) prints
+`failure:`, exits 1 with `walk-failed`, and offers only `next`: show the failure
+and the views, answer `next` once the person has seen them, and go to
+`diagnosing.md`. A walk a signal ended (the host's background limit, Ctrl-C)
+prints `interrupted`; one whose run was killed prints `walk-gone`, and its `do:`
+starts it again.
 
-A walked run is not the run a reviewer approves (the world and the
-browser were open between steps, and its summary says so): when the
-walk is done, run the scenario once more without `--step`.
+A walked run is not the run a reviewer approves (the world and the browser
+stayed open between steps, and its summary says so): after the walk, run the
+scenario once more without `--step`.
 
 ## 5. When the person disagrees
 
 Stop the walk at that pause (`nuka step stop <n> --walk <w>`) before you change
-anything. The fix goes in the step file or the feature, never in the
-record: a hand edit turns a measurement back into a claim. To show a
-variation of one step without rerunning the whole scenario, `nuka do
-<step> --use <step_record_id>` runs it alone on the same upstream values;
-that is a working record, not evidence. After the fix, start a new walk;
-with the person's word, answer `next` through the steps they already
-accepted, up to the first step whose file or sentence changed. A Then
-the person rejects is fixed in the implementation or by their word, not
-by weakening the Then.
+anything. The fix goes in the step file or the feature, never in the record: a
+hand edit turns a measurement back into a claim. To show a variation of one step
+without rerunning the whole scenario, `nuka do <step> --use <step_record_id>`
+runs it alone on the same upstream values; that is a working record, not
+evidence. After the fix, start a new walk; with the person's word, answer `next`
+through the steps they already accepted, up to the first step whose file or
+sentence changed. A Then the person rejects is fixed in the implementation or by
+their word, not by weakening the Then.

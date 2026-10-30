@@ -9,6 +9,31 @@ just until 0.1.
 
 ### Added
 
+- **A Then that reads a page says what the page had received from the
+  world.** Such a Then sends no request, so its record kept
+  `observed.events` not whole with the gap `no-requests`, and nothing
+  said which state of the world the page showed when it was read. A
+  claim step whose `observe` reaches `page`, `context`, or `pageAs`,
+  in a run with a world, now records `pages`: for each page each browser
+  context had open, the latest request whose response the page had
+  finished receiving before the reading began (`last_response`) and every
+  request in flight at some moment of the reading (`in_flight`), as
+  indexes into `page_requests` (`method`, `url`, `trace_id`,
+  `sent_at`, `finished_at`, `failed_at`, and `sent_during`: `this-step`,
+  `earlier-step` with its `step`, `hook`, or `pause`). The step's
+  `pages` are the reading its claims were judged on; under `poll`, each
+  reading has `pages` too, and a reading whose pages changed is a change
+  point. It is the order nukadoko received Playwright's `request`,
+  `requestfinished`, and `requestfailed` events in, never what the page
+  drew, and no outcome changes. The summary's Claims entry for a Then
+  read with a request in flight names each one (`, read with a request
+  in flight (GET <url> on page 1, sent during the step at line 9)`), since
+  a claim that held then may have held on a page about to change.
+  Documents, `fetch` calls, and XMLHttpRequests to the world count; an
+  EventSource, whose response never ends, does not. run.json and the
+  cucumber-messages claims attachment carry both fields, `nuka do` records
+  them, and `nuka report` checks that each index names a request. The
+  record fields are additive, so no `schema_version` changes.
 - **A polled Then stops once its reading has settled.** A broken claim
   that polls read until `poll.timeout_ms`, so while a scenario was being
   written, when most rounds break, each broken Then cost the whole

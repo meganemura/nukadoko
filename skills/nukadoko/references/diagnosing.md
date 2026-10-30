@@ -2,14 +2,13 @@
 
 ## A command that refused
 
-A command that stopped before it ran anything exits 2, not 1, and prints
-one `refused` finding with a code, such as
+A command that stopped before it ran anything exits 2, not 1, and prints one
+`refused` finding with a code, such as
 `refused\ttarget-not-found\t-\t<message>`; under `--json` it is in the
-envelope's `findings`, and `verdict` is `refused`. Make the edit its
-`fix:` line names, or run its `do:` line, before you guess at a fix: the
-`do:` is the step list for an unknown step name, the install line for a
-missing package, or the command's own `--help` for a flag it does not
-accept.
+envelope's `findings`, and `verdict` is `refused`. Make the edit its `fix:` line
+names, or run its `do:` line, before you guess at a fix: the `do:` is the step
+list for an unknown step name, the install line for a missing package, or the
+command's own `--help` for a flag it does not accept.
 
 ## Work through the failed step first
 
@@ -46,28 +45,24 @@ Before repeating `nuka run <feature>`, read the failed step's own step
 record in this order. The sections below are how to read the items that
 need more than a glance.
 
-1. Its `used` entries: each carries the full validated `result` of the
-   upstream step it read from, sitting right on the step record that
-   failed.
+1. Its `used` entries: each carries the full validated `result` of the upstream
+   step it read from, sitting right on the step record that failed.
 2. `actions`, then the rest of the timeline ("Reading a step record as a
-   timeline"): every Playwright call this step made through the `page`
-   fixture, `expect` waits included, each with its own duration and
-   outcome.
+   timeline"): every Playwright call this step made through the `page` fixture,
+   `expect` waits included, each with its own duration and outcome.
 3. `page_events`, if the step opened a browser: a console error, an
    uncaught page error, or a failed request recorded there can explain a
    failure nothing else on the step record mentions.
-4. `program-log.txt` beside the record, when `observed.program_log`
-   names it, and `program-log-late.txt` when the run summary names one:
-   the lines the program under test wrote for this step's own requests,
-   such as the error behind a 500, and `events.jsonl` when
-   `observed.events` names it: each statement, job, and call it made
-   (`program.md`).
+4. `program-log.txt` beside the record, when `observed.program_log` names it,
+   and `program-log-late.txt` when the run summary names one: the lines the
+   program under test wrote for this step's own requests, such as the error
+   behind a 500, and `events.jsonl` when `observed.events` names it: each
+   statement, job, and call it made (`program.md`).
 5. `nuka do <step> --use <upstream-step-record-id>` when the record
    sharpens a hypothesis rather than confirming it ("Testing a hypothesis
    without a full re-run").
-6. Re-run the scenario last, with the `do:` line `nuka run` printed,
-   once the step itself passes under `do`, not as the first thing tried
-   after a failure.
+6. Re-run the scenario last, with the `do:` line `nuka run` printed, once the
+   step itself passes under `do`, not as the first thing tried after a failure.
 
 ## Reading a broken claim
 
@@ -75,15 +70,14 @@ need more than a glance.
 claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected); first difference at line 2: actual "rent: 100", expected "rent: 101"
 ```
 
-The actual value and its source, the compare, the expected value and its
-source, then where the two part. A broken `has-same-items`, or `equal`
-on two lists with an item inserted or removed, names the expected items
-that are missing and the actual items that are extra, each with its
-index on its own side (`; 1 actual item is extra: ["4","chair","2"]
-(item 3)`), so an inserted row is one extra item, not a difference at
-every row after it. The step fails with `claim_broken`, and
-the run summary lists every claim under "Claims" with its outcome. A
-broken claim is fixed in the implementation or by asking the person,
+The actual value and its source, the compare, the expected value and its source,
+then where the two part. A broken `has-same-items`, or `equal` on two lists with
+an item inserted or removed, names the expected items that are missing and the
+actual items that are extra, each with its index on its own side
+(`; 1 actual item is extra: ["4","chair","2"] (item 3)`), so an inserted row is
+one extra item, not a difference at every row after it. The step fails with
+`claim_broken`, and the run summary lists every claim under "Claims" with its
+outcome. A broken claim is fixed in the implementation or by asking the person,
 never by a weaker compare.
 
 A polled claim that broke says why its poll stopped. `; the poll stopped on
@@ -143,11 +137,10 @@ read straight off the step's own trace: an `expect` that timed out shows up
 here with `outcome: "failed"` and a real `ms`, often enough to explain a
 failure without opening the trace viewer at all.
 
-If the step opened a browser (destructured `page`), also check
-`page_events` on that step record: a console error, an uncaught page error,
-or a failed request recorded there can explain a failure nothing else on
-the step record mentions, since it comes from the page itself rather than
-anything the step declared.
+If the step opened a browser (destructured `page`), also check `page_events` on
+that step record: a console error, an uncaught page error, or a failed request
+recorded there can explain a failure nothing else on the step record mentions,
+since it comes from the page itself rather than anything the step declared.
 
 ## The `final.png` and absence claims
 
@@ -172,6 +165,13 @@ true` in `nukadoko.config.ts`, `evidence.requests_trace` names a trace
 (`requests.zip`) whose screen shows each request the step sent and the
 body that came back, redacted as http.jsonl is. http.jsonl holds the same
 facts as text, and is quicker to read.
+
+A Then that read a page while a request to the world was in flight says so on
+its summary line (`read with a request in flight`, each request with the step
+that sent it), and its record's `pages` name each page's `last_response` and
+`in_flight` in `page_requests`. A claim that broke there may have read the page
+before the answer it needed: poll the Then (`checking-steps.md`), or have the
+When wait for what it started. This is an order, never what the page drew.
 
 ## A step that timed out
 

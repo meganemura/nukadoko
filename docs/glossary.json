@@ -911,6 +911,26 @@
       "en": ["walk (a process's working directory)", "walked whole", "the walk"],
       "ja": "たどる / まるごとたどる",
       "note": "runCommand が起動の前と終了の後に作業ディレクトリのエントリを読むこと。人と一緒の walk(nuka run --step)とは別の語なので walk と書かない"
+    },
+    {
+      "en": ["in flight (a request)", "a request in flight", "read with a request in flight"],
+      "ja": "レスポンス待ち / レスポンス待ちのリクエスト",
+      "note": "ページが world に送ったリクエストで、claim step の読み取りのあいだのどこかで、ページがまだレスポンスを受け取り終えていなかったもの。順序の計測で、ページが古かったという判定ではない。フィールド名 `in_flight` と run サマリの `read with a request in flight` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["finish receiving (a response)", "last response", "the latest response the page had finished receiving"],
+      "ja": "レスポンスを受け取り終える / 最後に受け取り終えたレスポンス",
+      "note": "Playwright の requestfinished のイベントを nukadoko が受け取ったこと。ページがそれを描いたことではない。フィールド名 `last_response` と `finished_at` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["sent during (a step, a hook, a pause)", "sent_during"],
+      "ja": "(step、hook、一時停止)のあいだに送った",
+      "note": "ページがリクエストを送ったときの境界(step、hook、一時停止)。何がページに送らせたかではない。値 `this-step`、`earlier-step`、`hook`、`pause` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["what the pages had received"],
+      "ja": "ページが受け取っていたもの",
+      "note": "docs/spec.md の見出し \"What the pages had received\"(spec.ja.md では ページが受け取っていたもの)。claim step の record の `pages` と `page_requests` が述べること"
     }
   ],
   "keep_english": [

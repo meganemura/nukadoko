@@ -2064,12 +2064,13 @@ claim が成り立たない間だけ、もう一度呼ぶからです。
 そのため step record は読み取りを残します(`readings`)。
 各読み取りについて、試行の番号、時刻、すべての claim が成り立ったかどうか、各 claim の実際の値(`actuals`)か、`observe` が throw した内容の最初の行を残します。
 `settled` を宣言する step では、読み取りが落ち着いたかどうかも残します。
+ページを読む step では、各ページが受け取っていたもの(`pages`、「ページが受け取っていたもの」を参照)も残します。
 期待値も `observe` から来るときは、各読み取りに各 claim の期待値も残します(`expecteds`)。
 `each` の claim では、宣言の期待値をラベルごとに残します。
 動いていく値が期待値の側のこともあるからです。
 各読み取りの値は、読んだときに取ったそれぞれのスナップショットです。
 40 回までの poll は、読み取りをすべて残します。
-それより長い poll は、最初の読み取り、最後の読み取り、そして内容(成り立ったかどうかと、長い値を切り詰める前の完全な形で各 claim が読んだものか、`observe` が throw したもの)が直前の読み取りと違う読み取りを、変化点として 38 個まで残します。
+それより長い poll は、最初の読み取り、最後の読み取り、そして内容(成り立ったかどうかと、長い値を切り詰める前の完全な形で各 claim が読んだものか、`observe` が throw したもの、そして `settled` と `pages`)が直前の読み取りと違う読み取りを、変化点として 38 個まで残します。
 残す変化点は、最も早い 19 個と最も遅い 19 個です。
 そのとき record は、残さなかった読み取りの数と、そのうち変化点だった数を述べ(`readings_left_out: { readings, change_points }`)、試行の番号が抜けの位置を示します。
 最初と最後の数回ではなく変化点を残すのは、候補ごとに同じ読み取りを繰り返して水増しする `observe` が、決まった幅の窓から候補を押し出せてしまうからです。
@@ -2080,6 +2081,71 @@ JSON にして 1024 バイトより長い値は、その先頭とバイト数で
 `observe` が `page`、`context`、`pageAs` の fixture に、直接またはプロジェクトの fixture を通して届く claim step には、`nuka check` が `poll` を述べることを求めます(`claim-poll-unstated`)。
 述べ方は `poll: { timeout_ms }` か `poll: false` です。
 そのような step が一度だけ読むのか、ページが落ち着くまで読むのかは、step ファイルが見える形で選ぶべきことだからです。
+
+#### ページが受け取っていたもの
+
+ページを読む Then は自分ではリクエストを送らないので、自分のリクエストからは、ページが world のどの状態を表示していたかが分かりません。
+ページは world が返したものを描き、自分からもう一度取りに行くこともよくあります。
+状態が変わったという知らせが来て、ページが `GET` のレスポンスを差し込むような場合です。
+そのため、world のある run で、`observe` が `page`、`context`、`pageAs` に届く claim step の record は、step が読んだときに開いていた各ページが world から何を受け取っていたかを名指しします。
+
+```json
+"pages": [{ "as": null, "page": 1, "url": "http://localhost:43223/room", "last_response": 0, "in_flight": [1] }],
+"page_requests": [
+  { "method": "GET", "url": "http://localhost:43223/state", "trace_id": "a899bf5d1c04fb3ac3b325e7e865ec35",
+    "sent_at": "2026-10-30T07:33:32.355Z", "finished_at": "2026-10-30T07:33:32.367Z",
+    "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-rqe9", "step": "aki-opens-the-room", "line": 8 } },
+  { "method": "GET", "url": "http://localhost:43223/state?hold=1500", "sent_at": "2026-10-30T07:33:32.450Z", "finished_at": null,
+    "sent_during": "earlier-step", "step": { "step_record_id": "step-20261030-073332-vk55", "step": "the-room-starts-a-refresh", "line": 9 } }
+]
+```
+
+- `pages` は、読み取りが終わったときにブラウザーコンテキストが開いていたページごとに 1 つの要素を持ちます。
+  既定のコンテキストが先で、そのあとに各 `pageAs` のコンテキストが開いた順に並びます。
+  要素は `as`(既定のコンテキストでは `null`)、`page`(そのコンテキストの開いているページの中の位置で、1 から)、`url` を持ちます。
+  開いているページをすべて載せるのは、step のコードがどのページを読んだかを Playwright が何も伝えず、ページのオブジェクトを包むと step が読むオブジェクトそのものが変わってしまうからです。
+  読み手は `as` と `url` でページを突き合わせます。
+- `last_response` は、読み取りが始まる前にページがレスポンスを受け取り終えていた、そのページの最も遅いリクエストです。
+  1 つもないときは `null` です。
+- `in_flight` は、読み取りのあいだのどこかでレスポンス待ちだった、そのページのすべてのリクエストです。
+  読み取りが始まったときにレスポンスを受け取り終えていなかったものと、読み取りのあいだにページが送ったものです。
+  読み取りとは、`observe` の呼び出しと、そのあとに nukadoko が取る ARIA スナップショットのことです。
+- どちらも `page_requests` の添字で、`page_requests` は名指されたリクエストを持ちます。
+  各リクエストは、`method`、`url`、`trace_id`(リクエストに付いて出た `traceparent` から読み、付かずに出たときは `null`、record を書いたときにまだ終わっていなかったときは無し)、`sent_at`、`finished_at`(ページがレスポンスを受け取り終えていなかったとき、またはリクエストが失敗したときは `null`)、レスポンスなしで終わったときの `failed_at`、`sent_during`、`step` を持ちます。
+- `sent_during` は、ページがリクエストを送ったときの境界で、リクエストの行をその step の http.jsonl に入れるのと同じ決まりです。
+  値は `this-step`、`earlier-step`(その step の `step_record_id`、`step`、`line` を `step` に持ちます)、`hook`、`pause`(`nuka run --step` の一時停止)です。
+  ページは step のためと同じくらい自分からもリクエストを送るので、`sent_during` が述べるのはページがいつ送ったかで、何がページに送らせたかではありません。
+- step の `pages` は、claim を判定した読み取りのものです。
+  一度だけ読む step ではその読み取りで、poll では最後の読み取りです。
+  `poll` のときは各読み取りも `pages` を持ち、`pages` が直前の読み取りと違う読み取りは変化点です(「poll」を参照)。
+
+これは順序の計測で、ページが何を描いたかの計測ではありません。
+「読み取りが始まる前」とは、読み取りが始まったときに、nukadoko がそのリクエストについて Playwright の `requestfinished` のイベントを受け取っていたことです。
+読み取りがレスポンスの受け取りより後だったことは、ページがそれを描いたことを示しません。
+レスポンス待ちのリクエストがあったことも、ページが古かったことを示しません。
+Chromium 153.0.8010.12 と Playwright 1.61.1 で測ったところ、ページがレスポンスから差し込んだテキストを読んだ 300 回の読み取りのうち、そのレスポンスの `requestfinished` のイベントより前に来たものは 1 つもありませんでした。
+これに依る結果はなく、各 claim は前と同じように判定します。
+レスポンス待ちのリクエストがある読み取りで成り立った claim は、変わる直前のページで成り立ったのかもしれません。
+そのため run サマリは、その Then の項目に、そのようなリクエストをすべて名指しします。
+
+```text
+- `features/room.feature:10` the room shows "ready", read with a request in flight (GET http://localhost:43223/state?hold=1500 on page 1, sent during the step at line 9)
+```
+
+数えるリクエストは、world のオリジン(`localhost` の world では、同じポートの `localhost` の下の名前も)へのページの document、`fetch` の呼び出し、XMLHttpRequest で、nukadoko が `traceparent` を付ける種類です。
+EventSource は数えません。
+そのレスポンスは開いたままのストリームなので、どの読み取りでもレスポンス待ちになってしまうからです。
+WebSocket は数えるリクエストを送らず、service worker のリクエストはどのページのものでもありません。
+順序は Playwright の `request`、`requestfinished`、`requestfailed` のイベントから取り、これはどのエンジンも送るので、Firefox や WebKit のページにも `pages` があります。
+そのリクエストは `traceparent` が付かずに出るので、`trace_id` は `null` です。
+`traceparent` を付ける DevTools のセッションでも Chromium では同じ順序が取れます。
+ですが、2 つ目のセッションで Chromium に Network のイベントを求めると、200 枚の画像を読み 50 回 fetch するページが、414 ms ではなく 457 ms かかりました(それぞれ 6 回の中央値)。
+trace id は、リクエストが終わってから読みます。
+レスポンス待ちのリクエスト 10 個のうち 4 個で、Playwright は 1 秒以内に答えませんでした。
+world のない run には `pages` はありません。
+
+`nuka check` はこれについて何も報告しません。
+step が読むときにリクエストがレスポンス待ちかどうかは、その run でのプログラムのタイミングで決まるので、step ファイルについてのどの事実も 1 通りには終わらないからです。
 
 #### 自分自身との比較
 
@@ -2144,6 +2210,7 @@ claim step の record には、次の固有のフィールドがあります(「
 - `readings`: poll するときだけあり、step が残した読み取りです(「poll」を参照)。
   すべては残さなかったときは `readings_left_out` もあります。
 - `settled`: `settled` を宣言する `poll` のときだけあり、その `conditions` と、読み取りが落ち着いたので poll が止まったときの `stop` です(「poll」を参照)。
+- `pages` と `page_requests`: world のある run で、`observe` が `page`、`context`、`pageAs` に届く step にあり、claim を判定した読み取りで、開いていた各ページが world から受け取っていたものです(「ページが受け取っていたもの」を参照)。
 - `events_read`: `events` を持つ step にだけあり、各キーの、前の step の実行イベントの読みです(「実行イベントの数についての claim」を参照)。
 
 `measured` は、生の実際の値と内容が等しい、記録されたチャネルを名指しします。
@@ -5839,7 +5906,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   一覧のルートのうち head の step がリクエストした数、一度もリクエストしなかったルート(ハンドラに別のルートからリクエストが届いたものは分けます)、world の一覧が名指さないルートへのリクエストと、プログラムがどのルートにも一致させなかったリクエスト(それぞれの数とともに)、ルートの一覧を読まなかった各 world を載せます(「一覧」を参照)。
   1 行が名指すルートは 20 までで、残りは数だけを書きます。
 - 「Claims」。
-  claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数、`settled` を宣言して失敗した step なら落ち着いた読み取り(`settled on reading 4 (screen equal "scoring")`)か `not settled` を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
+  claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数、`settled` を宣言して失敗した step なら落ち着いた読み取り(`settled on reading 4 (screen equal "scoring")`)か `not settled`、claim を判定した読み取りでレスポンス待ちだった各リクエスト(`read with a request in flight (GET <url> on page 1, sent during the step at line 9)`、「ページが受け取っていたもの」を参照)を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
   要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、どの claim も判定しなかったこと(判定したかもしれない compat step が Then の位置にあればそのこと)を載せます。
 - 「Unmeasured actions」。
@@ -6557,7 +6624,7 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   そのためスキーマが開いていたとしても、part がここで取る形はありません(「Parts」を参照)。
   Allure がそれを入れ子にできるのは、Allure 自身のモデルがそうしているからです。
 - Attachment は step が自分自身について宣言したものだけを含みます: `declared` の attachment、ログの行、claim step の claim です。
-  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` と、poll する step では `readings`、`readings_left_out`、`settled` を持ちます(「Claims」を参照)。
+  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` と、poll する step では `readings`、`readings_left_out`、`settled` を、ページを読んだ step では `pages` と `page_requests` を持ちます(「Claims」を参照)。
   claim は、step ファイルが確かめると宣言したものであり、比べた値を伴い、読み取りは各読み取りが読んだものを示します。
   ログの行は cucumber-js の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)を使います。
   trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。
