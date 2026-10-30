@@ -444,7 +444,7 @@ const document = z.looseObject({
           })
           .nullable()
           .optional(),
-        lists: z.looseObject({ routes: worldList.optional(), flags: worldList.optional() }).optional(),
+        lists: z.looseObject({ routes: worldList.optional(), flags: worldList.optional(), tables: worldList.optional() }).optional(),
       }),
     )
     .optional(),

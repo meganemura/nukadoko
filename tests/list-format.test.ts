@@ -1,14 +1,16 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import { parseList } from "../src/execution-events/lists.js";
+import { parseList, TABLE_HOLDS, type TableHolds } from "../src/execution-events/lists.js";
 
 // Responsibility: the properties of reading a program's list
 // (src/execution-events/lists.ts). A list printed as lines, with entries
 // printed twice, blank lines, CR line ends, and keys of the program's own,
 // reads back as each place once, with every handler or side any of its
-// lines named. One line that is not an entry of the kind, wherever it
-// stands, makes the whole list unread, naming that line's number.
+// lines named, and each table with what it holds, `state` where no line
+// says. One line that is not an entry of the kind, wherever it stands,
+// makes the whole list unread, naming that line's number, and so does a
+// table two lines say two different things of.
 
 const METHODS = ["GET", "PUT", "PATCH", "DELETE", "POST"];
 const ROUTES = ["/up", "/rooms/:id", "/rooms/:id/scores", "/orders/:id", "/*path"];
@@ -25,6 +27,12 @@ const flagLine = gs.composite((tc) => ({
   name: tc.draw(gs.sampledFrom(["quick_reorder", "slider_input", "dark_mode"])),
   sides: tc.draw(gs.arrays(gs.sampledFrom(["off", "on", "blue"]), { minSize: 1, maxSize: 3 })),
 }));
+
+const TABLES = ["rooms", "scores", "events", "schema_migrations", "solid_queue_jobs"];
+
+/** What each table of TABLES holds in one program: a line names it, or
+ * leaves it out when it is `state`. */
+const tableHoldings = gs.arrays(gs.sampledFrom(TABLE_HOLDS), { minSize: TABLES.length, maxSize: TABLES.length });
 
 /** The lines as a command prints them: blank lines between some, and CR
  * before some line feeds. */
@@ -80,6 +88,32 @@ describe("reading a program's list", () => {
       }
     }));
 
+  it("reads each table once, with what its lines say it holds, and state where none says", () =>
+    hegel.test((tc) => {
+      const holdings = tc.draw(tableHoldings);
+      const named = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: TABLES.length - 1 }), { maxSize: 10 }));
+      const lines = named.map((index) => {
+        const holds = holdings[index]!;
+        const quiet = holds === "state" && tc.draw(gs.booleans());
+        return JSON.stringify({ table: TABLES[index], ...(quiet ? {} : { holds }), ...(tc.draw(gs.booleans()) ? { x_owner: "app" } : {}) });
+      });
+      const read = parseList("tables", printed(tc, lines).join("\n"));
+      const expected = [...new Set(named)].map((index) => ({ table: TABLES[index]!, holds: holdings[index]! }));
+      expect(read).toEqual({ entries: expected });
+    }));
+
+  it("reads no tables list that says two things of one table, naming both lines", () =>
+    hegel.test((tc) => {
+      const holds = tc.draw(gs.sampledFrom(TABLE_HOLDS));
+      const other = tc.draw(gs.sampledFrom(TABLE_HOLDS.filter((value): value is TableHolds => value !== holds)));
+      const between = tc.draw(gs.integers({ minValue: 0, maxValue: 3 }));
+      const said = (value: TableHolds): string => JSON.stringify(value === "state" && tc.draw(gs.booleans()) ? { table: "events" } : { table: "events", holds: value });
+      const lines = [said(holds), ...Array.from({ length: between }, () => JSON.stringify({ table: "rooms" })), said(other)];
+      expect(parseList("tables", lines.join("\n"))).toEqual({
+        problem: `line ${between + 2} says table "events" holds ${other}, and line 1 says it holds ${holds}`,
+      });
+    }));
+
   it("reads no list that holds one line it cannot read, and names that line", () =>
     hegel.test((tc) => {
       const good = tc.draw(gs.arrays(routeLine, { maxSize: 6 })).map((line) => JSON.stringify(line));
@@ -91,7 +125,7 @@ describe("reading a program's list", () => {
     }));
 
   it("says why a line is not one entry of its kind", () => {
-    const problem = (kind: "routes" | "flags", line: string) => {
+    const problem = (kind: "routes" | "flags" | "tables", line: string) => {
       const read = parseList(kind, line);
       return "problem" in read ? read.problem : undefined;
     };
@@ -102,6 +136,10 @@ describe("reading a program's list", () => {
     expect(problem("routes", '{"method":"GET","route":"/up","route":"/down"}')).toBe('line 1 holds the key "route" twice');
     expect(problem("flags", JSON.stringify({ name: "quick_reorder" }))).toBe("line 1 has no sides");
     expect(problem("flags", JSON.stringify({ name: "quick_reorder", sides: [] }))).toBe("line 1's sides is empty");
+    expect(problem("tables", JSON.stringify({ table: "events", holds: "ledger" }))).toBe('line 1\'s holds is "ledger", which is not one of state, bookkeeping, infrastructure');
+    expect(problem("tables", JSON.stringify({ name: "events" }))).toBe(
+      'line 1 has the key "name", which a tables line does not have (table, holds, or an x_ key of the program\'s own)',
+    );
     expect(parseList("routes", "")).toEqual({ entries: [] });
   });
 });

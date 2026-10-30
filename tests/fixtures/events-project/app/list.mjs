@@ -1,5 +1,5 @@
 // Prints one of the program's lists, as nukadoko.program.ts's `lists`
-// runs it: `node app/list.mjs <routes|flags> <the world's URL>`. It asks
+// runs it: `node app/list.mjs <routes|flags|tables> <the world's URL>`. It asks
 // the running program first, so a list read before the program answers
 // fails. LIST_MODE, from the program file's env, makes the list a wrong
 // one: `fail` exits 3 after a line on stderr, and `malformed` prints a
@@ -21,11 +21,22 @@ const FLAGS = [
   { name: "quick_reorder", sides: ["off", "on"] },
   { name: "slider_input", sides: ["off", "on"] },
 ];
+// What each table the server writes holds: `events` is the record a page
+// keeps of each visit, and `solid_cache_entries` the cache a page fills on
+// a miss. A table with no `holds` holds state.
+const TABLES = [
+  { table: "rooms" },
+  { table: "scores", holds: "state" },
+  { table: "rankings" },
+  { table: "events", holds: "bookkeeping" },
+  { table: "solid_cache_entries", holds: "infrastructure" },
+];
+const LISTS = { routes: ROUTES, flags: FLAGS, tables: TABLES };
 
 if (process.env.LIST_MODE === "fail") {
   process.stderr.write(`the ${kind} list is not ready\n`);
   process.exit(3);
 }
-const lines = (kind === "routes" ? ROUTES : FLAGS).map((entry) => JSON.stringify(entry));
+const lines = LISTS[kind].map((entry) => JSON.stringify(entry));
 if (process.env.LIST_MODE === "malformed") lines.splice(1, 0, JSON.stringify({ method: "GET", path: "/rooms/:id" }));
 process.stdout.write(`${lines.join("\n")}\n`);

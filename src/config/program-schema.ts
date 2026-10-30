@@ -75,7 +75,7 @@ function timedCommand(entry: z.infer<typeof stepCommandSchema>, timeoutMs = DEFA
 /** `lists`: one command per kind of list the program prints
  * (src/execution-events/lists.ts), each a `build` entry's shape. */
 const listsSchema = z
-  .object({ routes: stepCommandSchema.optional(), flags: stepCommandSchema.optional() } satisfies Record<ListKind, unknown>)
+  .object({ routes: stepCommandSchema.optional(), flags: stepCommandSchema.optional(), tables: stepCommandSchema.optional() } satisfies Record<ListKind, unknown>)
   .strict();
 
 /** A list a world reads, with its command and limit. */

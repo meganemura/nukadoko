@@ -109,11 +109,15 @@ import type { WorldView } from "./world-view.js";
 // run`'s), runs each `lists` command once the program answers and
 // `setup` has run, so a command may ask the running program, with the
 // world's env, and reads what it printed (src/execution-events/lists.ts).
-// Only those worlds read lists: a list is read against the steps' event
-// lines, which no other world has, and only a run's record reads it. A
-// list command that fails, passes its limit, or prints what is not a list
-// fails no world: the record names why its list was not read, and nothing
-// of it counts.
+// Only those worlds read the routes and the flags lists: each is read
+// against the steps' event lines, which no other world has, and only a
+// run's record reads it. The tables list is read in every such world of
+// every tree, a `nuka do` world included unless its starter says its step
+// counts nothing: what a table holds decides what a count of execution
+// events counts, so a claim judged in a base world or by `nuka do` reads
+// the program's own declaration as head's does. A list command that
+// fails, passes its limit, or prints what is not a list fails no world:
+// the record names why its list was not read, and nothing of it counts.
 //
 // A program nukadoko started must not outlive nukadoko, however nukadoko
 // ends: a signal that arrives while a world is still starting, a step that
@@ -203,6 +207,10 @@ export interface WorldStarterOptions {
   /** `true` when head's served worlds read the program file's `lists`
    * (module header). */
   readonly lists?: true;
+  /** `false` when no world reads the program file's tables list: a
+   * `nuka do` step that counts no execution events reads nothing a table's
+   * holding changes. */
+  readonly tables?: false;
 }
 
 export interface WorldStarter {
@@ -507,9 +515,10 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         }
 
         let places: Partial<ListedPlaces> = {};
-        if (options.lists === true && tree === "head" && inlet !== undefined && recipe.lists.length > 0) {
+        const wanted = recipe.lists.filter((list) => (list.kind === "tables" ? options.tables !== false : options.lists === true && tree === "head"));
+        if (inlet !== undefined && wanted.length > 0) {
           const started = Date.now();
-          const lists = recipe.lists.map((list) => ({ kind: list.kind, argv: filledArgv(list.command, values, `lists.${list.kind}`), timeoutMs: list.timeout_ms }));
+          const lists = wanted.map((list) => ({ kind: list.kind, argv: filledArgv(list.command, values, `lists.${list.kind}`), timeoutMs: list.timeout_ms }));
           announce(`lists started: ${lists.map((list) => display(list.argv)).join("; ")}`);
           for (const list of lists) {
             commands.push({ phase: "lists", argv: list.argv });

@@ -9,7 +9,7 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, r
 
 // Responsibility: the program file's `lists` end to end, against
 // tests/fixtures/events-project, whose app/list.mjs prints the program's
-// routes and flags after it has asked the running program: each command
+// routes, flags, and tables after it has asked the running program: each command
 // runs once per served world with an events file, after the program
 // answers, with the world's env and placeholders, and the world's record
 // counts each list's entries. A command that fails or prints what is not
@@ -77,6 +77,33 @@ describe("the program file's lists", () => {
     expect(world.timings.lists_ms).toBeGreaterThanOrEqual(0);
     expect(stderr).toContain(`world default: lists started: node app/list.mjs routes ${world.url}; node app/list.mjs flags ${world.url}`);
     expect(listFindings(rootDir)).toEqual([]);
+  });
+
+  it("reads the tables list beside the others, each table once, and refuses one that says two things of a table", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      program(EVENTS, 'lists: { tables: "node app/list.mjs tables {url}", routes: "node app/list.mjs routes {url}" },'),
+    );
+    expect((await run(rootDir)).exitCode).toBe(0);
+    const [world] = latestRunJson(rootDir).worlds;
+    // The kinds are read in one order, whatever order the file names them in.
+    expect(world.commands.filter((command: { phase: string }) => command.phase === "lists").map((command: { argv: string[] }) => command.argv[2])).toEqual(["routes", "tables"]);
+    expect(world.lists).toEqual({ routes: { entries: 7, error: null }, tables: { entries: 5, error: null } });
+
+    await writeFile(
+      path.join(rootDir, "app", "two-holdings.mjs"),
+      'process.stdout.write(`${JSON.stringify({ table: "events", holds: "bookkeeping" })}\n${JSON.stringify({ table: "rooms" })}\n${JSON.stringify({ table: "events" })}\n`);\n',
+    );
+    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(EVENTS, 'lists: { tables: "node app/two-holdings.mjs" },'));
+    expect((await run(rootDir)).exitCode).toBe(0);
+    const [refused] = latestRunJson(rootDir).worlds;
+    expect(refused.lists).toEqual({
+      tables: {
+        entries: null,
+        error: 'lists.tables command node app/two-holdings.mjs printed a line that is not one entry of the list: line 3 says table "events" holds state, and line 1 says it holds bookkeeping',
+      },
+    });
+    expect(listFindings(rootDir)).toHaveLength(1);
   });
 
   it("reads no list of a command that fails, and runs the scenarios all the same", async () => {

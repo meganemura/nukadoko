@@ -976,6 +976,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // when the tree has no program file: the pass runs with no world.
     // A start a signal aborted is no failure of the program's, and the
     // run that follows is incomplete, so it reports nothing here.
+    // A list a started world did not read, as a warning: head's routes
+    // and flags, and the tables list of a world of any tree.
+    const warnListsUnread = (started: StartedWorld): void => {
+      const record = started.record();
+      const named = record.tree === "head" ? record.name : `${record.name} (${record.tree})`;
+      for (const [kind, list] of Object.entries(record.lists ?? {})) {
+        if (list.error === null) continue;
+        const log = record.log === null ? "" : `; see ${projectRelativeText(path.join(runDirAbsolute, record.log), rootDir)}`;
+        warn({ severity: "warning", code: "program-list-unread", message: `world ${named}: the ${kind} list was not read: ${list.error}${log}` });
+      }
+    };
     const startWorld = async (pass: EnvironmentPass, abort?: AbortSignal): Promise<StartedWorld | "failed" | null> => {
       if (pass.resolvedEnv.program === null) return null;
       const started = await worldStarter.start(pass.resolvedEnv.name, pass.resolvedEnv.program, pass.secrets, abort);
@@ -983,12 +994,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         redactOutput(started.view.secrets);
         if (started.view.url !== undefined) headUrls.set(pass.resolvedEnv.name, started.view.url);
         listedPlaces.set(pass.resolvedEnv.name, started.lists);
-        const record = started.record();
-        for (const [kind, list] of Object.entries(record.lists ?? {})) {
-          if (list.error === null) continue;
-          const log = record.log === null ? "" : `; see ${projectRelativeText(path.join(runDirAbsolute, record.log), rootDir)}`;
-          warn({ severity: "warning", code: "program-list-unread", message: `world ${record.name}: the ${kind} list was not read: ${list.error}${log}` });
-        }
+        warnListsUnread(started);
         return started;
       }
       worlds.push(started.record());
@@ -1840,6 +1846,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             }
             started = result;
             treeWorld = result;
+            warnListsUnread(result);
           }
           const result = await runTreePass({
             world,

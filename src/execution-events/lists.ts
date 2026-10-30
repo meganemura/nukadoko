@@ -1,10 +1,11 @@
 import { EXTENSION_PREFIX, repeatedKey } from "./format.js";
 
 // Responsibility: the lists a program prints of the places it has
-// (docs/spec.md "Lists"): its routes and its flags, one JSON object per
-// line, each place named in the words the execution events lines use (a
-// request line's `method` and `route`, a flag line's `name` and `side`),
-// so a list joins with the lines by text alone. As data: every kind and
+// (docs/spec.md "Lists"): its routes, its flags, and its tables, one JSON
+// object per line, each place named in the words the execution events
+// lines use (a request line's `method` and `route`, a flag line's `name`
+// and `side`, a db line's `table`), so a list joins with the lines by text
+// alone. As data: every kind and
 // its fields, and the one function that turns what a list command printed
 // into the kind's entries or the reason it is not a list. Pure. Boundary:
 // running the command is src/program/world.ts's, and what a run reads
@@ -21,7 +22,9 @@ import { EXTENSION_PREFIX, repeatedKey } from "./format.js";
 // A list is a set: an entry printed twice is one entry. A route printed
 // twice with two handlers keeps both, since a request line names its
 // method and route and not which handler ran, and a flag printed twice
-// keeps every side either line declares.
+// keeps every side either line declares. A table printed twice with two
+// different holdings is refused, naming both lines: what a table holds
+// decides whether a count counts a write to it, so neither line can win.
 
 export interface ListedRoute {
   /** The HTTP method, uppercase, as a request line names it. */
@@ -41,10 +44,27 @@ export interface ListedFlag {
   readonly sides: readonly string[];
 }
 
+/** What a table holds, in the program's own declaration: `state`, what
+ * the program is for (the default); `bookkeeping`, a record the program
+ * keeps of its own work, such as telemetry or an audit trail; or
+ * `infrastructure`, what its frameworks keep to run it, such as applied
+ * migrations or a job queue. */
+export const TABLE_HOLDS = ["state", "bookkeeping", "infrastructure"] as const;
+
+export type TableHolds = (typeof TABLE_HOLDS)[number];
+
+export interface ListedTable {
+  /** The table, as a db line's `table` names it. */
+  readonly table: string;
+  /** `state` when the line names none. */
+  readonly holds: TableHolds;
+}
+
 /** The entries of each kind of list. */
 export interface ListedPlaces {
   readonly routes: readonly ListedRoute[];
   readonly flags: readonly ListedFlag[];
+  readonly tables: readonly ListedTable[];
 }
 
 export type ListKind = keyof ListedPlaces;
@@ -67,6 +87,11 @@ function methodProblem(value: unknown): string | undefined {
   return method === method.toUpperCase() ? undefined : `is ${JSON.stringify(method)}, which is not uppercase, as a request line's method is`;
 }
 
+function holdsProblem(value: unknown): string | undefined {
+  if (typeof value !== "string" || !(TABLE_HOLDS as readonly string[]).includes(value)) return `is ${JSON.stringify(value)}, which is not one of ${TABLE_HOLDS.join(", ")}`;
+  return undefined;
+}
+
 function sidesProblem(value: unknown): string | undefined {
   if (!Array.isArray(value) || !value.every((side) => typeof side === "string")) return "is not an array of strings";
   if (value.length === 0) return "is empty";
@@ -86,6 +111,10 @@ export const LIST_FIELDS = {
     name: { required: true, problem: textProblem },
     sides: { required: true, problem: sidesProblem },
   },
+  tables: {
+    table: { required: true, problem: textProblem },
+    holds: { required: false, problem: holdsProblem },
+  },
 } as const satisfies Readonly<Record<ListKind, Readonly<Record<string, FieldRule>>>>;
 
 /** Every kind, in the order a world reads them. */
@@ -93,11 +122,18 @@ export const LIST_KINDS = Object.keys(LIST_FIELDS) as readonly ListKind[];
 
 type Line = Readonly<Record<string, unknown>>;
 
-// What a kind's checked lines come to, merged per place.
-const COLLECT: { readonly [K in ListKind]: (lines: readonly Line[]) => ListedPlaces[K] } = {
-  routes(lines) {
+/** A checked line, with its line number in the output. */
+interface NumberedLine {
+  readonly line: Line;
+  readonly number: number;
+}
+
+// What a kind's checked lines come to, merged per place, or why they are
+// not one list (module header).
+const COLLECT: { readonly [K in ListKind]: (lines: readonly NumberedLine[]) => ListedPlaces[K] | { readonly problem: string } } = {
+  routes(numbered) {
     const routes = new Map<string, { method: string; route: string; handlers: Set<string> }>();
-    for (const line of lines) {
+    for (const { line } of numbered) {
       const method = line.method as string;
       const route = line.route as string;
       const key = JSON.stringify([method, route]);
@@ -107,14 +143,27 @@ const COLLECT: { readonly [K in ListKind]: (lines: readonly Line[]) => ListedPla
     }
     return [...routes.values()].map((entry) => ({ method: entry.method, route: entry.route, handlers: [...entry.handlers].sort() }));
   },
-  flags(lines) {
+  flags(numbered) {
     const flags = new Map<string, Set<string>>();
-    for (const line of lines) {
+    for (const { line } of numbered) {
       const sides = flags.get(line.name as string) ?? new Set<string>();
       flags.set(line.name as string, sides);
       for (const side of line.sides as string[]) sides.add(side);
     }
     return [...flags].map(([name, sides]) => ({ name, sides: [...sides] }));
+  },
+  tables(numbered) {
+    const tables = new Map<string, { readonly holds: TableHolds; readonly number: number }>();
+    for (const { line, number } of numbered) {
+      const table = line.table as string;
+      const holds = (line.holds as TableHolds | undefined) ?? "state";
+      const earlier = tables.get(table);
+      if (earlier === undefined) tables.set(table, { holds, number });
+      else if (earlier.holds !== holds) {
+        return { problem: `line ${number} says table ${JSON.stringify(table)} holds ${holds}, and line ${earlier.number} says it holds ${earlier.holds}` };
+      }
+    }
+    return [...tables].map(([table, { holds }]) => ({ table, holds }));
   },
 };
 
@@ -153,12 +202,13 @@ function readLine(kind: ListKind, text: string, number: number): { readonly line
  * entry and is passed over, so a blank line at the end, or a CR before
  * each line feed, reads as nothing. Pure. */
 export function parseList<K extends ListKind>(kind: K, output: string): { readonly entries: ListedPlaces[K] } | { readonly problem: string } {
-  const lines: Line[] = [];
+  const lines: NumberedLine[] = [];
   for (const [index, text] of output.split("\n").entries()) {
     if (text.trim() === "") continue;
     const read = readLine(kind, text.endsWith("\r") ? text.slice(0, -1) : text, index + 1);
     if ("problem" in read) return read;
-    lines.push(read.line);
+    lines.push({ line: read.line, number: index + 1 });
   }
-  return { entries: COLLECT[kind](lines) };
+  const collected = COLLECT[kind](lines);
+  return "problem" in collected ? collected : { entries: collected };
 }
