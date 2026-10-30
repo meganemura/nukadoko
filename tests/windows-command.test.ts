@@ -129,7 +129,8 @@ describe.runIf(process.platform === "win32")("runCommand on Windows", () => {
           rmSync(dir, { recursive: true, force: true });
         }
       },
-      { testCases: 25 },
+      // Each case starts two processes through cmd.exe, which TooSlow counts as slow generation.
+      { testCases: 25, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
     ));
 
   it("starts npm by its bare name", async () => {
