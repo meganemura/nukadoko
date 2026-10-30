@@ -36,8 +36,8 @@ describe("nuka check on an MCP client connected to a bare transport", () => {
       config,
       readFileSync(config, "utf8").replace(
         "  fixtures: {",
-        "  fixtures: {\n    bare: async ({}, use) => {\n      const client = new Client();\n      await client.connect(new StdioClientTransport());\n      await use(client);\n    },",
-      ) + "\nclass StdioClientTransport {}\n",
+        "  fixtures: {\n    bare: async ({}, use) => {\n      const client = new Client();\n      await client.connect(new LocalStdioClientTransport());\n      await use(client);\n    },",
+      ) + "\nclass LocalStdioClientTransport {}\n",
     );
     const stdout = createCaptureSink();
     await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });

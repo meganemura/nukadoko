@@ -40,6 +40,8 @@ just until 0.1.
   counted in `after_step_end.mcp` and named on the summary's Unmeasured
   actions line, and `mcp.jsonl` is a reserved evidence name. A step that
   sends no MCP call reads as before, and no `schema_version` changes.
+  The tests run it with the official client, `@modelcontextprotocol/client`
+  2.4.0, a development dependency only, over both transports.
 - **`nuka check` notes an MCP transport nothing can wrap.**
   `client.connect(new StdioClientTransport(...))` builds the transport
   inside the argument, so no `measureMcp` can reach it and none of that

@@ -129,6 +129,37 @@ describe("MCP calls through measureMcp", () => {
     expect(step("the stdio call inserted at least 1 note").status).toBe("passed");
   });
 
+  it("measures the official SDK client's calls the same way, over HTTP and over stdio", async () => {
+    const result = await cli(rootDir, ["run", "features/sdk.feature"]);
+    expect(result.exitCode, result.stderr).toBe(0);
+    const steps = stepsOf(rootDir);
+
+    // The SDK client sends its own initialize and initialized in the
+    // fixture, outside every step, so the step holds only its tool call.
+    const milk = steps.get('the agent adds the note "milk" over HTTP with the SDK client')!;
+    expect(milk.status).toBe("passed");
+    const calls = jsonLines<McpCallLine>(rootDir, milk, "mcp.jsonl");
+    expect(calls.map((call) => call.method)).toEqual(["tools/call"]);
+    const [call] = calls;
+    const span = spanOf(call!.traceparent, milk.observed.events!.trace_id);
+    expect(span).toBeDefined();
+    const sent = jsonLines<{ traceparent?: string }>(rootDir, milk, "http.jsonl");
+    expect(sent.map((line) => line.traceparent)).toEqual([call!.traceparent]);
+    expect(JSON.parse(call!.params!.text!)).toMatchObject({ name: "add_note", arguments: { text: "milk" }, _meta: { traceparent: call!.traceparent } });
+    expect(milk.observed.events).toMatchObject({ kinds: { db: 1, request: 1 }, stamped_spans: [span], mcp_spans: [span], whole: true, open: [] });
+    expect(steps.get("the SDK HTTP call inserted 1 note")!.status).toBe("passed");
+
+    const eggs = steps.get('the agent adds the note "eggs" over stdio with the SDK client')!;
+    expect(eggs.status).toBe("passed");
+    const [piped, ...morePiped] = jsonLines<McpCallLine>(rootDir, eggs, "mcp.jsonl");
+    expect(morePiped).toEqual([]);
+    const pipedSpan = spanOf(piped!.traceparent, eggs.observed.events!.trace_id);
+    expect(pipedSpan).toBeDefined();
+    expect(piped).toMatchObject({ method: "tools/call", tool: "add_note" });
+    expect(eggs.observed.events).toMatchObject({ kinds: { db: 1, request: 1 }, mcp_spans: [pipedSpan], whole: false, open: [{ gap: "mcp-unbounded", calls: 1 }] });
+    expect(steps.get("the SDK stdio call inserted at least 1 note")!.status).toBe("passed");
+  });
+
   it("leaves an exact count of a stdio call's writes unjudged, and says why", async () => {
     const result = await cli(rootDir, ["run", "features/stdio-exact.feature"]);
     expect(result.exitCode).toBe(1);
