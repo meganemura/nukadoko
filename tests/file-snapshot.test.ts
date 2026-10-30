@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -5,7 +6,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createObservedCollector } from "../src/context/observed.js";
-import { diffSnapshots, type Snapshot } from "../src/context/file-snapshot.js";
+import { diffSnapshots, takeSnapshot, type Snapshot } from "../src/context/file-snapshot.js";
 import { runCommand, withProcessRecording } from "../src/context/run-command.js";
 
 // Responsibility: the file channel of `observed.processes[].files`: the
@@ -67,6 +68,49 @@ describe("diffSnapshots", () => {
     const unmeasured: Snapshot = { kind: "unmeasured", reason: "too big" };
     expect(diffSnapshots(unmeasured, measured([]))).toEqual({ unmeasured: "too big" });
     expect(diffSnapshots(measured([]), unmeasured)).toEqual({ unmeasured: "too big" });
+  });
+});
+
+describe("takeSnapshot", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "nukadoko-walk-"));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  // Another process makes and removes a nested directory as fast as it
+  // can, so a walk lists the directory and then finds it gone. A directory
+  // gone by the time it is read is absent, as a file gone before its stat
+  // is, and the walk measures the rest.
+  it("measures a tree whose directories come and go while it walks", async () => {
+    await writeFile(path.join(dir, "kept.txt"), "kept");
+    const churn = spawn(
+      node,
+      ["-e", "const fs = require('node:fs'); const end = Date.now() + 4000; while (Date.now() < end) { fs.mkdirSync('come/and/go', { recursive: true }); fs.rmSync('come', { recursive: true, force: true }); }"],
+      { cwd: dir, stdio: "ignore" },
+    );
+    const exited = new Promise((resolve) => churn.once("exit", resolve));
+    const reasons = new Set<string>();
+    let walks = 0;
+    try {
+      const end = Date.now() + 3000;
+      while (Date.now() < end) {
+        const snapshot = takeSnapshot(dir);
+        walks += 1;
+        if (snapshot.kind === "unmeasured") reasons.add(snapshot.reason);
+        else expect(snapshot.entries.has("kept.txt")).toBe(true);
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    } finally {
+      churn.kill();
+      await exited;
+    }
+    expect(walks).toBeGreaterThan(10);
+    expect([...reasons]).toEqual([]);
   });
 });
 

@@ -633,6 +633,17 @@ just until 0.1.
 
 ### Fixed
 
+- **A directory removed while `runCommand` walks the working directory
+  no longer leaves the walk unmeasured.** The walk listed a directory,
+  found it gone when it read it, and gave `observed.processes[].files` as
+  `{ unmeasured: "the working directory could not be read: ENOENT ..." }`
+  for the whole tree, so a program that makes and removes directories as
+  it runs, or anything else doing so in that directory at the time, cost
+  the step its file list and left a `files` claim on it unjudged. A
+  directory below the working directory that is gone, or replaced by a
+  file, when the walk reads it is now absent from that walk, as a file
+  removed between the listing and the stat already was. A working
+  directory that cannot be read still leaves the walk unmeasured.
 - **`nuka run --base` runs the base world of the change that adds
   execution events.** When head's steps count execution events and the
   ref's program file names no `{events}`, the base tree's check stopped

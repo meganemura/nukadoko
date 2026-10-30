@@ -55,7 +55,12 @@ export function takeSnapshot(root: string, unwatched: readonly string[] = []): S
   try {
     while (pending.length > 0) {
       const relativeDir = pending.pop()!;
-      for (const name of readdirSync(join(root, relativeDir))) {
+      const names = listed(root, relativeDir);
+      if (names === null) {
+        entries.delete(relativeDir);
+        continue;
+      }
+      for (const name of names) {
         const relative = relativeDir === "" ? name : `${relativeDir}${name}`;
         // Absent when it was removed between the listing and the stat.
         const info = lstatSync(join(root, relative), { bigint: true, throwIfNoEntry: false });
@@ -79,6 +84,21 @@ export function takeSnapshot(root: string, unwatched: readonly string[] = []): S
     return { kind: "unmeasured", reason: `the working directory could not be read: ${(error as Error).message}` };
   }
   return { kind: "measured", entries, skipped: skipped.sort() };
+}
+
+/** The names in a directory the walk reached, or `null` for one below
+ * `root` that was removed, or replaced by a file, after its parent listed
+ * it: it is absent at the moment the walk reads it, as a file removed
+ * between the listing and the stat is. Anything else, and a `root` that
+ * cannot be read, still leaves the whole walk unmeasured. */
+function listed(root: string, relativeDir: string): string[] | null {
+  try {
+    return readdirSync(join(root, relativeDir));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (relativeDir !== "" && (code === "ENOENT" || code === "ENOTDIR")) return null;
+    throw error;
+  }
 }
 
 /** The difference between two snapshots of one directory, each list

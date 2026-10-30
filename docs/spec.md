@@ -6900,9 +6900,11 @@ its scenario record's id, so either record leads to the other.
   directories, and the project's state directory (where the run itself
   writes), are not walked and are named in `"skipped"`. A working
   directory past 20000 entries, or one that cannot be read, gives
-  `{ "unmeasured": "<why>" }` instead. It measures a directory, not a
-  process: anything else writing there at the same time is in the
-  difference too. Each entry also has `"stdout"` and `"stderr"` when the
+  `{ "unmeasured": "<why>" }` instead. A file or directory below it that
+  is removed while the walk reads it is absent from that walk, so a
+  program that makes and removes directories as it runs still gets a
+  list. It measures a directory, not a process: anything else writing
+  there at the same time is in the difference too. Each entry also has `"stdout"` and `"stderr"` when the
   process wrote to that stream and the execution has an evidence
   directory: the name of a file in it, `process-<n>.stdout.txt` or
   `process-<n>.stderr.txt`, that holds the whole stream, redacted like
