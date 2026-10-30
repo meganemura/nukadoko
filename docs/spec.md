@@ -1789,7 +1789,16 @@ reads the from value and never what observe returned`. Then, in order:
   it, and `comma-list` trims it, splits it at each comma, and trims each
   item (an empty text has no items), so the text `CFP, Schedule,
   Registration` a sentence states reads as three names. A view applies to a string only; on any other value the claim breaks
-  and says so.
+  and says so. Some compares read one type on their actual side:
+  a string for `contains-text`, `starts-with-text`, `ends-with-text`,
+  `matches`, and `fits-text`, an array for `has-item` and
+  `has-same-items`, an object for `has-fields` and `lacks-field`, and a
+  number for the four order compares. `text` always makes a string, and
+  `lines` and `comma-list` an array, so such a compare under a view that
+  always makes another type, with no `at` after it, is refused at
+  import, naming the view, the two types, and how to read the value
+  instead: it would break on every line. `equal` and `not-equal` read
+  any type, and `is-a` has its own rule (see "The compares").
 - `at` takes a path inside the viewed value (`actual: "result.stdout",
   view: "json", at: "sections.git.0.dirty_count"`), so parsing is declared
   data, not code. A path segment on an array is a decimal index.
@@ -1800,7 +1809,17 @@ reads the from value and never what observe returned`. Then, in order:
   `{ actual: "orders", count: true, compare: "at-least", expected: {
   literal: 1 } }`. A value that is not an array breaks the claim and
   names its type (`count reads an array, and the value is an object`):
-  an object with a `length` key, or a text, is never counted. A count is
+  an object with a `length` key, or a text, is never counted. `nuka
+  check` reads the producing step's `returns` for a count of a `from`
+  value read with no `view`, and reports one whose schema parses the
+  value there as something that is never an array (a string, a number, a
+  boolean, an object, or a union, literal, or enum of only such values)
+  (`claim-not-an-array`): `Step "the-output-has-items"'s claims[0]
+  counts the items of out, and step "a-user-signs-up" on line 12 returns
+  a string there, never an array, so the claim never holds, whatever the
+  behaviour is`. It sees through `optional`, `nullable`, and
+  `readonly` alone; a schema that may parse to an array (`z.unknown`, a
+  transform, a `default` or a `catch`) is taken to be one. A count is
   compared with `equal`, `not-equal`, `greater-than`, `at-least`,
   `less-than`, or `at-most`, and its expected value is the sentence's
   number: a capture such as `{n:int}`, or a literal from the rule in
@@ -1824,7 +1843,12 @@ returns there, so it takes no `view`, `at`, or `count`, and its label
 names it: `ARIA snapshot of observe:page` (see "The compares").
 
 An actual value that resolves to `undefined` always breaks, and the record
-names the place. `nuka check` reads each `from` path against the producing
+names the place. When the walk found nothing above the path's last
+segment, the reason names where, so a missing parent and a missing field
+read apart: `from:a@3.body.profile.name is undefined, since from:a@3.body
+has nothing at profile`, or `, since from:a@3.body is undefined` for a
+`from` value that is missing itself. An expected side and an item claim
+say the same. `nuka check` reads each `from` path against the producing
 step's `returns` schema and reports a path that schema does not declare
 (`claim-path-unknown`), because such a claim could only ever break.
 A `from` entry's key reads one level of the producer's result, so a
@@ -1976,6 +2000,20 @@ before it ran, so the claim was not judged`. The refusals at
 import name the usual rewrites earlier. This comparison is what keeps the
 record true, and it also catches a schema that a step file changed after
 `defineStep` returned.
+
+So a claim whose `from` path the step's own args schema takes out never
+holds: it is `unjudged` when the producing step returned the key, and
+it breaks when the step did not. `nuka check` reports such a path when
+the args schema declares an object on it that does not declare the next
+key and keeps no key it does not declare (a `z.object` drops the key, a
+`z.strictObject` refuses it), while the producing step's `returns` may
+hold the key (`claim-args-dropped`). It reports a `lacks-field` claim, or
+a `where` that selects by one, whose field such an args object drops
+too: the claim never breaks, and the `where` never leaves an item out.
+An args schema that may keep the key (`z.looseObject`, a catchall, a
+union, a transform, or a `default` or a `catch` on the path) is taken to
+keep it. Reading the value through the producer's own schema (`user:
+signUp.returns.shape.user`) keeps every key it returns.
 
 A `from` value is copied after the producing step's `returns` has
 parsed it, and a `z.object` there drops each key it does not declare.
@@ -2352,7 +2390,11 @@ worker is started after the deadline passed, so a slow pattern under an
 an array. Paths inside are relative to the item, and an item claim with no
 `actual` reads the item itself. `where` selects the items the claims apply
 to. When the array is empty, or `where` selects nothing, the claim breaks:
-"every item" over nothing is not a measurement.
+"every item" over nothing is not a measurement. A value that is not an
+array breaks it too (`each reads an array, and the value is a string`),
+and `nuka check` reports an `each` over a `from` value, read with no
+`view`, whose producing step's `returns` parses it as something that is
+never an array, as it does for a count (`claim-not-an-array`).
 
 A `where` claim and an item claim overlap when the path one reads is
 the start of the path the other reads. The path read is `actual`
@@ -2375,10 +2417,19 @@ holds".
 An overlapping `where` claim that compares with `greater-than`,
 `at-least`, `less-than`, `at-most`, or `not-equal` is judged at run
 time, from the expected values in hand. When the two read one value (one
-path, one view, and a count on both or neither) and the `where` claim
+path, one view, and a count on both or neither; after a view, one `at`
+too) and the `where` claim
 implies the item claim, the
 claim breaks and names both: the same order direction with a bound at
-least as strict, or `not-equal` against the same value. "Every item
+least as strict, or `not-equal` against the same value. An order
+compare holds only on a number, and a `not-equal` only on a value of its
+expected value's JSON type, and a `where` that cannot compare an item
+breaks the claim, so an `is-a` item claim of a kind that is that type
+alone (`number`; `string` or `text`; `boolean`; `list` or `array`;
+`object`; `null`) is implied too: "every item over 10 has a number
+price" holds whatever the prices are. `defineStep` refuses such a pair
+when the kind is a literal, and for a `not-equal` when its expected value
+is a literal too; the run breaks the rest. "Every item
 over 10 costs more than 5" breaks with `each.where[0] selects the items
 whose price is greater-than 10, and every such item holds
 each.claims[0], greater-than 5, whatever the data, so the claim measures

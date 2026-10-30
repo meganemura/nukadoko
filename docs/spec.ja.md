@@ -1476,6 +1476,13 @@ claim の actual が `from` から読むキーを `observe` が返したとき�
   `comma-list` は切り詰めてからコンマごとに分け、各要素を切り詰めます(空のテキストには要素がありません)。
   そのため文が述べるテキスト `CFP, Schedule, Registration` は 3 つの名前として読めます。
   view は文字列にだけ適用され、それ以外の値では claim は成り立たず、その旨を述べます。
+  実際の側で 1 つの型だけを読む比較があります。
+  `contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`fits-text` は文字列を、`has-item` と `has-same-items` は配列を、`has-fields` と `lacks-field` はオブジェクトを、4 つの大小の比較は数を読みます。
+  `text` は必ず文字列を作り、`lines` と `comma-list` は配列を作ります。
+  そのため、そのあとに `at` のないまま、必ず別の型を作る view を通すそのような比較は、import の時点で拒否されます。
+  拒否は view と 2 つの型と、値を代わりに読む方法を名指しします。
+  どの行でも成り立たないからです。
+  `equal` と `not-equal` はどの型でも読み、`is-a` には独自の規則があります(「比較」を参照)。
 - `at` は view を通した値の中のパスを取ります(`actual: "result.stdout", view: "json", at: "sections.git.0.dirty_count"`)。
   そのためパースは、コードではなく宣言されたデータです。
   配列に対するパスの要素は 10 進のインデックスです。
@@ -1483,6 +1490,10 @@ claim の actual が `from` から読むキーを `observe` が返したとき�
   そのため数を述べる文(「一覧に注文が 3 件ある」、「少なくとも 1 行返った」、「要素がひとつも残っていない」)は、step のコードが求めた長さではなく、リストそのものについて判定されます(`{ actual: "orders", count: true, compare: "at-least", expected: { literal: 1 } }`)。
   配列でない値では claim は成り立たず、その型を名指しします(`count reads an array, and the value is an object`)。
   `length` キーを持つオブジェクトも、テキストも、数えません。
+  `nuka check` は、`view` なしで読む `from` の値を数える claim について値を返す step の `returns` を読み、そのスキーマがそこの値を決して配列にならないもの(文字列、数、真偽値、オブジェクト、またはそれらだけからなる union、literal、enum)としてパースするときに報告します(`claim-not-an-array`)。
+  報告は `Step "the-output-has-items"'s claims[0] counts the items of out, and step "a-user-signs-up" on line 12 returns a string there, never an array, so the claim never holds, whatever the behaviour is` のようになります。
+  見通すのは `optional`、`nullable`、`readonly` だけです。
+  配列にパースしうるスキーマ(`z.unknown`、transform、`default` や `catch`)は配列になりうるものとして扱います。
   数は `equal`、`not-equal`、`greater-than`、`at-least`、`less-than`、`at-most` で比べ、期待値は文が述べる数です。
   つまり `{n:int}` のようなキャプチャか、「期待値の出所」の規則に従うリテラルです。
   それ以外の比較は import の時点で拒否されます。
@@ -1498,6 +1509,9 @@ record のラベルは、`view`、`at`、`count` を含めて、場所全体を�
 実際の値は、`observe` がそこに返すページかロケーターについて nukadoko が取る ARIA スナップショットなので、`view`、`at`、`count` を取らず、ラベルがそれを名指しします(`ARIA snapshot of observe:page`、「比較」を参照)。
 
 `undefined` に解決される実際の値では、claim は必ず成り立たず、record はその場所を名指しします。
+パスの最後の要素より上で何も見つからなかったときは、理由がその場所を名指しするので、親がないこととフィールドがないことを読み分けられます。
+`from:a@3.body.profile.name is undefined, since from:a@3.body has nothing at profile` のようになり、`from` の値そのものがないときは `, since from:a@3.body is undefined` で終わります。
+期待値の側と要素の claim も同じことを述べます。
 `nuka check` は、各 `from` のパスを値を返す step の `returns` スキーマと照らし合わせ、スキーマが宣言していないパスを報告します(`claim-path-unknown`)。
 そのような claim は、成り立たないことしかありえないからです。
 `from` の項目のキーは、値を返す step の結果を一段だけ読みます。
@@ -1616,6 +1630,14 @@ args スキーマはいまも動き、`observe` が受け取るのはその出�
 2 つが違う場所では、判定基準について何もわからないので、claim は `unjudged` になり、理由がその場所を名指しします(`the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim was not judged`)。
 import の時点の拒否は、よくある書き換えを先に名指しします。
 record を正しく保つのはこの比較であり、`defineStep` が返ったあとで step ファイルが変えたスキーマもこの比較が見つけます。
+
+そのため、step 自身の args スキーマが取り除く `from` のパスを読む claim は、決して成り立ちません。
+値を返す step がそのキーを返したときは `unjudged` になり、返さなかったときは成り立ちません。
+`nuka check` は、args スキーマがそのパスの上に、次のキーを宣言せず、宣言していないキーを残さないオブジェクトを宣言し(`z.object` はそのキーを落とし、`z.strictObject` は拒否します)、値を返す step の `returns` がそのキーを持ちうるときに、そのパスを報告します(`claim-args-dropped`)。
+そのような args のオブジェクトが落とすフィールドについての `lacks-field` の claim と、それで選ぶ `where` も報告します。
+その claim が成り立たないことはなく、その `where` は要素を決して外しません。
+キーを残しうる args スキーマ(`z.looseObject`、catchall、union、transform、パスの上の `default` や `catch`)は、キーを残すものとして扱います。
+値を返す step 自身のスキーマで値を読めば(`user: signUp.returns.shape.user`)、その step が返すキーはすべて残ります。
 
 `from` の値は、値を返す step の `returns` がパースしたあとでコピーします。
 そこにある `z.object` は、宣言していないキーをそれぞれ落とします。
@@ -1866,6 +1888,8 @@ pattern には残り時間を与え、残りが無いときに与えることは
 `where` は claim を適用する要素を選びます。
 配列が空のとき、または `where` が何も選ばないとき、claim は成り立ちません。
 何もない集合についての「すべての要素」は計測ではないからです。
+配列でない値でも成り立ちません(`each reads an array, and the value is a string`)。
+`nuka check` は、`view` なしで読む `from` の値についての `each` を、数える claim と同じく、値を返す step の `returns` がそれを決して配列にならないものとしてパースするときに報告します(`claim-not-an-array`)。
 
 `where` の claim と要素の claim は、一方が読むパスが、もう一方が読むパスの始まりであるときに重なります。
 読むパスは `actual` に `at` を続けたものです。
@@ -1878,8 +1902,12 @@ pattern には残り時間を与え、残りが無いときに与えることは
 要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
 
 重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。
-2 つが 1 つの値(1 つのパスと 1 つの view で、両方が数えるか、どちらも数えない)を読み、`where` の claim が要素の claim を含意するときは、claim は成り立たず、その 2 つを名指しします。
+2 つが 1 つの値(1 つのパスと 1 つの view で、両方が数えるか、どちらも数えず、view のあとでは `at` も 1 つ)を読み、`where` の claim が要素の claim を含意するときは、claim は成り立たず、その 2 つを名指しします。
 含意するとは、同じ大小の向きで、境界が同じかより厳しいとき、または同じ値に対する `not-equal` のときです。
+大小の比較は数でだけ成り立ち、`not-equal` はその期待値の JSON の型の値でだけ成り立ち、要素を比較できない `where` は claim を成り立たなくします。
+そのため、その型だけを表す種類(`number`、`string` または `text`、`boolean`、`list` または `array`、`object`、`null`)についての `is-a` の要素の claim も含意されます。
+「10 を超える要素はどれも数の価格を持つ」は、価格が何であっても成り立ちます。
+`defineStep` は、種類が literal のとき、`not-equal` ではその期待値も literal のときに、そのような組を拒否し、残りは実行時に成り立たなくします。
 「10 を超える要素はどれも 5 より高い」は、`each.where[0] selects the items whose price is greater-than 10, and every such item holds each.claims[0], greater-than 5, whatever the data, so the claim measures nothing` で成り立ちません。
 それ以外の組はデータのとおりに判定します。
 「10 を超える要素はどれも 100 以下である」は、要素が持つ価格のとおりに成り立つか成り立たないかが決まります。

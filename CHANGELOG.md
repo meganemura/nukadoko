@@ -538,6 +538,47 @@ just until 0.1.
   the run itself. Under `--base` the base and the old world run their
   cells in the order head ran the rows. File order stays the default,
   and its rerun lines are unchanged.
+- **`nuka check` reports a count or an `each` on a value that is never
+  an array (`claim-not-an-array`).** A claim that counts the items of a
+  `from` value, an `each` over one, or an item claim that counts, read
+  with no `view`, always broke when the producing step's `returns`
+  parsed the value there as a string, a number, a boolean, an object, or
+  a union, literal, or enum of only such values. The check now names the
+  place and what the producer returns there. It sees through
+  `optional`, `nullable`, and `readonly` alone, and stays silent on a
+  schema that may parse to an array (`z.unknown`, a transform, a
+  `default` or a `catch`).
+- **`nuka check` reports a `from` path the claim step's own `args`
+  drops (`claim-args-dropped`).** A claim step whose `args` declared a
+  value as a `z.object` without the key a claim's path reads, while the
+  producing step's `returns` could hold it (a `z.looseObject`, say),
+  passed the check, and the run left the claim `unjudged` when the step
+  returned the key and broke it when the step did not. The check now
+  names the args object, the keys it declares, and the key it drops, for
+  an actual path, an expected `{ from }`, and an item path of an
+  `each`. A `lacks-field` claim, or a `where` that selects by one, whose
+  field that object drops is reported too: it never breaks, and the
+  `where` never leaves an item out.
+- **`defineStep` refuses a view that always makes a type its compare
+  does not read.** `text` makes a string, and `lines` and `comma-list`
+  an array, so with no `at` after the view, `has-fields` or
+  `lacks-field` on any of the three, `has-item` or `has-same-items` on
+  `text`, a text compare (`contains-text`, `starts-with-text`,
+  `ends-with-text`, `matches`, `fits-text`) on `lines` or
+  `comma-list`, and an order compare on any of the three broke on every
+  line. Only `lacks-field` was refused. The refusal names the view, the
+  type it makes, the type the compare reads, and how to read the value
+  instead. An item claim follows the same rule.
+- **An `is-a` item claim that its `where` clause's type already
+  implies measures nothing.** An order compare holds only on a number,
+  and a `not-equal` only on a value of its expected value's JSON type,
+  while a `where` that cannot compare an item breaks the `each`, so
+  "every item over 10 has a number price" held whatever the prices
+  were. The run breaks such a pair as measuring nothing when the kind is
+  that type alone (`number`; `string` or `text`; `boolean`; `list` or
+  `array`; `object`; `null`), and `defineStep` refuses it when the
+  kind is a literal, and for a `not-equal` when its value is a literal
+  too.
 
 ### Changed
 
@@ -656,6 +697,21 @@ just until 0.1.
   left `unjudged` read only `unjudged`. They now end with the first such
   item, what it held, and why, as a broken `each` names its first broken
   item.
+- **A where clause and an item claim read one value only when their
+  `at` matches too.** An `each` broke with "the claim measures nothing"
+  when its `where` and an item claim read one text through one view and
+  compared in one order direction, even when their `at` named different
+  paths: "every row whose a is over 10 has b over 5" broke on
+  `{"a":20,"b":7}`. The two `at` paths are compared after a view now,
+  and the reason names the `at` it read.
+- **An undefined path names the first segment that found nothing.** A
+  claim whose path's parent was missing and one whose last field was
+  missing both broke with `<place> is undefined`. The reason now ends
+  with where the walk first found nothing when that is above the last
+  segment: `from:a@3.body.profile.name is undefined, since from:a@3.body
+  has nothing at profile`, or `, since from:a@3.body is undefined` for
+  a `from` value that is missing itself. An actual side, an expected
+  side, and an item claim all say it.
 
 ## 0.24.0 — 2026-10-29
 

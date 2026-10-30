@@ -64,6 +64,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   自分のプロセスグループと自分のセッションで動くからです。
   端末で入力を求めるツールは、そこで失敗するので、答えを `input` か `env` で渡します。
   `observed.processes` のエントリを丸ごと比べる読み手は、キー `group` を足します。
+- **成り立ちえた 2 つの claim が、実行の前に拒否されます。**
+  それで通っていたシナリオは `nuka check` で失敗します。
+  `where` が要素の値を大小(`greater-than`、`at-least`、`less-than`、`at-most`)か literal に対する `not-equal` で比べ、その値の JSON の型だけを表す種類の `is-a` を claim する `each`(「10 を超える要素はどれも数の価格を持つ」など)は、データが何であっても成り立っていました。
+  いまは `defineStep` がそれを拒否し、種類か比べる値を行が埋めるときは実行がその組を成り立たなくします。
+  値について型より先のことを claim するか、`is-a` の claim を外します。
+  claim の step 自身の `args` が、そのフィールドを宣言しない `z.object` として宣言する値についての `lacks-field` の claim と、それで選ぶ `where` は `claim-args-dropped` になります。
+  値を返す step 自身のスキーマ(`user: signUp.returns.shape.user`)か `z.looseObject` で、その値を宣言します。
+  ほかの新しい拒否と報告は、成り立ったことのない claim を名指しするので、通っていたシナリオはどれにも当たりません。
 
 ## 0.23.0 から 0.24.0 へ
 

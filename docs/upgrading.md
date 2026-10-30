@@ -83,6 +83,21 @@ This part does not change release to release.
   A tool that prompts on the terminal fails there: give it the answer
   through `input` or `env`. A reader that compares the entries of
   `observed.processes` whole adds the key `group`.
+- **Two claims that could hold are refused before the run,** and a
+  scenario that passed on them fails `nuka check`. An `each` whose
+  `where` compares an item's value in order (`greater-than`, `at-least`,
+  `less-than`, `at-most`), or with `not-equal` against a literal, and
+  claims `is-a` of a kind that is that value's JSON type alone, such as
+  "every item over 10 has a number price", held whatever the data was:
+  `defineStep` refuses it now, and the run breaks the pair when the line
+  fills the kind or the compared value. Claim what the value is beyond
+  its type, or drop the `is-a` claim. A `lacks-field` claim, or a `where`
+  that selects by one, on a value the claim step's own `args` declares
+  as a `z.object` that does not declare the field is
+  `claim-args-dropped`: declare the value with the producing step's own
+  schema (`user: signUp.returns.shape.user`) or with `z.looseObject`. The other new
+  refusals and findings name claims that never held, so a scenario that
+  passed meets none of them.
 
 ## 0.23.0 to 0.24.0
 

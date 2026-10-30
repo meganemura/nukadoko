@@ -137,13 +137,13 @@ blank text or field name, a pattern matching `""`, an object with no field, only
 its inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a `Proxy`, or
 nesting past 256 levels leaves the claim `unjudged` (return an ISO string or a
 number). Each claim or item the step's deadline cuts off, a running `matches`
-included, is `unjudged`, with how many. So is a claim that a key the producer's
-`returns` dropped could break. `nuka check` reports a `from` path the producer's
-`returns` does not declare (`claim-path-unknown`), a `lacks-field` on a field it
-drops (`claim-field-stripped`), a claim whose sides are one place
-(`claim-compares-itself`), an `is-a` capture that names no kind
-(`claim-kind-unknown`), and a parameter type with a transformer on an expected
-key (`claim-expected-transformed`).
+included, is `unjudged`, with how many. So is a claim that a key `returns`
+dropped could break. `nuka check` reports a `from` path `returns` lacks or
+`args` drops (`claim-path-unknown`, `claim-args-dropped`), a `lacks-field`
+on a field `returns` drops (`claim-field-stripped`), a count or `each` on a
+non-array (`claim-not-an-array`), sides at one place (`claim-compares-itself`),
+an `is-a` capture naming no kind (`claim-kind-unknown`), and a transformer on
+an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 
