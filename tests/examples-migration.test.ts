@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, symlink } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
@@ -21,10 +21,10 @@ const TRACE_ID = expect.stringMatching(/^[0-9a-f]{32}$/);
 // Run against the *built* `dist/cli.js` (via `node`, not `src/cli.ts`/
 // `runCli` from src), for the same reason tests/compat-discover.test.ts's
 // own "resolves nukadoko/compat via the real published package" test does:
-// this temp copy is nested inside this very package's own directory tree,
-// so Node's self-referencing package resolution sends this example's own
-// bare `"nukadoko"`/`"nukadoko/compat"` imports straight to `./dist/...`,
-// unconditionally, before any node_modules shim is even consulted. Compat's
+// the temp copy links node_modules/nukadoko to this repository, as an
+// install does, so this example's own bare `"nukadoko"`/`"nukadoko/compat"`
+// imports reach `./dist/...` through the package's exports, ahead of the
+// fixture root's shim to src. Compat's
 // registration buffers (Given/When/Then/Before/defineWorld) are ordinary
 // module-closure state, not a Symbol.for brand -- they do not survive a
 // src/dist split the way a typed `defineStep` step does, so discovery must
@@ -62,6 +62,8 @@ describe("examples/migration", () => {
     // copied beside it.
     examplesDir = await copyExamplesToTempDir(["migration", "todo"]);
     rootDir = path.join(examplesDir, "migration");
+    await mkdir(path.join(examplesDir, "node_modules"));
+    await symlink(repoRoot, path.join(examplesDir, "node_modules", "nukadoko"), "dir");
 
     const { stdout, stderr, exitCode } = await runNuka(["run", "--records", "features/migration.feature"], rootDir);
 
