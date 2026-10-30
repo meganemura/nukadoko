@@ -376,7 +376,7 @@ describe("the program's execution events", () => {
     expect(record.observed.processes[0]).toMatchObject({ signal: "SIGTERM", timed_out: true, group: "ended" });
     const helper = Number(readFileSync(path.join(latestRunDir(rootDir), step.record, "process-1.stdout.txt"), "utf8"));
     const stat = existsSync(`/proc/${helper}/stat`) ? parseProcStat(readFileSync(`/proc/${helper}/stat`, "utf8")) : undefined;
-    expect(stat === undefined || stat.state === "Z" || stat.state === "X").toBe(true);
+    expect(stat === undefined || stat.state === "Z" || stat.state === "X" || stat.exiting).toBe(true);
   });
 
   it("gives the program the variable that names {events} and keeps it from every step, under nuka run and nuka do", async () => {

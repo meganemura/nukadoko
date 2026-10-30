@@ -163,7 +163,7 @@ describe("runCommand result", () => {
 });
 
 /** A process's group and whether it still runs, from /proc on Linux. */
-function procStat(pid: number): { readonly state: string; readonly pgrp: number } | undefined {
+function procStat(pid: number): ReturnType<typeof parseProcStat> {
   try {
     return parseProcStat(readFileSync(`/proc/${pid}/stat`, "utf8"));
   } catch {
@@ -173,7 +173,7 @@ function procStat(pid: number): { readonly state: string; readonly pgrp: number 
 
 function running(pid: number): boolean {
   const stat = procStat(pid);
-  return stat !== undefined && stat.state !== "Z" && stat.state !== "X";
+  return stat !== undefined && stat.state !== "Z" && stat.state !== "X" && !stat.exiting;
 }
 
 // A helper that keeps running in the leader's group, with output of its own.

@@ -717,6 +717,14 @@ just until 0.1.
 
 ### Fixed
 
+- **A process group whose last member is exiting reads as ended.** On
+  Linux, an exiting process closes its files before it becomes a zombie,
+  so `runCommand` could see a shared pipe end while that member still
+  showed its old state, and record `observed.processes[].group` as
+  `running` for a group that was already ending. A member whose
+  `/proc/<pid>/stat` flags carry the kernel's exiting bit now counts as
+  gone, as a zombie does, and a world's stop no longer waits for it.
+
 - **A directory removed while `runCommand` walks the working directory
   no longer leaves the walk unmeasured.** The walk listed a directory,
   found it gone when it read it, and gave `observed.processes[].files` as

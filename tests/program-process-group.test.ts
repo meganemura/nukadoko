@@ -20,14 +20,15 @@ import { createCaptureSink, repoRoot, sourceNodeArgs } from "./helpers/fixtures.
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("parseProcStat", () => {
-  it("reads the state and the process group after any executable name", () =>
+  it("reads the state, the process group, and whether it is exiting after any executable name", () =>
     hegel.test((tc) => {
       const comm = tc.draw(gs.text({ maxSize: 16 }));
       const state = tc.draw(gs.sampledFrom(["R", "S", "D", "Z", "T", "t", "X", "I"]));
       const pid = tc.draw(gs.integers({ minValue: 1, maxValue: 4_194_304 }));
       const ppid = tc.draw(gs.integers({ minValue: 0, maxValue: 4_194_304 }));
       const pgrp = tc.draw(gs.integers({ minValue: 0, maxValue: 4_194_304 }));
-      expect(parseProcStat(`${pid} (${comm}) ${state} ${ppid} ${pgrp} ${pgrp} 0 -1 4194560 120 0 0 0\n`)).toEqual({ state, pgrp });
+      const flags = tc.draw(gs.integers({ minValue: 0, maxValue: 0x7fffffff }));
+      expect(parseProcStat(`${pid} (${comm}) ${state} ${ppid} ${pgrp} ${pgrp} 0 -1 ${flags} 120 0 0 0\n`)).toEqual({ state, pgrp, exiting: (flags & 0x4) !== 0 });
     }));
 
   it("answers undefined for text that is not a stat line", () => {

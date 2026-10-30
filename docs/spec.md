@@ -3530,6 +3530,8 @@ A process of the group that exited but that its parent has not collected
 (a zombie, under a PID 1 that does not collect orphans, as in many
 containers) counts as gone on Linux, and as still there elsewhere, where
 the group then waits out its 5 seconds.
+So does a process that has begun to exit on Linux: it closes its files
+before it becomes a zombie, and it runs no code after that.
 A `build` or `prepare` command's group gets SIGKILL as soon as the
 command exits, so a child the command left running neither outlives it
 nor keeps its output open, which would keep the phase from ending.
