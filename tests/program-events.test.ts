@@ -323,7 +323,9 @@ describe("the program's execution events", () => {
           "    Then the tool wrote nothing",
           "",
           "  Scenario: still running",
-          "    When the tool leaves a process running for 5000 ms",
+          // The helper outlives the test, so the kill below reaches it and
+          // never a process that took its pid after it ended.
+          "    When the tool leaves a process running for 30000 ms",
           "    Then the tool wrote nothing",
           "",
         ].join("\n"),
