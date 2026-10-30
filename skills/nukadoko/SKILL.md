@@ -107,9 +107,8 @@ code (`references/scenario-rules.md`, "How this file grows").
 
 ## What not to do
 
-- Don't write a Then from what the program printed, a `fits-aria-snapshot`
-  tree copied from the page included, and don't edit a Then after a red run
-  without the person's word. Either is the implementation grading itself.
+- Don't write a Then from what the program printed, or edit one after a red
+  run without the person's word: either is the implementation grading itself.
 - Don't fill in a requirement the source never stated
   (`references/from-prose.md`).
 - Don't run a step that reaches past the project without a go-ahead, and
