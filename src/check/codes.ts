@@ -63,15 +63,15 @@ const CHECK_CODES = {
   },
   "claim-aria-snapshot-names-nothing": {
     description:
-      "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with an ARIA snapshot that names no node: only comments, an empty text, a /children line, or nothing at all. Every page holds such a tree, so the claim would hold whatever the page shows. nuka run breaks such a claim too, so --no-check does not let it hold.",
+      "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with an ARIA snapshot that names no node: only comments, an empty text, a /children line, or nothing at all. Every page holds such a tree, so it states nothing, and nuka run breaks the claim on every page, --no-check included.",
     severity: "error",
-    fix: "State in the docstring at least one node the page must show: a role with its name in double quotes, a text, or a /url, as the browser's ARIA snapshot prints it.",
+    fix: "State in the expected ARIA snapshot (the docstring or the capture) at least one node the page must show: a role with its name in double quotes, a text, or a /url, as the browser's ARIA snapshot prints it.",
   },
   "claim-aria-snapshot-unreadable": {
     description:
-      "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with a text that does not read as an ARIA snapshot, or that states what nukadoko does not judge: a name or a text between slashes, the [active] state, a prop that would describe no node, or a plain text that YAML reads as a number, a boolean, or null. The claim would break whatever the page shows, so the finding names the line of the docstring and how to write it.",
+      "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with a text that does not read as an ARIA snapshot, or that states what nukadoko does not judge: a name or a text between slashes, the [active] state, a prop that would describe no node, or a plain text that YAML reads as a number, a boolean, or null. The claim would break whatever the page shows, so the finding names the line of the expected snapshot and how to write it.",
     severity: "error",
-    fix: "Write the docstring line the finding names as the browser's ARIA snapshot prints it: a YAML list, each item starting with \"- \", a name in double quotes, and a text that YAML reads as something else in quotes.",
+    fix: "Write the line of the expected ARIA snapshot the finding names as the browser's ARIA snapshot prints it: a YAML list, each item starting with \"- \", a name in double quotes, and a text that YAML reads as something else in quotes.",
   },
   "claim-compares-itself": {
     description:
