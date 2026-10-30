@@ -1050,6 +1050,14 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
         path: joinRelative(stepRecord.evidence.dir, stepRecord.evidence.http),
       });
     }
+    if (stepRecord.evidence.mcp) {
+      attachments.push({
+        kind: "path",
+        name: "mcp log",
+        contentType: "text/plain",
+        path: joinRelative(stepRecord.evidence.dir, stepRecord.evidence.mcp),
+      });
+    }
     if (stepRecord.evidence.trace) {
       attachments.push({
         kind: "path",

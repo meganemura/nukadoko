@@ -134,6 +134,7 @@ describe("writeAllureResults", () => {
       mkdirSync(recordDir, { recursive: true });
       writeFileSync(path.join(recordDir, "note.txt"), "declared note");
       writeFileSync(path.join(recordDir, "http.jsonl"), '{"method":"GET","url":"https://x","status":200,"duration_ms":5}\n');
+      writeFileSync(path.join(recordDir, "mcp.jsonl"), '{"method":"tools/call","id":2,"tool":"add_note","duration_ms":7}\n');
 
       const stepRecord1: StepRecord = {
         schema_version: 4,
@@ -150,7 +151,7 @@ describe("writeAllureResults", () => {
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
-        evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [], http: "http.jsonl", trace: "step-trace.zip" },
+        evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [], http: "http.jsonl", mcp: "mcp.jsonl", trace: "step-trace.zip" },
         observed: { processes: null, http: null, files: null, unmeasured: [] },
         mutates: true,
         declared: {
@@ -298,9 +299,12 @@ describe("writeAllureResults", () => {
       expect(step1.parameters).toContainEqual({ name: "mutates (declared)", value: "true" });
 
       const attachmentNames = step1.attachments!.map((a) => a.name).sort();
-      expect(attachmentNames).toEqual(["declared: note.txt", "http log", "record.json", "result", "trace"]);
+      expect(attachmentNames).toEqual(["declared: note.txt", "http log", "mcp log", "record.json", "result", "trace"]);
       const traceAttachment = step1.attachments!.find((a) => a.name === "trace") as { type: string };
       expect(traceAttachment.type).toBe("application/vnd.allure.playwright-trace");
+      const mcpAttachment = step1.attachments!.find((a) => a.name === "mcp log") as { type: string; source: string };
+      expect(mcpAttachment.type).toBe("text/plain");
+      expect(readFileSync(path.join(resultsDir, mcpAttachment.source), "utf8")).toBe('{"method":"tools/call","id":2,"tool":"add_note","duration_ms":7}\n');
 
       // Step1's own trace never leaks onto step2's own steps[] entry.
       expect(step2.attachments!.map((a) => a.name)).not.toContain("trace");

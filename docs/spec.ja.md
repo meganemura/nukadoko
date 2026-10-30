@@ -6587,7 +6587,7 @@ step entry はそもそも、それを組み立てるための identity を持�
 compat door は nukadoko に移るためのものであり、留まるためのものではありません。
 nukadoko に移った後は、scenario の history が nukadoko 自身の run から新しく積み上がっていきます。
 
-step entry は trace、HTTP log、検証済み result、`record.json`、宣言された attachment を含みます。
+step entry は trace、HTTP log、MCP log、検証済み result、`record.json`、宣言された attachment を含みます。
 Data table は `Data table` という名前の CSV attachment になります。
 Doc string は text attachment になり、allure-cucumberjs が省く内容も保持します。
 Examples table は `Examples` という名前の scenario attachment になります。

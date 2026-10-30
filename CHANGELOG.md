@@ -9,6 +9,11 @@ just until 0.1.
 
 ### Added
 
+- **The Allure report attaches a step's MCP calls.** `nuka report
+  --format allure` attaches `evidence.mcp` as `mcp log` beside the
+  `http log`, so a reader of the report sees the measured MCP calls of a
+  step, as they see its HTTP requests.
+
 - **A step's MCP calls are measured, and the server's work for them
   counts for the step.** A step that called a tool through an MCP client
   left nothing in its record: the calls had no line, carried no trace

@@ -8547,7 +8547,7 @@ A team that migrates an existing suite to nukadoko starts new Allure history, tr
 The compat door exists to let a suite move onto nukadoko, not to be where it settles.
 Once on nukadoko, a scenario's history starts building fresh from nukadoko's own runs.
 
-A step entry includes its trace, HTTP log, validated result, `record.json`, and declared attachments.
+A step entry includes its trace, HTTP log, MCP log, validated result, `record.json`, and declared attachments.
 Data tables become CSV attachments named `Data table`.
 Doc strings become text attachments, which preserves content that allure-cucumberjs omits.
 An Examples table becomes a scenario attachment named `Examples`.
