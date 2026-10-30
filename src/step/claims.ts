@@ -25,6 +25,7 @@ export const CLAIM_COMPARES = [
   "has-fields",
   "lacks-field",
   "fits-text",
+  "fits-aria-snapshot",
   "is-a",
   "matches",
   "greater-than",
@@ -180,6 +181,17 @@ export function placeViewed(place: ClaimPlace, view: ClaimView | undefined): Cla
 export function placeCounted(place: ClaimPlace, count: boolean | undefined): ClaimPlace {
   if (count !== true) return place;
   return { origin: place.origin, segments: [...place.segments, "#count"], label: `count of ${place.label}`, open: false };
+}
+
+/** The compare whose actual value is the ARIA snapshot nukadoko takes of
+ * the locator or page at its path, and not the value there. */
+export const ARIA_SNAPSHOT_COMPARE = "fits-aria-snapshot" satisfies ClaimCompare;
+
+/** `place` read through the ARIA snapshot nukadoko takes of the locator or
+ * page there: like a count, the last step a claim takes, so the label
+ * names it first. Pure. */
+export function placeAriaSnapshot(place: ClaimPlace): ClaimPlace {
+  return { origin: place.origin, segments: [...place.segments, "#aria-snapshot"], label: `ARIA snapshot of ${place.label}`, open: false };
 }
 
 function sameSegment(a: string, b: string): boolean {
@@ -896,6 +908,53 @@ function checkCount(label: string, claim: Record<string, unknown>): void {
   }
 }
 
+/** Refuses a `fits-aria-snapshot` claim the run could not judge as the
+ * line states it. Its actual value is the ARIA snapshot nukadoko takes of
+ * the locator or page `observe` returns at `actual`, so it reads nothing an
+ * earlier step returned (plain JSON, never a locator) and nothing inside an
+ * `each` item, and nothing (a view, an `at`, a count) stands between the
+ * value and the snapshot. Its expected tree is the text the line states,
+ * read as it is: a tree a step returned or `observe` read would be one a
+ * program wrote, so it could be the actual tree copied, and the claim
+ * would hold whatever the page shows. */
+function checkAriaSnapshot(label: string, claim: Record<string, unknown>, where: Where, actualFromObserve: boolean): void {
+  const takes = "fits-aria-snapshot takes the ARIA snapshot of a locator or page that observe returns";
+  if (where === "item") {
+    throw new InvalidClaimError(
+      `${label} compares with fits-aria-snapshot, and an item of each is plain JSON, never a locator or a page, while ${takes}, so the claim always breaks. Claim the snapshot at the top level, with actual naming the key observe returns it under`,
+    );
+  }
+  if (!actualFromObserve) {
+    throw new InvalidClaimError(
+      `${label}.actual reads a value an earlier step returned, which is plain JSON and never a locator or a page, and ${takes}, so the claim always breaks. Return the locator or page from observe, and name its key in actual`,
+    );
+  }
+  for (const key of ["view", "at", "count"] as const) {
+    if (claim[key] === undefined) continue;
+    throw new InvalidClaimError(
+      `${label} has ${key}, and ${takes} at actual, with nothing between the value and the snapshot. Name the locator or page in actual, and drop ${key}`,
+    );
+  }
+  const expected = claim.expected;
+  const literal = literalOf(expected);
+  if (literal !== null) {
+    throw new InvalidClaimError(
+      `${label}.expected is the literal ${describe(literal.literal)}, and the expected ARIA snapshot of fits-aria-snapshot is a tree of lines the line states, which the pattern's fixed words are not. Take the expected snapshot from the docstring`,
+    );
+  }
+  if (typeof expected === "object" && expected !== null) {
+    const source = "from" in expected ? "a value a step returned" : "a value observe read";
+    throw new InvalidClaimError(
+      `${label}.expected reads ${describe(expected)}, ${source}, and the expected ARIA snapshot of fits-aria-snapshot is the tree the line states: a tree a program wrote could be the actual tree copied, so the claim would hold whatever the page shows. Take the expected snapshot from the docstring`,
+    );
+  }
+  if (claim.expected_view !== undefined) {
+    throw new InvalidClaimError(
+      `${label}.expected_view is ${describe(claim.expected_view)}, and fits-aria-snapshot reads the expected ARIA snapshot from the text the line states, as it is. Drop expected_view`,
+    );
+  }
+}
+
 function checkComparison(label: string, claim: Record<string, unknown>, shape: ClaimStepShape, where: Where, actualFromObserve: boolean): void {
   if (claim.each !== undefined) {
     throw new InvalidClaimError(`${label} has each, which a claim inside each cannot have`);
@@ -910,6 +969,9 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   checkExpectedView(label, claim, shape);
   checkCount(label, claim);
   COMPARE_SIDES[claim.compare as ClaimCompare]?.(label, claim);
+  // Not a row of COMPARE_SIDES: it needs to know where the claim sits and
+  // what its actual reads.
+  if (claim.compare === ARIA_SNAPSHOT_COMPARE) checkAriaSnapshot(label, claim, where, actualFromObserve);
 }
 
 /** Whether a top-level claim's `actual` reads observe: it is not an

@@ -49,6 +49,7 @@ import { inputCopy, readAt, snapshotKeys, type Read, type Refusal, type Snapshot
 import { startPatternWorker, testPatternInWorker } from "./pattern-worker.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
+import { ariaSnapshotReader, takeAriaSnapshots } from "./aria-reads.js";
 import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
 
 // `nuka do` names where each args key came from, and where each claim
@@ -492,10 +493,13 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     ...eventsShape.keys,
   ];
   const shadowsOf = new WeakMap<Reader, ReadonlySet<string>>();
+  // The ARIA snapshots of one reading, beside its plain snapshots.
+  const ariaOf = new WeakMap<Reader, NonNullable<ClaimInputs["ariaSnapshots"]>>();
   const observeReceived = step.observe === undefined ? [] : Object.keys(args).filter((key) => !withheld.has(key));
   const claimInputs = (observed: Reader): ClaimInputs => ({
     args: readerOf(argReads),
     observed,
+    ...(ariaOf.has(observed) ? { ariaSnapshots: ariaOf.get(observed)! } : {}),
     shadowedByObserve: shadowsOf.get(observed) ?? NONE_SHADOWED,
     schemaChanged,
     fromKeys,
@@ -646,15 +650,21 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     };
   }
   const copies = inputCopies.copies;
-  const takeObserved = (value: unknown): Reader => {
+  const takeObserved = (value: unknown): Reader | Promise<Reader> => {
     const reader = readerOf(takeReads(value, reads.observed));
     const shadowed = typeof value === "object" && value !== null && !types.isProxy(value) ? actualFromKeys.filter((key) => Object.hasOwn(value, key)) : [];
     if (shadowed.length > 0) shadowsOf.set(reader, new Set(shadowed));
-    return reader;
+    if (reads.ariaSnapshots.length === 0) return reader;
+    return takeAriaSnapshots(value, reads.ariaSnapshots).then((taken) => {
+      ariaOf.set(reader, ariaSnapshotReader(taken));
+      return reader;
+    });
   };
   // The snapshot is taken the moment observe returns, before anything else
   // runs: a value it returned and changes later (on a timer, in a promise
-  // callback, on the next reading) is not what the claims read.
+  // callback, on the next reading) is not what the claims read. An ARIA
+  // snapshot asks the browser, so it comes after the plain ones, within
+  // the same reading and under the same deadline.
   const callObserve = (): Reader | Promise<Reader> => {
     attempts += 1;
     const returned: unknown = observe(fixtures, observeInputs(copies, withheld, name));

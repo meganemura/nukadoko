@@ -185,6 +185,7 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "has-fields",
   "lacks-field",
   "fits-text",
+  "fits-aria-snapshot",
   "is-a",
   "matches",
   "greater-than",
@@ -649,7 +650,9 @@ describe("compares", () => {
       const actual = tc.draw(jsonValues);
       const want = tc.draw(jsonValues);
       tc.assume(jsonType(actual) !== jsonType(want));
-      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a" && entry !== "lacks-field")));
+      // fits-aria-snapshot reads no value observe returned as JSON: its
+      // actual is the snapshot nukadoko takes of a locator.
+      const name = tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "has-item" && entry !== "is-a" && entry !== "lacks-field" && entry !== "fits-aria-snapshot")));
       const record = await judgeOne({ actual: "value", compare: name, expected: "want" }, { want }, { value: actual });
       expect(record.outcome).toBe("broken");
     }));
@@ -1418,9 +1421,18 @@ describe("where", () => {
 
   const decides = ["equal", "has-same-items", "has-fields", "lacks-field", "fits-text", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
   const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
+  // Judges a locator or page observe returned, which no item is.
+  const noItemTakes = ["fits-aria-snapshot"] as const;
 
-  it("sorts every compare into one that a where clause may not use on an overlapping place, or one the run judges", () => {
-    expect([...decides, ...leaves].sort()).toEqual([...CLAIM_COMPARES].sort());
+  it("sorts every compare into one that a where clause may not use on an overlapping place, one the run judges, or one no item claim takes", () => {
+    expect([...decides, ...leaves, ...noItemTakes].sort()).toEqual([...CLAIM_COMPARES].sort());
+    for (const compare of noItemTakes) {
+      for (const list of ["where", "claims"] as const) {
+        const entry = { actual: "a", compare, expected: "least" };
+        const each = list === "where" ? { where: [entry], claims: [{ actual: "b", compare: "at-least", expected: "least" }] } : { claims: [entry] };
+        expect(claimsProblem([{ actual: "result", each } as Claim], shape)).toContain(`claims[0].each.${list}[0] compares with fits-aria-snapshot, and an item of each is plain JSON, never a locator or a page`);
+      }
+    }
   });
 
   it("refuses a where clause whose place overlaps an item claim's when it compares with equal, has-same-items, has-fields, lacks-field, fits-text, is-a, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>

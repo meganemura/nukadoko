@@ -5,8 +5,10 @@ import { types } from "node:util";
 // returns either a fresh copy made only of plain JSON, sharing no object
 // with the value it was given, or a refusal that names where the first part
 // that is not plain JSON sits and what it is. `readAt` walks a path to the
-// value a claim names and takes its snapshot, and `snapshotKeys` takes one
-// of each key of a step's result. They are pure and run no code of the
+// value a claim names and takes its snapshot, `valueAt` is the walk alone,
+// for the locator or page a `fits-aria-snapshot` claim reads, which no copy
+// can hold, and `snapshotKeys` takes one of each key of a step's result.
+// They are pure and run no code of the
 // value's own: a getter is refused by its descriptor, never called, and a
 // Proxy is refused before any of its traps can run. `inputCopy` is the one
 // copy here that may run code (a structured clone calls getters): it makes
@@ -160,14 +162,20 @@ export function snapshot(value: unknown, maxDepth = SNAPSHOT_MAX_DEPTH): Snapsho
   return refusal === null ? { value: result } : { refused: refusal };
 }
 
+/** The value at a path, still the value step code holds, or why there
+ * is none: nothing at segment `missing`, or a part the walk will not read
+ * through. */
+export type Found = { readonly found: unknown } | { readonly missing: number } | { readonly refused: Refusal };
+
 /**
- * The snapshot of the value at `segments` inside `root`, walking own data
- * properties only, so no path reaches `Object.prototype` and no getter or
- * Proxy trap runs on the way. An array segment is a decimal index; nothing
- * else is read from an array, so `length` is not a path into one. A
- * refusal's `at` counts from `root`. Pure.
+ * The value at `segments` inside `root`, walking own data properties only,
+ * so no path reaches `Object.prototype` and no getter or Proxy trap runs on
+ * the way. An array segment is a decimal index; nothing else is read from
+ * an array, so `length` is not a path into one. The value itself is not
+ * copied: `readAt` takes its snapshot, and a caller that hands it to code
+ * of its own (an ARIA snapshot of a locator) does that itself. Pure.
  */
-export function readAt(root: unknown, segments: readonly string[], maxDepth = SNAPSHOT_MAX_DEPTH): Read {
+export function valueAt(root: unknown, segments: readonly string[]): Found {
   let current: unknown = root;
   for (let index = 0; index < segments.length; index += 1) {
     if (typeof current !== "object" || current === null) return { missing: index };
@@ -179,8 +187,17 @@ export function readAt(root: unknown, segments: readonly string[], maxDepth = SN
     if (!("value" in descriptor)) return { refused: { at: segments.slice(0, index + 1), problem: "is a getter" } };
     current = descriptor.value;
   }
-  if (current === undefined) return { missing: segments.length };
-  const taken = snapshot(current, maxDepth);
+  return current === undefined ? { missing: segments.length } : { found: current };
+}
+
+/**
+ * The snapshot of the value at `segments` inside `root`, found as
+ * `valueAt` finds it. A refusal's `at` counts from `root`. Pure.
+ */
+export function readAt(root: unknown, segments: readonly string[], maxDepth = SNAPSHOT_MAX_DEPTH): Read {
+  const found = valueAt(root, segments);
+  if (!("found" in found)) return found;
+  const taken = snapshot(found.found, maxDepth);
   return "refused" in taken ? { refused: { ...taken.refused, at: [...segments, ...taken.refused.at] } } : taken;
 }
 

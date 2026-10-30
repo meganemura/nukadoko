@@ -1,6 +1,7 @@
 import { describeRange } from "../../execution-events/count.js";
 import { describeCounted, describeLeftOut } from "../../execution-events/counted.js";
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
+import { snapshotDifference } from "../../step/aria-snapshot.js";
 import { deepEqual, fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 
 // Responsibility: one claim record as one line of plain text, the words
@@ -9,10 +10,11 @@ import { deepEqual, fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 // the cucumber-messages exception. One function, so the four never
 // describe the same claim differently. It reads a record that is already
 // written; it does not judge anything. Where it names the place two values
-// part under a compare that matches by shape (has-fields, fits-text), it
-// asks the matcher the claim was judged with, so the line cannot name a
-// place the judging did not, and where it names the items two lists do
-// not share, it pairs them with the equality the compare judged with.
+// part under a compare that matches by shape (has-fields, fits-text,
+// fits-aria-snapshot), it asks the matcher the claim was judged with, so
+// the line cannot name a place the judging did not, and where it names the
+// items two lists do not share, it pairs them with the equality the
+// compare judged with.
 
 /** A value longer than this is cut in a line; the record keeps it whole. */
 const VALUE_TEXT_LIMIT = 120;
@@ -200,6 +202,14 @@ export function fitsDifference(actual: unknown, expected: unknown): string | nul
   return `${fitted}expected line ${fit.fitted + 1} fits nothing from actual line ${fit.at}: actual ${sideText(fit.actual)}, expected ${valueText(fit.expected)}`;
 }
 
+/** The first expected line of a broken `fits-aria-snapshot` claim that
+ * fits nothing, the actual node it was looked for under, and the nearest
+ * actual node, found by the matcher the claim was judged with; `null`
+ * when the two fit, or for a value that is not a text. Pure. */
+export function ariaSnapshotDifferenceOf(actual: unknown, expected: unknown): string | null {
+  return typeof actual === "string" && typeof expected === "string" ? snapshotDifference(actual, expected) : null;
+}
+
 /** The field a broken `lacks-field` claim's actual object holds, with its
  * value, since an object too long for the line may not show it, and a
  * field set to `null` reads as absent to a reader who expects it gone;
@@ -381,6 +391,7 @@ const DIFFERENCES: Partial<Record<ClaimCompare, (actual: unknown, expected: unkn
   "has-fields": fieldsDifference,
   "lacks-field": presentFieldDifference,
   "fits-text": fitsDifference,
+  "fits-aria-snapshot": ariaSnapshotDifferenceOf,
 };
 
 function differenceText(record: ClaimComparisonRecord | ClaimEachRecord): string {

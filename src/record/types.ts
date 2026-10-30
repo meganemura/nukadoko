@@ -754,6 +754,7 @@ export type ClaimCompare =
   | "has-fields"
   | "lacks-field"
   | "fits-text"
+  | "fits-aria-snapshot"
   | "is-a"
   | "matches"
   | "greater-than"
@@ -786,7 +787,9 @@ export interface MeasuredChannel {
  * `reason` says which). `*_from` names where each side came from, `view`
  * and `at` included: `sentence:<key>`, `from:<step>@<line or step record id>.<path>`,
  * `literal:<the pattern words that state it>`, or `observe:<path>`, with
- * `count of ` before it for a claim that counts.
+ * `count of ` before it for a claim that counts, and `ARIA snapshot of `
+ * before it for a `fits-aria-snapshot` claim, whose `actual` is the text of
+ * the ARIA snapshot nukadoko took.
  * `expected_text` is the text the sentence states the expected value as:
  * a capture's text, the docstring, the table, or the pattern words of a
  * literal, and `null` for a value from an earlier step or from `observe`.

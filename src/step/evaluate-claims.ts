@@ -11,12 +11,15 @@ import type {
 } from "../record/types.js";
 import { COUNT_COMPARES, judgeCount, type CountCompare, type CountReading } from "../execution-events/count.js";
 import type { CountedGroup, LeftOutGroup } from "../execution-events/counted.js";
+import { judgeSnapshots } from "./aria-snapshot.js";
 import {
+  ARIA_SNAPSHOT_COMPARE,
   isEachClaim,
   kindNamed,
   NO_EVENTS,
   literalStatedByAll,
   pathSegments,
+  placeAriaSnapshot,
   placeAt,
   placeCounted,
   placesOverlap,
@@ -56,6 +59,11 @@ import { readAt, snapshot, type Read, type Refusal } from "./snapshot.js";
 // and could come out otherwise with them is `unjudged` and names the
 // step, the place, and the keys, and one that holds whatever they were
 // still holds.
+//
+// A `fits-aria-snapshot` claim reads no JSON value `observe` returned:
+// its actual is the text of the ARIA snapshot nukadoko took of the locator
+// or page there, right after `observe` returned (src/run/aria-reads.ts),
+// and that text is what is compared and what the record shows.
 //
 // A claim on a count of execution events reads no snapshot: its actual
 // is the range nukadoko counted (src/execution-events/count.ts), and it
@@ -483,6 +491,15 @@ export async function compareValues(
       }
       return { holds: textFit(actual as string, expected as string).fits };
     }
+    case "fits-aria-snapshot": {
+      if (actualType !== "string" || expectedType !== "string") {
+        return { reason: `fits-aria-snapshot reads two ARIA snapshots as texts, and compares ${article(actualType)} with ${article(expectedType)}` };
+      }
+      const judged = judgeSnapshots(actual as string, expected as string);
+      if ("broken" in judged) return { reason: judged.broken };
+      if ("unjudged" in judged) return { stopped: judged.unjudged };
+      return { holds: judged.fits };
+    }
     case "is-a": {
       // One of the two compares whose sides differ in type by design (the
       // other is lacks-field): the expected side names a kind, and the actual
@@ -559,6 +576,10 @@ export interface ClaimReads {
   /** Every args path a claim reads. */
   readonly args: readonly (readonly string[])[];
   readonly observed: readonly (readonly string[])[];
+  /** The paths into what `observe` returned whose ARIA snapshot nukadoko
+   * takes, for a `fits-aria-snapshot` claim: the value there is a locator
+   * or a page, which no plain JSON snapshot holds. */
+  readonly ariaSnapshots: readonly (readonly string[])[];
   /** The args paths a claim compares as one value: what the args schema's
    * output is compared with whole. */
   readonly argValues: readonly (readonly string[])[];
@@ -591,6 +612,7 @@ export function itemSegments(claim: ItemClaim): readonly string[] {
 export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<string>, events: EventsShape = NO_EVENTS): ClaimReads {
   const args = new Map<string, readonly string[]>();
   const observed = new Map<string, readonly string[]>();
+  const ariaSnapshots = new Map<string, readonly string[]>();
   const argValues = new Map<string, readonly string[]>();
   const argItems = new Map<string, { segments: readonly string[]; inside: Map<string, readonly string[]> }>();
   const add = (into: Map<string, readonly string[]>, segments: readonly string[] | null): void => {
@@ -611,7 +633,8 @@ export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<strin
     }
     const segments = actualSegments(claim);
     const fromArgs = segments !== null && fromKeys.has(segments[0]!);
-    if (segments !== null) add(fromArgs ? args : observed, segments);
+    const ariaSnapshot = !isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE;
+    if (segments !== null) add(fromArgs ? args : ariaSnapshot ? ariaSnapshots : observed, segments);
     if (!isEachClaim(claim)) {
       if (fromArgs) add(argValues, segments);
       addExpected(claim.expected);
@@ -631,6 +654,7 @@ export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<strin
   return {
     args: [...args.values()],
     observed: [...observed.values()],
+    ariaSnapshots: [...ariaSnapshots.values()],
     argValues: [...argValues.values()],
     argItems: [...argItems.values()].map((entry) => ({ segments: entry.segments, inside: [...entry.inside.values()] })),
   };
@@ -692,6 +716,10 @@ export interface ClaimInputs {
   /** What `observe` returned, as snapshots taken the moment it returned.
    * `observe` itself received copies of its inputs, never the args. */
   readonly observed: Reader;
+  /** The ARIA snapshot nukadoko took, right after `observe` returned, of
+   * the locator or page at each path a `fits-aria-snapshot` claim reads
+   * (`ClaimReads.ariaSnapshots`); absent when it took none. */
+  readonly ariaSnapshots?: (segments: readonly string[]) => AriaSnapshotRead;
   /** Where the args schema's output differs from the snapshot at a place
    * a claim reads (`segments`, read as one value, or item by item for an
    * `each`), or `null`: a claim on such a value would judge something the
@@ -732,6 +760,15 @@ export interface ClaimInputs {
    * step with no `events`. */
   readonly events?: ReadonlyMap<string, EventsCountSide>;
 }
+
+/** What nukadoko's ARIA snapshot of the value at one path of `observe`'s
+ * result found: the text the browser printed, or why there is none, as a
+ * phrase that follows the place's name. A value that is no locator or
+ * page breaks the claim, since `observe` returns it on every reading; a
+ * snapshot the browser could not take (a locator that matched nothing in
+ * time, or more than one element) leaves it unjudged, since nothing was
+ * measured. */
+export type AriaSnapshotRead = { readonly text: string } | { readonly broken: string } | { readonly unjudged: string };
 
 /** What nukadoko knows of the keys an earlier step (`step`) had its
  * `returns` drop from one object of the value it returned: the keys its
@@ -852,6 +889,7 @@ function topLevelSide(claim: Claim, inputs: ClaimInputs): Side & { readonly from
   const segments = actualSegments(claim) ?? path;
   const atRead = segments.length > path.length;
   const fromKey = inputs.fromKeys.has(path[0]!) ? path[0]! : null;
+  if (!isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE) return { ...ariaSnapshotSide(path, fromKey, inputs), fromKey, atRead: false };
   const read = fromKey === null ? inputs.observed(segments) : inputs.args(segments);
   const base = fromKey === null ? OBSERVE_PLACE : argPlace(fromKey, inputs);
   const skip = fromKey === null ? 0 : 1;
@@ -861,6 +899,20 @@ function topLevelSide(claim: Claim, inputs: ClaimInputs): Side & { readonly from
     return { place, broken: `${place.label} has nothing at ${claim.at!}`, fromKey, atRead };
   }
   return { ...sideOf(read, base, rest, skip), fromKey, atRead };
+}
+
+/** The side a `fits-aria-snapshot` claim reads: the ARIA snapshot
+ * nukadoko took of the locator or page `observe` returned at `path`.
+ * `defineStep` refuses such a claim on a `from` value; one that reaches
+ * here anyway breaks, since a value an earlier step returned is plain
+ * JSON, and a text there would be a tree step code wrote. */
+function ariaSnapshotSide(path: readonly string[], fromKey: string | null, inputs: ClaimInputs): Side {
+  const read = fromKey === null ? placeAt(OBSERVE_PLACE, path.join(".")) : placeAt(argPlace(fromKey, inputs), path.slice(1).join("."));
+  const place = placeAriaSnapshot(read);
+  if (fromKey !== null) return { place, broken: `${read.label} is a value an earlier step returned, and fits-aria-snapshot takes the ARIA snapshot of a locator or page that observe returns` };
+  const taken = inputs.ariaSnapshots?.(path) ?? { unjudged: "has no ARIA snapshot nukadoko took, so the claim was not judged" };
+  if ("text" in taken) return { place, value: taken.text };
+  return "broken" in taken ? { place, broken: `${read.label} ${taken.broken}` } : { place, unjudged: `${read.label} ${taken.unjudged}` };
 }
 
 /** A side through `view` and then `at`; `atRead` when the side was read
@@ -1537,6 +1589,7 @@ function actualPlace(claim: Claim, inputs: ClaimInputs): ClaimPlace {
   if (events !== undefined) return { origin: "events", segments: [claim.actual], label: events.label, open: false };
   const segments = pathSegments(claim.actual) ?? [claim.actual];
   const base = inputs.fromKeys.has(segments[0]!) ? placeAt(argPlace(segments[0]!, inputs), segments.slice(1).join(".")) : placeAt(OBSERVE_PLACE, claim.actual);
+  if (!isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE) return placeAriaSnapshot(base);
   return placeCounted(placeAt(placeViewed(base, claim.view), claim.at), isEachClaim(claim) ? undefined : claim.count);
 }
 

@@ -162,7 +162,7 @@ describe("snapshotFits", () => {
       const expected = cut(tc, from) as Tree;
       const docstring = print(from === top ? expected.children : [expected]).join("\n");
       const judged = judgeSnapshots(text, docstring);
-      tc.assume(!("reason" in judged && judged.reason.includes("names no node")));
+      tc.assume(!("broken" in judged && judged.broken.includes("names no node")));
       expect(judged, `${docstring}\n--- fits ---\n${text}`).toEqual({ fits: true });
     }));
 
@@ -175,7 +175,7 @@ describe("snapshotFits", () => {
       const place = tc.draw(gs.integers({ minValue: 1, maxValue: size }));
       const smaller = print(without(expected, place).children).join("\n");
       const judged = judgeSnapshots(text, smaller);
-      tc.assume(!("reason" in judged));
+      tc.assume(!("broken" in judged));
       expect(judged, `${smaller}\n--- fits ---\n${text}`).toEqual({ fits: true });
     }));
 
@@ -255,7 +255,7 @@ describe("judgeSnapshots on a real page's snapshot", () => {
 
   it("refuses an expected tree that names no node, since every page holds it", () => {
     for (const empty of ["", "  \n", "# only a comment", '- text: ""', "- /children: equal"]) {
-      expect(judgeSnapshots(ROOM, empty)).toEqual({ reason: "fits-aria-snapshot has an expected ARIA snapshot that names no node, which every page holds" });
+      expect(judgeSnapshots(ROOM, empty)).toEqual({ broken: "fits-aria-snapshot has an expected ARIA snapshot that names no node, which every page holds" });
     }
   });
 
@@ -277,7 +277,7 @@ describe("judgeSnapshots on a real page's snapshot", () => {
       "- paragraph: |\n    text",
     ].map((expected) => {
       const judged = judgeSnapshots(ROOM, expected);
-      return "reason" in judged ? judged.reason.replace("the expected ARIA snapshot does not read: ", "") : judged;
+      return "broken" in judged ? judged.broken.replace("the expected ARIA snapshot does not read: ", "") : judged;
     });
     expect(reasons).toEqual([
       "line 1 names heading with a pattern between slashes, which fits-aria-snapshot does not judge: state the name in double quotes, or claim the part that changes with another claim",

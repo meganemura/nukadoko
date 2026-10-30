@@ -1018,16 +1018,33 @@ export function misfitText(misfit: SnapshotMisfit): string {
   }
 }
 
-/** Whether a broken claim's actual snapshot fits its expected one, or why
- * either text reads as no snapshot, or why the expected one names nothing
- * a page could lack. The compare's whole judgment, from the two texts the
- * record keeps. Pure. */
-export function judgeSnapshots(actualText: string, expectedText: string): { readonly fits: boolean } | { readonly reason: string } {
+/** The expected text of a claim as a tree, or why it is none: a text
+ * that does not read, or a tree that names no node, which every page
+ * holds. Either breaks the claim on every page. */
+function expectedTree(expectedText: string): { readonly root: ExpectedNode } | { readonly problem: string } {
   const expected = readExpectedSnapshot(expectedText);
-  if ("problem" in expected) return { reason: `the expected ARIA snapshot does not read: ${expected.problem}` };
-  if (expected.named === 0) return { reason: "fits-aria-snapshot has an expected ARIA snapshot that names no node, which every page holds" };
+  if ("problem" in expected) return { problem: `the expected ARIA snapshot does not read: ${expected.problem}` };
+  return expected.named === 0 ? { problem: "fits-aria-snapshot has an expected ARIA snapshot that names no node, which every page holds" } : { root: expected.root };
+}
+
+/** Why an expected text breaks a claim on every page, or `null`: what
+ * the check reports from the line alone, before a run. Pure. */
+export function expectedSnapshotProblem(expectedText: string): string | null {
+  const tree = expectedTree(expectedText);
+  return "problem" in tree ? tree.problem : null;
+}
+
+/** Whether a claim's actual snapshot fits its expected one: the
+ * compare's whole judgment, from the two texts the record keeps. An
+ * expected text that is no tree, or names nothing, breaks the claim, since
+ * the line states it. An actual text that does not read leaves the claim
+ * unjudged: the browser printed something this reader does not know, which
+ * says nothing about the page. Pure. */
+export function judgeSnapshots(actualText: string, expectedText: string): { readonly fits: boolean } | { readonly broken: string } | { readonly unjudged: string } {
+  const expected = expectedTree(expectedText);
+  if ("problem" in expected) return { broken: expected.problem };
   const actual = readActualSnapshot(actualText);
-  if ("problem" in actual) return { reason: `the ARIA snapshot nukadoko took does not read: ${actual.problem}` };
+  if ("problem" in actual) return { unjudged: `the ARIA snapshot nukadoko took does not read: ${actual.problem}, so the claim was not judged` };
   return { fits: snapshotFits(actual.root, expected.root) };
 }
 
@@ -1035,9 +1052,9 @@ export function judgeSnapshots(actualText: string, expectedText: string): { read
  * they fit or either does not read (the claim's reason says why then).
  * Pure. */
 export function snapshotDifference(actualText: string, expectedText: string): string | null {
-  const expected = readExpectedSnapshot(expectedText);
+  const expected = expectedTree(expectedText);
   const actual = readActualSnapshot(actualText);
-  if ("problem" in expected || "problem" in actual || expected.named === 0) return null;
+  if ("problem" in expected || "problem" in actual) return null;
   const misfit = snapshotMisfit(actual.root, expected.root);
   return misfit === null ? null : misfitText(misfit);
 }
