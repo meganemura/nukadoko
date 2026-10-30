@@ -1802,14 +1802,15 @@ Then the page shows
 ```
 
 期待する行の役割を持つノードがそこに無いときは、その行は、期待する行が入るはずの位置にある実際の子を名指しします。
-それは、前の兄弟が合った子の次の子で、直すべき行はそこだからです。
+それは、前の兄弟が合った子と、次の兄弟が合った子(無ければ親の終わり)のあいだにある子で、直すべき行はそのどれかだからです。
+そのような子が 1 つならその行で名指しし(`; the child at that place is slider "Points": "50" (actual line 7)`)、いくつかあればその行の範囲で名指しします。
 
 ```text
-... broken; expected line 2 (spinbutton) fits no child of main (actual line 5), and no node there is a spinbutton; the child at that place is slider "Points": "50" (actual line 7)
+... broken; expected line 2 (spinbutton) fits no child of main (actual line 5), and no node there is a spinbutton; the 3 children at that place are actual lines 7 to 9
 ```
 
 その行は、実際の側を、ページの先頭ではなく、合わなかったところが指すスナップショットの行として、行番号とともに示します。
-それは、期待する行を探したノードから、名指ししたノードまでの、最大 12 行です(`"- main:\n  - heading \"Alpha\" [level=2]\n ..." (lines 5 to 7 of ARIA snapshot of observe:page)`)。
+それは、前の兄弟が合った子(最初の子なら、期待する行を探したノード)から、もっとも近いノードまで、またはその位置にある子の終わりまでの、最大 12 行です(`"  - heading \"Alpha\" [level=2]\n ..." (lines 6 to 9 of ARIA snapshot of observe:page)`)。
 record は ARIA スナップショット全体を `actual` として持つので、読み手はページがほかに何を見せていたかを見られます。
 それは nukadoko が取ったテキストで、step のコードが書いたものではありません。
 文字列や、その名前の関数を持つただのオブジェクトのように、クラスに `ariaSnapshot()` のない値では claim は成り立たず、それが何かを名指しします(`observe:page is a string, and fits-aria-snapshot takes the ARIA snapshot of a locator or page that observe returns`)。

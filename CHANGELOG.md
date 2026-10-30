@@ -66,14 +66,15 @@ just until 0.1.
   actual node (`; expected line 2 (button "Submit") fits no child of form
   "Scores" (actual line 3); nearest: button "Skip" [disabled] (actual
   line 7)`); when no node there has the expected role, it names the
-  actual child at the place the expected line would go, the one after
-  the child its previous sibling fit (`, and no node there is a
-  spinbutton; the child at that place is slider "Points": "50" (actual
-  line 7)`). The line shows the actual side as the numbered snapshot
-  lines the misfit points at, at most 12, rather than the page's first
-  characters (`(lines 5 to 7 of ARIA snapshot of observe:page)`). A snapshot the browser could not take, such as a locator
-  that matched no element or more than one, leaves the claim `unjudged`
-  with the browser's first line. `defineStep` refuses the compare on an
+  actual children at the place the expected line would go, between the
+  children its previous and next siblings fit (`, and no node there is a
+  spinbutton; the 3 children at that place are actual lines 7 to 9`).
+  The line shows the actual side as the numbered snapshot lines the
+  misfit points at, from the child the previous sibling fit, at most 12,
+  rather than the page's first characters (`(lines 6 to 9 of ARIA
+  snapshot of observe:page)`). A snapshot the browser could not take,
+  such as a locator that matched no element or more than one, leaves the
+  claim `unjudged` with the browser's first line. `defineStep` refuses the compare on an
   actual from `from`, inside `each`, or with `view`, `at`, or `count`, and
   on an expected value that is a literal, `{ from }`, `{ observe }`, read
   through `expected_view`, or not a plain `z.string()`, since the expected

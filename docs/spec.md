@@ -2246,20 +2246,24 @@ with the state or the prop that differs:
 ```
 
 When no node there has the expected line's role, the line names the
-actual child at the place the expected line would go, the one after the
-child its previous sibling fit, since that is the line to edit:
+actual children at the place the expected line would go: those between
+the child its previous sibling fit and the child its next sibling fit
+(or the parent's end), since one of them is the line to edit. It names
+one such child by its line (`; the child at that place is slider
+"Points": "50" (actual line 7)`), and several by their lines:
 
 ```text
-... broken; expected line 2 (spinbutton) fits no child of main (actual line 5), and no node there is a spinbutton; the child at that place is slider "Points": "50" (actual line 7)
+... broken; expected line 2 (spinbutton) fits no child of main (actual line 5), and no node there is a spinbutton; the 3 children at that place are actual lines 7 to 9
 ```
 
 The line shows the actual side as the snapshot lines that misfit points
-at, numbered, rather than the start of the page: from the node the
-expected line was looked for under to the node it names, at most 12
-lines (`"- main:\n  - heading \"Alpha\" [level=2]\n ..." (lines 5 to 7 of
-ARIA snapshot of observe:page)`). The record keeps the whole snapshot
-as `actual`, so a reader sees what else the page showed. It is a text nukadoko took and never one step code
-wrote: a value whose class has no `ariaSnapshot()`, such as a string or
+at, numbered, rather than the start of the page: from the child the
+previous sibling fit (or the node the expected line was looked for
+under, for a first child) to the nearest node, or through the children
+at its place, at most 12 lines (`"  - heading \"Alpha\" [level=2]\n ..."
+(lines 6 to 9 of ARIA snapshot of observe:page)`). The record keeps the
+whole snapshot as `actual`, so a reader sees what else the page
+showed. It is a text nukadoko took and never one step code wrote: a value whose class has no `ariaSnapshot()`, such as a string or
 a plain object with a function of that name, breaks the claim and names
 what it is (`observe:page is a string, and fits-aria-snapshot takes the
 ARIA snapshot of a locator or page that observe returns`). A snapshot
