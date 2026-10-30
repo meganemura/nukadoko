@@ -648,6 +648,11 @@ export interface RunWorldProgramLog {
   readonly tagged: number;
 }
 
+/** The order a run's passes ran their scenarios in: the order the targets
+ * select, or one a seed shuffled, which `--order shuffled:<seed>` runs
+ * again. */
+export type RunOrder = { readonly kind: "file" } | { readonly kind: "shuffled"; readonly seed: number };
+
 /** The fields `nuka run` puts beside the envelope's `findings`. */
 export type RunFields = {
   readonly run_id: string;
@@ -677,6 +682,10 @@ export type RunFields = {
   /** Under `--tag`: its expressions in the order given, and how many
    * scenarios of the targeted files they left out. Absent without it. */
   readonly tag_selection?: { readonly expressions: readonly string[]; readonly left_out: number };
+  /** The order each pass ran its scenarios in (`nuka run --order`).
+   * Absent in a run.json an earlier build wrote, which ran in file
+   * order. */
+  readonly order?: RunOrder;
   /** `skipped` for a run started with `--no-check`, so no static finding
    * held it back; `ran` otherwise. Absent in a run.json an earlier build
    * wrote. */
