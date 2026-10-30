@@ -230,7 +230,7 @@ describe("a request with no response", () => {
     observed.close();
     leave();
     while (held.length < 1) await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(observed.afterStepEnd()).toEqual({ requests: 1, processes: 0 });
+    expect(observed.afterStepEnd()).toEqual({ requests: 1, processes: 0, mcp: 0 });
     expect(httpLines()).toEqual([]);
     finalizeOpenRequests();
     expect(httpLines()).toEqual([

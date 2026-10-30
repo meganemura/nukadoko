@@ -71,6 +71,8 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ItemClaim",
     "KeptText",
     "MaybeCounts",
+    "McpCallLine",
+    "McpTransport",
     "MeasuredChannel",
     "NamedTraceEntry",
     "NukadokoConfig",
