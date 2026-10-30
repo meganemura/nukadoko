@@ -4,16 +4,17 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { MAX_ENTRIES } from "../src/context/file-snapshot.js";
+import { bySeverity } from "./helpers/envelope.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: a claim on the files an earlier step's commands changed
-// end to end, through `nuka run` and `nuka do --use` against
-// tests/fixtures/files-project, whose producers run a stand-in build
-// through `runCommand` (or write without one). A Then judges the paths
-// the producer's record lists, and never a value its code returned: an
-// empty list holds only when every process was walked whole, a producer
-// that ran no process leaves the claim unjudged, and so does a walk that
-// was not made.
+// end to end, through `nuka run`, `nuka do --use`, and `nuka check`
+// against tests/fixtures/files-project, whose producers run a stand-in
+// build through `runCommand` (or write without one). A Then judges the
+// paths the producer's record lists, and never a value its code
+// returned: an empty list holds only when every process was walked whole,
+// a producer that ran no process leaves the claim unjudged, and so does a
+// walk that was not made.
 
 async function cli(rootDir: string, args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const stdout = createCaptureSink();
@@ -200,5 +201,48 @@ describe("the vocabulary of a files key", () => {
     expect((JSON.parse(described.stdout) as { files: unknown }).files).toEqual({ written: { of: ["run-build"], change: ["added", "changed"] } });
     const under = await cli(rootDir, ["describe", "no-src-change"]);
     expect((JSON.parse(under.stdout) as { files: unknown }).files).toEqual({ source: { of: ["run-build"], under: "src/" } });
+  });
+});
+
+describe("nuka check: the order of a files producer", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("files-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("names a claim line whose producer no earlier line runs, or two candidates ran before it", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "files.feature"),
+      feature([
+        ["no producer", ["Then the build changed no file under src/"]],
+        ["two producers", ["When the build runs in-process", 'And the build runs with "check"', "Then the build writes nothing"]],
+        ["one producer", ['When the build runs with "check"', "Then the build writes nothing"]],
+      ]),
+    );
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
+    expect(exitCode).toBe(1);
+    const { errors } = bySeverity(stdout.text()) as { errors: { code: string; line?: number; message: string; fix?: string }[] };
+    expect(errors.map(({ code, line, message, fix }) => ({ code, line, message, fix }))).toEqual([
+      {
+        code: "files-producer-missing",
+        line: 4,
+        message:
+          'Step "no-src-change"\'s files.source reads the files the commands of step "run-build" changed, and no earlier line runs it: "run-build" runs nowhere in this scenario. Each claim on the list is unjudged',
+        fix: 'Put a line that runs step "run-build" earlier in the scenario, or, if an earlier line runs the step whose files the claim means, list that step in files.source.of of step "no-src-change".',
+      },
+      {
+        code: "files-producer-ambiguous",
+        line: 9,
+        message:
+          'Step "writes-nothing"\'s files.written reads the files the commands of one of steps "run-build", "build-in-process", "build-in-two-dirs", and "build-in-big-tree" changed, and "run-build" and "build-in-process" each ran earlier in this scenario, so the run cannot choose whose files to read, and each claim on the list is unjudged',
+        fix: 'Remove or move lines so that exactly one of steps "run-build" and "build-in-process" runs before this line.',
+      },
+    ]);
   });
 });

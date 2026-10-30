@@ -1532,7 +1532,7 @@ step のコードが返した値から作ることはありません。
   選び方は events のキーと同じです(「実行イベントの数についての claim」を参照)。
   scenario の前の行でちょうど 1 つが走り、それを走らせた最後の行が読まれます。
   1 つも走っていないときも、2 つが走ったときも、claim は `unjudged` です。
-  その reason が、それらを名指します。
+  `nuka check` は world が起動する前に、そのどちらもエラー `files-producer-missing` と `files-producer-ambiguous` として報告します。
   `nuka do` の下では、読む record を `--use` が名指します。
 - `change` は `added`、`changed`、`removed` か、そのリストを選びます。
   書かないときは、すべての変化を選びます。

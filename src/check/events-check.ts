@@ -6,6 +6,7 @@ import { namesPlaceholder } from "../program/placeholders.js";
 import {
   producersOf,
   isClaimStep,
+  type ClaimStep,
   type Step,
 } from "../step/define-step.js";
 import type { BoundStepLine, StepTextMatcher } from "./feature-check.js";
@@ -41,16 +42,62 @@ import type { CheckIssue } from "./types.js";
 // such a world is often one the project does not run, such as a shared
 // staging server, the other scenarios still have something to say there,
 // and the run names each claim it cannot judge with `world-unread`.
+//
+// A claim step's `files` (docs/spec.md "Files an earlier step changed")
+// chooses its producer by the same order rule, so the same two findings
+// name a key whose producer no earlier line runs
+// (`files-producer-missing`) or whose candidates two lines ran
+// (`files-producer-ambiguous`). Whether that producer will run a command
+// is not known before it runs: a step that calls `runCommand` through a
+// helper names it nowhere in its own source, so the check stays silent
+// there, and the run leaves the claim unjudged.
 
-/** One events key whose producer the scenario cannot supply. */
-export interface EventsOrderIssue {
+/** One events or files key whose producer the scenario cannot supply. */
+export interface ProducerOrderIssue {
   /** 0-based index into `pickle.steps`: the claim step's line. */
   readonly stepIndex: number;
   readonly stepName: string;
-  readonly code: "events-producer-missing" | "events-producer-ambiguous";
+  readonly code: "events-producer-missing" | "events-producer-ambiguous" | "files-producer-missing" | "files-producer-ambiguous";
   readonly message: string;
   readonly fix: string;
 }
+
+/** A reading of an earlier step that a claim step declares by key, each
+ * with an `of`: what the findings call it, and what is left unjudged. */
+interface Reading {
+  readonly option: "events" | "files";
+  readonly entries: (step: ClaimStep) => Readonly<Record<string, { readonly of: Step | readonly Step[] }>>;
+  /** What the key does with the step `whose` names. */
+  readonly reads: (whose: string) => string;
+  /** What the run cannot choose when two candidates ran. */
+  readonly choose: string;
+  /** The claims left unjudged, and the gap word when there is one. */
+  readonly unjudged: string;
+  readonly missingTail: string;
+  /** The step a fix lists in `of`: the one whose reading the claim means. */
+  readonly means: string;
+}
+
+const READINGS: readonly Reading[] = [
+  {
+    option: "events",
+    entries: (step) => step.events,
+    reads: (whose) => `counts the execution events of ${whose}`,
+    choose: "whose events to count",
+    unjudged: "each claim on the count is unjudged",
+    missingTail: " (producer-not-run)",
+    means: "whose execution events the claim means",
+  },
+  {
+    option: "files",
+    entries: (step) => step.files,
+    reads: (whose) => `reads the files the commands of ${whose} changed`,
+    choose: "whose files to read",
+    unjudged: "each claim on the list is unjudged",
+    missingTail: "",
+    means: "whose files the claim means",
+  },
+];
 
 /** `"a"`, `"a" and "b"`, `"a", "b", and "c"`: the run's own way of
  * naming candidates (src/run/run-scenario.ts). */
@@ -60,14 +107,14 @@ function quoted(names: readonly string[]): string {
   return `${each.slice(0, -1).join(", ")}, and ${each.at(-1)}`;
 }
 
-/** The events keys of each claim step bound in `pickle` whose `of`
- * names no step an earlier line runs, or two that earlier lines run.
+/** The events and files keys of each claim step bound in `pickle` whose
+ * `of` names no step an earlier line runs, or two that earlier lines run.
  * Pure. */
-export function checkEventsOrder(
+export function checkProducerOrder(
   pickle: Pickle,
   vocabulary: Vocabulary,
   match: StepTextMatcher,
-): readonly EventsOrderIssue[] {
+): readonly ProducerOrderIssue[] {
   const matches = pickle.steps.map((step) => match(step.text));
   const resolved = matches.map((result) =>
     result.stepNames.length === 1 ? result.stepNames[0] : undefined,
@@ -76,7 +123,7 @@ export function checkEventsOrder(
   for (const entry of vocabulary.values()) {
     if (entry.kind === "typed") nameOf.set(entry.step, entry.name);
   }
-  const issues: EventsOrderIssue[] = [];
+  const issues: ProducerOrderIssue[] = [];
   pickle.steps.forEach((_, stepIndex) => {
     const stepName = resolved[stepIndex];
     const entry = stepName === undefined ? undefined : vocabulary.get(stepName);
@@ -91,8 +138,8 @@ export function checkEventsOrder(
     const undefinedBefore = matches
       .slice(0, stepIndex)
       .some((earlier) => earlier.stepNames.length === 0);
-    for (const [key, events] of Object.entries(entry.step.events)) {
-      const names = producersOf(events).flatMap((step) => {
+    for (const reading of READINGS) for (const [key, declared] of Object.entries(reading.entries(entry.step))) {
+      const names = producersOf(declared).flatMap((step) => {
         const name = nameOf.get(step);
         return name === undefined ? [] : [name];
       });
@@ -101,15 +148,15 @@ export function checkEventsOrder(
       if (names.length === 0) continue;
       const ran = names.filter((name) => before.includes(name));
       if (ran.length === 1) continue;
-      const where = `Step "${stepName}"'s events.${key}`;
+      const where = `Step "${stepName}"'s ${reading.option}.${key}`;
       if (ran.length >= 2) {
         issues.push({
           stepIndex,
           stepName,
-          code: "events-producer-ambiguous",
+          code: `${reading.option}-producer-ambiguous`,
           message:
-            `${where} counts the execution events of one of steps ${quoted(names)}, and ${quoted(ran)} each ran earlier in this scenario, ` +
-            "so the run cannot choose whose events to count, and each claim on the count is unjudged",
+            `${where} ${reading.reads(`one of steps ${quoted(names)}`)}, and ${quoted(ran)} each ran earlier in this scenario, ` +
+            `so the run cannot choose ${reading.choose}, and ${reading.unjudged}`,
           fix: `Remove or move lines so that exactly one of steps ${quoted(ran)} runs before this line.`,
         });
         continue;
@@ -126,14 +173,15 @@ export function checkEventsOrder(
         names.length === 1
           ? `step "${names[0]}"`
           : `exactly one of steps ${quoted(names)}`;
+      const unjudged = reading.unjudged.charAt(0).toUpperCase() + reading.unjudged.slice(1);
       issues.push({
         stepIndex,
         stepName,
-        code: "events-producer-missing",
-        message: `${where} counts the execution events of ${whose}, and no earlier line runs it: ${status}. Each claim on the count is unjudged (producer-not-run)`,
+        code: `${reading.option}-producer-missing`,
+        message: `${where} ${reading.reads(whose)}, and no earlier line runs it: ${status}. ${unjudged}${reading.missingTail}`,
         fix:
-          `Put a line that runs ${whose} earlier in the scenario, or, if an earlier line runs the step whose execution events the claim means, ` +
-          `list that step in events.${key}.of of step "${stepName}".`,
+          `Put a line that runs ${whose} earlier in the scenario, or, if an earlier line runs the step ${reading.means}, ` +
+          `list that step in ${reading.option}.${key}.of of step "${stepName}".`,
       });
     }
   });

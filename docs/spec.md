@@ -1863,8 +1863,10 @@ measured.
   candidate steps, chosen as an events key's are (see "A claim on a
   count of events"): exactly one of them runs earlier in the scenario,
   and the latest line that ran it is the one read. When none ran, or
-  two did, the claim is `unjudged`, and its reason names them. Under
-  `nuka do`, `--use` names the record to read.
+  two did, the claim is `unjudged`, and `nuka check` reports both before
+  a world starts, as the errors `files-producer-missing` and
+  `files-producer-ambiguous`. Under `nuka do`, `--use` names the record
+  to read.
 - `change` selects `added`, `changed`, or `removed`, or a list of them,
   and every change when it is left out.
 - `under` keeps the paths inside one directory, written relative to the

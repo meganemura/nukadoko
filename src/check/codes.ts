@@ -207,6 +207,18 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
   },
+  "files-producer-ambiguous": {
+    description:
+      "A step's files names more than one candidate step in of, and more than one of them runs earlier in the scenario, so the run cannot choose whose files to read and each claim on the list is unjudged.",
+    severity: "error",
+    fix: "Remove or move lines so that exactly one of the candidate steps runs before the line that reads their files.",
+  },
+  "files-producer-missing": {
+    description:
+      "A step's files reads the files the commands of a step changed, and no earlier line in the scenario runs that step, so each claim on the list is unjudged.",
+    severity: "error",
+    fix: "Put a line that runs the step earlier in the scenario, or list the step an earlier line runs in that key's of.",
+  },
   "fixture-cycle": {
     description: "config.fixtures definitions depend on each other in a cycle, so none of them can ever resolve.",
     severity: "error",

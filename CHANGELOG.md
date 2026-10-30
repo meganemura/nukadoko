@@ -28,8 +28,10 @@ just until 0.1.
   directories leave the claim `unjudged`, with the reason, since a list
   nukadoko never measured is not an empty one. `measured` names the
   producer's `observed.processes[0].files`. The producer is chosen as an
-  events key's is: `nuka do` takes the producer's record through
-  `--use`, and `nuka steps` and `nuka describe` show each key. The record fields are additive, so no
+  events key's is: `nuka check` reports the new errors
+  `files-producer-missing` and `files-producer-ambiguous`, `nuka do`
+  takes the producer's record through `--use`, and `nuka steps` and
+  `nuka describe` show each key. The record fields are additive, so no
   `schema_version` changes.
 - **`nuka run --tag` selects scenarios by tag.** `--tag "not @ios"` runs
   only the scenarios whose tags, those of their `Feature:` line and
