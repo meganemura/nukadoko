@@ -72,7 +72,7 @@ describe("tests/helpers/fixtures.ts in two checkouts at once", () => {
 
       const kept = made.filter((_, index) => Math.floor(index / 2) % 2 === 1);
       const entries = (await readdir(tempRoot)).sort();
-      expect(entries).toEqual([...kept.map((dir) => path.basename(dir)), "node_modules"].sort());
+      expect(entries).toEqual([...kept.map((dir) => path.basename(dir)), "node_modules", "package.json"].sort());
       for (const dir of kept.filter((d) => path.basename(d).startsWith("fixture-"))) {
         expect(await readFile(path.join(dir, "a.txt"), "utf8")).toBe(`${path.basename(root)}\n`);
       }

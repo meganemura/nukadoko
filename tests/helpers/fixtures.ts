@@ -46,7 +46,7 @@ const tempFixturesRoot = path.join(testsDir, ".tmp-fixtures");
  * `removeTempDir` in a `finally`.
  */
 export async function copyFixtureToTempDir(name: string): Promise<string> {
-  await mkdir(tempFixturesRoot, { recursive: true });
+  await ensureNukadokoShim();
   const dest = await mkdtemp(path.join(tempFixturesRoot, "fixture-"));
   await cp(fixture(name), dest, { recursive: true });
   return dest;
@@ -88,7 +88,7 @@ export async function removeTempDir(dir: string): Promise<void> {
  * ones and say so on stderr, in a test asserting on a clean run.
  */
 export async function copyExampleToTempDir(name: string): Promise<string> {
-  await mkdir(tempFixturesRoot, { recursive: true });
+  await ensureNukadokoShim();
   const dest = await mkdtemp(path.join(tempFixturesRoot, "example-"));
   await copyExample(name, dest);
   return dest;
@@ -101,7 +101,7 @@ export async function copyExampleToTempDir(name: string): Promise<string> {
  * is copied as copyExampleToTempDir copies one.
  */
 export async function copyExamplesToTempDir(names: readonly string[]): Promise<string> {
-  await mkdir(tempFixturesRoot, { recursive: true });
+  await ensureNukadokoShim();
   const dest = await mkdtemp(path.join(tempFixturesRoot, "examples-"));
   for (const name of names) await copyExample(name, path.join(dest, name));
   return dest;
@@ -125,7 +125,7 @@ async function copyExample(name: string, dest: string): Promise<void> {
  * specifiers like "zod" by walking up to this repo's own node_modules.
  */
 export async function createEmptyTempDir(): Promise<string> {
-  await mkdir(tempFixturesRoot, { recursive: true });
+  await ensureNukadokoShim();
   return mkdtemp(path.join(tempFixturesRoot, "empty-"));
 }
 
@@ -141,8 +141,7 @@ const nukadokoShimDir = path.join(tempFixturesRoot, "node_modules", "nukadoko");
  * content is left alone, and new content lands by rename, which replaces
  * the file in one step.
  */
-async function writeShimFile(name: string, text: string): Promise<void> {
-  const target = path.join(nukadokoShimDir, name);
+async function replaceFile(target: string, text: string): Promise<void> {
   const current = await readFile(target, "utf8").catch(() => null);
   if (current === text) return;
   const staging = `${target}.${process.pid}.${randomUUID()}.tmp`;
@@ -158,6 +157,13 @@ async function writeShimFile(name: string, text: string): Promise<void> {
  * it, whether created by this file's `createEmptyTempDir` or
  * `copyFixtureToTempDir`.
  *
+ * Node tries a package's own name before any `node_modules` (a
+ * self-reference), through the nearest package.json. Without one of its
+ * own, a temp project's nearest is this repository's, whose `exports`
+ * point at `dist/`, so a step file would run whatever was last built while
+ * the CLI under test runs `src/`. The package.json written last at
+ * `tempFixturesRoot` ends that walk there, after the shim is in place.
+ *
  * `nuka init`/`nuka scaffold` generate real-user-facing artifacts that
  * import from `"nukadoko"` (the published package name), not from a
  * fixture-relative shim path (the generated
@@ -170,8 +176,8 @@ async function writeShimFile(name: string, text: string): Promise<void> {
  */
 export async function ensureNukadokoShim(): Promise<void> {
   await mkdir(nukadokoShimDir, { recursive: true });
-  await writeShimFile(
-    "package.json",
+  await replaceFile(
+    path.join(nukadokoShimDir, "package.json"),
     `${JSON.stringify(
       {
         name: "nukadoko",
@@ -189,8 +195,8 @@ export async function ensureNukadokoShim(): Promise<void> {
   // A `.js` file, because the loader maps `.js` to `.ts` only for a path
   // specifier and the package entry is reached by name; the `.d.ts` beside
   // it gives tsc the same types through `src/`.
-  await writeShimFile("index.js", `export * from "${specifier}";\n`);
-  await writeShimFile("index.d.ts", `export * from "${specifier}";\n`);
+  await replaceFile(path.join(nukadokoShimDir, "index.js"), `export * from "${specifier}";\n`);
+  await replaceFile(path.join(nukadokoShimDir, "index.d.ts"), `export * from "${specifier}";\n`);
 
   // "./compat" subpath (extending this
   // mechanism for it is explicitly permitted) — same re-export trick as the
@@ -202,8 +208,9 @@ export async function ensureNukadokoShim(): Promise<void> {
   const compatTarget = path.join(repoRoot, "src", "compat", "index.js");
   const compatRelative = path.relative(nukadokoShimDir, compatTarget).split(path.sep).join("/");
   const compatSpecifier = compatRelative.startsWith(".") ? compatRelative : `./${compatRelative}`;
-  await writeShimFile("compat.js", `export * from "${compatSpecifier}";\n`);
-  await writeShimFile("compat.d.ts", `export * from "${compatSpecifier}";\n`);
+  await replaceFile(path.join(nukadokoShimDir, "compat.js"), `export * from "${compatSpecifier}";\n`);
+  await replaceFile(path.join(nukadokoShimDir, "compat.d.ts"), `export * from "${compatSpecifier}";\n`);
+  await replaceFile(path.join(tempFixturesRoot, "package.json"), `${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`);
 }
 
 const execFileAsync = promisify(execFile);

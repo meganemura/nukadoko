@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -95,17 +95,13 @@ describe("discoverSteps: compat registration", () => {
   //
   // Run against the *built* `dist/cli.js` (via `node`, not `src/cli.ts` under
   // the loader — mirroring tests/cli.test.ts's own "nuka (process)" describe block,
-  // one layer further down the stack): every temp project under
-  // tests/.tmp-fixtures/ is nested inside this very package's own directory
-  // tree, so Node's self-referencing package resolution
-  // (https://nodejs.org/api/packages.html#self-referencing-a-package-using-its-name)
-  // resolves a bare `"nukadoko/compat"` import through this repo's *own*
-  // package.json `exports` map — unconditionally, before node_modules is
-  // even consulted, so tests/helpers/fixtures.ts's `ensureNukadokoShim()`
-  // shim is never actually reached for a project nested here. That map
-  // points at `./dist/compat/index.js`: discovery must therefore run from
+  // one layer further down the stack): the project links node_modules/nukadoko
+  // to this repository, as an install does, so a bare `"nukadoko/compat"`
+  // import resolves through this repo's own package.json `exports` map
+  // rather than through tests/helpers/fixtures.ts's `ensureNukadokoShim()`
+  // shim. That map points at `./dist/compat/index.js`: discovery must therefore run from
   // `dist/` too, so its own internal load of `../compat/registry.js`
-  // resolves to the *same* compiled file the self-reference resolves to —
+  // resolves to the *same* compiled file the link resolves to —
   // running `discoverSteps` from `src/` here (as every other test in this
   // file does) would silently split the two into independent module
   // instances with independent buffers, since compat's registration buffer
@@ -119,6 +115,8 @@ describe("discoverSteps: compat registration", () => {
     const rootDir = await createEmptyTempDir();
     try {
       await mkdir(path.join(rootDir, "features", "steps"), { recursive: true });
+      await mkdir(path.join(rootDir, "node_modules"));
+      await symlink(repoRoot, path.join(rootDir, "node_modules", "nukadoko"), "dir");
       await writeFile(
         path.join(rootDir, "features", "steps", "bare-import.ts"),
         [
