@@ -18,7 +18,7 @@ import type { Finding } from "../finding/finding.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { describeSelection, type DeclaredEventSelection } from "../execution-events/selection.js";
 import { describeClaim, type Claim, type ClaimPoll } from "../step/claims.js";
-import { eventsCandidates, fixtureSourceOf, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
+import { describeChangedFiles, producersOf, fixtureSourceOf, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type ChangedFiles, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
 import { strictArgsSchema } from "../step/strict-args.js";
@@ -451,6 +451,10 @@ export interface StepSummary {
    * the key counts, by vocabulary name, and the selection as declared.
    * Absent when the step declares none. */
   readonly events?: Readonly<Record<string, EventsSummary>>;
+  /** A claim step's `files`, by key: the steps whose changed files the
+   * key reads, by vocabulary name, and the changes and directory it
+   * selects, as declared. Absent when the step declares none. */
+  readonly files?: Readonly<Record<string, FilesSummary>>;
 }
 
 /** One events key of a claim step, as `nuka steps` and `nuka describe`
@@ -458,6 +462,14 @@ export interface StepSummary {
 export interface EventsSummary {
   readonly of: readonly string[];
   readonly count: DeclaredEventSelection;
+}
+
+/** One files key of a claim step, as `nuka steps` and `nuka describe`
+ * print it. */
+export interface FilesSummary {
+  readonly of: readonly string[];
+  readonly change?: ChangedFiles["change"];
+  readonly under?: string;
 }
 
 /** The fixture names `needs_inferred` is allowed
@@ -556,6 +568,7 @@ export function summarize(
     parts: partsSummary(entry.step, stepNames),
     ...claimFields(entry.step),
     ...eventsFields(entry.step, stepNames),
+    ...filesFields(entry.step, stepNames),
     ...needsFields(entry.step, graph),
   };
 }
@@ -565,7 +578,24 @@ function eventsFields(step: Step, stepNames: StepNames): { readonly events?: Rea
   if (!isClaimStep(step) || Object.keys(step.events).length === 0) return {};
   return {
     events: Object.fromEntries(
-      Object.entries(step.events).map(([key, entry]) => [key, { of: eventsCandidates(entry).map((candidate) => upstreamStepName(candidate, stepNames)), count: entry.count }]),
+      Object.entries(step.events).map(([key, entry]) => [key, { of: producersOf(entry).map((candidate) => upstreamStepName(candidate, stepNames)), count: entry.count }]),
+    ),
+  };
+}
+
+/** `files` for a claim step that declares any; nothing otherwise. */
+function filesFields(step: Step, stepNames: StepNames): { readonly files?: Readonly<Record<string, FilesSummary>> } {
+  if (!isClaimStep(step) || Object.keys(step.files).length === 0) return {};
+  return {
+    files: Object.fromEntries(
+      Object.entries(step.files).map(([key, entry]) => [
+        key,
+        {
+          of: producersOf(entry).map((candidate) => upstreamStepName(candidate, stepNames)),
+          ...(entry.change === undefined ? {} : { change: entry.change }),
+          ...(entry.under === undefined ? {} : { under: entry.under }),
+        },
+      ]),
     ),
   };
 }
@@ -644,6 +674,9 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   for (const [key, entry] of Object.entries(s.events ?? {})) {
     lines.push(...wrapIndented(`events: ${key} counts ${describeSelection(entry.count)} of ${entry.of.join(" or ")}`, width));
   }
+  for (const [key, entry] of Object.entries(s.files ?? {})) {
+    lines.push(...wrapIndented(`files: ${key} lists the files the commands of ${entry.of.join(" or ")} ${describeChangedFiles(entry)}`, width));
+  }
   for (const claim of s.claims ?? []) {
     lines.push(...wrapIndented(`claim: ${describeClaim(claim)}`, width));
   }
@@ -708,6 +741,8 @@ export interface TypedStepContract {
   readonly poll?: ClaimPoll;
   /** Same field and presence rule as `StepSummary.events`. */
   readonly events?: Readonly<Record<string, EventsSummary>>;
+  /** Same field and presence rule as `StepSummary.files`. */
+  readonly files?: Readonly<Record<string, FilesSummary>>;
   /** Same field and presence rule as `StepSummary.timeout`. */
   readonly timeout?: number;
   /** The same shape as `StepSummary.from`, so a reader of `nuka steps
@@ -836,6 +871,7 @@ export function describeContract(
     mutates: entry.step.mutates,
     ...claimFields(entry.step),
     ...eventsFields(entry.step, stepNames),
+    ...filesFields(entry.step, stepNames),
     timeout: entry.step.timeout,
     from: fromResult.rendered,
     from_errors: fromResult.errors,

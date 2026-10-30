@@ -152,7 +152,10 @@ each command wrote. A step that runs the tool through `runCommand`
 gets that diff measured: each process lists the files added, changed,
 and removed under its working directory (`observed.processes[].files`),
 and the step's `observed.files` lists what changed in its scratch
-directories, with the content. Confirm the evidence exists after the verification skill's cleanup
+directories, with the content. A scenario that claims what the tool wrote
+("writes nothing", "changed no file under src/") reads that list through a
+claim step's `files` (`skills/nukadoko/references/parts.md`), never
+through a list the step returns. Confirm the evidence exists after the verification skill's cleanup
 has run.
 
 ## 6. Reproducing a report

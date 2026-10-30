@@ -4,7 +4,7 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 import { worldsToStart } from "../environment/resolve-environment.js";
 import { namesPlaceholder } from "../program/placeholders.js";
 import {
-  eventsCandidates,
+  producersOf,
   isClaimStep,
   type Step,
 } from "../step/define-step.js";
@@ -92,7 +92,7 @@ export function checkEventsOrder(
       .slice(0, stepIndex)
       .some((earlier) => earlier.stepNames.length === 0);
     for (const [key, events] of Object.entries(entry.step.events)) {
-      const names = eventsCandidates(events).flatMap((step) => {
+      const names = producersOf(events).flatMap((step) => {
         const name = nameOf.get(step);
         return name === undefined ? [] : [name];
       });

@@ -99,6 +99,9 @@ export type { Claim, ClaimExpected, ClaimLiteral, ClaimPoll, ComparisonClaim, Ea
 // reading: a step file names the selection, and a reader of a record the
 // range, the gaps, and the lines that may match.
 export type { EventsCount } from "./step/define-step.js";
+// What a claim step's `files` declares: the step whose commands changed
+// the files, and which changes and directory the list holds.
+export type { ChangeKind, ChangedFiles } from "./step/define-step.js";
 export type { DeclaredEventSelection, EventSelection, SentenceValue } from "./execution-events/selection.js";
 export type { CountCompare, CountRange } from "./execution-events/count.js";
 export type { CountedGroup } from "./execution-events/counted.js";

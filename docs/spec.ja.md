@@ -1461,6 +1461,8 @@ record の読み手は、値を行が使った言葉と見比べられます。
 最初の要素は `from` のキーであるか、そうでなければ `observe` が返すオブジェクトのキーです。
 step の `events` のキーそのものは、代わりに前の step の実行イベントの数を読みます。
 その数は、プログラムが書いた行から nukadoko が作ります(「実行イベントの数についての claim」を参照)。
+step の `files` のキーそのものは、前の step のコマンドが変えたパスを読みます。
+nukadoko はそれを、その step の record から読みます(「前の step が変えたファイル」を参照)。
 最初の要素が文の埋めるキーであるパスは拒否されます。
 claim が計測する値は、行から来ることはありません。
 `observe` が `from` のキーと同じ名前で返したキーは、`from` のキーが勝つので claim に届きません。
@@ -1501,6 +1503,76 @@ record のラベルは、`view`、`at`、`count` を含めて、場所全体を�
 `from` の項目のキーは、値を返す step の結果を一段だけ読みます。
 そのため `nested.list` のようにドットを含むキーは、パスではなく一つのキーを名指しします。
 `from` には `nested` を書き、その下の `list` は claim のパスで読みます。
+
+#### 前の step が変えたファイル
+
+Then は、前の step のコマンドがディスクに何をしたかを claim にできます。
+"the build writes nothing"、"wrote the migration file migrations/0002_add_note.sql"、"wrote exactly these files"、"changed no file under src/" のような文です。
+claim step はその一覧を `files` で名指し、claim はそのキーを実際の値として読みます:
+
+```ts
+// features/steps/build-writes-nothing.ts
+import { defineStep, z } from "nukadoko";
+import runBuild from "./run-build.ts";
+
+export default defineStep({
+  pattern: "the build writes nothing",
+  args: z.object({}),
+  files: { written: { of: runBuild } },
+  claims: [{ actual: "written", compare: "equal", expected: { literal: [] } }],
+});
+```
+
+nukadoko はその一覧を前の step の record から作ります。
+その step の `runCommand` のプロセスが、作業ディレクトリの下で加えた、変えた、消したパスです(`observed.processes[].files`、「Records」を参照)。
+step のコードが返した値から作ることはありません。
+そのため、コマンドを走らせる step はコマンドが言うことを返し、claim は nukadoko が計測したものを読みます。
+
+- `of` は、一覧が読むコマンドを走らせた step か、候補の step のリストです。
+  選び方は events のキーと同じです(「実行イベントの数についての claim」を参照)。
+  scenario の前の行でちょうど 1 つが走り、それを走らせた最後の行が読まれます。
+  1 つも走っていないときも、2 つが走ったときも、claim は `unjudged` です。
+  その reason が、それらを名指します。
+- `change` は `added`、`changed`、`removed` か、そのリストを選びます。
+  書かないときは、すべての変化を選びます。
+- `under` は、1 つのディレクトリの中のパスだけを残します。
+  コマンドの作業ディレクトリからの相対パスで、区切りは `/` です(`"src"` または `"src/"`)。
+  絶対パス、バックスラッシュや `.` や `..` の要素を持つパス、たどらない `node_modules` や `.git` の中のパスは、import の時点で拒否されます。
+
+一覧は並べ替えられ、各パスを 1 度だけ持ちます。
+パスは作業ディレクトリからの相対パスで、区切りは `/`、ディレクトリは末尾に `/` を持ちます。
+そのため、新しいディレクトリに `migrations/0002_add_note.sql` を作るコマンドは、`migrations/` も加えます。
+
+そのキーについての claim は、一覧の全体を比べるか、その要素の数を数えます。
+比較は `equal`、`not-equal`、`has-item`、`has-same-items` か、2 つの数を比べる比較と `count: true` です。
+`view`、`at`、`each`、一覧の中へのパスは持ちません。
+期待値は文のものです。
+つまり `has-item` での `{path:string}` のようなキャプチャ、`expected_view: "lines"` で読む docstring、パターンの語が述べるリテラル(`equal` での `nothing` や `no` は `[]` を決めます)です。
+`{ from }` と `{ observe }` は拒否されます。
+計測した一覧と比べる一覧を、step のコードが選ぶことになるからです。
+files のキーは `from` のキー、args のキー、events のキーと同じ名前を持たず、どのキーもいずれかの claim が読みます。
+どれも import の時点で拒否されます。
+
+一覧は、step のどのプロセスもまるごとたどれたときにだけ作られます。
+そのため、claim が読む不在は nukadoko が見た不在です。
+そうでないとき、claim は `unjudged` で、その reason が理由を述べます:
+
+- step が `runCommand` のプロセスを 1 つも走らせず、何も計測しなかった。
+  nukadoko が計測しなかった一覧は、空の一覧ではありません。
+- プロセスの作業ディレクトリをたどらなかった(`{ "unmeasured": "<理由>" }`: エントリが 20000 を超えた、またはディレクトリを読めなかった)。
+- プロセスが閉じたときに、そのグループのプロセスがまだ動いていた(`"group": "running"`)。
+  たどったあとにそのプロセスが書いたファイルは一覧にありません。
+- プロセスが 2 つ以上の作業ディレクトリで走った。
+  それぞれのパスは 1 つの一覧になりません。
+- `under` が、たどらなかったディレクトリの中を名指す。
+
+```text
+claim unjudged: files:build-in-process@4 added, changed, or removed equal [] (literal:nothing): build-in-process@4 ran no runCommand process, so nukadoko measured no file for it, and a list it never measured is not an empty list
+```
+
+record の `actual_from` は、変化とディレクトリを添えた `files:<step>@<line>` です(`files:run-build@9 added or changed` など)。
+`measured` は producer の record と `observed.processes[0].files` を名指します(いくつかのプロセスを走らせた step では `observed.processes`)。
+producer の record を作ったときにまだ動いていたプロセスは `observed.processes` にないので、一覧もそれを見られません。
 
 #### claim が判定する値
 
@@ -1979,6 +2051,8 @@ claim step の record には、次の固有のフィールドがあります(「
 `measured` が述べるのは、あるチャネルが同じ値を持つことであり、`observe` がそこから読んだことではありません。
 `observe` が自分のプロセスに出力させた定数や、そのようなプロセスの出力と等しい定数も、同じようにそのチャネルを名指しします。
 どちらだったかは、step record のコマンドラインが示します。
+`files` のキーについての claim は、一致の例外です。
+nukadoko は一覧を producer のプロセスから作ったので、`measured` はそれを読んだ場所で名指し(「前の step が変えたファイル」を参照)、一覧を作らなかったときは `null` です。
 
 `measured: null` は、定数がとる姿です。
 step のコードが書いた値や導いた値は、どのチャネルにもありません。
@@ -5270,8 +5344,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   step を走らせるプロセスは、受け取った SIGINT、SIGTERM、SIGHUP のそれぞれを、まだ動いているそのようなプロセスのグループへ渡します。
   `timeout` は、グループのすべてのプロセスに SIGTERM を送ります。
   ほかの場所での呼び出しは、呼び出し元のプロセスグループのままです。
-  `files` はエントリの `"files"` と同じ値です。
-  そのため、「このコマンドは何も書かない」を主張する step は、自分でディレクトリをたどらずに、この計測を返せます。
+  `files` はエントリの `"files"` と同じ値で、step の外でそれを読む呼び出し元のためのものです。
+  コマンドが書いたものについての claim は、step が返す値からではなく、claim step の `files` を通してエントリを読みます(「前の step が変えたファイル」を参照)。
   `files` は step の中では必ずあり、step の外では `files: true` を渡したときだけあります。
   Windows では、`npm` のような拡張子のないプログラム名を `PATH` と `PATHEXT` で探し、`.cmd` と `.bat` のファイルは `cmd.exe` を通して各引数をそのまま渡して実行します。
   そのため step はどのプラットフォームでも同じ名前でプログラムを指定でき、`command` には step が書いた名前が残ります。

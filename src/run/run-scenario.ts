@@ -55,16 +55,16 @@ export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
-import type { ArgOrigin, ErrorKind, FixtureUsageEntry, ReturnsDrop, StepRecord } from "../record/types.js";
+import type { ArgOrigin, ErrorKind, FixtureUsageEntry, ProcessEntry, ReturnsDrop, StepRecord } from "../record/types.js";
 import { readStepRecord } from "../record/read-step-record.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
-import { eventsCandidates, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type ClaimStep, type Step } from "../step/define-step.js";
+import { isClaimStep, malformedFromEntryMessage, producersOf, tryFromCandidates, type ClaimStep, type Step } from "../step/define-step.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
-import { runValidatedStep, snapshotClaimArgs, type ClaimExecution, type EventsSource, type FilledFrom } from "./execute-typed-step.js";
+import { runValidatedStep, snapshotClaimArgs, type ClaimExecution, type EventsSource, type FilesSource, type FilledFrom } from "./execute-typed-step.js";
 import { copyOf, type Refusal, type Snapshot } from "../step/snapshot.js";
 import { transformedFillReason } from "../step/claims.js";
 import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
@@ -257,6 +257,9 @@ interface ChainEntry {
   /** The trace id of the step's execution events, `null` when it has
    * none: what a later step's `events` reads them by. */
   readonly eventsTrace: string | null;
+  /** The step's `runCommand` processes as its record lists them, `null`
+   * when it ran none: what a later step's `files` reads. */
+  readonly processes: readonly ProcessEntry[] | null;
 }
 
 
@@ -888,13 +891,15 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // chain as `injectFrom` finds a from key's producer. `nuka check`
   // reports a line where none or two did (events-producer-missing,
   // events-producer-ambiguous); under --no-check the claim is unjudged.
-  const eventsSourceOf = (step: ClaimStep) => (key: string): EventsSource => {
-    const candidates = eventsCandidates(step.events[key]!);
-    const names = candidates.map((candidate) => stepNameOf.get(candidate) ?? "a step discovery never registered");
-    const present = candidates.flatMap((candidate) => {
+  const ranEarlier = (candidates: readonly Step[]): { readonly names: readonly string[]; readonly present: readonly ChainEntry[] } => ({
+    names: candidates.map((candidate) => stepNameOf.get(candidate) ?? "a step discovery never registered"),
+    present: candidates.flatMap((candidate) => {
       const entry = chain.get(candidate);
       return entry === undefined ? [] : [entry];
-    });
+    }),
+  });
+  const eventsSourceOf = (step: ClaimStep) => (key: string): EventsSource => {
+    const { names, present } = ranEarlier(producersOf(step.events[key]!));
     if (present.length === 0) return { producer: { source: "unread", of: null, gap: "producer-not-run" }, of: names.join(" or ") };
     if (present.length > 1) {
       return {
@@ -908,6 +913,24 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // trace: the handle then says why there is nothing to read.
     const producer = contextHandle.eventsProducer({ step_record_id: entry.recordId, step: entry.stepName, line }, entry.eventsTrace ?? entry.recordId);
     return { producer, of: `${entry.stepName}@${line ?? entry.recordId}` };
+  };
+
+  // The step a files key reads the changed paths of, chosen by the same
+  // rule (files-producer-missing, files-producer-ambiguous).
+  const filesSourceOf = (step: ClaimStep) => (key: string): FilesSource => {
+    const { names, present } = ranEarlier(producersOf(step.files[key]!));
+    const of = names.join(" or ");
+    if (present.length === 0) {
+      return { of, unchosen: `files.${key}.of names ${names.map((name) => `"${name}"`).join(" or ")}, and no earlier line in this scenario ran it, so there is no list of the files it changed` };
+    }
+    if (present.length > 1) {
+      return {
+        of,
+        unchosen: `files.${key}.of names ${present.map((entry) => `"${entry.stepName}"`).join(" and ")}, and each ran earlier in this scenario, so the step cannot choose whose files to read`,
+      };
+    }
+    const entry = present[0]!;
+    return { of: `${entry.stepName}@${recordLines.get(entry.recordId) ?? entry.recordId}`, record: { step_record_id: entry.recordId, processes: entry.processes } };
   };
 
   // Every typed step's own Step object, keyed by its vocabulary name — built
@@ -1258,6 +1281,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         stepName: outcomeStepName,
         returnsDropped: chainKey.returnsDropped,
         eventsTrace: observed.events?.trace_id ?? null,
+        processes: observed.processes,
       });
     }
 
@@ -2072,6 +2096,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               config,
               ...(isClaimStep(entry.step) && Object.keys(entry.step.events).length > 0
                 ? { eventsSource: eventsSourceOf(entry.step) }
+                : {}),
+              ...(isClaimStep(entry.step) && Object.keys(entry.step.files).length > 0
+                ? { filesSource: filesSourceOf(entry.step) }
                 : {}),
               argSide: (key) => claimArgSide(key, originOf(key), (id) => recordLines.get(id) ?? null),
               filledFrom,

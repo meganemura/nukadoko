@@ -8,6 +8,7 @@ import { selectionProblems, type DeclaredEventSelection } from "../execution-eve
 import { claimsProblem, eventsShapeOf, pathSegments, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
 import { freezeInPlace, frozenCopy, type Keep } from "./frozen-copy.js";
 import { MAX_TIMER_DELAY_MS } from "../timer/max-delay.js";
+import type { FileChange } from "../record/types.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
@@ -377,6 +378,7 @@ export interface RunStepDefinition<
   observe?: never;
   poll?: never;
   events?: never;
+  files?: never;
 }
 
 /** One count a claim step reads (docs/spec.md "Execution events"): the
@@ -389,8 +391,50 @@ export interface EventsCount {
   readonly count: DeclaredEventSelection;
 }
 
-/** The candidate steps an events entry names, as a list. */
-export function eventsCandidates(entry: EventsCount): readonly Step[] {
+/** What a `runCommand` process did to a path under its working
+ * directory, as `observed.processes[].files` lists it: the record's own
+ * words for a change. */
+export type ChangeKind = FileChange["change"];
+
+/** Every change, in the order a record lists them. */
+export const FILE_CHANGES: readonly ChangeKind[] = ["added", "changed", "removed"];
+
+/** One list of paths a claim step reads (docs/spec.md "Files an earlier
+ * step changed"): the earlier step whose `runCommand` processes nukadoko
+ * measured, which changes it takes (every one when `change` is left
+ * out), and the directory the paths are in (the whole working directory
+ * when `under` is left out). `of` is a step, or a list of candidate
+ * steps of which exactly one runs earlier in the scenario, as a `from`
+ * key's producers are. A claim names the key as its actual. */
+export interface ChangedFiles {
+  readonly of: Step | readonly [Step, ...Step[]];
+  readonly change?: ChangeKind | readonly [ChangeKind, ...ChangeKind[]];
+  readonly under?: string;
+}
+
+/** The changes `entry` selects, in the order a record lists them. */
+export function selectedChanges(entry: Pick<ChangedFiles, "change">): readonly ChangeKind[] {
+  if (entry.change === undefined) return FILE_CHANGES;
+  const named: readonly ChangeKind[] = Array.isArray(entry.change) ? entry.change : [entry.change as ChangeKind];
+  return FILE_CHANGES.filter((change) => named.includes(change));
+}
+
+/** `under` as the prefix every path inside it starts with. */
+export function directoryOf(under: string): string {
+  return under.endsWith("/") ? under : `${under}/`;
+}
+
+/** What `entry` selects, as a record's label names it after the step:
+ * the changes, then ` under <dir>` (`added or changed under src/`).
+ * Pure. */
+export function describeChangedFiles(entry: Pick<ChangedFiles, "change" | "under">): string {
+  const changes = selectedChanges(entry);
+  const words = changes.length <= 2 ? changes.join(" or ") : `${changes.slice(0, -1).join(", ")}, or ${changes.at(-1)}`;
+  return entry.under === undefined ? words : `${words} under ${directoryOf(entry.under)}`;
+}
+
+/** The candidate steps an `events` or `files` entry names, as a list. */
+export function producersOf(entry: { readonly of: Step | readonly Step[] }): readonly Step[] {
   return Array.isArray(entry.of) ? (entry.of as readonly Step[]) : [entry.of as Step];
 }
 
@@ -458,6 +502,10 @@ export interface ClaimStepDefinition<
    * actual names: nukadoko reads the lines the program wrote for that
    * step, waits until they are whole or the wait ends, and counts. */
   events?: Readonly<Record<string, EventsCount>>;
+  /** Lists of the paths an earlier step's `runCommand` processes added,
+   * changed, or removed, by the key a claim's actual names: nukadoko reads
+   * them from that step's record, never from what its code returned. */
+  files?: Readonly<Record<string, ChangedFiles>>;
   run?: never;
   returns?: never;
   mutates?: never;
@@ -527,6 +575,8 @@ export interface ClaimStep<TArgs extends z.ZodTypeAny = z.ZodTypeAny> extends St
   /** Empty (`{}`) when the step declares no `events`, the same default
    * `from` has. */
   readonly events: Readonly<Record<string, EventsCount>>;
+  /** Empty (`{}`) when the step declares no `files`, the same default. */
+  readonly files: Readonly<Record<string, ChangedFiles>>;
   readonly run?: undefined;
 }
 
@@ -578,6 +628,7 @@ const STEP_OPTIONS: Record<keyof RunStepDefinition | keyof ClaimStepDefinition, 
   observe: true,
   poll: true,
   events: true,
+  files: true,
 };
 
 /** The options `defineStep` reads, in the order its reference lists them. */
@@ -664,6 +715,7 @@ interface DefinitionFields {
   observe?: unknown;
   poll?: unknown;
   events?: unknown;
+  files?: unknown;
 }
 
 function validateStepDefinition(definition: DefinitionFields): void {
@@ -693,7 +745,7 @@ function validateStepDefinition(definition: DefinitionFields): void {
     validateClaimStepDefinition(definition);
     return;
   }
-  for (const option of ["observe", "poll", "events"] as const) {
+  for (const option of ["observe", "poll", "events", "files"] as const) {
     if (definition[option] !== undefined) {
       throw new InvalidStepDefinitionError(
         `defineStep ${option} belongs to a claim step, and this definition has no claims. A step that acts uses run; a step that judges declares claims.`,
@@ -758,7 +810,7 @@ function validateClaimStepDefinition(definition: DefinitionFields): void {
       "defineStep observe must be a function. nukadoko reads fixture names from that function's source text and then calls it.",
     );
   }
-  const eventsRefusal = eventsProblem(definition.events);
+  const eventsRefusal = eventsProblem(definition.events) ?? filesProblem(definition.files);
   if (eventsRefusal !== null) {
     throw new InvalidStepDefinitionError(`defineStep ${eventsRefusal}.`);
   }
@@ -784,6 +836,7 @@ function validateClaimStepDefinition(definition: DefinitionFields): void {
       argsRewrite: argsSchemaRewrite(definition.args as z.ZodTypeAny),
       stringArgs: shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isPlainString(field)).map(([key]) => key)),
       events: eventsShapeOf(definition.events),
+      files: filesKeysOf(definition.files),
     }) ?? pollProblem(definition.poll, definition.observe !== undefined, MAX_STEP_TIMEOUT_MS);
   if (problem !== null) {
     throw new InvalidStepDefinitionError(`defineStep ${problem}.`);
@@ -820,6 +873,74 @@ function eventsProblem(events: unknown): string | null {
     if (problems.length > 0) return problems.join("; ");
   }
   return null;
+}
+
+const FILES_ENTRY_KEYS: readonly string[] = ["of", "change", "under"];
+
+// A walk never enters these, so a list under one is empty on every line.
+const UNWALKED_NAMES: ReadonlySet<string> = new Set(["node_modules", ".git"]);
+
+/** Why `files` is not an object of lists the run can read, or `null`:
+ * each key one word a claim's actual can name, each entry `{ of, change?,
+ * under? }` with `of` a step `defineStep` returned or a list of distinct
+ * ones, `change` one of the changes a record lists or a list of distinct
+ * ones, and `under` a directory relative to the working directory, written
+ * with `/`, that a walk enters. */
+function filesProblem(files: unknown): string | null {
+  if (files === undefined) return null;
+  if (typeof files !== "object" || files === null || Array.isArray(files)) {
+    return "files must be an object whose keys name lists of paths, each { of, change?, under? }";
+  }
+  for (const [key, entry] of Object.entries(files)) {
+    if (pathSegments(key)?.length !== 1) {
+      return `files key ${JSON.stringify(key)} is not one key a claim's actual can name; name it with one word and no dot`;
+    }
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry) || isDefinedStep(entry)) {
+      return `files.${key} must be an object with of, the step whose commands changed the files`;
+    }
+    const unknown = Object.keys(entry).find((name) => !FILES_ENTRY_KEYS.includes(name));
+    if (unknown !== undefined) return `files.${key} has the key "${unknown}", which a files entry does not have. It has ${FILES_ENTRY_KEYS.join(", ")}`;
+    const { of, change, under } = entry as { of?: unknown; change?: unknown; under?: unknown };
+    const candidates = Array.isArray(of) ? of : [of];
+    if (candidates.length === 0 || !candidates.every((candidate) => isDefinedStep(candidate))) {
+      return `files.${key}.of must be a step defineStep returned, or a non-empty list of them; import the step whose commands changed the files`;
+    }
+    if (new Set(candidates).size !== candidates.length) return `files.${key}.of names one step twice`;
+    if (change !== undefined) {
+      const changes = Array.isArray(change) ? change : [change];
+      if (changes.length === 0 || !changes.every((value) => (FILE_CHANGES as readonly unknown[]).includes(value))) {
+        return `files.${key}.change must be one of ${FILE_CHANGES.join(", ")}, or a non-empty list of them; leave it out for every change`;
+      }
+      if (new Set(changes).size !== changes.length) return `files.${key}.change names one change twice`;
+    }
+    if (under !== undefined) {
+      const problem = underProblem(under);
+      if (problem !== null) return `files.${key}.under ${problem}`;
+    }
+  }
+  return null;
+}
+
+/** Why `under` names no directory a walk lists paths in, or `null`. A
+ * record's paths are relative and `/`-separated, so an absolute path, a
+ * backslash, or a `.` or `..` segment matches none of them, and a list
+ * under `node_modules` or `.git` is empty whatever the command did. */
+function underProblem(under: unknown): string | null {
+  if (typeof under !== "string") return `must be a directory relative to the command's working directory, such as "src/"; got ${typeof under}`;
+  const segments = under.replace(/\/$/, "").split("/");
+  if (under.startsWith("/") || under.includes("\\") || segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    return `is ${JSON.stringify(under)}, and a record lists each path relative to the command's working directory, with / between its parts, so no path is under it. Name the directory that way, such as "src/"`;
+  }
+  const unwalked = segments.find((segment) => UNWALKED_NAMES.has(segment));
+  if (unwalked !== undefined) {
+    return `is ${JSON.stringify(under)}, inside a ${unwalked} directory, which runCommand does not walk, so the list is empty whatever the command did`;
+  }
+  return null;
+}
+
+/** The keys of a `files` declaration, read as far as it is an object. */
+function filesKeysOf(files: unknown): ReadonlySet<string> {
+  return typeof files === "object" && files !== null && !Array.isArray(files) ? new Set(Object.keys(files)) : new Set();
 }
 
 function isHonoredStepTimeout(timeout: unknown): timeout is number {
@@ -869,6 +990,7 @@ export function defineStep(input: StepDefinitionInput): Step {
       observe: definition.observe as ObserveFn | undefined,
       poll: definition.poll,
       events: (definition.events ?? Object.freeze({})) as Readonly<Record<string, EventsCount>>,
+      files: (definition.files ?? Object.freeze({})) as Readonly<Record<string, ChangedFiles>>,
       [STEP_DECLARATION]: { declaresReturns: false, ignoredOptions: ignoredOptions(definition) },
     });
   }
@@ -914,19 +1036,20 @@ function definedSteps(): WeakSet<object> {
 /** The fields of a definition that hold data a step file could change or
  * answer differently on a second read: each is copied once, frozen at
  * every level, and the copy is what defineStep validates and returns. */
-const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll", "events"] as const;
+const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll", "events", "files"] as const;
 
 /** Where a definition field names another step, by the keys below the
- * field: `parts[i]`, in `events` the `of` of an entry, `events[key].of`
- * or `events[key].of[i]`, and `events[key]` itself, so a step written
- * there in place of `{ of, count }` is named in eventsProblem's words;
+ * field: `parts[i]`, in `events` and `files` the `of` of an entry,
+ * `events[key].of` or `events[key].of[i]`, and `events[key]` itself, so a
+ * step written there in place of `{ of, count }` is named in
+ * eventsProblem's words (filesProblem's for `files`);
  * and in `from` the step of a `[step, "key"]`
  * tuple, `from[key][0]` or, in a list of candidates, `from[key][i][0]`.
  * `from[key]` itself is one too: a step written there instead of a tuple
  * is kept, so validate-from.ts names that mistake in its own words. */
 function isStepPlace(field: string, at: readonly string[]): boolean {
   if (field === "parts") return at.length === 1;
-  if (field === "events") return at.length === 1 || ((at.length === 2 || at.length === 3) && at[1] === "of");
+  if (field === "events" || field === "files") return at.length === 1 || ((at.length === 2 || at.length === 3) && at[1] === "of");
   if (field !== "from") return false;
   return at.length === 1 || ((at.length === 2 || at.length === 3) && at[at.length - 1] === "0");
 }

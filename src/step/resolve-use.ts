@@ -1,6 +1,6 @@
 import type { ReturnsDrop, StepRecord, UsedEntryWithResult } from "../record/types.js";
 import { reviveStoredForm } from "../stored-form/revive.js";
-import { eventsCandidates, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
+import { producersOf, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type Step } from "./define-step.js";
 
 // Responsibility: `nuka do --use <record-id>`'s own lookup (docs/spec.md
 // "Single steps (the agent path)", the `--use` paragraph) — turns one
@@ -171,7 +171,7 @@ export function resolveUse(
   const eventsKeys: string[] = [];
   const events = isClaimStep(step) ? step.events : {};
   for (const [key, entry] of Object.entries(events)) {
-    for (const candidate of eventsCandidates(entry)) {
+    for (const candidate of producersOf(entry)) {
       const candidateName = stepNameOf.get(candidate);
       if (candidateName === undefined) unnamedPlace ??= `events.${key}.of`;
       if (candidateName === stepRecord.step && !eventsKeys.includes(key)) eventsKeys.push(key);

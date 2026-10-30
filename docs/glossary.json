@@ -886,6 +886,21 @@
       "en": ["locator"],
       "ja": "ロケーター",
       "note": "ブラウザのライブラリがページの要素を指すために返すオブジェクト。fits-aria-snapshot では observe がページかロケーターを返し、nukadoko がその ARIA スナップショットを取る"
+    },
+    {
+      "en": ["files an earlier step changed", "files (a claim step option)", "files key"],
+      "ja": "前の step が変えたファイル / files のキー",
+      "note": "claim step の `files` が名指す、前の step の runCommand のプロセスが加えた、変えた、消したパスの一覧。オプション名 `files` とコード `files-producer-missing` / `files-producer-ambiguous` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["working directory", "cwd"],
+      "ja": "作業ディレクトリ",
+      "note": "runCommand のプロセスが走るディレクトリ。record のフィールド `cwd` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["walk (a process's working directory)", "walked whole", "the walk"],
+      "ja": "たどる / まるごとたどる",
+      "note": "runCommand が起動の前と終了の後に作業ディレクトリのエントリを読むこと。人と一緒の walk(nuka run --step)とは別の語なので walk と書かない"
     }
   ],
   "keep_english": [

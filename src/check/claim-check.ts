@@ -443,9 +443,10 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
     };
     step.claims.forEach((claim: Claim, index) => {
       const label = `claims[${index}]`;
-      // A count of execution events is a place no other side can read,
-      // so only its expected side has a path to check.
-      if (!isEachClaim(claim) && Object.hasOwn(step.events, claim.actual)) {
+      // A count of execution events, and a list of changed files, is a
+      // place no other side can read, so only its expected side has a path
+      // to check.
+      if (!isEachClaim(claim) && (Object.hasOwn(step.events, claim.actual) || Object.hasOwn(step.files, claim.actual))) {
         if (typeof claim.expected === "object" && "from" in claim.expected) checkFromPath(`${label}.expected.from`, claim.expected.from);
         noteExpectedFrom(label, claim.expected);
         return;

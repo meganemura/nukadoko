@@ -17,6 +17,8 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ActionEntry",
     "ArgOrigin",
     "CallEntry",
+    "ChangeKind",
+    "ChangedFiles",
     "Claim",
     "ClaimCompare",
     "ClaimComparisonRecord",

@@ -39,8 +39,15 @@ After a failure, what should be knowable about it?
   exit, so a step that needs the command to succeed checks `exitCode`
   itself, and each process it starts is listed in the calling step's
   `observed.processes`, so a failure record shows the command, its working
-  directory, its exit code, and the files it changed (`files`, also on the
-  result, so "writes nothing" needs no hand-rolled diff). A process
+  directory, its exit code, and the files it changed. A Then that claims
+  what the command wrote reads those files from the record, through a
+  claim step's `files`, never from a list the step returns:
+  `files: { written: { of: runBuild, change: ["added", "changed"], under: "src" } }`
+  with `{ actual: "written", compare: "equal", expected: { literal: [] } }`
+  for "changed no file under src/" (`has-item` a captured path, or
+  `has-same-items` the docstring with `expected_view: "lines"`). The claim
+  is `unjudged` when the producer ran no `runCommand`, or a walk was not
+  made: a list nukadoko never measured is not an empty one. A process
   started through `spawnSync` or `execFileSync` instead is only named in
   `observed.unmeasured`, with nothing of what it printed or changed. A secret the step holds itself and passes
   as an argument goes in `redact: { NAME: value }`, so the record shows

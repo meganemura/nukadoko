@@ -9,6 +9,27 @@ just until 0.1.
 
 ### Added
 
+- **A Then claims on the files an earlier step's commands changed.** A
+  claim step's `files: { written: { of: runBuild, change?, under? } }`
+  names a list that nukadoko makes from the producer's step record: the
+  paths its `runCommand` processes added, changed, or removed
+  (`observed.processes[].files`), with the changes `change` selects and
+  the directory `under` keeps. A claim reads the key alone, as `equal`,
+  `not-equal`, `has-item`, `has-same-items`, or a count, with its
+  expected value from the sentence, so "the build writes nothing", "wrote
+  the migration file migrations/0002_add_note.sql", "wrote exactly these
+  files" (the docstring read as lines), and "changed no file under src/"
+  are judged on what nukadoko measured, never on a list the step
+  returned. An expected `{ from }` or `{ observe }`, a `view`, an `at`,
+  and an `under` no recorded path can be inside are refused at import.
+  The list is made only when every process of the producer was walked
+  whole: a producer that ran no `runCommand`, a walk that was not made, a
+  process that left its group running, or processes in two working
+  directories leave the claim `unjudged`, with the reason, since a list
+  nukadoko never measured is not an empty one. `measured` names the
+  producer's `observed.processes[0].files`. The producer is chosen as an
+  events key's is, and `nuka steps` and `nuka describe` show each key. The record fields are additive, so no
+  `schema_version` changes.
 - **`nuka run --tag` selects scenarios by tag.** `--tag "not @ios"` runs
   only the scenarios whose tags, those of their `Feature:` line and
   `Examples:` block included, meet the expression, `@name` or `not @name`;

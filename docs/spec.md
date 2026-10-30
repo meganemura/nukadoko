@@ -1771,7 +1771,9 @@ words the line used.
 the object `observe` returns. A key of the step's `events`, alone, reads
 a count of an earlier step's execution events instead, which nukadoko
 makes from the lines the program wrote (see "A claim on a count of
-events"). A path whose first segment is a key the
+events"). A key of the step's `files`, alone, reads the paths an earlier
+step's commands changed, which nukadoko reads from that step's record
+(see "Files an earlier step changed"). A path whose first segment is a key the
 sentence fills is refused: the value a claim measures never comes from the
 line. A key `observe` returns under the name of a `from` key would never
 reach the claim, since the `from` key wins, so neither may happen in
@@ -1828,6 +1830,89 @@ step's `returns` schema and reports a path that schema does not declare
 A `from` entry's key reads one level of the producer's result, so a
 dotted key such as `nested.list` names one key, not a path: name
 `nested` in `from` and read `list` under it in the claim's path.
+
+#### Files an earlier step changed
+
+A Then can claim what an earlier step's commands did on disk: "the
+build writes nothing", "wrote the migration file
+migrations/0002_add_note.sql", "wrote exactly these files", "changed no
+file under src/". The claim step names the list in `files`, and a claim
+reads its key as its actual:
+
+```ts
+// features/steps/build-writes-nothing.ts
+import { defineStep, z } from "nukadoko";
+import runBuild from "./run-build.ts";
+
+export default defineStep({
+  pattern: "the build writes nothing",
+  args: z.object({}),
+  files: { written: { of: runBuild } },
+  claims: [{ actual: "written", compare: "equal", expected: { literal: [] } }],
+});
+```
+
+nukadoko makes the list from the earlier step's record: the paths its
+`runCommand` processes added, changed, or removed under their working
+directory (`observed.processes[].files`, see "Records"). A value the
+step's code returned never makes it, so a step that runs a command
+returns what the command says, and the claim reads what nukadoko
+measured.
+
+- `of` is the step whose commands the list reads, or a list of
+  candidate steps, chosen as an events key's are (see "A claim on a
+  count of events"): exactly one of them runs earlier in the scenario,
+  and the latest line that ran it is the one read. When none ran, or
+  two did, the claim is `unjudged`, and its reason names them.
+- `change` selects `added`, `changed`, or `removed`, or a list of them,
+  and every change when it is left out.
+- `under` keeps the paths inside one directory, written relative to the
+  command's working directory with `/` between its parts (`"src"` or
+  `"src/"`). A path that is absolute, holds a backslash or a `.` or `..`
+  segment, or lies inside `node_modules` or `.git`, which the walk does
+  not enter, is refused at import.
+
+The list is sorted, and names each path once. A path is relative to the
+working directory, with `/` separators, and a directory ends in `/`, so
+a command that creates `migrations/0002_add_note.sql` in a new directory
+adds `migrations/` too.
+
+A claim on the key compares the whole list or counts it: `equal`,
+`not-equal`, `has-item`, or `has-same-items`, or `count: true` with a
+compare of two numbers. It takes no `view`, `at`, `each`, or path inside
+the list. Its expected value is the sentence's: a capture such as
+`{path:string}` under `has-item`, the docstring read with
+`expected_view: "lines"`, or a literal the pattern's words state
+(`nothing` or `no` fixes `[]` under `equal`). `{ from }` and
+`{ observe }` are refused, since step code would then choose the list
+the measured one is compared with. A files key has no name of a `from`
+key, an args key, or an events key, and a claim reads every key. Each of
+these is refused at import.
+
+A list is made only where every process of the step was walked whole,
+so an absence a claim reads is one nukadoko saw. Otherwise the claim is
+`unjudged`, and its reason says why:
+
+- the step ran no `runCommand` process, so nothing was measured, and a
+  list nukadoko never measured is not an empty list;
+- a process's walk was not made (`{ "unmeasured": "<why>" }`: past 20000
+  entries, or a directory that could not be read);
+- a process left one of its group running when it closed (`"group":
+  "running"`), so a file that process wrote after the walk is not in it;
+- the processes ran in more than one working directory, so their paths
+  make no one list;
+- `under` names a directory inside one the walk skipped.
+
+```text
+claim unjudged: files:build-in-process@4 added, changed, or removed equal [] (literal:nothing): build-in-process@4 ran no runCommand process, so nukadoko measured no file for it, and a list it never measured is not an empty list
+```
+
+The record's `actual_from` is `files:<step>@<line>` with the changes and
+the directory, such as `files:run-build@9 added or changed`, and
+`measured` names the producer's record and `observed.processes[0].files`
+(or `observed.processes`, for a step that ran several). A process still
+running when the producer's record was built is not in
+`observed.processes`, so the list cannot see it either.
 
 #### The value a claim judges
 
@@ -2549,6 +2634,10 @@ content: it says that a channel holds the same value, not that `observe`
 read it there. A constant that `observe` printed through a process of its
 own, or one that equals what such a process printed, names that channel
 all the same, and the step record's command lines show which it was.
+A claim on a `files` key is the exception to matching: nukadoko made the
+list from the producer's processes, so `measured` names them by where it
+read them (see "Files an earlier step changed"), and is `null` when it
+made no list.
 
 `measured: null` is what a constant looks like: a value that step code
 wrote, or worked out, is in no channel. It is also what a part of a
@@ -6797,8 +6886,10 @@ its scenario record's id, so either record leads to the other.
   group of every such process still running, and `timeout` sends SIGTERM
   to every process of the group. A call anywhere else keeps the caller's
   group. `files` is the same value as the entry's
-  `"files"`, so a step whose claim is "the command writes nothing" returns
-  the measurement instead of walking the directory itself. It is present
+  `"files"`, for a caller that reads it outside a step. A claim on what the
+  command wrote reads the entry through the claim step's `files` (see
+  "Files an earlier step changed"), never through a value the step
+  returns. It is present
   inside a step, and outside one only with `files: true`. On Windows, a bare program name such as `npm` is looked up through
   `PATH` and `PATHEXT`, and a `.cmd` or `.bat` file runs through
   `cmd.exe` with each argument passed unchanged, so a step names a program

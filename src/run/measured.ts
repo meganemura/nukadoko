@@ -37,7 +37,9 @@ import { deepEqual, type ExpectedOrigin, type JudgedClaim } from "../step/evalua
 // A claim on a count of execution events needs no search: nukadoko made
 // the count, so its channel is the claim step's own `events_read.<key>`
 // by construction, whatever the claim's outcome, which is how the run
-// finds the reading to count again once the world stops.
+// finds the reading to count again once the world stops. Nor does a claim
+// on the files an earlier step changed: nukadoko read the list from that
+// step's `observed.processes`, so that is its channel.
 
 /** One recorded channel and where it sits in its step record: a text, a
  * number the record holds as a number, or a text the record holds only in
@@ -184,8 +186,11 @@ export function withMeasured(judged: readonly JudgedClaim[], context: MeasuredCo
     const recordId = origin === "observe" ? context.ownRecordId : context.fromRecordOf(origin.fromKey);
     return { ...entry, expected_measured: Object.hasOwn(entry, "expected") ? channelFor(recordId, entry.expected, measured) : null };
   };
-  return judged.map(({ record, rawActual, fromKey, expectedOrigins, eventsKey }) => {
+  return judged.map(({ record, rawActual, fromKey, expectedOrigins, eventsKey, filesChannel }) => {
     const observed = record.outcome !== "unobserved";
+    if (filesChannel !== undefined && !("each" in record)) {
+      return { ...withExpected(record, expectedOrigins[0], null, observed), measured: observed ? filesChannel : null };
+    }
     if (eventsKey !== undefined && !("each" in record)) {
       const measured: MeasuredChannel | null = observed ? { step_record_id: context.ownRecordId, channel: `events_read.${eventsKey}` } : null;
       return { ...withExpected(record, expectedOrigins[0], null, observed), measured };

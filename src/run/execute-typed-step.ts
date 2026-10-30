@@ -46,6 +46,7 @@ import {
   type ReadingsLog,
 } from "../step/evaluate-claims.js";
 import { inputCopy, readAt, snapshotKeys, type Read, type Refusal, type Snapshot } from "../step/snapshot.js";
+import { filesSide, type FilesSource } from "./changed-files.js";
 import { startPatternWorker, testPatternInWorker } from "./pattern-worker.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
@@ -57,6 +58,7 @@ import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
 // layer through this file.
 export { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
 export { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
+export type { FilesSource } from "./changed-files.js";
 export type { ChannelText } from "./measured.js";
 
 // Responsibility: one typed step, run once in a ctx the caller already
@@ -78,6 +80,10 @@ export type { ChannelText } from "./measured.js";
 // before the write arrived. Judging takes its budget from the deadline
 // after the wait, so time spent waiting for lines never leaves a claim
 // unjudged for want of time to compare.
+//
+// A claim step with `files` reads each key's list from its producer's
+// record (src/run/changed-files.ts) before anything runs: the record is
+// written, so there is nothing to wait for.
 
 /** What a claim step read and how its claims came out. */
 export interface ClaimExecution {
@@ -168,6 +174,9 @@ export interface RunValidatedStepInput {
   /** A claim step with `events` only: the step each events key counts the
    * execution events of. */
   readonly eventsSource?: (key: string) => EventsSource;
+  /** A claim step with `files` only: the step each files key reads the
+   * changed paths of. */
+  readonly filesSource?: (key: string) => FilesSource;
 }
 
 /** The step whose result filled a `from` key, its name, the key of its
@@ -271,7 +280,7 @@ function deadlineOf(step: Step, config: RunValidatedStepInput["config"]): { read
  * it is not judged. */
 export function snapshotClaimArgs(step: Step, rawArgs: unknown, refusedFrom: ReadonlyMap<string, Refusal> = new Map()): ReadonlyMap<string, Read> | undefined {
   if (!isClaimStep(step)) return undefined;
-  const paths = claimReads(step.claims, new Set(Object.keys(step.from)), eventsShapeOf(step.events)).args;
+  const paths = claimReads(step.claims, new Set(Object.keys(step.from)), eventsShapeOf(step.events), new Set(Object.keys(step.files))).args;
   const reads = new Map(takeReads(rawArgs, paths.filter((segments) => !refusedFrom.has(segments[0]!))));
   for (const segments of paths) {
     const refusal = refusedFrom.get(segments[0]!);
@@ -458,7 +467,8 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const budgetOf = (): JudgingBudget => stepBudget ?? judgingBudget(Date.now() + PATTERN_LIMIT_MS, "the 10 second limit for judging a step with no deadline");
   const fromKeys = new Set(Object.keys(step.from));
   const eventsShape = eventsShapeOf(step.events);
-  const reads = claimReads(step.claims, fromKeys, eventsShape);
+  const filesKeys = new Set(Object.keys(step.files));
+  const reads = claimReads(step.claims, fromKeys, eventsShape, filesKeys);
   // A caller that took no snapshot before the schema ran (none does) gets
   // one of the validated args, so no claim reads a live value either way.
   const argReads = input.claimArgs ?? takeReads(args, reads.args);
@@ -481,6 +491,14 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   let eventsSides: ReadonlyMap<string, EventsCountSide> = new Map(
     eventsPlans.map((plan) => [plan.key, { label: plan.label, unjudged: "the step ended before it read the execution events" }] as const),
   );
+  // Each files key: the list read from its producer's record, or why
+  // there is none. A key the caller supplies no source for has no producer.
+  const filesSides = new Map(
+    Object.entries(step.files).map(([key, entry]) => {
+      const source: FilesSource = input.filesSource?.(key) ?? { of: `files.${key}.of`, unchosen: "nukadoko was given no step whose files this key reads" };
+      return [key, filesSide(entry, source)] as const;
+    }),
+  );
   let eventsRead: Readonly<Record<string, EventsReadRecord>> | undefined;
   const eventsField = (): { readonly eventsRead?: Readonly<Record<string, EventsReadRecord>> } => (eventsRead === undefined ? {} : { eventsRead });
   const noObservation: Reader = readerOf(new Map());
@@ -491,6 +509,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const actualFromKeys = [
     ...step.claims.map((claim) => pathSegments(claim.actual)?.[0] ?? "").filter((key) => fromKeys.has(key)),
     ...eventsShape.keys,
+    ...filesKeys,
   ];
   const shadowsOf = new WeakMap<Reader, ReadonlySet<string>>();
   // The ARIA snapshots of one reading, beside its plain snapshots.
@@ -512,6 +531,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     testPattern,
     budget: budgetOf(),
     ...(eventsSides.size === 0 ? {} : { events: eventsSides }),
+    ...(filesSides.size === 0 ? {} : { files: filesSides }),
   });
   let fixtureUsage: FixtureUsageEntry[] = [];
   let attempts = 0;
@@ -755,6 +775,7 @@ export interface ExecuteTypedStepInput {
   readonly filledFrom?: ReadonlyMap<string, FilledFrom>;
   readonly secrets: SecretSet;
   readonly eventsSource?: (key: string) => EventsSource;
+  readonly filesSource?: (key: string) => FilesSource;
 }
 
 /** `args` is the validated value once validation passed, and the value

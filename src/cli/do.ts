@@ -47,7 +47,7 @@ import { buildSecretSet } from "../secrets/build-secret-set.js";
 import type { SecretSet } from "../secrets/types.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact, fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
-import { eventsCandidates, isClaimStep, type Step } from "../step/define-step.js";
+import { producersOf, isClaimStep, type Step } from "../step/define-step.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import {
   formatFixtureDefinitionIssues,
@@ -407,7 +407,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       if (resolved !== undefined) {
         return { of: `${resolved.used.step}@${resolved.used.step_record_id}`, producer: recordedEventsProducer(rootDir, config.stateDir, resolved.record) };
       }
-      const names = isClaimStep(entry.step) ? eventsCandidates(entry.step.events[key]!).map((candidate) => stepNameOf.get(candidate) ?? "a step discovery never registered") : [];
+      const names = isClaimStep(entry.step) ? producersOf(entry.step.events[key]!).map((candidate) => stepNameOf.get(candidate) ?? "a step discovery never registered") : [];
       return {
         of: names.join(" or "),
         unchosen:

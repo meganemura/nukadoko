@@ -100,23 +100,23 @@ export default defineStep({
 ## The actual value
 
 `actual` is a path whose first segment is a `from` key or a key `observe`
-returns, or an `events` key alone, a count of what the program did
-(`program.md`), never a key the sentence fills (a `from` key hides an `observe`
-key of its name, so a step whose claims read no `observe` key is refused); a
-path reads own properties only (not `constructor`, not a getter). `view:
-"text"` trims the end (a program's last newline), `"lines"` also splits it into
-lines, `"json"` parses it, and `"comma-list"` splits it at commas; `at` then
-takes a path inside the viewed value, so parsing is data: `{ actual: "stdout",
-view: "json", at: "sections.git.0.dirty_count", compare: "equal", expected:
-"count" }`. `count: true` then compares the number of items of the array there,
-with a number compare only (`at-least` the literal `1` for "at least one row"),
-and breaks on a value that is not an array. `{ actual, each: { where?, claims }
-}` applies item claims to every item of an array (paths inside are relative to
-the item), and breaks when the array, or what `where` selects, is empty. A
-`where` claim whose path starts an item claim's, or the reverse, is refused
-with `equal`, `has-same-items`, `has-fields`, `lacks-field`, `fits-text`,
-`is-a`, `has-item`, `matches`, `contains-text`, `starts-with-text`, or
-`ends-with-text`, and breaks the claim where it implies it.
+returns, or an `events` key (`program.md`) or a `files` key (`parts.md`) alone,
+never a key the sentence fills (a `from` key hides an `observe` key of its name,
+so a step whose claims read no `observe` key is refused); a path reads own
+properties only (not `constructor`, not a getter). `view: "text"` trims the end
+(a program's last newline), `"lines"` also splits it into lines, `"json"` parses
+it, and `"comma-list"` splits it at commas; `at` then takes a path inside the
+viewed value, so parsing is data: `{ actual: "stdout", view: "json", at:
+"sections.git.0.dirty_count", compare: "equal", expected: "count" }`. `count:
+true` then compares the number of items of the array there, with a number
+compare only (`at-least` the literal `1` for "at least one row"), and breaks on
+a value that is not an array. `{ actual, each: { where?, claims } }` applies
+item claims to every item of an array (paths inside are relative to the item),
+and breaks when the array, or what `where` selects, is empty. A `where` claim
+whose path starts an item claim's, or the reverse, is refused with `equal`,
+`has-same-items`, `has-fields`, `lacks-field`, `fits-text`, `is-a`, `has-item`,
+`matches`, `contains-text`, `starts-with-text`, or `ends-with-text`, and breaks
+the claim where it implies it.
 
 The compares: `equal` (structural), `not-equal`, `contains-text`,
 `starts-with-text`, `ends-with-text`, `has-item`, `has-same-items` (in any

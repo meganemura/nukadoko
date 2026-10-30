@@ -8,6 +8,7 @@ import type {
   ClaimReading,
   ClaimReadingValue,
   ClaimView,
+  MeasuredChannel,
 } from "../record/types.js";
 import { COUNT_COMPARES, judgeCount, type CountCompare, type CountReading } from "../execution-events/count.js";
 import type { CountedGroup, LeftOutGroup } from "../execution-events/counted.js";
@@ -17,6 +18,7 @@ import {
   isEachClaim,
   kindNamed,
   NO_EVENTS,
+  NO_FILES,
   literalStatedByAll,
   pathSegments,
   placeAriaSnapshot,
@@ -68,6 +70,11 @@ import { readAt, snapshot, type Read, type Refusal } from "./snapshot.js";
 // A claim on a count of execution events reads no snapshot: its actual
 // is the range nukadoko counted (src/execution-events/count.ts), and it
 // holds or breaks only when every count in the range gives that answer.
+//
+// A claim on the files an earlier step changed reads no snapshot either:
+// its actual is the list of paths the runner read from that step's record
+// (src/run/changed-files.ts), or why there is none, and the list is judged
+// as any other value is.
 
 /** The JSON type a compare sees. `undefined` never reaches a compare: an
  * undefined side breaks first, naming its path. */
@@ -609,7 +616,7 @@ export function itemSegments(claim: ItemClaim): readonly string[] {
   return claim.view === undefined && claim.at !== undefined ? [...segments, ...claim.at.split(".")] : segments;
 }
 
-export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<string>, events: EventsShape = NO_EVENTS): ClaimReads {
+export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<string>, events: EventsShape = NO_EVENTS, files: ReadonlySet<string> = NO_FILES): ClaimReads {
   const args = new Map<string, readonly string[]>();
   const observed = new Map<string, readonly string[]>();
   const ariaSnapshots = new Map<string, readonly string[]>();
@@ -626,8 +633,9 @@ export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<strin
     else if ("from" in expected) add(argValues, pathSegments(expected.from));
   };
   for (const claim of claims) {
-    // A count of execution events is no value a snapshot holds.
-    if (!isEachClaim(claim) && events.keys.has(claim.actual)) {
+    // A count of execution events, and a list of changed files, is no
+    // value a snapshot holds.
+    if (!isEachClaim(claim) && (events.keys.has(claim.actual) || files.has(claim.actual))) {
       addExpected(claim.expected);
       continue;
     }
@@ -759,6 +767,9 @@ export interface ClaimInputs {
   /** Each events key of the step as its claims read it; absent for a
    * step with no `events`. */
   readonly events?: ReadonlyMap<string, EventsCountSide>;
+  /** Each files key of the step as its claims read it; absent for a step
+   * with no `files`. */
+  readonly files?: ReadonlyMap<string, FilesSide>;
 }
 
 /** What nukadoko's ARIA snapshot of the value at one path of `observe`'s
@@ -769,6 +780,14 @@ export interface ClaimInputs {
  * time, or more than one element) leaves it unjudged, since nothing was
  * measured. */
 export type AriaSnapshotRead = { readonly text: string } | { readonly broken: string } | { readonly unjudged: string };
+
+/** One files key as a claim reads it: the label the record names the list
+ * by (`files:<step>@<line> <changes>`, then ` under <dir>`), and the
+ * sorted paths the earlier step's `runCommand` processes changed, with the
+ * channel of its record they were read from, or why there is no list. */
+export type FilesSide =
+  | { readonly label: string; readonly paths: readonly string[]; readonly measured: MeasuredChannel }
+  | { readonly label: string; readonly unjudged: string };
 
 /** What nukadoko knows of the keys an earlier step (`step`) had its
  * `returns` drop from one object of the value it returned: the keys its
@@ -818,6 +837,10 @@ export interface JudgedClaim {
    * actual was measured on the claim step's own `events_read.<key>`.
    * Absent when the step holds no reading of the key. */
   readonly eventsKey?: string;
+  /** A claim on files only: the channel of the earlier step's record its
+   * list was read from, which is where it was measured by construction.
+   * Absent when there was no list. */
+  readonly filesChannel?: MeasuredChannel;
 }
 
 /** Where `claim`'s expected value is read, for `expected_measured`. Pure. */
@@ -1584,9 +1607,15 @@ function keptItems(judged: readonly ClaimItemRecord[]): ClaimItemRecord[] {
 
 // --- labels alone, for a claim nothing was compared for ---
 
+function filesPlace(key: string, side: FilesSide): ClaimPlace {
+  return { origin: `files:${key}`, segments: [], label: side.label, open: false };
+}
+
 function actualPlace(claim: Claim, inputs: ClaimInputs): ClaimPlace {
   const events = inputs.events?.get(claim.actual);
   if (events !== undefined) return { origin: "events", segments: [claim.actual], label: events.label, open: false };
+  const files = inputs.files?.get(claim.actual);
+  if (files !== undefined) return placeCounted(filesPlace(claim.actual, files), isEachClaim(claim) ? undefined : claim.count);
   const segments = pathSegments(claim.actual) ?? [claim.actual];
   const base = inputs.fromKeys.has(segments[0]!) ? placeAt(argPlace(segments[0]!, inputs), segments.slice(1).join(".")) : placeAt(OBSERVE_PLACE, claim.actual);
   if (!isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE) return placeAriaSnapshot(base);
@@ -1668,7 +1697,13 @@ function fromKeyOf(claim: Claim, fromKeys: ReadonlySet<string>): string | null {
 /** Why a claim whose actual starts with `key` is not judged when
  * `observe` returned `key` too: the claim reads the from value, or the
  * count of execution events, that `source` names. Pure. */
-export function shadowedReason(key: string, source: "from" | "events" = "from"): string {
+export function shadowedReason(key: string, source: "from" | "events" | "files" = "from"): string {
+  if (source === "files") {
+    return (
+      `observe returned "${key}", and files has a key of the same name, so actual "${key}" reads the paths an earlier step's commands changed and never what observe returned. ` +
+      `Rename the key observe returns, or the files key, so each name has one source`
+    );
+  }
   if (source === "events") {
     return (
       `observe returned "${key}", and events has a key of the same name, so actual "${key}" reads the count of execution events and never what observe returned. ` +
@@ -1704,6 +1739,18 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
       const record = shadowed ? notJudged(claim, inputs, "broken", shadowedReason(eventsKey, "events")) : judgeEventsCount(claim as ComparisonClaim, events, inputs);
       // Measured on the reading, when there is one to name.
       judged.push({ record, rawActual: undefined, fromKey: null, expectedOrigins, ...("reading" in events ? { eventsKey } : {}) });
+      continue;
+    }
+    const files = isEachClaim(claim) ? undefined : inputs.files?.get(claim.actual);
+    if (files !== undefined) {
+      if (inputs.shadowedByObserve?.has(claim.actual) === true) {
+        judged.push({ record: notJudged(claim, inputs, "broken", shadowedReason(claim.actual, "files")), rawActual: undefined, fromKey: null, expectedOrigins });
+        continue;
+      }
+      const place = filesPlace(claim.actual, files);
+      const side: Side = "paths" in files ? { place, value: [...files.paths] } : { place, unjudged: files.unjudged };
+      const record = await judgeComparison(claim as ComparisonClaim, side, inputs);
+      judged.push({ record, rawActual: undefined, fromKey: null, expectedOrigins, ...("paths" in files ? { filesChannel: files.measured } : {}) });
       continue;
     }
     if (fromKey !== null && inputs.shadowedByObserve?.has(fromKey) === true) {

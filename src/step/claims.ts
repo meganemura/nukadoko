@@ -9,7 +9,8 @@ import type { ClaimCompare, ClaimView } from "../record/types.js";
 // the expected value is in the sentence or in an earlier step's result,
 // never in step code. This module holds the declaration types, the path
 // syntax both sides share, the literal rule, and what a claim on a count
-// of execution events may declare. It does not evaluate a
+// of execution events, or on the files an earlier step changed, may
+// declare. It does not evaluate a
 // claim (src/step/evaluate-claims.ts does) and does not read a feature file
 // (`nuka check` resolves a claim against the line that binds it).
 
@@ -489,6 +490,8 @@ export interface ClaimStepShape {
   /** What the step's `events` declares (`eventsShapeOf`); absent for a
    * step with none. */
   readonly events?: EventsShape;
+  /** The keys of the step's `files`; absent for a step with none. */
+  readonly files?: ReadonlySet<string>;
 }
 
 // --- execution events ---
@@ -605,6 +608,92 @@ function checkEvents(claims: readonly Record<string, unknown>[], shape: ClaimSte
     checkNotRewritten(label, value.name, shape, "expected");
   }
 }
+
+// --- files an earlier step changed ---
+//
+// A claim step's `files` names the paths an earlier step's `runCommand`
+// processes added, changed, or removed (docs/spec.md "Files an earlier
+// step changed"), and a claim reads one by its key alone, as its actual.
+// nukadoko reads the list from that step's record, so the claim takes no
+// path, view, or at, and compares the whole list or its count. Its
+// expected value is the sentence's: a capture, the docstring, or the
+// pattern's words. A list from `{ from }` or `{ observe }` would be one
+// step code chose, which is what reading the record is there to rule out.
+
+/** The compares a list of paths can take: a text or order compare breaks
+ * on an array on every line, and is-a list holds on every one. */
+export const FILES_COMPARES: readonly ClaimCompare[] = ["equal", "not-equal", "has-item", "has-same-items"];
+
+/** The keys a claim on files has. */
+const FILES_CLAIM_KEYS = ["actual", "count", "compare", "expected", "expected_view"] as const;
+
+/** Refuses a claim on files key `key` that the run would judge one way on
+ * every line, or whose expected value is not the sentence's. */
+function checkFilesClaim(label: string, claim: Record<string, unknown>, key: string, shape: ClaimStepShape): void {
+  const reads = `${label} reads files.${key}, the list of paths an earlier step's commands changed`;
+  if (claim.each !== undefined) {
+    throw new InvalidClaimError(`${reads}, and a claim on it compares the whole list or counts it. Compare it with ${FILES_COMPARES.join(", ")}, or count it`);
+  }
+  checkKeys(label, claim, FILES_CLAIM_KEYS, "a claim on files");
+  const expected = claim.expected;
+  if (typeof expected === "object" && expected !== null && !Array.isArray(expected) && ("from" in expected || "observe" in expected)) {
+    const source = "from" in expected ? "from" : "observe";
+    throw new InvalidClaimError(
+      `${reads}, and its expected value is { ${source} }, a value step code ${source === "from" ? "returned" : "read"}, so step code would choose the list the measured one is compared with. State the expected paths in the sentence: a capture, the docstring, or the pattern's words`,
+    );
+  }
+  if (claim.count === undefined && !(FILES_COMPARES as readonly unknown[]).includes(claim.compare)) {
+    throw new InvalidClaimError(
+      `${reads}, which is an array of paths, and ${describe(claim.compare)} does not compare it, so the claim would break on every line or hold on every line. Compare it with ${FILES_COMPARES.join(", ")}, or count it`,
+    );
+  }
+  checkExpected(label, expected, claim.compare, shape, false);
+  checkExpectedView(label, claim, shape);
+  checkCount(label, claim);
+  if (claim.count !== undefined) return;
+  // has-item compares with one path, and the other compares with a list:
+  // an expected value of the other kind breaks the claim on every line,
+  // or, under not-equal, holds on every one.
+  const one = claim.compare === "has-item";
+  const wanted = one ? "a text" : "an array";
+  const fix = one
+    ? "State the path in the pattern's fixed words, or capture it"
+    : "State the list with a word such as nothing or no, or read the docstring with expected_view lines";
+  const literal = literalOf(expected);
+  if (literal !== null && (one ? typeof literal.literal !== "string" : !Array.isArray(literal.literal))) {
+    throw new InvalidClaimError(`${reads}, and its expected value is the literal ${describe(literal.literal)}, which is never ${wanted}, so ${String(claim.compare)} judges it the same way on every line. ${fix}`);
+  }
+  if (typeof expected !== "string" || shape.stringArgs?.has(expected) !== true) return;
+  const view = claim.expected_view as (typeof CLAIM_VIEWS)[number] | undefined;
+  const makes = view === undefined ? "string" : VIEW_MAKES[view];
+  if (makes !== null && makes !== (one ? "string" : "array")) {
+    const how = view === undefined ? "a plain z.string()" : `a plain z.string() read through expected_view ${view}`;
+    throw new InvalidClaimError(`${reads}, and its expected value is args.${expected}, ${how}, which is never ${wanted}, so ${String(claim.compare)} judges it the same way on every line. ${fix}`);
+  }
+}
+
+/** Refuses a `files` key that collides with another source of a claim's
+ * actual, or that no claim reads. */
+function checkFiles(claims: readonly Record<string, unknown>[], shape: ClaimStepShape): void {
+  for (const key of shape.files ?? NO_FILES) {
+    const other = shape.fromKeys.has(key)
+      ? "a key of from"
+      : shape.argsKeys?.has(key) === true || shape.captureKeys.has(key)
+        ? "an args key"
+        : shape.events?.keys.has(key) === true
+          ? "a key of events"
+          : null;
+    if (other !== null) {
+      throw new InvalidClaimError(`files.${key} has the name of ${other}, so a claim's actual "${key}" would have two sources. Rename one of them`);
+    }
+    if (!claims.some((claim) => claim.actual === key)) {
+      throw new InvalidClaimError(`files.${key} is read by no claim, so the list it names changes no verdict. Compare a claim with actual "${key}", or take the key out of files`);
+    }
+  }
+}
+
+/** The keys of a step with no `files`. */
+export const NO_FILES: ReadonlySet<string> = new Set();
 
 type Where = "actual" | "item";
 
@@ -979,10 +1068,11 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   if (claim.compare === ARIA_SNAPSHOT_COMPARE) checkAriaSnapshot(label, claim, shape, where, actualFromObserve);
 }
 
-/** Whether a top-level claim's `actual` reads observe: it is not an
- * events key, and its first segment is not a `from` key. */
-export function actualReadsObserve(actual: string, fromKeys: ReadonlySet<string>, eventsKeys: ReadonlySet<string> = NO_EVENTS.keys): boolean {
-  return !eventsKeys.has(actual) && !fromKeys.has(pathSegments(actual)?.[0] ?? "");
+/** Whether a top-level claim's `actual` reads observe: it is not a key
+ * of a reading nukadoko took (`events` or `files`), and its first
+ * segment is not a `from` key. */
+export function actualReadsObserve(actual: string, fromKeys: ReadonlySet<string>, readingKeys: ReadonlySet<string> = NO_EVENTS.keys): boolean {
+  return !readingKeys.has(actual) && !fromKeys.has(pathSegments(actual)?.[0] ?? "");
 }
 
 /** Why `defineStep` must not store this claim list, naming the claim by
@@ -1021,6 +1111,16 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
     checkPath(`${label}.actual`, claim.actual, false);
     const segments = pathSegments(claim.actual as string)!;
     const head = segments[0]!;
+    const filesKeys = shape.files ?? NO_FILES;
+    if (filesKeys.has(claim.actual as string)) {
+      checkFilesClaim(label, claim, claim.actual as string, shape);
+      return;
+    }
+    if (filesKeys.has(head)) {
+      throw new InvalidClaimError(
+        `${label}.actual reads inside files.${head}, a list of paths with nothing to walk into. Name the key alone: actual "${head}"`,
+      );
+    }
     const eventsKeys = shape.events?.keys ?? NO_EVENTS.keys;
     if (eventsKeys.has(claim.actual as string)) {
       checkEventsClaim(label, claim, claim.actual as string, shape);
@@ -1100,7 +1200,8 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
   // a key it returns under a from key's name: the from value wins, so the
   // reading is never compared and nothing says so.
   checkEvents(claims as readonly Record<string, unknown>[], shape);
-  if (shape.hasObserve && !claimsReadObserve(claims as readonly Claim[], shape.fromKeys, shape.events?.keys)) {
+  checkFiles(claims as readonly Record<string, unknown>[], shape);
+  if (shape.hasObserve && !claimsReadObserve(claims as readonly Claim[], shape.fromKeys, new Set([...(shape.events?.keys ?? []), ...(shape.files ?? [])]))) {
     throw new InvalidClaimError(
       "the step has observe, and no claim reads what it returns: every claim's actual is a key of from, and no expected value is { observe }. " +
         "A key observe returns under a from key's name never reaches a claim, since the from value wins. " +
@@ -1155,9 +1256,9 @@ export function observeWithheldKeys(claims: readonly Claim[], fromKeys: Readonly
 /** Whether any claim reads what `observe` returns: an actual whose first
  * segment is not a from key, or an expected `{ observe }`, in a claim or
  * in an `each`'s `where` and item claims. Pure. */
-export function claimsReadObserve(claims: readonly Claim[], fromKeys: ReadonlySet<string>, eventsKeys: ReadonlySet<string> = NO_EVENTS.keys): boolean {
+export function claimsReadObserve(claims: readonly Claim[], fromKeys: ReadonlySet<string>, readingKeys: ReadonlySet<string> = NO_EVENTS.keys): boolean {
   return claims.some((claim) => {
-    if (actualReadsObserve(claim.actual, fromKeys, eventsKeys)) return true;
+    if (actualReadsObserve(claim.actual, fromKeys, readingKeys)) return true;
     const entries: readonly ItemClaim[] = isEachClaim(claim) ? [...(claim.each.where ?? []), ...claim.each.claims] : [claim];
     return entries.some((entry) => typeof entry.expected === "object" && entry.expected !== null && "observe" in entry.expected);
   });

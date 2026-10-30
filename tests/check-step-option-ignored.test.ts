@@ -88,7 +88,7 @@ describe("nuka check: step-option-ignored", () => {
         message: 'Step "misspelled" passes timeOut, which is not a defineStep option, so it has no effect',
         file: "features/steps/misspelled.ts",
         step: "misspelled",
-        fix: "Delete timeOut from the defineStep call in features/steps/misspelled.ts, or rename it to an option defineStep reads: pattern, patterns, description, args, returns, mutates, from, timeout, parts, run, claims, observe, poll, events.",
+        fix: "Delete timeOut from the defineStep call in features/steps/misspelled.ts, or rename it to an option defineStep reads: pattern, patterns, description, args, returns, mutates, from, timeout, parts, run, claims, observe, poll, events, files.",
       },
       {
         code: "step-option-ignored",
