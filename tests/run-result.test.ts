@@ -69,6 +69,7 @@ describe("nuka run: run.json", () => {
       // The fixture has no program file, so the run started no world.
       worlds: [],
       selection: "full",
+      order: { kind: "file" },
       counts: { scenarios: 2, passed: 1, failed: 1, stopped: 0, not_run: 0, controls: 0, controls_not_run: 0 },
       scenarios: [
         {

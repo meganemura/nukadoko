@@ -135,6 +135,9 @@ interface RunArgs {
   concurrency?: number;
   /** `--step`: pause after each step until `nuka step` answers. */
   step?: boolean;
+  /** `--order`: `file`, `shuffled`, or `shuffled:<seed>`; run.ts
+   * refuses anything else. */
+  order?: string;
 }
 
 interface InitArgs {
@@ -664,6 +667,15 @@ export async function runCli(
             "the same claim in Then has broken at the same line this many times, or a run disagrees (default 2); only then does " +
             "the control prove the scenario. A required cell runs once, or --repeat times",
         })
+        .option("order", {
+          type: "string",
+          nargs: 1,
+          describe:
+            "the order each environment's pass runs its scenarios in: file (the default), or shuffled, which sorts the " +
+            "feature files and then each file's scenarios by a seed nukadoko draws, so a scenario that passes only after " +
+            "another one ran shows up; shuffled:<seed> runs that order again. The seed is on stderr, in run.json, in the " +
+            "summary, and in every rerun line, which in a shuffled run names the scenarios that ran before the failed one",
+        })
         .option("base", {
           type: "string",
           nargs: 1,
@@ -682,7 +694,7 @@ export async function runCli(
             "fixtures still open, until nuka step next or nuka step stop answers that pause. One scenario in one " +
             "environment; run it in the background and follow it with nuka step wait",
         })
-        .check(rejectRepeatedFlags(["concurrency", "repeat", "proof-runs", "base"])) as Argv<RunArgs>,
+        .check(rejectRepeatedFlags(["concurrency", "repeat", "proof-runs", "base", "order"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
@@ -699,6 +711,7 @@ export async function runCli(
         repeat: args.repeat ?? 1,
         proofRuns: args["proof-runs"] ?? DEFAULT_PROOF_RUNS,
         ...(args.base !== undefined ? { base: args.base } : {}),
+        ...(args.order !== undefined ? { order: args.order } : {}),
         step: args.step ?? false,
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.

@@ -85,6 +85,20 @@ describe("inRunOrder", () => {
     }));
 });
 
+// A seed in a run.json or a summary has to name the same order for every
+// nukadoko that reads it later, so the key is part of the format: these
+// orders change only with an upgrade note.
+describe("the order a seed names", () => {
+  it("stays the same across versions", () => {
+    const file = (relativePath: string, lines: readonly number[]): File => ({ relativePath, pickles: lines.map((line) => ({ location: { line } })), selectedLines: null });
+    const selection = [file("features/a.feature", [3, 8, 13]), file("features/b.feature", [4, 9]), file("features/c/d.feature", [2])];
+    const named = (seed: number) => sequenceOf(inRunOrder(selection, { kind: "shuffled", seed })).map(keyOf);
+    expect(named(0)).toEqual(["features/c/d.feature:2", "features/b.feature:9", "features/b.feature:4", "features/a.feature:3", "features/a.feature:8", "features/a.feature:13"]);
+    expect(named(1)).toEqual(["features/c/d.feature:2", "features/a.feature:3", "features/a.feature:8", "features/a.feature:13", "features/b.feature:4", "features/b.feature:9"]);
+    expect(named(MAX_ORDER_SEED)).toEqual(["features/c/d.feature:2", "features/b.feature:4", "features/b.feature:9", "features/a.feature:8", "features/a.feature:3", "features/a.feature:13"]);
+  });
+});
+
 describe("replayTargets", () => {
   it("names what ran before a scenario in its pass, then it, in the order the pass ran them", () =>
     hegel.test((tc) => {

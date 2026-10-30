@@ -846,6 +846,31 @@
       "en": ["undeclared write", "undeclared-write"],
       "ja": "宣言されていない書き込み",
       "note": "nuka run の注記 `undeclared-write`。mutates: false を宣言した step の trace が、状態を持つテーブルへのコミットした書き込みを持つこと。コードはコードスパンで英語のまま"
+    },
+    {
+      "en": ["order (of a run)", "the run's order"],
+      "ja": "順序 / run の順序",
+      "note": "nuka run --order が決める、各 pass が scenario を走らせる並び。run.json の `order` と、docs/spec.md の見出し \"Order\"(spec.ja.md では 順序)に対応する。値 `file` と `shuffled` はコードスパンで英語のまま。seed も英語のまま(choice の note と同じ)"
+    },
+    {
+      "en": ["file order"],
+      "ja": "ファイル順",
+      "note": "`--order file`、既定の順序。対象が選ぶ順序で、ファイルはパスのバイト順、scenario はファイルの中の順"
+    },
+    {
+      "en": ["shuffled order", "shuffled run", "shuffle"],
+      "ja": "シャッフルした順序 / シャッフルした run / シャッフル",
+      "note": "`--order shuffled` の順序と、その順序で走った run。ファイルを seed の鍵で並べ、次に各ファイルの scenario を並べる。ファイルは分かれない"
+    },
+    {
+      "en": ["order dependence", "depends on the order"],
+      "ja": "順序への依存",
+      "note": "前に走った scenario がプログラムに残したもの(または残さなかったもの)のために scenario が通ること、または失敗すること。flaky と区別する語で、`do:` 行で同じ失敗が再現すれば順序への依存"
+    },
+    {
+      "en": ["replay (a rerun line replays what ran before)", "replays"],
+      "ja": "再現する",
+      "note": "シャッフルした run の `do:` 行が、失敗した scenario の前に同じ pass で走った scenario を同じ順序で走らせること"
     }
   ],
   "keep_english": [

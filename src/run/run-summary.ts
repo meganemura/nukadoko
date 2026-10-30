@@ -250,6 +250,13 @@ function renderCondition(document: RunDocument): string[] {
       : tagged === undefined
         ? "- selection: partial (a line target left out other scenarios of its file)"
         : `- selection: partial (${tagFlagsOf(tagged.expressions)} left out ${countOf(tagged.left_out, "scenario", "scenarios")} of the targeted files)`;
+  // Only a shuffled order is said, as file order is what a run without
+  // `--order` runs: every cell of the table ran in it, and the flag runs
+  // the same order again.
+  const order =
+    document.order?.kind === "shuffled"
+      ? [`- order: shuffled, seed ${document.order.seed} (\`--order shuffled:${document.order.seed}\` runs this order again)`]
+      : [];
   // Only a count other than the default is said, as `proven` reads
   // with it: a control's `(n runs)` in the table is measured against it.
   const proofRuns =
@@ -271,6 +278,7 @@ function renderCondition(document: RunDocument): string[] {
     ...events,
     browser,
     selection,
+    ...order,
     ...proofRuns,
     ...check,
     `- nukadoko: ${document.nukadoko}`,

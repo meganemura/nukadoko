@@ -3823,7 +3823,7 @@ export default defineProgram({
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--concurrency <n>] [--repeat <n>] [--order file|shuffled[:<seed>]] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -3862,6 +3862,7 @@ nukadoko は scenario を `.feature` ファイルからだけ読むからです�
 そのため、どの scenario が何番目に実行されたかは run をまたいで安定し、ある record やレポートを別の run のものと比較できます。
 後述の `--concurrency` は、この走査順序を保ちつつ位置は手放します。
 ファイルは同じ順序で配られますが、record は worker が終えた順に並びます。
+`--order shuffled` は、ファイルと各ファイルの中の scenario を、代わりに seed が名指す順序に並べます(「順序」を参照)。
 ディレクトリに `:line` を付けると拒否されます。
 `:line` は 1 つのファイルの中から 1 つの scenario を選ぶものであり、ディレクトリはその中から選ぶべき単一のファイルを名指ししていないからです。
 走査が見つけられる `.feature` ファイルを持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
@@ -3899,8 +3900,8 @@ scenario は、ブラウザの中、HTTP 呼び出しの中、またはプロジ
 分かれたプロセスは、この 3 つすべてに届きます。
 
 配る単位は feature ファイルです。
-1 つのファイルの中のすべての scenario は、1 つの worker の中でファイル順に実行されるため、Background とその後の scenario は、並行度 1 のときと同じ関係を保ちます。
-ファイルは歩いたときと同じ決まったバイト順で配られるため、どの worker がどのファイルを受け取るかは run をまたいで揺れません。
+1 つのファイルの中のすべての scenario は、1 つの worker の中で run の順序(`--order shuffled` でなければファイル順、「順序」を参照)で実行されるため、Background とその後の scenario は、並行度 1 のときと同じ関係を保ちます。
+ファイルも run の順序で配られるため、どの worker がどのファイルを受け取るかは、同じ順序の run をまたいで揺れません。
 したがって、1 つのファイルを名指した run では `--concurrency` が 1 を超えてもすることが何もなく、`nuka run` は、何もすることのない worker を起動する代わりにそう伝えます。
 
 `Feature:` 行に付けた `@nukadoko:serial` タグは、そのファイルを他のどのファイルも実行していない間に実行します。
@@ -4091,6 +4092,7 @@ exit code は結果であって、失敗ではないからです。
 `do:` 行は `nuka run <feature>:<line>` で、run が environment を選んだときは、その scenario が走った environment を名指す `--env <name>` も付きます。
 `--env`、`defaultEnvironments`、condition を宣言する environment のどれで選んだときも同じで、暗黙の `default` だけを走らせた run では何も名指しません。
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
+シャッフルした run では、この行はその scenario の前に走ったものも再現します(「順序」を参照)。
 この行は直列実行と並行実行の両方で表示されます。
 `--json` のとき、stderr は空です。
 この段落とその前の 2 つの段落が挙げる行がどれも出ず、retention の行も出ません。
@@ -4235,6 +4237,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
 - `selection` は、`:line` の対象か `--tag` がそのファイルの scenario を 1 つでも外したとき `partial` で、それ以外は `full` です。
   部分実行はデバッグの結果であり、レビュアーが feature が通ったと読むべきものではありません(「レビュー」を参照)。
 - `tag_selection` は `--tag` のときだけあり、`expressions` は与えた順の式、`left_out` は対象のファイルの scenario のうち式が外した数です。
+- `order` は `{ "kind": "file" }` か、`--order shuffled` の run では、引いたか与えられた seed を持つ `{ "kind": "shuffled", "seed": <n> }` です(「順序」を参照)。
 - `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` と、そのセルの役割である `role`(`required` か `control` で、「断定」を参照)を持ちます。
   `--base` のもとでは、base か old の world の実行は `world`(`base` か `old`)と、それがセルである head の行の `feature` と `line` を持つ `row` を持ちます。
   base が `paths` のためだけに走らせた実行はセルではなく、`for_paths` も持ちます(「断定」を参照)。
@@ -4359,6 +4362,72 @@ required な連鎖キーの生産者が欠けているか、より後ろで束�
 undefined な step は、マッチに失敗したテキストを名指しして scenario を失敗させ、`nuka scaffold` を提案します。
 同梱の skill に従う agent が、欠けている型付き step を作成して PR として提出します。
 feature のバックログが語彙の成長を駆動します。
+
+### 順序
+
+```sh
+nuka run [<feature[:line]|dir>...] --order shuffled
+nuka run [<feature[:line]|dir>...] --order shuffled:<seed>
+```
+
+1 つの environment の scenario は、1 つの world に対して 1 つずつ順に走ります。
+そのため scenario は、前に走った scenario がプログラムに残したもの(行、アカウント、切り替えた flag、ファイル)に出会います。
+必要なものを前の scenario が作ったから通る scenario や、それを損なう scenario が後で走るから通る scenario は、ファイル順ではどの run でも通ります。
+両方を書いた agent は緑の run を読み、run は証明した以上のことを主張します。
+`--order shuffled` は同じ選択を別の順序で走らせるので、そうした scenario は失敗します。
+
+`--order` は `file`、`shuffled`、`shuffled:<seed>` を取り、seed は 0 から 4294967295 までの整数です。
+既定の `file` は、対象が選ぶ順序です(「Scenario(スクリプト化された経路)」を参照)。
+`shuffled` は、feature ファイルを並べ、次に各ファイルの中の scenario を並べます。
+並べる鍵は、seed と、各ファイルのパスまたは各 scenario の行から作ります。
+`shuffled` は seed を自分で引き、`shuffled:<seed>` はその seed が名指す順序をもう一度走らせます。
+ファイルは分かれません。
+`--concurrency` はシャッフルした順序でファイル全体を配り、worker は各ファイルの scenario をその順序で走らせるので、1 つの seed はどの並行度でも 1 つの順序を名指します。
+複数のファイルの scenario を混ぜるシャッフルは、worker の数ごとに別の順序を与えてしまいます。
+`@nukadoko:serial` を付けたファイルは、これまでどおり他のどのファイルも走っていない間に走ります。
+run のすべての pass は、各 environment でも `--repeat` の各回でも、同じ順序で走ります。
+environment は `--env` が与える順序を保ちます。
+それぞれが自分の world を持つからです。
+`--base` のもとでは、base と old の world は、head が行を走らせた順序でセルを走らせます。
+base や old のセルはある行の head のセルとの比較であり、head と違う scenario の後に走ったセルは、比べる変更ではなくその違いのせいで結果が変わりうるからです。
+
+scenario の鍵は、他に何が選ばれたかに依りません。
+そのため、選択のどの部分も、選択全体が与えた順序で走ります。
+seed は、それを読むどの nukadoko でも同じ順序を名指します。
+鍵は形式の一部であり、その変更は、docs/upgrading.md に移り方を書く破壊的な変更です。
+
+シャッフルした run は、引いた seed も与えられた seed も、4 つの場所で言います。
+1 つ目は stderr で、最初の scenario の前に `order shuffled:<seed>` と書きます。
+そのため、シグナルで止まって run.json を書かない run も seed を言います。
+2 つ目は run.json の `order`、3 つ目はサマリの `order` の行です。
+4 つ目は、run が表示する、scenario をもう一度走らせるすべてのコマンドです。
+順序がいちばん効くのは、失敗した scenario の `do:` 行です。
+他の scenario の後で失敗し、単独では通る scenario は、それを単独で走らせる行では通ります。
+そのためシャッフルした run では、この行は、その pass でその scenario の前に走った scenario と、その scenario 自身を名指し、順序と run 自身の `--env` フラグを付けます。
+その `--env` フラグが、その pass と同じ scenario を選びます。
+
+```text
+failed	scenario-failed	features/accounts.feature:3	nobody has signed up yet: claim broken: 1 (count of observe:names) equal 0 (sentence:count)
+  do: nuka run features/accounts.feature --order shuffled:1
+```
+
+そこまでにすべての scenario が走ったファイルは、対象がそのファイル全体を名指し、`--tag` がそのどれも外していなければファイル全体で、そうでなければ行で名指します。
+そのため、この行に `--tag` は要りません。
+行から対象を消しても、残りは同じ順序で走ります。
+読み手はこうして、失敗した scenario が必要とする scenario や、それを損なう scenario を見つけます。
+`--repeat` が 1 を超えるときや `--concurrency` が 1 を超えるときは、scenario の前に走ったものは順序の一部分ではありません。
+前の回がすべての scenario を走らせたか、別の worker が同時に走らせたからです。
+そのときの行は、run 自身の対象に `--tag`、`--order`、`--repeat`、`--concurrency`、`--env` フラグを付けたものです。
+`hook-failed` の所見の `do` は run 自身の対象を `--tag` 付きで名指し、それと `--base` の行の所見の `do` は、すでに名指しているものに順序を加えます。
+ファイル順では、`do:` 行はこれまでどおり scenario を単独で走らせます。
+
+run は、scenario がシャッフルした順序でなぜ失敗したかを言いません。
+ある順序で失敗し別の順序で通るのは、順序への依存の姿であり、flaky な scenario の姿でもあります。
+`do:` 行は両者を見分けます。
+順序への依存なら、その行でもう一度失敗するからです。
+nukadoko は、計測していない原因ではなく、何が走ったかを報告します。
+`--repeat` はどの回でも 1 つの順序を保つので、最初の回より後の回は、前の回が残したものにも出会います。
+前の scenario が損なう scenario は、ファイル順でも 2 回目から失敗し、そのセルは `flaky` と読めます。
 
 ### 断定
 
@@ -5482,7 +5551,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   その場所、名前、行の理由を載せます。
   その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せ、base か old の world のセルではその前に `base:` か `old:` を付けます。
 - 条件。
-  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world ごとの 1 行(「実行イベント」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
+  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world ごとの 1 行(「実行イベント」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--order shuffled` のときの `order: shuffled, seed <n>`(ファイル順では何もなし)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--base` のもとでは「Removed criteria」。
   消えた各受け入れ基準の場所と名前、そして基点での文を `gherkin` のブロックで載せます。
 - run.json が `paths` を持つときは「Changed paths」。
@@ -5510,6 +5579,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。
 - 失敗した run では、失敗した各 scenario の `do` である `nuka run <feature>:<line>` コマンド。
   run に `--env` があれば、その scenario が失敗した environment を名指す `--env` も付きます。
+  シャッフルした run では、代わりにその順序を再現するコマンドです(「順序」を参照)。
 
 サマリは毎回 `.nukadoko/runs/<run_id>/summary.md` に書かれます。
 `$GITHUB_STEP_SUMMARY` が設定されていれば、それが指すファイルに追記されます(GitHub Actions はすべての step にこれを設定するので、設定なしでジョブのサマリページに run が載ります)。
@@ -6490,6 +6560,16 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expres
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
+                              --order shuffled runs each pass's feature files,
+                              and each file's scenarios, in an order a seed
+                              nukadoko draws; --order shuffled:<seed> runs
+                              that order again, and file (the default) is
+                              the order the targets select. The seed is on
+                              stderr before the first scenario, in run.json's
+                              order, in the summary, and in every rerun line, which
+                              names the scenarios that ran before the
+                              failed one (the run itself under --repeat or
+                              --concurrency above 1).
                               --base <git ref> compares each criterion with
                               the commit the ref names: a new or changed one
                               also runs against the base's code (the base
@@ -7069,7 +7149,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
 | 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code |
-| 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code や対象を指定したときの注記の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
+| 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat`、`--concurrency`、`--order`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code や対象を指定したときの注記の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
 | コマンド | stdout | stderr |

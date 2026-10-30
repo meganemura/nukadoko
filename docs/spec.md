@@ -4876,7 +4876,7 @@ Rails lines of its own requests.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expression>]... [--concurrency <n>] [--repeat <n>] [--order file|shuffled[:<seed>]] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -4921,7 +4921,9 @@ compared byte by byte rather than by locale, so which scenario ran in which
 position stays stable across runs and a record or a report can be compared
 against another one. `--concurrency` below keeps that visiting order and
 gives up the position: the files are still handed out in it, and the
-records land in the order the workers finish. `:line` on a directory is
+records land in the order the workers finish. `--order shuffled` puts the
+files, and the scenarios inside each, in an order a seed names instead
+(see "Order"). `:line` on a directory is
 refused: it selects one scenario inside a single file, and a directory
 names no single file for it to select inside. A directory holding no
 `.feature` file the walk can see is refused too, the same tone
@@ -4974,10 +4976,11 @@ others is a promise the tool cannot keep. Separate processes reach all
 three.
 
 The unit of distribution is the feature file. Every scenario in one file
-runs in one worker, in file order, so a Background and the scenarios after
-it keep the relation they have at concurrency 1. Files are handed out in
-the same fixed byte order they are walked in, so which worker gets which
-file does not drift between runs. `--concurrency` above 1 therefore has
+runs in one worker, in the run's order (file order unless `--order
+shuffled`, see "Order"), so a Background and the scenarios after it keep
+the relation they have at concurrency 1. Files are handed out in the
+run's order too, so which worker gets which file does not drift between
+runs of one order. `--concurrency` above 1 therefore has
 nothing to do for a target naming a single file, and `nuka run` says so
 rather than starting workers that would sit idle.
 
@@ -5223,7 +5226,8 @@ naming the environment the scenario ran in whenever the run selected
 environments, by `--env`, by `defaultEnvironments`, or as the environments
 that declare conditions (only a run of the implicit `default` names none),
 quoted for a POSIX shell where a word needs
-it. These lines appear for serial and concurrent runs. Under `--json`, stderr is empty: it carries none of the lines this
+it. In a shuffled run the line also replays what ran before the scenario
+(see "Order"). These lines appear for serial and concurrent runs. Under `--json`, stderr is empty: it carries none of the lines this
 paragraph and the two above it name, nor the retention line, and the
 document on stdout holds the result, since an
 agent's shell reads both streams as one. A warning that something went
@@ -5377,6 +5381,9 @@ to act on the run without opening another file:
 - `tag_selection`, under `--tag` only: `expressions`, the expressions in
   the order given, and `left_out`, how many scenarios of the targeted
   files they left out.
+- `order` is `{ "kind": "file" }`, or `{ "kind": "shuffled", "seed": <n> }`
+  for a run under `--order shuffled`, with the seed it drew or was given
+  (see "Order").
 - `scenarios` has one entry per scenario execution, in the order each
   finished, with the `environment` it ran in and the `role` of its cell,
   `required` or `control` (see "Verdicts"). Under `--base`, an execution
@@ -5590,6 +5597,86 @@ An undefined step fails the scenario naming the text that failed to match
 and suggests `nuka scaffold`. An agent following the bundled skill authors
 the missing typed step and submits it as a PR: the feature backlog drives
 vocabulary growth.
+
+### Order
+
+```sh
+nuka run [<feature[:line]|dir>...] --order shuffled
+nuka run [<feature[:line]|dir>...] --order shuffled:<seed>
+```
+
+The scenarios of one environment run against one world, one after
+another, so a scenario meets whatever the scenarios before it left in the
+program: a row, an account, a switched flag, a file. A scenario that
+passes only because an earlier one made what it needs, or only because
+the one that spoils it runs later, passes on every run in file order. The
+agent that wrote both reads a green run, and the run claims more than it
+proved. `--order shuffled` runs the same selection in another order, so
+such a scenario fails.
+
+`--order` takes `file`, `shuffled`, or `shuffled:<seed>`, where the seed
+is a whole number from 0 to 4294967295. `file`, the default, is the order
+the targets select (see "Scenarios (the scripted path)"). `shuffled`
+sorts the feature files, then the scenarios inside each file, by a key
+made from the seed and each file's path or each scenario's line, and
+draws the seed itself; `shuffled:<seed>` runs the order that seed names
+again. A file stays whole: `--concurrency` hands out whole files in the
+shuffled order, a worker runs each file's scenarios in it, and one seed
+names one order at every concurrency. A shuffle that mixed the scenarios
+of several files would give each worker count an order of its own. A
+file tagged `@nukadoko:serial` still runs while no other file runs. Every
+pass of the run, in each environment and in each `--repeat` round, runs
+the same order, and the environments keep the order `--env` gives, since
+each has a world of its own. Under `--base`, the base and the old world
+run their cells in the order head ran the rows: a base or an old cell is
+a row's comparison with its head cell, and a cell that ran after other
+scenarios than head's could differ for that reason and not for the
+change it compares.
+
+The key of a scenario does not depend on what else was selected, so any
+part of a selection runs in the order the whole selection gave it. A seed
+names the same order in every nukadoko that reads it: the key is part of
+the format, and a change to it is a breaking change with an upgrade note.
+
+A shuffled run says its seed, drawn or given, in four places: on stderr,
+`order shuffled:<seed>` before the first scenario, so a run a signal
+stops, which writes no run.json, still says it; in run.json's `order`; in
+the summary's `order` line; and in every command the run prints that runs
+the scenarios again. A failed scenario's rerun line is where the order
+matters most. A scenario that fails after another one and passes alone
+passes a line that runs it alone, so in a shuffled run that line names
+the scenarios that ran before it in its pass, then it, with the order and
+the run's own `--env` flags, which select the same scenarios for that
+pass:
+
+```text
+failed	scenario-failed	features/accounts.feature:3	nobody has signed up yet: claim broken: 1 (count of observe:names) equal 0 (sentence:count)
+  do: nuka run features/accounts.feature --order shuffled:1
+```
+
+A file whose every scenario ran by then is named whole when a target
+named it whole and `--tag` left none of it out, and by its lines
+otherwise, so the line needs no `--tag`. Deleting targets from the
+line keeps the rest in the same order, which is how a reader finds the
+scenario the failed one needs, or the one that spoils it. Under
+`--repeat` above 1 or `--concurrency` above 1, what ran before a
+scenario is not one part of the order: an earlier round ran every
+scenario, or another worker ran at the same time. The line is then the
+run's own targets with `--tag`, `--order`, `--repeat`, `--concurrency`,
+and its `--env` flags. A `hook-failed` line, which names the run's own
+targets with `--tag`, and a `--base` row's line add the order to what
+they already name. In file order, a rerun line runs the
+scenario alone, as it always did.
+
+The run does not say why a scenario failed in a shuffled order. A
+failure in one order and a pass in another is what an order dependence
+looks like, and also what a flaky scenario looks like. The rerun line
+tells the two apart, since an order dependence fails on it again, and
+nukadoko reports what ran rather than a cause it did not measure.
+`--repeat` keeps one order in every round, so a round after the first
+also meets what the round before it left: a scenario an earlier scenario
+spoils fails from the second round on, in file order too, and its cell
+reads `flaky`.
 
 ### Verdicts
 
@@ -7152,7 +7239,8 @@ holds:
   read, got no line, or hold lines no step record holds (see "Execution
   events"), every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
-  file), `proof runs: <n>` when `--proof-runs` is not 2, `check: skipped`
+  file), `order: shuffled, seed <n>` under `--order shuffled` (nothing in
+  file order), `proof runs: <n>` when `--proof-runs` is not 2, `check: skipped`
   under `nuka run --no-check` (nothing when the check ran), the nukadoko
   version, the run id, and the start and finish times;
 - under `--base`, "Removed criteria": each removed criterion's location
@@ -7209,7 +7297,8 @@ holds:
   failed), one line each with its severity, code, location, and message;
 - for a failed run, each failed scenario's `do`, the `nuka run
   <feature>:<line>` command, with `--env` naming the environment it failed
-  in when the run had one.
+  in when the run had one, or in a shuffled run the command that replays
+  its order (see "Order").
 
 It is written to `.nukadoko/runs/<run_id>/summary.md` every time,
 appended to the file `$GITHUB_STEP_SUMMARY` names when that is set (GitHub
@@ -8245,6 +8334,16 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expres
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
+                              --order shuffled runs each pass's feature files,
+                              and each file's scenarios, in an order a seed
+                              nukadoko draws; --order shuffled:<seed> runs
+                              that order again, and file (the default) is
+                              the order the targets select. The seed is on
+                              stderr before the first scenario, in run.json's
+                              order, in the summary, and in every rerun line, which
+                              names the scenarios that ran before the
+                              failed one (the run itself under --repeat or
+                              --concurrency above 1).
                               --base <git ref> compares each criterion with
                               the commit the ref names: a new or changed one
                               also runs against the base's code (the base
@@ -8838,7 +8937,7 @@ reading either stream.
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
 | 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported |
-| 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code or a note code with targets, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
+| 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat`, `--concurrency`, or `--order`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code or a note code with targets, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
 | Command | stdout | stderr |

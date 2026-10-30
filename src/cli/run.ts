@@ -63,6 +63,7 @@ import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { openWalk, restartCommand, type WalkHandle } from "../run/walk-files.js";
 import { generateRunId } from "../run/run-id.js";
+import { inRunOrder, orderFlags, orderText, readOrder, replayTargets, runCommand } from "../run/run-order.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
@@ -332,6 +333,9 @@ export interface RunRunOptions {
   /** `--step`: walk one execution of one scenario, pausing after each
    * step until `nuka step` answers (src/run/walk-files.ts). */
   step?: boolean;
+  /** `--order` as given: `file` (the default when absent), `shuffled`,
+   * or `shuffled:<seed>` (src/run/run-order.ts). */
+  order?: string;
   /** `$GITHUB_STEP_SUMMARY` as the CLI read it, `undefined` when unset or
    * empty. Passed in rather than read here so a test decides it. */
   stepSummaryPath: string | undefined;
@@ -394,7 +398,8 @@ export function checkCommandFor(targets: readonly string[], envs: readonly strin
  * (`condition-unmet`). Otherwise it names the first environment of the
  * program file that meets every scenario, or else one that meets some,
  * and there is none when no environment meets any. When the targets hold
- * no scenario, only an edit gets past it. Pure. */
+ * no scenario, only an edit gets past it. The `do:` line keeps `--order`
+ * as it was given (`givenOrder`). Pure. */
 export function nothingSelectedFinding(
   targets: readonly string[],
   givenTargets: readonly string[],
@@ -402,6 +407,7 @@ export function nothingSelectedFinding(
   leftOutTags: readonly (readonly string[])[],
   program: Pick<Program, "environments" | "defaultEnvironments"> | null,
   programFile: string,
+  givenOrder: readonly string[] = [],
 ): Finding {
   const leftOut = leftOutTags.length;
   if (leftOut === 0) {
@@ -424,7 +430,7 @@ export function nothingSelectedFinding(
         ? "no environment declares conditions"
         : "the environments that declare conditions";
   const without = `A run without --env selects ${defaults.join(", ")} (${chosenBy})`;
-  const run = (env: readonly string[]): string => ["nuka run", ...givenTargets.map(shellWord), ...env.map(shellWord)].join(" ");
+  const run = (env: readonly string[]): string => ["nuka run", ...[...givenTargets, ...env, ...givenOrder].map(shellWord)].join(" ");
   const message = `no scenario to run: the conditions of the ${leftOut} selected ${leftOut === 1 ? "scenario" : "scenarios"} hold in no environment --env names (${envs.join(", ")}), so nothing was checked`;
   const them = leftOut === 1 ? "it" : "them";
   if (meetsEach(defaults)) {
@@ -509,6 +515,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   if (!Number.isInteger(proofRuns) || proofRuns < 1) {
     return refused(`--proof-runs must be a whole number of 1 or more (got ${options.proofRuns}).`, "invalid-value");
   }
+  // A seed nukadoko draws is drawn here, once, so every line that names
+  // the order names the same one.
+  const order = readOrder(options.order);
+  if (order === undefined) {
+    return refused(`--order must be file, shuffled, or shuffled:<seed> with a whole number from 0 to 4294967295 (got "${options.order}").`, "invalid-value");
+  }
+  // A command printed before the run starts keeps `--order` as it was
+  // given: a seed is drawn for a run, and this one did not start.
+  const givenOrder = options.order === undefined ? [] : ["--order", options.order];
   // Resolved once, before anything runs: a ref that names nothing, or a
   // project outside git, has nothing to compare against, and a run that
   // judged every row `new` would claim a comparison it did not make. A
@@ -580,10 +595,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // A rerun line has to land in the same environment the failure came from.
   // A run that ran only the implicit `default` names none, since a rerun
   // without `--env` runs there again.
-  const conditionsOf: RunConditions = {
-    rerunFlags: (environment) => (implicitDefault ? [] : ["--env", environment]),
-    named: envs.length > 1,
-  };
+  const envFlagsOf = (environment: string): string[] => (implicitDefault ? [] : ["--env", environment]);
   const rerunFlags = options.envs.flatMap((name) => ["--env", name]);
 
   let resolvedEnvs: ResolvedEnvironment[];
@@ -659,7 +671,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         return { ...selection, features };
       } catch (error) {
         if (error instanceof DirectoryTargetLineError) {
-          const command = ["nuka", "run", ...error.targetsWithoutLine, ...rerunFlags, ...tagFlags].map(shellWord).join(" ");
+          const command = runCommand([...error.targetsWithoutLine, ...rerunFlags, ...tagFlags, ...givenOrder]);
           return { refused: new RefusalError("line-on-directory", error.message, { do: command }) };
         }
         return { refused: error };
@@ -732,6 +744,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       selected = selection;
     }
 
+    // The files a target named whole, read before the order below lists
+    // each file's lines: a rerun names such a file whole once all of it ran.
+    const wholeFiles = new Set(selected.features.filter((feature) => feature.selectedLines === null).map((feature) => feature.relativePath));
+    // In the run's order from here on, so every pass, every worker, each
+    // proof round, and the base and the old world, whose targets are read
+    // from `flatPickles` below, run what they run in this one order. A base
+    // or an old cell is a row's comparison with its head cell, and one that
+    // ran after other scenarios than head's did could differ for that
+    // reason and not for the change it compares.
+    selected = { ...selected, features: inRunOrder(selected.features, order) };
+
     // Flattened once, here, into the `{ feature, pickle }` pairs every use
     // below actually needs: `selected.features` stays grouped by file for
     // sources.json, but every other use (counting,
@@ -773,6 +796,40 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }),
       };
     }
+
+    // A target naming one file has nothing to distribute across more than
+    // one worker, so `--concurrency` drops back to 1 (the line that says
+    // so is written where the execution starts).
+    const effectiveConcurrency = concurrency > 1 && selected.features.length <= 1 ? 1 : concurrency;
+    // Every pass runs the same scenarios in the same order.
+    const passSequence = flatPickles.map(({ feature, pickle }) => ({ feature: feature.relativePath, line: pickle.location?.line ?? 0 }));
+    // The command that runs a failed scenario again. In file order it runs
+    // the scenario alone, in its environment. In a shuffled order what ran
+    // before it in its pass is part of what it met, so a scenario that
+    // passes alone and fails after another one would pass the line that
+    // runs it alone. When the pass ran its selection once, one scenario at
+    // a time, the line names the scenarios that ran before it, then it,
+    // with the order and the run's own `--env` flags, which select the
+    // same scenarios for that pass. Under `--repeat` or `--concurrency`
+    // what ran before it is not one part of the order, so the line is the
+    // run's own targets with the same flags.
+    const conditionsOf: RunConditions = {
+      rerun: (scenario) => {
+        if (order.kind === "file") return formatRerunCommand(scenario, envFlagsOf(scenario.environment));
+        if (repeat > 1 || effectiveConcurrency > 1) {
+          return runCommand([
+            ...options.featureArgs,
+            ...tagFlags,
+            ...orderFlags(order),
+            ...(repeat > 1 ? ["--repeat", String(repeat)] : []),
+            ...(effectiveConcurrency > 1 ? ["--concurrency", String(effectiveConcurrency)] : []),
+            ...rerunFlags,
+          ]);
+        }
+        return runCommand([...replayTargets(passSequence, wholeFiles, scenario), ...orderFlags(order), ...rerunFlags]);
+      },
+      named: envs.length > 1,
+    };
 
     // --- Execution phase: from here, every pickle that begins gets a
     // scenario record written, whatever happens inside it. ---
@@ -917,6 +974,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             targetedPickles.filter(({ pickle }) => !runsHere(pickle)).map(({ pickle }) => pickle.tags.map((tag) => tag.name)),
             program,
             programFile,
+            givenOrder,
           ),
         ],
         FAILED_EXIT_CODE,
@@ -999,6 +1057,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     const runId = generateRunId();
+    // Said before anything runs, so a run a signal stops, which writes no
+    // run.json, still says which order to run again.
+    if (order.kind === "shuffled") progress.write(`order ${orderText(order)}\n`);
     // One starter for the run, so a tree builds once however many
     // environments it serves. A world's directory sits in the run's own,
     // and its record names paths relative to it, as every path in run.json.
@@ -1323,7 +1384,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         },
         recordPath: (stepRecordId) => path.join(RUN_FILE_DIRS.steps, stepRecordId),
         evidenceDir: relativeToRun(config.stateDir, runId, record.evidence.dir),
-        rerun: formatRerunCommand(record, conditionsOf.rerunFlags(record.environment)),
+        rerun: conditionsOf.rerun(record),
         inThen,
         stepKind,
       });
@@ -1484,7 +1545,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // one too, whose `do:` judges it again against the same base: the
       // commit the ref resolved to, since a branch or `HEAD` can move
       // before the line runs.
-      if (base !== undefined) rows.push(...judgedRowFindings(table, base.commit, rerunFlags, base.obstacles));
+      if (base !== undefined) rows.push(...judgedRowFindings(table, base.commit, [...rerunFlags, ...orderFlags(order)], base.obstacles));
       // A cell a claim judged too early made broke may sit under a
       // scenario that passed, whose line says nothing failed.
       rows.push(...judgedEarlyFindings(runScenarios, conditionsOf));
@@ -1526,6 +1587,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         worlds,
         selection,
         ...(options.tags.length > 0 ? { tag_selection: { expressions: options.tags, left_out: leftOutByTags } } : {}),
+        order,
         check: options.check ? "ran" : "skipped",
         counts: countScenarios(runScenarios, table),
         scenarios: runScenarios,
@@ -1685,7 +1747,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // A run-scope hook belongs to one environment's pass, so its finding
     // names that environment, and its `do` reruns the same targets there.
     const runHookDo = (environment: string): string =>
-      ["nuka", "run", ...options.featureArgs, ...conditionsOf.rerunFlags(environment)].map(shellWord).join(" ");
+      runCommand([...options.featureArgs, ...envFlagsOf(environment), ...tagFlags, ...orderFlags(order)]);
     const runOneRunHook = async (
       hook: (typeof compatRunHooks)[number],
       label: "BeforeAll" | "AfterAll",
@@ -1970,9 +2032,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // one worker, so `--concurrency` drops back to 1 with a one-line
     // reason (docs/spec.md "Scenarios (the scripted path)",
     // same category as the paths line), before any worker is spawned.
-    let effectiveConcurrency = concurrency;
-    if (effectiveConcurrency > 1 && selected.features.length <= 1) {
-      effectiveConcurrency = 1;
+    if (effectiveConcurrency < concurrency) {
       progress.write("--concurrency has nothing to distribute: this run selects one feature file.\n");
     }
 

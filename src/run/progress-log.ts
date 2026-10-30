@@ -398,11 +398,12 @@ export function failedScenarioOf(record: {
   };
 }
 
-/** How a run names one execution's condition: the rerun flags that land a
- * command in the same environment, and whether a line names the
+/** How a run names one execution's condition: the command that runs a
+ * failed scenario again in the same environment, after what ran before it
+ * when the order matters (src/cli/run.ts), and whether a line names the
  * environment, which it does once the run has more than one. */
 export interface RunConditions {
-  readonly rerunFlags: (environment: string) => readonly string[];
+  readonly rerun: (scenario: { readonly feature: string; readonly line: number; readonly environment: string }) => string;
   readonly named: boolean;
 }
 
@@ -552,7 +553,7 @@ export function failedScenarioFindings(failures: readonly FailedScenario[], cond
         file: failure.feature,
         line: failure.line,
         message: `${name}: the walk was stopped after step ${failure.stopped.after_step}${at} with nuka step stop, so the steps after it did not run`,
-        do: formatRerunCommand(failure, conditions.rerunFlags(failure.environment)),
+        do: conditions.rerun(failure),
       };
     }
     return {
@@ -561,15 +562,16 @@ export function failedScenarioFindings(failures: readonly FailedScenario[], cond
       file: failure.feature,
       line: failure.line,
       message: failure.error === undefined ? name : `${name}: ${failure.error}`,
-      do: formatRerunCommand(failure, conditions.rerunFlags(failure.environment)),
+      do: conditions.rerun(failure),
     };
   });
 }
 
-/** The command that runs one failed scenario again, in the same environment.
- * `rerunFlags` carries only flags that change which world the scenario ran
- * against (`--env`): a flag that only shapes output stays out, so the line
- * stays short enough to copy. */
+/** The command that runs one failed scenario again, alone, in the same
+ * environment: a file-order run's rerun line. `rerunFlags` carries only
+ * flags that change which world the scenario ran against (`--env`): a flag
+ * that only shapes output stays out, so the line stays short enough to
+ * copy. */
 export function formatRerunCommand(failure: Pick<FailedScenario, "feature" | "line">, rerunFlags: readonly string[]): string {
   return ["nuka", "run", `${failure.feature}:${failure.line}`, ...rerunFlags].map(shellWord).join(" ");
 }

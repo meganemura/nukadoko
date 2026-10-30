@@ -5,7 +5,7 @@ import { describeCounted, groupsAdded } from "../execution-events/counted.js";
 import type { Finding } from "../finding/finding.js";
 import type { RunAfterWorldStop, RunClaim, RunScenario, RunStep } from "../record/run-result.js";
 import type { EventsReadRecord, EventsSlice } from "../record/types.js";
-import { formatRerunCommand, scenarioLabel, type RunConditions } from "./progress-log.js";
+import { scenarioLabel, type RunConditions } from "./progress-log.js";
 
 // Responsibility: a claim on a count of execution events, judged again
 // once its world has stopped, over every line of the producer's trace the
@@ -154,7 +154,7 @@ function judgedTooEarly(claim: RunClaim): claim is RunClaim & { readonly after_w
  * may have passed, so no scenario finding says why its row is red. One
  * per scenario and environment, since the runs of `--repeat` would say
  * it again. Pure. */
-export function judgedEarlyFindings(scenarios: readonly RunScenario[], conditions: Pick<RunConditions, "named" | "rerunFlags">): Finding[] {
+export function judgedEarlyFindings(scenarios: readonly RunScenario[], conditions: Pick<RunConditions, "named" | "rerun">): Finding[] {
   const findings = new Map<string, Finding>();
   for (const scenario of scenarios) {
     if (scenario.world !== undefined) continue;
@@ -173,7 +173,7 @@ export function judgedEarlyFindings(scenarios: readonly RunScenario[], condition
       message:
         `${scenarioLabel(scenario.scenario, scenario.environment, conditions)}: a claim at line ${line} ${claim.outcome} before every execution event it counts ` +
         `had arrived, so its cell is broke: ${claim.after_world_stop.reason}`,
-      do: formatRerunCommand(scenario, conditions.rerunFlags(scenario.environment)),
+      do: conditions.rerun(scenario),
     });
   }
   return [...findings.values()];
