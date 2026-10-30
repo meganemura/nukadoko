@@ -573,7 +573,7 @@ fixture の名前:
   step が一方のメソッドを必要とする頻度は、もう一方を必要とする頻度とほぼ同じです。
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl` と等しい `name` も拒否されます。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl`、`mcp.jsonl` と等しい `name` も拒否されます。
   `nuka do` では、record の隣にある world の directory の名前 `world` も拒否されます。
   `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も拒否されます。
   大文字小文字だけが違う綴りも同じです。
@@ -3106,6 +3106,8 @@ BeforeAll と AfterAll はどの scenario の外でも、どの step や hook �
   それ自体がトレースされる CI のランナーは、1 つ設定します。
   step が自分で設定した `TRACEPARENT` は保ちます。
   `observed.processes` のプロセスのエントリは、nukadoko が設定した値を `traceparent` として名指します。
+- `measureMcp` が包んだ transport を通して step が送る MCP の呼び出しは、その呼び出しのために作った span id で、step の trace context を `params._meta.traceparent` に入れて運びます。
+  world への HTTP では、同じ値をヘッダとしても運びます(「MCP の呼び出し」を参照)。
 - 付くのは、world のオリジン、つまり URL のスキーム、ホスト、ポートへのリクエストだけです。
   ほかのオリジンへのリクエストは CDN や決済事業者のような第三者のもので、予期しないヘッダはその振る舞いを変えうるからです。
   `localhost` の world では、同じポートの `localhost` の下の名前も world のものです。
@@ -3374,15 +3376,22 @@ step は、プログラムのログと同じようにファイルを読みます
   それらは step の行です。
   プロセスはいくつリクエストを送ってもよく、1 つも送らなくてもよいので、`whole` はそのどれもリクエストに対応させません。
   それらに上限を与えるのは、プロセスが終わることです(下の `processes-unbounded`)。
-- `whole` は、step が `traceparent` を付けたリクエストを少なくとも 1 つ送るか `runCommand` のプロセスを走らせ、走らせたプロセスのそれぞれがプロセスグループのプロセスを 1 つも残さずに終わり(`"group": "ended"`、「Records」を参照)、付けたリクエストのそれぞれが自分の `request` の行を持ち(step が送った span id で対応させ、trace id だけの行は 1 つのリクエストとして数えます)、trace の中で積んだジョブのそれぞれが `enqueue` の行と少なくとも同じ数の `perform` の行を持ち、trace の行に読めないものが無く、step の行がファイルに収まり、ファイルが置き換えられなかったとき `true` です。
+- `mcp_spans` は、step が `params._meta` に nukadoko の `traceparent` を入れて送った MCP の呼び出しの span id で(「MCP の呼び出し」を参照)、多くて 1000 個です。
+  1 つも無いときは現れません。
+  HTTP で world へ送った呼び出しは、同じ span id で `traceparent` を付けたリクエストとして出ていくので、その span は `stamped_spans` にもあり、その `request` の行が呼び出しを閉じます。
+  ほかの道で送った呼び出しには、それを閉じる行がありません(下の `mcp-unbounded`)。
+- `whole` は、step が `traceparent` を付けたリクエストを少なくとも 1 つ送るか、`runCommand` のプロセスを走らせるか、MCP の呼び出しを送り、送った MCP の呼び出しのそれぞれが `traceparent` を付けたリクエストとして出ていき、走らせたプロセスのそれぞれがプロセスグループのプロセスを 1 つも残さずに終わり(`"group": "ended"`、「Records」を参照)、付けたリクエストのそれぞれが自分の `request` の行を持ち(step が送った span id で対応させ、trace id だけの行は 1 つのリクエストとして数えます)、trace の中で積んだジョブのそれぞれが `enqueue` の行と少なくとも同じ数の `perform` の行を持ち、trace の行に読めないものが無く、step の行がファイルに収まり、ファイルが置き換えられなかったとき `true` です。
 - `open` は、`whole` が `false` である理由を、欠けを示す語 1 つずつで、この順に挙げます:
-  - `no-requests`: step が world へ `traceparent` を付けたリクエストを 1 つも送らず、`runCommand` のプロセスも 1 つも走らせませんでした。
+  - `no-requests`: step が world へ `traceparent` を付けたリクエストを 1 つも送らず、`runCommand` のプロセスも 1 つも走らせず、MCP の呼び出しも 1 つも送りませんでした。
     行が終わりを知らせる仕事を引き起こしておらず、何の仕事も引き起こさなかったと言える行もありません。
     ページを読むだけの Then がよくある例です。
   - `processes-unbounded`: step が走らせた `runCommand` のプロセスが、まだ world へリクエストを送るかもしれません。
     step の record を作ったときにまだ動いていたか、プロセスグループのプロセスを動かしたまま残したか(`"group": "running"`)、nukadoko がプロセスグループを見られない Windows で動いたかのどれかです。
     プログラムは world へいくつリクエストを送ってもよく、1 つも送らなくてもよいので、そのすべてが行を書いたと言える数がありません。
     step が自分でも `traceparent` を付けたリクエストを送ったかどうかに関わらず、そうです。
+  - `calls` を伴う `mcp-unbounded`: step の MCP の呼び出しのうち、その数が、終わりを知らせる行の無い道でサーバに届きました。
+    stdio か、world とは別のオリジンへの HTTP です。
+    サーバはそうした呼び出しのためにまだ仕事をしているかもしれず、そのために world へいくつリクエストを送ってもかまいません。
   - `no-lines`: step はリクエストに `traceparent` を付けましたが、その trace id を持つ行がありません。
     書き手が無い、変数が違う、行が遅れた、のどれかです。
   - `requests` を伴う `request-unreported`: `traceparent` を付けたリクエストのうち、その数が `request` の行を持ちません。
@@ -3393,7 +3402,7 @@ step は、プログラムのログと同じようにファイルを読みます
 
 `whole: false` は、それ以上何も起きなかったとは決して言いません。
 プログラムの仕事がまだ続いているか、行が失われたかもしれず、`open` がどちらかを言います。
-world へ何も送らず、`runCommand` のプロセスも走らせなかった step は、決してそろいません。
+world へ何も送らず、`runCommand` のプロセスも走らせず、MCP の呼び出しも送らなかった step は、決してそろいません。
 その step が何の仕事も引き起こさなかったと言える行が無いからです。
 `runCommand` のプロセスを走らせた step は、走らせたプロセスのそれぞれが終わり、そのプロセスグループにプロセスが 1 つも残っていなければそろいます。
 そのプロセスが始めたものは、もう新しいリクエストを送れません。
@@ -3901,8 +3910,9 @@ claim はまだ届く途中の行で判定されたので、セルはどちら�
 
 この仕組みが届かないものを、1 つの一覧にまとめます:
 
-- world にリクエストを送らず、`runCommand` のプロセスも走らせなかった step の実行イベントは、そろうことがありません(`no-requests`)。
+- world にリクエストを送らず、`runCommand` のプロセスも走らせず、MCP の呼び出しも送らなかった step の実行イベントは、そろうことがありません(`no-requests`)。
   record を作ったときにプロセスがまだ動いていた step、プロセスグループのプロセスを動かしたまま残した step、Windows でプロセスを走らせた step の実行イベントも、そろいません(`processes-unbounded`)。
+  stdio や、ほかのオリジンへ MCP の呼び出しを送った step の実行イベントも、そろいません(`mcp-unbounded`)。
   そのため、その数についての claim は、下限から上のどの数でも成り立つとき(`at-least` など)にだけ成り立ちます。
 - どの step のものでもない行は数える step のものかもしれないので、範囲を広げます。
   リクエストの trace を付けずに行を書くプログラムでは、不在は示せないままです。
@@ -3911,6 +3921,95 @@ claim はまだ届く途中の行で判定されたので、セルはどちら�
 - world が止まったあとに書かれた行は、どの数にも入りません。
 - テーブルを名指さない選び方は、受け入れ基準が扱うときでも、印の付いたテーブルへの書き込みを除きます。
   そうしたテーブルを扱う step は、それを名指します。
+
+### MCP の呼び出し
+
+プログラムは、Model Context Protocol(MCP)を通して agent に仕事を差し出せます。
+呼び出す tool、読む resource、得る prompt です。
+agent と同じようにそれらを呼び出す step は、このプロトコル自身の SDK の `Client` を使い、nukadoko は自分のクライアントを足しません。
+`nukadoko` の `measureMcp` がクライアントの transport を包み、step がそれを通して送るそれぞれの呼び出しは、その step の record の一部になります:
+
+```ts
+// nukadoko.config.ts
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { defineConfig, measureMcp } from "nukadoko";
+
+export default defineConfig({
+  fixtures: {
+    notes: async ({ baseURL }, use) => {
+      const client = new Client({ name: "acceptance", version: "1.0.0" });
+      await client.connect(measureMcp(new StreamableHTTPClientTransport(new URL("/mcp", baseURL))));
+      await use(client);
+      await client.close();
+    },
+  },
+});
+```
+
+- `measureMcp(transport)` は、`send`、`onmessage`、`onclose` を計測するようにした transport を返します。
+  読むのはどの MCP の transport も持つメンバ(`start`、`send`、`close`、`onmessage`、`onclose`)だけです。
+  そのため、stdio でも streamable HTTP でも、どの版の SDK の transport にも合い、nukadoko は SDK を import しません。
+  ほかのメンバはどれも transport 自身のものです。
+  stdio の transport の `pid`、HTTP の transport の `sessionId`、`instanceof` は、もとのままです。
+- これは `ctx` のメンバではなく import で、`runCommand` がそうであるのと同じ理由によります。
+  クライアントはふつう scenario の fixture の中、どの step の外でもつなぎ、いくつもの step から呼び出すので、`send` のそれぞれが、その時点で動いている step を見つけます。
+  どの step の外でも送ったメッセージ(上の fixture でのクライアントの `initialize`)は、渡されたとおりに送り、どこにも記録しません。
+- step の呼び出しは、step の trace context を `params._meta.traceparent` に入れて運びます。
+  これは MCP が W3C Trace Context のために定めるキーで、span id はその呼び出しのために作ります(「trace context とプログラムのログ」を参照)。
+  すでに値を持つメッセージはそれを保ち、`params` がオブジェクトでないメッセージはそのまま送ります。
+  その値を自分の仕事の trace に写すサーバは、その呼び出しについてのログの行と実行イベントを、step のものにします。
+- world のオリジンへの HTTP では、transport が呼び出しのために送るどのリクエストも、同じ値を `traceparent` ヘッダとして運びます。
+  そのリクエストは step が `traceparent` を付けたリクエストで(`stamped`、`stamped_spans`)、プログラムがそれについて書く `request` の行が呼び出しを閉じます。
+  そのため、呼び出しが書いたものの数は、ちょうどの数になりえます。
+- stdio や、ほかのオリジンへの HTTP では、値は `_meta` にだけ入ります。
+  そうした呼び出しの終わりを知らせる行はありません。
+  step の実行イベントは `mcp-unbounded` で開いたままです(「実行イベント」を参照)。
+  stdio のサーバの仕事が step のものになるのは、その値を `traceparent` ヘッダにして world へリクエストを送るときだけです。
+  サーバは自分では実行イベントを書けません。
+  nukadoko のプロセスは `{events}` が名指すパスを持たないので、transport が起動するどのプロセスにもそれは渡らないからです。
+- step の呼び出しは、行が終わりを知らせられる仕事として数えます。
+  そのため、MCP の呼び出しだけをした step には、欠け `no-requests` がありません。
+- `measureMcp` は判定をしません。
+  `isError: true` の結果も JSON-RPC のエラーも step が読む答えで、その意味は step のコードが決めます。
+- `connect` の呼び出しの中に `new StdioClientTransport(...)` と書いてつないだクライアントの transport は、何も包めません。
+  `nuka check` はそれを注記 `mcp-transport-unmeasured` として名指します(「check と注記」を参照)。
+
+呼び出しのそれぞれは、step record の隣の `mcp.jsonl`(`evidence.mcp`)の 1 行で、`observed.mcp` がその行を数えます(「Records」を参照)。
+world への HTTP での呼び出しの行です:
+
+```json
+{
+  "method": "tools/call",
+  "id": 2,
+  "tool": "add_note",
+  "params": { "text": "{\"name\":\"add_note\",\"arguments\":{\"text\":\"milk\"},\"_meta\":{\"traceparent\":\"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\"}}", "bytes": 129 },
+  "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  "header_sent_to": ["http://localhost:45915"],
+  "duration_ms": 7,
+  "result": { "text": "{\"content\":[{\"type\":\"text\",\"text\":\"note 1\"}],\"structuredContent\":{\"id\":1}}", "bytes": 74 }
+}
+```
+
+- `method` は JSON-RPC のメソッドで、`id` は送ったとおりのリクエストの id です。
+  通知は `id` を持たず、`"notification": true` を持ちます。
+- `tool` は `tools/call` の tool を、`prompt` は `prompts/get` の prompt を、`uri` は `resources/read`、`resources/subscribe`、`resources/unsubscribe` の resource を名指します。
+- `params` と `result` は JSON のテキストで、step の secret で redact し、本文と同じように持ちます。
+  それぞれ多くて 16 KiB で、それを超えると `bytes` と `"truncated": true` を持ちます(`evidence.http` を参照)。
+  `params` は、出ていったとおりの `_meta` を持ちます。
+- `traceparent` は `params._meta` の値で、nukadoko のものか step 自身のものです。
+  `header_sent_to` はそれをヘッダとして受け取ったオリジンで、1 つも無いときは現れません。
+- `duration_ms` は、送ってから答えまでです。
+- `is_error: true` は、`isError` が `true` の結果に付きます。
+  tool は動き、エラーを知らせました。
+  `error` は JSON-RPC のエラーで、その `code`(数でないときは `null`)と `message` の最初の行を持ち、`result` はありません。
+- `unanswered` は、step の record を書いたときに答えが来ていなければ `"step"` です(境界は、リクエストを待つのと同じように、多くて 1 秒それを待ちます)。
+  run が先に終われば `"run"`、transport が先に閉じれば `"closed"` です。
+  `send_error` は transport の `send` が投げたものの最初の行で、包んだ側はそのエラーをそのまま投げ直します。
+- step のコードが、その record を書いたあとに始めた呼び出しも、その step のものです。
+  その行は `"after_step_end": true` を持ち、`run.json` の step はそれを `after_step_end.mcp` に数えます。
+
+これが計測しないもの: サーバがクライアントへ送るリクエスト(sampling、elicitation)、サーバが送る通知、そして `measureMcp` が包まなかった transport を通して送った呼び出し。
+どれも transport 自身のやりとりで、step record にはその行がありません。
 
 ### 一覧
 
@@ -5439,7 +5538,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   `started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
 - `observed` は、その実行が届いたものとしてツールが見たものを、チャネルごとに 1 つのキーで持ちます。
-  キーは `processes`、`http`、`files`、`unmeasured` で、run に world の URL があるときは `program_log` もあります。
+  キーは `processes`、`http`、`files`、`unmeasured` で、step が `measureMcp` を通して MCP の呼び出しを送ったときは `mcp` もあり、run に world の URL があるときは `program_log` もあります。
   world のプログラムのファイルが `{events}` を名指すとき、または world が `url` にあるときは `events` もあります。
   どのチャネルも 1 つの規則に従います。
   正確に計測できるものは計測し、計測できないものはそうと印を付け、メソッドから書き込みを推測しません。
@@ -5559,8 +5658,13 @@ scenario record は独立したファイルではなく、その run の `run.js
 - `observed.program_log` は、プログラムのログのうち step の切り出しで、`{ "trace_id", "lines", "file", "stamped" }` です。
   `url` の world では、nukadoko がそのログを読まないので `null` です。
   run に world の URL が無いときは現れません(「テスト対象のプログラム」、「trace context とプログラムのログ」を参照)。
-- `observed.events` は、プログラムの実行イベントのうち step の切り出しで、`{ "trace_id", "lines", "file", "kinds", "stamped", "stamped_spans", "unreadable", "unowned", "process_spans", "process_requests", "whole", "open" }` です。
+- `observed.events` は、プログラムの実行イベントのうち step の切り出しで、`{ "trace_id", "lines", "file", "kinds", "stamped", "stamped_spans", "unreadable", "unowned", "process_spans", "process_requests", "whole", "open" }` で、step が MCP の呼び出しを送ったときは `"mcp_spans"` も持ちます。
   `url` の world では `null` で、world のプログラムのファイルが `{events}` を名指さないときは現れません(「実行イベント」を参照)。
+- `observed.mcp` は、`measureMcp` が包んだ transport を通して step が送った MCP の呼び出しと通知を数えます。
+  それぞれは step の mcp.jsonl の 1 行です(下の `evidence.mcp`、「MCP の呼び出し」を参照)。
+  1 つも送らなかったときは現れないので、MCP のクライアントを使わない step は前と同じに読めます。
+  step のコードが record を書いたあとに送った呼び出しは、ここでは数えません。
+  その行も、その step の mcp.jsonl に `"after_step_end": true` を付けて書かれます。
 - `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
   各エントリは `{ "path", "change", "bytes", "content" }` です。
   2 つの出どころをまとめます。
@@ -5626,8 +5730,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   そのとき始めたリクエストや `runCommand` のプロセスは、その step のものであり、そのとき動いている step のものではありません。
   どの境界も、開いたときの evidence のディレクトリを持ち続けるからです。
   record は確定しており書き直さないので、その操作は record の隣に `"after_step_end": true` を付けて書かれます。
-  リクエストはその step の http.jsonl の行に、プロセスは `process-<n>.json` のエントリになります。
+  リクエストはその step の http.jsonl の行に、プロセスは `process-<n>.json` のエントリに、MCP の呼び出しはその step の mcp.jsonl の行になります。
   scenario record の step のエントリと `run.json` の step は、`"after_step_end": { "requests", "processes" }` を持ちます。
+  MCP の呼び出しをあとで始めたときは `"mcp"` も持ちます。
   これは scenario が終わる前に始まったものの数です。
   リクエストを始めたときは `"http": "http.jsonl"` も加わります。
   これはその行を持つ、step record のディレクトリにあるファイルで、すべての行が record のあとのものなら、record の `evidence.http` はそれを名指しません。
@@ -5696,6 +5801,11 @@ scenario record は独立したファイルではなく、その run の `run.js
   パスはリクエストが始まった時点で決まり、その step が返ったあとにレスポンスが届いても、そこへ追記されます。
   page の通信のうち http.jsonl に届くのは `document`、`xhr`、`fetch`(Playwright 自身の `request.resourceType()`)のリクエストだけです。
   実際のページ読み込みは画像やスタイルシート、スクリプトを何十件も引き込みますが、それを受け入れ確認の目的で読み手が 1 つずつ追うことはなく、そのすべてを保持しようとするファイルはそもそも読み手が開けるものではなくなってしまいます。
+- `evidence.mcp`(少なくとも 1 つの MCP の呼び出しが記録されたときだけ現れます)は mcp.jsonl を指します。
+  1 行に 1 つの JSON オブジェクトで、`measureMcp` が包んだ transport を通して step が送った呼び出しと通知のそれぞれです(行の形は「MCP の呼び出し」にあります)。
+  行は、呼び出しに答えが来たとき、step の境界が答えを待つのをやめたとき、または transport が閉じたときに追記します。
+  通知の行は、送ったときに追記します。
+  追記に失敗しても step は失敗しません。
 - `evidence.attachments`(空でないときだけ現れます)は、`evidence.attach`/`evidence.path` がこの実行で実際に書き込んだものを、`{ "name", "file", "at" }` の形でそれぞれ並べたものです(「Context API」を参照)。
   `name` は step が頼んだ名前、`file` は実際にディスクへ書かれたファイル名で、`evidence.dir` からの相対パスです。
   この 2 つが違うのは、同じ `name` がこの実行で 2 回以上使われたときだけです。
@@ -5708,7 +5818,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl`、`mcp.jsonl` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。
@@ -5916,8 +6026,8 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - 「Scenarios with no claim」。
   要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、どの claim も判定しなかったこと(判定したかもしれない compat step が Then の位置にあればそのこと)を載せます。
 - 「Unmeasured actions」。
-  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、または step のあとに届いたプログラムのログや実行イベントの行があるとき(`program_log_late`、`events_late`)、step ごとに 1 行を載せます。
-  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es)`、world の停止がそうした行を見つけたときは `<n> line(s) of the program's log after the step ended, in program-log-late.txt` と `<n> line(s) of the program's events after the step ended, in events-late.jsonl`(「テスト対象のプログラム」を参照)、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
+  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、record を書いたあとにリクエスト、`runCommand` のプロセス、MCP の呼び出しのどれかを始めたとき(`after_step_end`)、または step のあとに届いたプログラムのログや実行イベントの行があるとき(`program_log_late`、`events_late`)、step ごとに 1 行を載せます。
+  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es), <n> MCP call(s) in mcp.jsonl`、world の停止がそうした行を見つけたときは `<n> line(s) of the program's log after the step ended, in program-log-late.txt` と `<n> line(s) of the program's events after the step ended, in events-late.jsonl`(「テスト対象のプログラム」を参照)、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
   どちらもない step は何も加えず、`--repeat` のときは同じ行を持つ同じ step が 1 行になります。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。
@@ -6783,6 +6893,12 @@ nukadoko を使う 11 のプロジェクトを調べたところ、その 14 の
   支配する `package.json` は Node 自身が使うもの、つまりそのファイルから見て最も近い `package.json` です。
   注記はそれを名指し、直し方を示します。
   `"type": "module"` を追加するか、プロジェクト自身の `.js` ファイルが CommonJS なら `.mts` の名前にすることです。
+  run は動くので、これは注記です。
+- **`connect` の呼び出しの中で作った transport につなぐ MCP のクライアント**(`mcp-transport-unmeasured`)。
+  config の fixture か型付き step の中の `client.connect(new StdioClientTransport(...))` のようなものです。
+  その transport は引数の中にしか無いので、何もそれを `measureMcp` に通せません。
+  そのクライアントが送るどの呼び出しも step record に届かず、trace context も運びません(「MCP の呼び出し」を参照)。
+  先に作って名前で渡す transport は、作ったところで包んでいるかもしれないので報告しません。
   run は動くので、これは注記です。
 
 どの envFile も定義していないキーを名指す `secrets.public` や `secrets.redact` のエントリ(`secrets-public-key-unknown`、`secrets-redact-key-unknown`)は、注記ではなく警告です。

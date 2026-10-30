@@ -9,6 +9,39 @@ just until 0.1.
 
 ### Added
 
+- **A step's MCP calls are measured, and the server's work for them
+  counts for the step.** A step that called a tool through an MCP client
+  left nothing in its record: the calls had no line, carried no trace
+  context, and a step whose only work was an MCP call read as
+  `no-requests`. `measureMcp(transport)` from `nukadoko` wraps the
+  client's transport, so a project keeps the official SDK `Client`
+  (stdio or streamable HTTP) and nukadoko imports no SDK:
+  `client.connect(measureMcp(new StreamableHTTPClientTransport(url)))` in
+  a fixture. Each request and notification a step sends through it is a
+  line of the step's `mcp.jsonl` (`evidence.mcp`, counted by
+  `observed.mcp`): the method, the id, the tool, prompt, or resource it
+  names, `params` and `result` as JSON text redacted and cut as a body
+  is, `is_error` for a tool that reported an error, a JSON-RPC error's
+  `code` and first line, `duration_ms`, and `unanswered` or
+  `send_error`. Each call carries the step's trace context in
+  `params._meta.traceparent` (a caller's own value is kept), and over
+  HTTP to the world the same value as its `traceparent` header, so the
+  program's `request` line closes the call and a count of what it wrote
+  can be exact. A call over stdio, or to another origin, leaves the
+  step's events open with the new gap `mcp-unbounded` (with `calls`),
+  since no line reports its end: an `at-least` claim can hold, an exact
+  count is unjudged. `observed.events` gains `mcp_spans`, an MCP call
+  clears `no-requests`, a call that starts after its step's record is
+  counted in `after_step_end.mcp` and named on the summary's Unmeasured
+  actions line, and `mcp.jsonl` is a reserved evidence name. A step that
+  sends no MCP call reads as before, and no `schema_version` changes.
+- **`nuka check` notes an MCP transport nothing can wrap.**
+  `client.connect(new StdioClientTransport(...))` builds the transport
+  inside the argument, so no `measureMcp` can reach it and none of that
+  client's calls reach a step record. The new note
+  `mcp-transport-unmeasured` names the config fixture or typed step that
+  holds it. A transport built first and passed by name is not reported,
+  since it may be wrapped where it is built.
 - **A Then that reads a page says what the page had received from the
   world.** Such a Then sends no request, so its record kept
   `observed.events` not whole with the gap `no-requests`, and nothing

@@ -36,7 +36,27 @@ A `fetch` that an interceptor installed after nukadoko (msw, nock)
 answers itself never reaches nukadoko, so it has no line; a mocked
 `node:http` request still has one.
 
-A request or a `runCommand` process the step's code starts after its
+A step that calls a program's MCP server uses the SDK's own `Client`,
+connected in a fixture, with its transport passed through `measureMcp`
+(from `nukadoko`); nukadoko adds no client:
+
+```ts
+await client.connect(measureMcp(new StreamableHTTPClientTransport(new URL("/mcp", baseURL))));
+```
+
+Each request and notification a step sends through it is a line of the
+step's `mcp.jsonl` (`evidence.mcp`, counted by `observed.mcp`): the
+method, the tool, prompt, or resource, `params` and `result` kept like
+a body, `is_error` (the tool reported an error), `error` (a JSON-RPC
+error), `duration_ms`, or `unanswered`. The call carries the step's
+trace context in `params._meta.traceparent`, and over HTTP to the world
+in its header too, so the server's events for it are the step's
+(`references/program.md`). An error answer is a result the step reads,
+never a failure nukadoko decides. `nuka check` notes
+`mcp-transport-unmeasured` for a transport written inside `connect(...)`,
+which nothing can wrap: build it first.
+
+A request, a `runCommand` process, or an MCP call the step's code starts after its
 record was written (a timer it left behind) is written beside that
 record, marked `after_step_end`, never in the next step's files, and the
 run summary names it under the step, with the file that holds the
@@ -69,7 +89,7 @@ the second call is suffixed the same way (`Report.txt`, then
 `report-2.txt`) and the two do not share one path. A harness file name is
 refused with `ReservedEvidenceNameError`: `record.json`, `final.png`,
 `trace.zip`, `http.jsonl`, `program-log.txt`, `program-log-late.txt`,
-`events.jsonl`, `events-late.jsonl`, `events-read.jsonl`, `world` under `nuka do`, and `process-<n>.stdout.txt`,
+`events.jsonl`, `events-late.jsonl`, `events-read.jsonl`, `mcp.jsonl`, `world` under `nuka do`, and `process-<n>.stdout.txt`,
 `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, and
 `process-<n>.json` (what a `runCommand` process printed and was given,
 and the entry of one that started after the step ended), in any case.

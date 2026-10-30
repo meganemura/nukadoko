@@ -68,7 +68,9 @@ does not know. The finding names the fixture.
 The program under test is not a fixture: `nukadoko.program.ts` builds it,
 starts it once per world on a port of its own, and stops it after the
 scenarios (`program.md`). A fixture that starts a server in-process
-gives a run no record of which program answered.
+gives a run no record of which program answered. A fixture that connects
+an MCP client to the program passes the transport through `measureMcp`,
+so each call a step sends is in its record (`evidence.md`).
 
 
 ## Temporary directories

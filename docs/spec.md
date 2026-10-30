@@ -668,8 +668,8 @@ The fixture names:
   `name` that contains a path separator is refused. A `name` equal to `.`,
   `..`, or the empty string is also refused. A `name` of `record.json`,
   `final.png`, `trace.zip`, `http.jsonl`, `program-log.txt`,
-  `program-log-late.txt`, `events.jsonl`, `events-late.jsonl`, or
-  `events-read.jsonl`, under `nuka do` a `name` of `world` (the world's
+  `program-log-late.txt`, `events.jsonl`, `events-late.jsonl`,
+  `events-read.jsonl`, or `mcp.jsonl`, under `nuka do` a `name` of `world` (the world's
   directory beside the record), or a `name` of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused too,
   including a spelling that differs only by case (`ReservedEvidenceNameError`). Those
@@ -3990,6 +3990,10 @@ hook's boundary, so their requests go without a `traceparent`.
   A `TRACEPARENT` the step set itself is kept.
   The process's entry in `observed.processes` names the value nukadoko
   set, as `traceparent`.
+- An MCP call a step sends through a transport `measureMcp` wrapped
+  carries the step's trace context in `params._meta.traceparent`, with a
+  span id made for the call, and over HTTP to the world the same value as
+  its header (see "MCP calls").
 - Only a request to the world's origin, the scheme, host, and port of its
   URL, gets one.
   A request to another origin is a third party's, a CDN or a payment
@@ -4363,8 +4367,17 @@ value is still JSON and the file shows exactly what was read.
   `whole` matches none of them to a request, since a process may send
   any number of requests or none: what bounds them is the end of the
   process (`processes-unbounded`, below).
-- `whole` is `true` when the step stamped at least one request or ran
-  a `runCommand` process, every process it ran closed with no process
+- `mcp_spans` are the span ids of the MCP calls the step sent with
+  nukadoko's `traceparent` in `params._meta` (see "MCP calls"), at most
+  1000, absent when there are none.
+  A call over HTTP to the world went out in a stamped request with the
+  same span id, so its span is in `stamped_spans` too, and its
+  `request` line closes it.
+  A call that went another way has no line that closes it
+  (`mcp-unbounded`, below).
+- `whole` is `true` when the step stamped at least one request, ran
+  a `runCommand` process, or sent an MCP call, every MCP call it sent
+  went out in a stamped request, every process it ran closed with no process
   of its group left (`"group": "ended"`, see "Records"), every request
   it stamped has its `request` line, matched by the span id the step
   sent (a line with a bare trace id counts for one request), every job
@@ -4374,8 +4387,8 @@ value is still JSON and the file shows exactly what was read.
 - `open` names each reason `whole` is `false`, one gap word each, in
   this order:
   - `no-requests`: the step sent the world no request with a
-    `traceparent` and ran no `runCommand` process, so it caused no
-    work a line could report the end of, and no line can say that it
+    `traceparent`, ran no `runCommand` process, and sent no MCP call,
+    so it caused no work a line could report the end of, and no line can say that it
     caused none (a Then that only reads the page is the usual one);
   - `processes-unbounded`: a `runCommand` process the step ran may
     still send the world requests: it still ran when the step's record
@@ -4385,6 +4398,11 @@ value is still JSON and the file shows exactly what was read.
     A program may send the world any number of requests or none, so no
     count says that all of them reported, whether or not the step also
     stamped requests of its own;
+  - `mcp-unbounded`, with `calls`: that many of the step's MCP calls
+    reached their server by a way no line reports the end of: over
+    stdio, or over HTTP to another origin than the world's.
+    The server may still work for such a call, and may send the world
+    any number of requests for it;
   - `no-lines`: the step stamped requests, and no line carries its trace
     id: no writer, a wrong variable, or lines that came late;
   - `request-unreported`, with `requests`: that many of the stamped
@@ -4399,8 +4417,8 @@ value is still JSON and the file shows exactly what was read.
 
 `whole: false` never says that nothing more happened: the program's work
 may still be going on, or a line may be lost, and `open` says which.
-A step that sent nothing to the world and ran no `runCommand` process
-is never whole, since no line can say that it caused no work.
+A step that sent nothing to the world, ran no `runCommand` process,
+and sent no MCP call is never whole, since no line can say that it caused no work.
 A step that ran one is whole once each process it ran has closed and no
 process of its group is left: nothing it started can send another
 request, and the step's slice has waited for the lines of the requests
@@ -5056,12 +5074,14 @@ claim adds `after the world stopped, <reason>, and the cell is broke`.
 
 What this does not reach, in one list:
 
-- A step that sent the world no request and ran no `runCommand`
-  process never has whole events (`no-requests`), and neither has one
-  whose process still ran when its record was built, left a process of
-  its group running, or ran on Windows (`processes-unbounded`), so a
-  claim on its count holds only where every count from the lower bound
-  up would hold it, such as `at-least`.
+- A step that sent the world no request, ran no `runCommand` process,
+  and sent no MCP call never has whole events (`no-requests`), and
+  neither has one whose process still ran when its record was built, left
+  a process of its group running, or ran on Windows
+  (`processes-unbounded`), or one that sent an MCP call over stdio or to
+  another origin (`mcp-unbounded`), so a claim on its count holds only
+  where every count from the lower bound up would hold it, such as
+  `at-least`.
 - A process that leaves its process group, as a daemon does with
   `setsid`, is not seen: the step reads as whole once the rest of the
   group has ended, and a line the daemon causes after a claim was judged
@@ -5073,6 +5093,124 @@ What this does not reach, in one list:
 - A selection that names no table leaves out a write to a marked table
   even where a criterion is about it: a step that means such a table
   names it.
+
+### MCP calls
+
+A program can offer an agent its work through the Model Context Protocol
+(MCP): tools to call, resources to read, prompts to get.
+A step that calls them as an agent would uses the protocol's own SDK
+`Client`, and nukadoko adds no client of its own.
+`measureMcp` from `nukadoko` wraps the client's transport, and each call a
+step sends through it is part of that step's record:
+
+```ts
+// nukadoko.config.ts
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { defineConfig, measureMcp } from "nukadoko";
+
+export default defineConfig({
+  fixtures: {
+    notes: async ({ baseURL }, use) => {
+      const client = new Client({ name: "acceptance", version: "1.0.0" });
+      await client.connect(measureMcp(new StreamableHTTPClientTransport(new URL("/mcp", baseURL))));
+      await use(client);
+      await client.close();
+    },
+  },
+});
+```
+
+- `measureMcp(transport)` returns the transport with its `send`,
+  `onmessage`, and `onclose` measured.
+  It reads only the members every MCP transport has (`start`, `send`,
+  `close`, `onmessage`, `onclose`), so it fits a transport of any SDK
+  version, stdio and streamable HTTP alike, and nukadoko imports no SDK.
+  Every other member is the transport's own: a stdio transport's `pid`,
+  an HTTP transport's `sessionId`, and `instanceof` stay as they were.
+- It is an import, not a member of `ctx`, for the reason `runCommand` is
+  one: a client is usually connected in a scenario fixture, outside every
+  step, and called from several steps, so each `send` finds the step that
+  runs at that moment.
+  A message sent outside every step (the client's `initialize` in the
+  fixture above) is sent as it was given and recorded nowhere.
+- A step's call carries the step's trace context in
+  `params._meta.traceparent`, the key MCP documents for W3C Trace Context,
+  with a span id made for the call (see "Trace context and the program's
+  log").
+  A message that already holds one keeps it, and one whose `params` is
+  not an object goes as it was.
+  A server that copies the value into the trace of its own work makes its
+  log lines and execution events for the call the step's.
+- Over HTTP to the world's origin, every request the transport sends for
+  a call carries the same value as its `traceparent` header.
+  That request is a stamped request of the step (`stamped`,
+  `stamped_spans`), and the program's `request` line for it closes the
+  call, so a count of what the call wrote can be exact.
+- Over stdio, or to another origin, the value goes only in `_meta`.
+  No line reports the end of such a call: the step's events stay open with
+  `mcp-unbounded` (see "Execution events").
+  A stdio server's work is the step's only when it sends the world a
+  request with that value as its `traceparent` header.
+  It cannot write events of its own: nukadoko's process never holds the
+  path `{events}` names, so no process a transport starts is given it.
+- A step's call counts as work a line can report the end of, so a step
+  whose only work was an MCP call has no `no-requests` gap.
+- `measureMcp` decides no verdict.
+  A result with `isError: true` and a JSON-RPC error are answers the step
+  reads, and the step's code decides what they mean.
+- A client connected to `new StdioClientTransport(...)` written inside
+  the `connect` call has a transport nothing can wrap; `nuka check` names
+  it as the note `mcp-transport-unmeasured` (see "Checks and notes").
+
+Each call is one line of `mcp.jsonl` beside the step record
+(`evidence.mcp`), and `observed.mcp` counts the lines (see "Records").
+A line of a call over HTTP to the world:
+
+```json
+{
+  "method": "tools/call",
+  "id": 2,
+  "tool": "add_note",
+  "params": { "text": "{\"name\":\"add_note\",\"arguments\":{\"text\":\"milk\"},\"_meta\":{\"traceparent\":\"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\"}}", "bytes": 129 },
+  "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  "header_sent_to": ["http://localhost:45915"],
+  "duration_ms": 7,
+  "result": { "text": "{\"content\":[{\"type\":\"text\",\"text\":\"note 1\"}],\"structuredContent\":{\"id\":1}}", "bytes": 74 }
+}
+```
+
+- `method` is the JSON-RPC method, and `id` the request's id as sent.
+  A notification has no `id` and has `"notification": true`.
+- `tool` names the tool of a `tools/call`, `prompt` the prompt of a
+  `prompts/get`, and `uri` the resource of a `resources/read`,
+  `resources/subscribe`, or `resources/unsubscribe`.
+- `params` and `result` are JSON text, redacted with the step's secrets
+  and kept as a body is (at most 16 KiB each, with `bytes` and
+  `"truncated": true` past that; see `evidence.http`).
+  `params` holds `_meta` as it went out.
+- `traceparent` is the value in `params._meta`, nukadoko's or the step's
+  own, and `header_sent_to` the origins that got it as a header, absent
+  when none did.
+- `duration_ms` runs from the send to the answer.
+- `is_error: true` marks a result whose `isError` is `true`: the tool ran
+  and reported an error.
+  `error` is a JSON-RPC error, its `code` (`null` when it is not a
+  number) and the first line of its `message`, with no `result`.
+- `unanswered` is `"step"` when no answer had come when the step's record
+  was written (the boundary waits for one as it waits for a request, up to
+  one second), `"run"` when the run ended first, and `"closed"` when the
+  transport closed first.
+  `send_error` is the first line of what the transport's `send` threw,
+  and the wrapper throws that error on unchanged.
+- A call a step's code starts after its record was written is still that
+  step's: its line has `"after_step_end": true`, and the step in `run.json`
+  counts it in `after_step_end.mcp`.
+
+What this does not measure: a request the server sends the client
+(sampling, an elicitation), a notification the server sends, and a call
+sent through a transport `measureMcp` did not wrap.
+Each is the transport's own traffic, and the step record has no line for
+it.
 
 ### Lists
 
@@ -7033,7 +7171,8 @@ its scenario record's id, so either record leads to the other.
   for without ever stating it, and it says the real thing: how long after
   this execution's own timeline the screenshot was actually taken.
 - `observed` holds what the tool saw the execution reach, one key per
-  channel: `processes`, `http`, `files`, and `unmeasured`, and, when the
+  channel: `processes`, `http`, `files`, and `unmeasured`, `mcp` when
+  the step sent an MCP call through `measureMcp`, and, when the
   run has a world URL, `program_log`, and `events` when the world's
   program file names `{events}` or the world is at a `url`. Every channel
   follows one rule: measure what can be measured exactly, mark what
@@ -7216,9 +7355,17 @@ its scenario record's id, so either record leads to the other.
 - `observed.events` is the step's slice of the program's execution
   events, `{ "trace_id", "lines", "file", "kinds", "stamped",
   "stamped_spans", "unreadable", "unowned", "process_spans",
-  "process_requests", "whole", "open" }`, or `null` for a world at a
+  "process_requests", "whole", "open" }`, with `"mcp_spans"` when the
+  step sent an MCP call, or `null` for a world at a
   `url`; it is absent when the world's program file does not name
   `{events}` (see "Execution events").
+- `observed.mcp` counts the MCP calls and notifications the step sent
+  through a transport `measureMcp` wrapped, each one line of the step's
+  mcp.jsonl (`evidence.mcp`, below, and "MCP calls"); it is absent when
+  the step sent none, and a step that uses no MCP client reads as it did
+  before. A call the step's code sends after its record was written is
+  not counted here: its line is still written to that step's mcp.jsonl,
+  with `"after_step_end": true`.
 - `observed.files` (`null` when the execution changed none) lists the
   paths the step changed, sorted: `{ "path", "change", "bytes", "content" }`.
   Two sources are merged. Every scratch directory (see "Context API") is
@@ -7315,9 +7462,11 @@ its scenario record's id, so either record leads to the other.
   step running at the time: each boundary keeps the evidence directory it
   opened with. The record is final and is not rewritten, so the action is
   written beside it marked `"after_step_end": true`: a request's line in
-  that step's http.jsonl, a process's entry as `process-<n>.json`. The
+  that step's http.jsonl, a process's entry as `process-<n>.json`, an MCP
+  call's line in that step's mcp.jsonl. The
   scenario record's step entry, and the step in `run.json`, carry
-  `"after_step_end": { "requests", "processes" }`, the counts of what
+  `"after_step_end": { "requests", "processes" }`, with `"mcp"` when an
+  MCP call started late, the counts of what
   started before the scenario ended, with `"http": "http.jsonl"` when a
   request did: the file in the step record's directory that holds their
   lines, which the record's `evidence.http` does not name when every line
@@ -7419,6 +7568,13 @@ its scenario record's id, so either record leads to the other.
   nobody reading a step record for acceptance purposes traces one by one,
   and a file trying to hold all of them would stop being something a reader
   opens at all.
+- `evidence.mcp` (included only after at least one MCP call was logged)
+  points to mcp.jsonl, one JSON object per line for each call and
+  notification the step sent through a transport `measureMcp` wrapped
+  (the line is described under "MCP calls"). A line is appended when its
+  call is answered, when the step boundary stops waiting for an answer, or
+  when the transport closes; a notification's line is appended when it is
+  sent. A failed append does not fail the step.
 - `evidence.attachments` (included only when it has entries) lists what
   `evidence.attach`/`evidence.path` actually wrote this execution (see
   "Context API"), each `{ "name", "file", "at" }`: `name` is what the step
@@ -7443,7 +7599,7 @@ its scenario record's id, so either record leads to the other.
   empty string, is refused before anything is written, never silently
   rewritten into something safe. A `name` of `record.json`, `final.png`,
   `trace.zip`, `http.jsonl`, `program-log.txt`, `program-log-late.txt`,
-  `events.jsonl`, `events-late.jsonl`, or `events-read.jsonl`, under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
+  `events.jsonl`, `events-late.jsonl`, `events-read.jsonl`, or `mcp.jsonl`, under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
   `final.<name>.png` for a valid `pageAs` name, or of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by
@@ -7783,14 +7939,14 @@ holds:
   `judged_by`: its location, its name, and that no claim judged it (with
   a compat step in Then position that may have);
 - "Unmeasured actions", when a step did something the tool saw but could
-  not measure (`observed.unmeasured`), started a request or a
-  `runCommand` process after its record was written (`after_step_end`),
+  not measure (`observed.unmeasured`), started a request, a
+  `runCommand` process, or an MCP call after its record was written (`after_step_end`),
   or has lines of the program's log or of its execution events that
   arrived after it (`program_log_late`, `events_late`):
   one line per step, with its location, its text, its environment when
   the run had more than one, up to three of its actions and how many
   more, `started after the step ended: <n> request(s) in http.jsonl, <n>
-  process(es)` when it did, `<n> line(s) of the program's log after the
+  process(es), <n> MCP call(s) in mcp.jsonl` when it did, `<n> line(s) of the program's log after the
   step ended, in program-log-late.txt` and `<n> line(s) of the program's
   events after the step ended, in events-late.jsonl` when the world's stop
   found any (see "Program"), the advice to start a process with `runCommand` when one
@@ -8716,6 +8872,15 @@ The following notes show what `nuka check` reads as rot rather than style:
   above the file. The note names it and the fix: `"type": "module"`, or
   `.mts` names when the project's own `.js` files are CommonJS. It is a
   note, because the run works.
+- **An MCP client connected to a transport built inside the `connect`
+  call** (`mcp-transport-unmeasured`), as in
+  `client.connect(new StdioClientTransport(...))`, in a config fixture
+  or a typed step. That transport exists only in the argument, so
+  nothing can pass it through `measureMcp`, and each call the client
+  sends reaches no step record and carries no trace context (see "MCP
+  calls"). A transport built first and passed by name may be wrapped
+  where it is built, so it is not reported. It is a note, because the
+  run works.
 
 A `secrets.public` or `secrets.redact` entry that names a key no envFile
 defines (`secrets-public-key-unknown`, `secrets-redact-key-unknown`) is a

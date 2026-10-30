@@ -98,6 +98,20 @@ This part does not change release to release.
   schema (`user: signUp.returns.shape.user`) or with `z.looseObject`. The other new
   refusals and findings name claims that never held, so a scenario that
   passed meets none of them.
+- **MCP calls: a fixture that connects an MCP client can make each call
+  part of the step record.** Nothing changes for a client as it is
+  connected now. Pass its transport through `measureMcp` from
+  `nukadoko`, in the fixture that builds it:
+  `await client.connect(measureMcp(new StdioClientTransport({ command, args })))`.
+  Each call a step sends is then a line of the step's `mcp.jsonl`, and
+  carries the step's trace context in `params._meta.traceparent`. Over
+  streamable HTTP to the world, the program's lines for the call are the
+  step's, and a count claim on them can be exact. Over stdio, an exact
+  count claim on the server's work is `unjudged` (`mcp-unbounded`):
+  claim `at-least`, or reach the server over HTTP. A transport written
+  inside the `connect` call cannot be wrapped, and `nuka check` names
+  it as the note `mcp-transport-unmeasured`: build it first, then pass
+  it through `measureMcp`. See docs/spec.md "MCP calls".
 
 ## 0.23.0 to 0.24.0
 
@@ -831,7 +845,9 @@ This part does not change release to release.
   or `callMcpTool` uses the SDK's own client: add
   `@modelcontextprotocol/client` to the project, build a `Client` with a
   `StdioClientTransport` (from `@modelcontextprotocol/client/stdio`) in
-  the fixture's setup, and close it in its teardown.
+  the fixture's setup, and close it in its teardown. A later release
+  measures that client's calls: see the MCP item under "0.24.0 to the next
+  release".
 
 - **Each run is one directory, `.nukadoko/runs/<run_id>/`, and
   `records/` is no longer written.** A script, a CI step, or a tool that

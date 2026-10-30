@@ -517,6 +517,21 @@
       "note": "nukadoko がリクエストに `traceparent` ヘッダを足すこと。フィールド `stamped` はコードスパンで英語のまま。刻印 などの比喩には訳さない"
     },
     {
+      "en": ["MCP call", "an MCP call"],
+      "ja": "MCP の呼び出し",
+      "note": "step が measureMcp で包んだ transport を通して MCP サーバに送る request と通知。mcp.jsonl の 1 行。フィールド `observed.mcp` と欠けを示す語 `mcp-unbounded` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["wrap (a transport)", "wrapped"],
+      "ja": "包む",
+      "note": "measureMcp が MCP クライアントの transport を Proxy で包み、送ったメッセージと答えを計測すること。transport そのものは英語のまま(keep_english)"
+    },
+    {
+      "en": ["notification (MCP, JSON-RPC)"],
+      "ja": "通知",
+      "note": "id を持たず、答えを待たない JSON-RPC のメッセージ。mcp.jsonl のフィールド `notification` はコードスパンで英語のまま"
+    },
+    {
       "en": ["origin (of a URL)"],
       "ja": "オリジン",
       "note": "スキーム、ホスト、ポートの組。ブラウザの同一オリジンポリシーの語に揃える。args の出所(origin of an argument)とは別の語"
@@ -1079,6 +1094,10 @@
     {
       "term": "span id",
       "why": "`traceparent` の 16 桁の部分。nukadoko ではリクエスト 1 つにつき 1 つ。同じ step の trace id を共有するリクエスト(1 つの step で同じ GET を送った複数のページなど)を見分ける鍵"
+    },
+    {
+      "term": "transport",
+      "why": "MCP SDK の Transport インタフェース(start、send、close、onmessage、onclose)と、StdioClientTransport や StreamableHTTPClientTransport の型名に直接対応する。measureMcp が包むのはこれ。訳すと型名との結び付きが失われる"
     },
     {
       "term": "tree",

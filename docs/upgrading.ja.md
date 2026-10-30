@@ -72,6 +72,16 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   claim の step 自身の `args` が、そのフィールドを宣言しない `z.object` として宣言する値についての `lacks-field` の claim と、それで選ぶ `where` は `claim-args-dropped` になります。
   値を返す step 自身のスキーマ(`user: signUp.returns.shape.user`)か `z.looseObject` で、その値を宣言します。
   ほかの新しい拒否と報告は、成り立ったことのない claim を名指しするので、通っていたシナリオはどれにも当たりません。
+- **MCP の呼び出し: MCP のクライアントをつなぐ fixture は、それぞれの呼び出しを step record の一部にできます。**
+  いまのつなぎ方のクライアントには、何も変わりません。
+  transport を作る fixture の中で、それを `nukadoko` の `measureMcp` に通します: `await client.connect(measureMcp(new StdioClientTransport({ command, args })))`。
+  すると step が送るそれぞれの呼び出しは、その step の `mcp.jsonl` の 1 行になり、step の trace context を `params._meta.traceparent` に入れて運びます。
+  world への streamable HTTP では、呼び出しについてのプログラムの行は step のものになり、その数についての claim はちょうどの数になりえます。
+  stdio では、サーバの仕事のちょうどの数についての claim は `unjudged` です(`mcp-unbounded`)。
+  `at-least` を claim するか、HTTP でサーバに届けます。
+  `connect` の呼び出しの中に書いた transport は包めず、`nuka check` はそれを注記 `mcp-transport-unmeasured` として名指します。
+  先に作ってから `measureMcp` に通してください。
+  docs/spec.ja.md の「MCP の呼び出し」を参照してください。
 
 ## 0.23.0 から 0.24.0 へ
 
@@ -674,6 +684,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `@modelcontextprotocol/client` への任意の peer dependency も一緒です。
   `connectMcpServer` や `callMcpTool` を呼んでいた fixture は、SDK 自身の client を使います。
   `@modelcontextprotocol/client` をプロジェクトに加え、fixture の setup で `StdioClientTransport`(`@modelcontextprotocol/client/stdio` から)を使う `Client` を作り、teardown で閉じてください。
+  そのクライアントの呼び出しは、あとのリリースで計測できるようになりました。
+  「0.24.0 から次のリリースへ」の MCP の項目を参照してください。
 
 - **各 run は 1 つのディレクトリ `.nukadoko/runs/<run_id>/` になり、`records/` は書かれなくなりました。**
   state directory を読むスクリプト、CI の step、ツールは、次のパスを変えます。

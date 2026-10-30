@@ -41,13 +41,12 @@ not followed, so name a path that answers 200 with no login (`/up`, `/health`).
 | `{token}` | random per world, redacted as `{{secret.WORLD_TOKEN}}` in every record |
 | `{events}` | a private empty file a world nukadoko serves gets for its program's execution events |
 | `{condition.<name>}` | the value the environment declares for that condition: `true`, `false`, or the string |
-
-A placeholder a world has no value for (`{port}` or `{url}` with neither
-`serve` nor `url`, `{events}` without `serve`, `{condition.<name>}` where
-the environment does not declare it, anything but `{root}` in `build`) is
-`program-placeholder-unfilled`: `nuka check` reports it for the worlds a
-`nuka run` with the same `--env` flags would start, and `nuka run` and
-`nuka do` refuse it before any command runs.
+A placeholder a world has no value for (`{port}` or `{url}` with neither `serve`
+nor `url`, `{events}` without `serve`, `{condition.<name>}` where the
+environment does not declare it, anything but `{root}` in `build`) is
+`program-placeholder-unfilled`: `nuka check` reports it for the worlds a `nuka
+run` with the same `--env` flags would start, and `nuka run` and `nuka do`
+refuse it before any command runs.
 
 One world serves every scenario of an environment, so what one scenario
 writes is there for the next: a scenario creates what it reads and claims
@@ -87,16 +86,15 @@ and its log; each step record names its world in `world_name`.
 
 ## Each step's lines of the program's log
 
-Every request a step sends to the world's origin (through `fetch`,
-`node:http`, `request`, and a Chromium page) carries a W3C `traceparent`
-with the step's own trace id. A request that sets its own keeps it. When
-the program writes the trace id into its log lines, each step record
-gets the lines that carry its trace id in `program-log.txt` beside it,
-counted in `observed.program_log` (`{ trace_id, lines, file, stamped }`).
-Read that file first when a step against the program fails: it holds
-what the server did for that step. A line that arrived after the step
-ended is still that step's, in `program-log-late.txt` beside the record;
-the run summary names it on the step's line.
+Every request a step sends to the world's origin (through `fetch`, `node:http`,
+`request`, and a Chromium page) carries a W3C `traceparent` with the step's own
+trace id. A request that sets its own keeps it. When the program writes the
+trace id into its log lines, each step record gets the lines that carry its
+trace id in `program-log.txt` beside it, counted in `observed.program_log`
+(`{ trace_id, lines, file, stamped }`). Read that file first when a step against
+the program fails: it holds what the server did for that step. A line that
+arrived after the step ended is still that step's, in `program-log-late.txt`
+beside the record; the run summary names it on the step's line.
 
 `lines: 0` with `stamped` above 0 says only that no line carried the
 step's trace id by the time its record was written. Read the run
@@ -122,30 +120,32 @@ with `traceparent_sent_to`, the origins that received it.
 
 ## Each step's execution events
 
-A program can also write one JSON line per operation it ends (a request,
-a statement, a transaction, a job, an outgoing call, a flag, an error) to
-the file `{events}` names, in the format of docs/execution-events.md:
+A program can also write one JSON line per operation it ends (a request, a
+statement, a transaction, a job, an outgoing call, a flag, an error) to the file
+`{events}` names, in the format of docs/execution-events.md:
 `env: { EXECUTION_EVENTS: "{events}" }`. Each line carries the request's
-`traceparent`, a job's the one that enqueued it, so the lines of every
-process the program runs reach the step that caused them. Each step record
-gets its lines, redacted, in `events.jsonl` beside it, counted in
-`observed.events` (`{ trace_id, lines, file, kinds, stamped, stamped_spans,
-unreadable, unowned, process_spans, process_requests, whole, open }`). A
-`runCommand` process gets the step's trace context as `TRACEPARENT`;
-a command-line tool that copies it into its requests' `traceparent`
-header makes their lines the step's (`process_requests` counts them).
-Only the program gets the variable that names `{events}`: a step, and every
-process it starts, gets the rest of `env`, so no line a step writes reads as the program's.
-Read it to see what the program did inside a step: which tables it read and
-wrote, which jobs it enqueued and ran.
+`traceparent`, a job's the one that enqueued it, so the lines of every process
+the program runs reach the step that caused them. Each step record gets its
+lines, redacted, in `events.jsonl` beside it, counted in `observed.events`
+(`{ trace_id, lines, file, kinds, stamped, stamped_spans, unreadable, unowned,
+process_spans, process_requests, whole, open }`, and `mcp_spans` after an MCP
+call). A `runCommand` process gets the step's trace context as `TRACEPARENT`,
+an MCP call through `measureMcp` in `params._meta.traceparent`
+(`references/evidence.md`); a tool or a stdio server that copies it into its
+requests' `traceparent` header makes their lines the step's (`process_requests`
+counts a tool's). Only the program gets the variable that names `{events}`,
+never a step or a process it starts, so no line a step writes reads as the
+program's. Read it to see what the program did inside a step: which tables it
+read and wrote, which jobs it enqueued and ran.
 
 `whole: true` says every request the step stamped has its `request` line, every
-job it enqueued performed, and each `runCommand` process it ran ended with its
-process group. `whole: false` never says nothing more happened: `open` names
-why, one word each: `no-requests` (the step sent the world no stamped request
-and ran no `runCommand` process, such as a Then that only reads the page),
-`processes-unbounded` (a process it ran still runs, left its group running, or
-ran on Windows), `no-lines` (no writer, or a wrong variable),
+job it enqueued performed, each `runCommand` process it ran ended with its
+process group, and each MCP call went to the world over HTTP. `whole: false`
+never says nothing more happened: `open` names why, one word each: `no-requests`
+(no stamped request, `runCommand` process, or MCP call, such as a Then that only
+reads the page), `processes-unbounded` (a process it ran still runs, left its
+group running, or ran on Windows), `mcp-unbounded` (an MCP call went over stdio
+or to another origin), `no-lines` (no writer, or a wrong variable),
 `request-unreported`, `jobs-pending` (with `job_ids`), `unreadable` (a line
 spliced or cut), `truncated`, `file-replaced`. A line that arrived later is in
 `events-late.jsonl`, and the run summary names it. The whole file, redacted, is

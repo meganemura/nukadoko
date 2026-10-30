@@ -82,6 +82,7 @@ measured there, not that nothing happened):
   run summary's line for the world (`program.md`); `null`: a `url` world.
 - `events` counts the step's execution events by kind, in `events.jsonl`
   (late ones in `events-late.jsonl`); `open` names why `whole` is false.
+- `mcp` counts the step's MCP calls, each a line of `mcp.jsonl` (`evidence.md`).
 - `files` lists the paths the step changed in a scratch directory or wrote
   through `node:fs`, each with its content after the step. A file the step asked
   Playwright to write (a screenshot saved to a path, a trace from
@@ -174,14 +175,13 @@ A call whose output you lost, or that printed `starting` or `running`, is safe
 to run again: an answer is written once, and the same answer again prints what
 followed it. `pause-answered` means another answer reached that pause first,
 `pause-not-current` that the walk is elsewhere, and `walk-not-current` that a
-later walk replaced the one the answer names: show the person what the
-`nuka step wait --walk <w>` of its `do` prints before you answer again. A pause
-where the scenario failed (a step, or an AfterStep hook after it) prints
-`failure:`, exits 1 with `walk-failed`, and offers only `next`: show the failure
-and the views, answer `next` once the person has seen them, and go to
-`diagnosing.md`. A walk a signal ended (the host's background limit, Ctrl-C)
-prints `interrupted`; one whose run was killed prints `walk-gone`, and its `do:`
-starts it again.
+later walk replaced the one the answer names: show the person what the `nuka
+step wait --walk <w>` of its `do` prints before you answer again. A pause where
+the scenario failed (a step, or an AfterStep hook after it) prints `failure:`,
+exits 1 with `walk-failed`, and offers only `next`: show the failure and the
+views, answer `next` once the person has seen them, and go to `diagnosing.md`. A
+walk a signal ended (the host's background limit, Ctrl-C) prints `interrupted`;
+one whose run was killed prints `walk-gone`, and its `do:` starts it again.
 
 A walked run is not the run a reviewer approves (the world and the browser
 stayed open between steps, and its summary says so): after the walk, run the
