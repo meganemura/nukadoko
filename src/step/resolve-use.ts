@@ -22,7 +22,9 @@ import { producersOf, isClaimStep, malformedFromEntryMessage, tryFromCandidates,
 // A claim step's `events` keys match the same way: a step record whose
 // step one key's `of` names supplies that key's execution events, and the
 // caller reads them from the record (src/cli/recorded-events.ts). Such a
-// record fills no args key, so it lands in no `used` entry.
+// record fills no args key, so it lands in no `used` entry. A `files` key
+// matches the same way, and reads the paths the record's `runCommand`
+// processes changed.
 //
 // A key naming several candidate producers matches this step record against
 // every one of them via `fromCandidates`, exactly the way a
@@ -69,7 +71,10 @@ export interface ResolveUseSuccess {
   readonly dropped: readonly ReturnsDrop[] | undefined;
   /** The events keys whose `of` names this step record's step. */
   readonly events: readonly string[];
-  /** The step record itself, whose execution events those keys count. */
+  /** The files keys whose `of` names this step record's step. */
+  readonly files: readonly string[];
+  /** The step record itself, whose execution events those events keys
+   * count and whose processes those files keys read. */
   readonly record: StepRecord;
 }
 
@@ -168,18 +173,27 @@ export function resolveUse(
       }
     }
   }
-  const eventsKeys: string[] = [];
-  const events = isClaimStep(step) ? step.events : {};
-  for (const [key, entry] of Object.entries(events)) {
-    for (const candidate of producersOf(entry)) {
-      const candidateName = stepNameOf.get(candidate);
-      if (candidateName === undefined) unnamedPlace ??= `events.${key}.of`;
-      if (candidateName === stepRecord.step && !eventsKeys.includes(key)) eventsKeys.push(key);
+  // The keys of a reading nukadoko took (`events`, `files`) whose `of`
+  // names this record's step.
+  const readingKeys = (option: "events" | "files", entries: Readonly<Record<string, { readonly of: Step | readonly Step[] }>>): string[] => {
+    const keys: string[] = [];
+    for (const [key, entry] of Object.entries(entries)) {
+      for (const candidate of producersOf(entry)) {
+        const candidateName = stepNameOf.get(candidate);
+        if (candidateName === undefined) unnamedPlace ??= `${option}.${key}.of`;
+        if (candidateName === stepRecord.step && !keys.includes(key)) keys.push(key);
+      }
     }
-  }
+    return keys;
+  };
+  const events = isClaimStep(step) ? step.events : {};
+  const files = isClaimStep(step) ? step.files : {};
+  const eventsKeys = readingKeys("events", events);
+  const filesKeys = readingKeys("files", files);
+  const readsRecord = eventsKeys.length > 0 || filesKeys.length > 0;
   // An upstream with no name may be this record's step under another
   // module instance, so "not named by any entry" would blame the wrong thing.
-  if (matches.length === 0 && eventsKeys.length === 0 && unnamedPlace !== undefined) {
+  if (matches.length === 0 && !readsRecord && unnamedPlace !== undefined) {
     return {
       ok: false,
       message:
@@ -187,8 +201,9 @@ export function resolveUse(
         `\`${unnamedPlace}\` names has no name here${unnamedNote !== undefined ? `. ${unnamedNote}` : ""}`,
     };
   }
-  if (matches.length === 0 && eventsKeys.length === 0) {
-    const places = Object.keys(events).length === 0 ? "`from` entries" : "`from` entries or `events` keys";
+  if (matches.length === 0 && !readsRecord) {
+    const readings = [...(Object.keys(events).length === 0 ? [] : ["`events`"]), ...(Object.keys(files).length === 0 ? [] : ["`files`"])];
+    const places = readings.length === 0 ? "`from` entries" : `\`from\` entries or ${readings.join(" or ")} keys`;
     return {
       ok: false,
       message: `--use ${recordId}: its step "${stepRecord.step}" is not named by any of this step's ${places}`,
@@ -220,6 +235,7 @@ export function resolveUse(
     producer: matches[0]?.[2],
     dropped: readReturnsDropped((stepRecord as { returns_dropped?: unknown }).returns_dropped),
     events: eventsKeys,
+    files: filesKeys,
     record: stepRecord,
   };
 }

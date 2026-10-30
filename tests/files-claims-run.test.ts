@@ -7,12 +7,13 @@ import { MAX_ENTRIES } from "../src/context/file-snapshot.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: a claim on the files an earlier step's commands changed
-// end to end, through `nuka run` against tests/fixtures/files-project,
-// whose producers run a stand-in build through `runCommand` (or write
-// without one). A Then judges the paths the producer's record lists, and
-// never a value its code returned: an empty list holds only when every
-// process was walked whole, a producer that ran no process leaves the
-// claim unjudged, and so does a walk that was not made.
+// end to end, through `nuka run` and `nuka do --use` against
+// tests/fixtures/files-project, whose producers run a stand-in build
+// through `runCommand` (or write without one). A Then judges the paths
+// the producer's record lists, and never a value its code returned: an
+// empty list holds only when every process was walked whole, a producer
+// that ran no process leaves the claim unjudged, and so does a walk that
+// was not made.
 
 async function cli(rootDir: string, args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const stdout = createCaptureSink();
@@ -154,6 +155,30 @@ describe("a claim on the files an earlier step changed, under nuka run", () => {
       ["unjudged", `nukadoko did not measure the files process 1 of build-in-big-tree@4 changed: more than ${MAX_ENTRIES} entries under the working directory`, null, false],
     ]);
   }, 60_000);
+
+  it("reads the record --use names under nuka do, refuses two records for one key, and leaves the claim unjudged when none names the producer", async () => {
+    const build = await cli(rootDir, ["do", "run-build", "--args", '{"mode":"edit"}']);
+    expect(build.exitCode).toBe(0);
+    const id = (JSON.parse(build.stdout) as { step_record_id: string }).step_record_id;
+    const exactly = await cli(rootDir, ["do", "wrote-exactly", "--args", JSON.stringify({ docstring: "src/index.ts" }), "--use", id]);
+    expect(exactly.exitCode).toBe(0);
+    expect((JSON.parse(exactly.stdout) as { claims: ClaimFacts[] }).claims).toEqual([
+      expect.objectContaining({ actual: ["src/index.ts"], actual_from: `files:run-build@${id} added or changed`, outcome: "held", measured: { step_record_id: id, channel: ONE_PROCESS } }),
+    ]);
+    const again = await cli(rootDir, ["do", "run-build", "--args", '{"mode":"check"}']);
+    const second = (JSON.parse(again.stdout) as { step_record_id: string }).step_record_id;
+    const both = await cli(rootDir, ["do", "wrote-exactly", "--args", JSON.stringify({ docstring: "src/index.ts" }), "--use", id, "--use", second]);
+    expect(both.exitCode).toBe(2);
+    expect(both.stdout + both.stderr).toContain(
+      `--use: files key "written" is supplied by both step record ${id} (step "run-build") and step record ${second} (step "run-build"), and nuka do reads the files of one step record per key`,
+    );
+    const unused = await cli(rootDir, ["do", "no-src-change", "--args", "{}"]);
+    expect(unused.exitCode).toBe(1);
+    expect((JSON.parse(unused.stdout) as { claims: ClaimFacts[] }).claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: 'files.source.of names "run-build", and no --use value names a step record of it, so nuka do has no files to read',
+    });
+  });
 });
 
 describe("the vocabulary of a files key", () => {

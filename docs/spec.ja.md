@@ -1533,6 +1533,7 @@ step のコードが返した値から作ることはありません。
   scenario の前の行でちょうど 1 つが走り、それを走らせた最後の行が読まれます。
   1 つも走っていないときも、2 つが走ったときも、claim は `unjudged` です。
   その reason が、それらを名指します。
+  `nuka do` の下では、読む record を `--use` が名指します。
 - `change` は `added`、`changed`、`removed` か、そのリストを選びます。
   書かないときは、すべての変化を選びます。
 - `under` は、1 つのディレクトリの中のパスだけを残します。
@@ -4950,6 +4951,10 @@ record の読みが読む範囲は、producer の切り出しまでです。
 record は step の切り出しが読んだものを保ちます。
 その間に届いたものは `events-late.jsonl` にあり、record の `events_late` はそうした行がすべてそろっているかを示すので、あとの `--use` は自分の読みがそろいうるかを知ります。
 まだ 1 行も書いていないプログラムの world は待ちません。
+
+claim step の `files` のキー(「前の step が変えたファイル」を参照)も、同じように step record を受け取ります。
+キーの `of` がその step を名指す step record が、その `observed.processes` を供給し、claim の `actual_from` は producer を `<step>@<step record id>` として名指します。
+1 つのキーに 2 つの step record を渡すと拒否され、どの `--use` も供給しないキーでは、その claim はキーの `of` を名指して `unjudged` になります。
 
 `--use` が運ぶのは値そのものであり、それが指すものがまだそこにあるという保証ではありません。
 上流の step が返した path は、fixture が所有するリソースを指していることがあります。

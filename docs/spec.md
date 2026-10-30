@@ -1863,7 +1863,8 @@ measured.
   candidate steps, chosen as an events key's are (see "A claim on a
   count of events"): exactly one of them runs earlier in the scenario,
   and the latest line that ran it is the one read. When none ran, or
-  two did, the claim is `unjudged`, and its reason names them.
+  two did, the claim is `unjudged`, and its reason names them. Under
+  `nuka do`, `--use` names the record to read.
 - `change` selects `added`, `changed`, or `removed`, or a list of them,
   and every change when it is left out.
 - `under` keeps the paths inside one directory, written relative to the
@@ -6375,6 +6376,13 @@ in `events-late.jsonl`, and `events_late` in the record says whether
 every such line is there, so a later `--use` knows whether its reading
 can be whole.
 A world whose program has written no line is not waited for.
+
+A claim step's `files` keys (see "Files an earlier step changed") take a
+step record the same way: the record whose step a key's `of` names
+supplies its `observed.processes`, and the claim's `actual_from` names
+the producer as `<step>@<step record id>`. Two step records for one key
+are refused, and a key no `--use` supplies leaves its claims `unjudged`,
+naming the key's `of`.
 
 What crosses with `--use` is the value itself, not a guarantee that
 whatever it names is still there: a path an upstream step returned can

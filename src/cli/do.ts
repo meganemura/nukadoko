@@ -10,6 +10,7 @@ import {
   recordedChannels,
   withMeasured,
   type EventsSource,
+  type FilesSource,
   type FilledFrom,
 } from "../run/execute-typed-step.js";
 import { settleEvents } from "../context/events-read.js";
@@ -415,6 +416,40 @@ export async function runDo(options: RunDoOptions): Promise<number> {
           "so nuka do has no execution events to count",
       };
     };
+    // One step record per files key, for the same reason: a list is the
+    // files of one execution. Each key reads the processes of the record
+    // --use named for it, and a key no --use supplies is unjudged.
+    const filesUse = new Map<string, ResolveUseSuccess>();
+    for (const resolved of resolvedUses) {
+      for (const key of resolved.files) {
+        const earlier = filesUse.get(key);
+        if (earlier !== undefined) {
+          return refuse(
+            sinks,
+            `--use: files key "${key}" is supplied by both step record ${earlier.used.step_record_id} (step "${earlier.used.step}") and ` +
+              `step record ${resolved.used.step_record_id} (step "${resolved.used.step}"), and nuka do reads the files of one step record per key`,
+            "step-inputs-invalid",
+          );
+        }
+        filesUse.set(key, resolved);
+      }
+    }
+    const filesSource = (key: string): FilesSource => {
+      const resolved = filesUse.get(key);
+      if (resolved !== undefined) {
+        return {
+          of: `${resolved.used.step}@${resolved.used.step_record_id}`,
+          record: { step_record_id: resolved.used.step_record_id, processes: resolved.record.observed.processes },
+        };
+      }
+      const names = isClaimStep(entry.step) ? producersOf(entry.step.files[key]!).map((candidate) => stepNameOf.get(candidate) ?? "a step discovery never registered") : [];
+      return {
+        of: names.join(" or "),
+        unchosen:
+          `files.${key}.of names ${names.map((candidate) => `"${candidate}"`).join(" or ")}, and no --use value names a step record of ${names.length === 1 ? "it" : "any of them"}, ` +
+          "so nuka do has no files to read",
+      };
+    };
 
     // Read-only refusal is a setup failure, not an execution failure: the
     // step never runs, so nothing was
@@ -709,6 +744,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       argSide: (key) => claimArgSide(key, origins.get(key), () => null),
       filledFrom,
       ...(isClaimStep(entry.step) && Object.keys(entry.step.events).length > 0 ? { eventsSource } : {}),
+      ...(isClaimStep(entry.step) && Object.keys(entry.step.files).length > 0 ? { filesSource } : {}),
       // No line states a value under nuka do: a key --args gave reads as
       // the JSON text it was given.
       sentenceText: (key) =>

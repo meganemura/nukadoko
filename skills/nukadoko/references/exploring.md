@@ -85,6 +85,8 @@ execution events that record kept (`references/program.md`). Before
 `nuka do` stops its world, it waits up to 10 s for the step's own events
 to be whole, so the lines of a job that performs after the response are
 there for that count.
+A `files` key takes one the same way, and reads the files that record's
+`runCommand` processes changed (`references/parts.md`).
 
 So one shape of an exploration is: keep the unit of a single `do` call
 small enough to see what you need, and grow it by adding parts rather
