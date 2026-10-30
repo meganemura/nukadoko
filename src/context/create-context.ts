@@ -57,6 +57,7 @@ import { type AfterStepEnd, createObservedCollector, finalizeOpenRequests } from
 import { createPageEventsCollector } from "./page-events.js";
 import { createEventsReader } from "./events-file.js";
 import { readEvents, type EventsProducer, type EventsRequest } from "./events-read.js";
+import { NO_MARKED_TABLES, type WorldTables } from "../execution-events/tables.js";
 import { createProgramLogReader } from "./program-log-slice.js";
 import { newTracePrefix, originOf } from "./trace-context.js";
 import { pollWithRecording } from "./poll.js";
@@ -560,6 +561,10 @@ export interface CreateStepContextOptions {
   /** The prefix every trace id of the world starts with
    * (src/program/world-view.ts). Without one, the handle makes its own. */
   tracePrefix?: string | undefined;
+  /** What the world's tables list says (src/program/world-view.ts), which
+   * decides the lines a claim step's count leaves out. A world whose
+   * program file names no tables list marks none, as when it is absent. */
+  tables?: WorldTables | undefined;
   /** The world's directory (src/program/world-view.ts). It is inside the
    * state directory, which the file measurement leaves out, and a step's
    * own write there is recorded all the same (observed.ts). */
@@ -1482,7 +1487,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     observedSnapshot,
     afterStepEnd: () => observed.afterStepEnd(),
     eventsProducer,
-    readEvents: (requests, until) => readEvents(requests, { until, dir: boundaryDir, secrets }),
+    readEvents: (requests, until) => readEvents(requests, { until, dir: boundaryDir, secrets, tables: options.tables ?? NO_MARKED_TABLES }),
     usedSnapshot,
     recordUsed,
     sectionsSnapshot,

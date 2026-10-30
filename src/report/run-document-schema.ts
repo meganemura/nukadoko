@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { GROUP_FIELDS } from "../execution-events/counted.js";
+import { MARKED_HOLDS, type MarkedHolds } from "../execution-events/tables.js";
 import type { EventKindName } from "../execution-events/format.js";
 import { PATH_KIND_ORDER, PATH_KINDS, type PathKind } from "../execution-events/path.js";
 import { GAP_WORDS } from "../execution-events/tally.js";
@@ -49,10 +50,15 @@ const countedGroup = z.looseObject({
   lines: z.number().int(),
 });
 
+// A group a count left out, since the program marks its table
+// (src/execution-events/tables.ts): the summary names what it holds.
+const leftOutGroup = countedGroup.extend({ holds: z.enum(MARKED_HOLDS as [MarkedHolds, ...MarkedHolds[]]) });
+
 const comparisonClaim = z.looseObject({
   actual: z.unknown().optional(),
   actual_range: countRange.optional(),
   counted: z.array(countedGroup).optional(),
+  left_out: z.array(leftOutGroup).optional(),
   actual_from: z.string(),
   view: z.string().optional(),
   at: z.string().optional(),
@@ -168,6 +174,7 @@ const eventsRead = z.looseObject({
   whole: z.boolean(),
   open: z.array(eventsGap),
   maybe: z.record(z.string(), z.number().int()),
+  left_out: z.array(leftOutGroup).optional(),
   lines: z.number().int(),
   unreadable: z.number().int(),
   unowned: z.number().int(),

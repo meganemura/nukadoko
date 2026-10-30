@@ -10,7 +10,7 @@ import type {
   ClaimView,
 } from "../record/types.js";
 import { COUNT_COMPARES, judgeCount, type CountCompare, type CountReading } from "../execution-events/count.js";
-import type { CountedGroup } from "../execution-events/counted.js";
+import type { CountedGroup, LeftOutGroup } from "../execution-events/counted.js";
 import {
   isEachClaim,
   kindNamed,
@@ -746,12 +746,18 @@ export type DroppedKeys =
 /** One events key as a claim reads it: the label the record names the
  * count by (`events:<step>@<line> count <selection>`), and the step's
  * reading with the name of the step whose events it counted and the
- * lines it counted, or why there is none. A selection whose sentence
+ * lines it counted and left out, or why there is none. A selection whose sentence
  * value does not fit its field breaks the claim, since the line states
  * what the format cannot select by, and a reading nukadoko could not make
  * leaves it unjudged. */
 export type EventsCountSide =
-  | { readonly label: string; readonly of: string; readonly reading: CountReading; readonly counted: readonly CountedGroup[] }
+  | {
+      readonly label: string;
+      readonly of: string;
+      readonly reading: CountReading;
+      readonly counted: readonly CountedGroup[];
+      readonly left_out?: readonly LeftOutGroup[];
+    }
   | { readonly label: string; readonly broken: string }
   | { readonly label: string; readonly unjudged: string };
 
@@ -997,13 +1003,14 @@ function isCountCompare(compare: string): compare is CountCompare {
 /** A claim on a count of execution events: the range the step read
  * against the expected number. `actual` is the count when the range is
  * one number, and `actual_range` the range otherwise, with the lines it
- * counted beside it. */
+ * counted, and those it left out, beside it. */
 function judgeEventsCount(claim: ComparisonClaim, side: EventsCountSide, inputs: ClaimInputs): ClaimComparisonRecord {
   const expected = expectedSide(claim, inputs);
   const range = "reading" in side ? side.reading.range : null;
   const base = {
     ...(range === null ? {} : range.at_most === range.at_least ? { actual: range.at_least } : { actual_range: { ...range } }),
     ...("counted" in side ? { counted: side.counted } : {}),
+    ...("left_out" in side && side.left_out !== undefined ? { left_out: side.left_out } : {}),
     actual_from: side.label,
     compare: claim.compare,
     ...("value" in expected ? { expected: expected.value } : {}),

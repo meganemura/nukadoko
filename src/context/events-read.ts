@@ -6,6 +6,7 @@ import { matchLine, type EventSelection } from "../execution-events/selection.js
 import { createKindsSeen, createTraceTally, readingGaps, type EventsGap, type KindsSeen, type MaybeCounts, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
 import type { EventsProducerRecord, EventsReadRecord, EventsSlice } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
+import type { WorldTables } from "../execution-events/tables.js";
 import { withoutChannelRecording } from "./channels.js";
 import { EVENTS_LATE_FILE_NAME, keptLine, type ProducerStart, type WorldEventsFile } from "./events-file.js";
 import { forEachLogLine, StepLines } from "./trace-slice.js";
@@ -95,6 +96,9 @@ export interface EventsReadOptions {
   /** The reading step's record directory. */
   readonly dir: string;
   readonly secrets: SecretSet;
+  /** What the claim step's world's tables list says, which decides the
+   * lines a count leaves out (src/execution-events/tables.ts). */
+  readonly tables: WorldTables;
 }
 
 /** The tally inputs of a recorded slice: a record written before
@@ -255,7 +259,7 @@ function readRecorded(group: Group, kinds: KindsSeen, keep: (text: string, parse
   group.replaced = slice.open.some((gap) => gap.gap === "file-replaced");
 }
 
-const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 };
+const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, holds_unknown: 0, commit_unknown: 0, unowned: 0 };
 
 /** Reads each request's producer, waiting until every live producer's
  * events are whole, can no longer become whole, or `options.until` is
@@ -271,7 +275,7 @@ export async function readEvents(requests: readonly EventsRequest[], options: Ev
   const groups = new Map<EventsProducer, Group>();
   for (const [producer, keys] of byProducer) {
     const inputs = producer.source === "live" ? producer.start.inputs : tallyInputsOfSlice(producer.slice);
-    const tally = createTraceTally({ ...inputs, selections: keys.map((request) => request.selection) });
+    const tally = createTraceTally({ ...inputs, selections: keys.map((request) => request.selection), tables: options.tables });
     groups.set(producer, { producer, requests: keys, tally, unownedNotKept: 0, truncated: false, replaced: false });
   }
   const kept = new StepLines();
@@ -318,6 +322,7 @@ export async function readEvents(requests: readonly EventsRequest[], options: Ev
       count: selection,
       range: rangeOf({ yes: count.yes, maybe }, whole),
       counted: count.counted,
+      ...(count.left_out.length === 0 ? {} : { left_out: count.left_out }),
       whole,
       open,
       maybe,

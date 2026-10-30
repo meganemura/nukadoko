@@ -1,4 +1,5 @@
 import * as hegel from "@hegeldev/hegel";
+import { NO_MARKED_TABLES } from "../src/execution-events/tables.js";
 import * as gs from "@hegeldev/hegel/generators";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -71,7 +72,7 @@ const append = (file: string, texts: readonly string[]): void => appendFileSync(
 const requests = (producer: EventsProducer, selections: Readonly<Record<string, EventSelection>>): EventsRequest[] =>
   Object.entries(selections).map(([key, selection]) => ({ key, producer, selection }));
 
-const read = (into: string, list: readonly EventsRequest[], waitMs = 1500, secrets: SecretSet = []) => readEvents(list, { until: Date.now() + waitMs, dir: into, secrets });
+const read = (into: string, list: readonly EventsRequest[], waitMs = 1500, secrets: SecretSet = []) => readEvents(list, { until: Date.now() + waitMs, dir: into, secrets, tables: NO_MARKED_TABLES });
 
 describe("readEvents from the world's file", () => {
   it("waits for the job the producer enqueued, then counts exactly", async () => {
@@ -153,7 +154,7 @@ describe("readEvents from the world's file", () => {
       counted: [],
       whole: false,
       open: [{ gap: "producer-not-run" }],
-      maybe: { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 },
+      maybe: { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, holds_unknown: 0, commit_unknown: 0, unowned: 0 },
       lines: 0,
       unreadable: 0,
       unowned: 0,
@@ -211,7 +212,7 @@ async function readingOf(first: Buffer, second: Buffer): Promise<{ readonly read
         resolve();
       }, 15),
     );
-    const readings = await readEvents(requests(live, SELECTIONS), { until: Date.now() + 2000, dir: path.join(at, "then"), secrets: [] });
+    const readings = await readEvents(requests(live, SELECTIONS), { until: Date.now() + 2000, dir: path.join(at, "then"), secrets: [], tables: NO_MARKED_TABLES });
     await later;
     const keptPath = path.join(at, "then", EVENTS_READ_FILE_NAME);
     const withoutWait = Object.fromEntries(Object.entries(readings).map(([key, value]) => [key, { ...value, waited_ms: 0 }]));

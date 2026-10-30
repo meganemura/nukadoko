@@ -500,6 +500,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // A command is filled with absolute paths (`{root}`, `{dir}`), and
         // every path nukadoko prints is relative to the project.
         progress: { write: (chunk: string) => stderr.write(projectRelativeText(chunk, rootDir)) },
+        // The tables list decides only what a count of execution events
+        // counts, so a step that counts none is spared its command.
+        ...(isClaimStep(entry.step) && Object.keys(entry.step.events).length > 0 ? {} : { tables: false as const }),
       }).start(resolvedEnv.name, resolvedEnv.program, secrets, startAbort.signal);
       processSignal.setProcessCleanup(async () => {
         startAbort.abort();
@@ -546,6 +549,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       programLog: world?.view.log,
       events: world?.view.events,
       tracePrefix: world?.view.tracePrefix,
+      tables: world?.view.tables,
       worldDir: world?.view.dir,
       evidenceDir,
       // The world's directory is beside the record (worldDir above), so a

@@ -933,6 +933,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     programLog: programWorld?.log,
     events: programWorld?.events,
     tracePrefix: programWorld?.tracePrefix,
+    tables: programWorld?.tables,
     worldDir: programWorld?.dir,
     evidenceDir: scenarioDir,
     rootDir,

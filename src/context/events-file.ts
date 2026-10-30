@@ -4,6 +4,7 @@ import { ownerOf, parseEventLine, type ParsedLine } from "../execution-events/fo
 import type { CountedGroup } from "../execution-events/counted.js";
 import { createPathFold, type PathFold, type StepPath } from "../execution-events/path.js";
 import type { EventSelection } from "../execution-events/selection.js";
+import { NO_MARKED_TABLES, type WorldTables } from "../execution-events/tables.js";
 import { createKindsSeen, createTraceTally, readingGaps, type EventsGap, type KindsSeen, type SelectionCount, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
 import type { EventsSlice } from "../record/types.js";
 import { redact, redactString } from "../secrets/redact.js";
@@ -259,7 +260,8 @@ export interface WorldEvents {
  * copy to `copyPath`, each step's lines past its slice to its
  * EVENTS_LATE_FILE_NAME, counts what the file holds, folds each step's
  * path, and counts each of `recounts` again over every line of its
- * trace. `steps` give `lines` as `observed.events.lines`. */
+ * trace, leaving out what `tables`, the world's tables list, leaves out,
+ * as the reading did. `steps` give `lines` as `observed.events.lines`. */
 export function collectWorldEvents(
   filePath: string,
   prefix: string,
@@ -267,6 +269,7 @@ export function collectWorldEvents(
   secrets: SecretSet,
   copyPath: string,
   recounts: readonly Recount[] = [],
+  tables: WorldTables = NO_MARKED_TABLES,
 ): WorldEvents {
   let lines = 0;
   let unowned = 0;
@@ -274,7 +277,7 @@ export function collectWorldEvents(
   const undefinedKinds = new Map<string, number>();
   const folds = new Map<string, PathFold>(steps.map((step) => [step.traceId, createPathFold(step.inputs)]));
   const kinds = createKindsSeen();
-  const tallies = recounts.map((recount) => createTraceTally({ ...recount.inputs, selections: [recount.selection] }));
+  const tallies = recounts.map((recount) => createTraceTally({ ...recount.inputs, selections: [recount.selection], tables }));
   const talliesOf = new Map<string, TraceTally[]>();
   recounts.forEach((recount, index) => talliesOf.set(recount.traceId, [...(talliesOf.get(recount.traceId) ?? []), tallies[index]!]));
   let pending: string[] = [];

@@ -1,3 +1,4 @@
+import { NO_MARKED_TABLES, type WorldTables } from "../execution-events/tables.js";
 import type { SecretSet } from "../secrets/types.js";
 
 // Responsibility: what the steps of a world see of it, as one plain value
@@ -5,7 +6,8 @@ import type { SecretSet } from "../secrets/types.js";
 // URL, the env its processes got, the values made for it that every record
 // redacts, the prefix of its trace ids, its program log when nukadoko
 // serves the program, and the file its program appends execution events
-// to when the program file asks for one. Boundary:
+// to when the program file asks for one, and what its tables list says,
+// which decides what a claim step's count leaves out. Boundary:
 // no process; starting and stopping the program is src/program/world.ts's.
 
 export interface WorldView {
@@ -37,6 +39,10 @@ export interface WorldView {
    * program file names it; `null` otherwise. Only the parent makes and
    * removes the file; every process that runs steps reads it. */
   readonly events: string | null;
+  /** What the program's tables list says of its tables, when the world
+   * read one (src/execution-events/tables.ts); no table is marked when
+   * the program file names none. */
+  readonly tables: WorldTables;
 }
 
 export function serializeWorldView(view: WorldView): string {
@@ -59,6 +65,7 @@ export function parseWorldView(text: string): WorldView {
     dir: value.dir,
     tracePrefix: value.tracePrefix,
     events: typeof value.events === "string" ? value.events : null,
+    tables: value.tables ?? NO_MARKED_TABLES,
   };
 }
 

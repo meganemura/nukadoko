@@ -29,7 +29,7 @@ const readable = (text: string): ReadableLine => {
 
 const line = (fields: Record<string, unknown>): ReadableLine => readable(JSON.stringify({ trace: traceparent(T, SPANS[0]!), ...fields }));
 
-const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 };
+const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, holds_unknown: 0, commit_unknown: 0, unowned: 0 };
 
 describe("EventSelection", () => {
   it("compiles a selection the format can judge, and nothing else", () => {
@@ -252,7 +252,7 @@ describe("createTraceTally's counts", () => {
     tally.unowned(readable(JSON.stringify({ trace: traceparent(U, SPANS[1]!), kind: "db", table: "scores", op: "insert", committed: true })));
     tally.unowned(readable(JSON.stringify({ trace: traceparent(U, SPANS[1]!), kind: "db", table: "rooms", op: "insert", committed: true })));
     const reading = tally.reading({ truncated: false, replaced: false });
-    expect(reading.counts).toEqual([{ yes: 0, maybe: { unreadable: 1, undefined_kind: 1, unknown_version: 1, field_unknown: 1, commit_unknown: 1, unowned: 1 }, counted: [] }]);
+    expect(reading.counts).toEqual([{ yes: 0, maybe: { unreadable: 1, undefined_kind: 1, unknown_version: 1, field_unknown: 1, holds_unknown: 0, commit_unknown: 1, unowned: 1 }, counted: [], left_out: [] }]);
     expect(reading.unowned).toBe(2);
     expect(rangeOf(reading.counts[0]!, false)).toEqual({ at_least: 0, at_most: null });
   });
@@ -265,6 +265,7 @@ describe("createTraceTally's counts", () => {
       yes: 1,
       maybe: { ...NO_MAYBE, commit_unknown: 1 },
       counted: [{ kind: "db", fields: { op: "insert", table: "events" }, lines: 1 }],
+      left_out: [],
     });
     tally.owned(line({ kind: "tx", id: "t1", phase: "commit" }));
     expect(tally.reading({ truncated: false, replaced: false }).counts[0]).toEqual({
@@ -274,6 +275,7 @@ describe("createTraceTally's counts", () => {
         { kind: "db", fields: { op: "insert", table: "events" }, lines: 1 },
         { kind: "db", fields: { op: "insert", table: "scores" }, lines: 1 },
       ],
+      left_out: [],
     });
   });
 

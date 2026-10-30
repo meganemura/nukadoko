@@ -1,5 +1,6 @@
 import type { DB_OPS, EVENT_KINDS, EventKindName, JsonObject } from "./format.js";
 import { valueText } from "./selection.js";
+import type { MarkedHolds } from "./tables.js";
 
 // Responsibility: what the lines a count counted were, as a record and
 // as words: the lines grouped by the fields that tell one line of the
@@ -18,7 +19,10 @@ import { valueText } from "./selection.js";
 // program's vocabulary, as a step record's `kinds` does, and not the
 // number of lines, and a record lists every group. Only fields the format
 // requires are group fields, so every line that matched holds each of
-// them; the type of GROUP_FIELDS refuses any other.
+// them; the type of GROUP_FIELDS refuses any other. The lines a count left
+// out, since the program marks their table as bookkeeping or
+// infrastructure (tables.ts), are grouped the same way, each group with
+// what its table holds, so the words say why the count did not count it.
 
 type KindFields<K extends EventKindName> = (typeof EVENT_KINDS)[K];
 
@@ -46,6 +50,11 @@ export interface CountedGroup {
   /** Each of `GROUP_FIELDS[kind]`, as the lines hold it, in that order. */
   readonly fields: Readonly<Record<string, string | number | boolean | null>>;
   readonly lines: number;
+}
+
+/** Lines a count left out, since their table holds `holds`. */
+export interface LeftOutGroup extends CountedGroup {
+  readonly holds: MarkedHolds;
 }
 
 /** The lines a count matched, grouped as they are folded, in any order. */
@@ -136,9 +145,21 @@ function totalOf(groups: readonly CountedGroup[]): number {
  * GROUPS_NAMED `..., and 4 more lines in 2 groups`. With `more`, the count
  * reads `1 more line`. Empty for no group. Pure. */
 export function describeCounted(groups: readonly CountedGroup[], more = false): string {
+  return describeGroups(groups, more, (group) => GROUP_WORDS[group.kind](group.fields));
+}
+
+/** The groups a count left out in words, as describeCounted names them,
+ * each with what its table holds: `2 lines: 1 db insert into events
+ * (bookkeeping), 1 db insert into solid_cache_entries (infrastructure)`.
+ * Empty for no group. Pure. */
+export function describeLeftOut(groups: readonly LeftOutGroup[]): string {
+  return describeGroups(groups, false, (group) => `${GROUP_WORDS[group.kind](group.fields)} (${group.holds})`);
+}
+
+function describeGroups<G extends CountedGroup>(groups: readonly G[], more: boolean, wordsOf: (group: G) => string): string {
   if (groups.length === 0) return "";
   const named = groups.slice(0, GROUPS_NAMED).map((group) => {
-    const words = GROUP_WORDS[group.kind](group.fields);
+    const words = wordsOf(group);
     return groups.length === 1 ? words : `${group.lines} ${words}`;
   });
   const rest = groups.slice(GROUPS_NAMED);

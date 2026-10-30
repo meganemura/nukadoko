@@ -227,7 +227,7 @@ describe("parseRunDocument", () => {
       range: { at_least: 0, at_most: null },
       whole: false,
       open: [{ gap: "jobs-pending", job_ids: ["3f2a9c41"] }],
-      maybe: { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 },
+      maybe: { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, holds_unknown: 0, commit_unknown: 0, unowned: 0 },
       lines: 1,
       unreadable: 0,
       unowned: 0,

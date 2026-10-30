@@ -11,6 +11,7 @@ import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
 import { parseList, type ListedPlaces, type ListKind } from "../execution-events/lists.js";
 import type { StepPath } from "../execution-events/path.js";
+import { NO_MARKED_TABLES, tablesOf, type WorldTables } from "../execution-events/tables.js";
 import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldList, RunWorldName } from "../record/run-result.js";
 import type { EventsSlice } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
@@ -537,7 +538,10 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         // A step that could find the events file could append a line the
         // program never wrote, and a claim would read it as the program's.
         const stepEnv = Object.fromEntries(Object.entries(worldEnv).filter(([key]) => !textNamesPlaceholder(recipe.env[key]!, "events")));
-        const view: WorldView = { name, url, env: stepEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix, events: inlet?.path ?? null };
+        // A tables list the world did not read leaves every table's holding
+        // unknown, never state: a count cannot tell which lines it leaves out.
+        const tables: WorldTables = places.tables !== undefined ? tablesOf(places.tables) : listed.tables !== undefined ? { unread: true } : NO_MARKED_TABLES;
+        const view: WorldView = { name, url, env: stepEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix, events: inlet?.path ?? null, tables };
         const running = server;
         const events = inlet;
         // A world at a URL has a log and events nukadoko cannot read; a
@@ -577,7 +581,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
                 const traced = (steps ?? []).flatMap(({ traceId, dir, events: slice }) =>
                   slice === undefined ? [] : [{ traceId, lines: slice.lines, dir, inputs: tallyInputsOfSlice(slice), replaced: slice.open.some((gap) => gap.gap === "file-replaced") }],
                 );
-                const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy, recounts);
+                const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy, recounts, tables);
                 eventsLate = found.late;
                 paths = found.paths;
                 recounted = found.recounted;

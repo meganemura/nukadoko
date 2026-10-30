@@ -1,7 +1,8 @@
 import { createCommitIndex } from "./commit-state.js";
-import { createLineGroups, type CountedGroup } from "./counted.js";
+import { createLineGroups, type CountedGroup, type LeftOutGroup } from "./counted.js";
 import type { EventKindName, JsonObject, ParsedLine, ReadableLine } from "./format.js";
 import { matchLine, type EventSelection } from "./selection.js";
+import { markOf, NO_MARKED_TABLES, tableRule, type WorldTables } from "./tables.js";
 
 // Responsibility: what the lines of one trace say about the work they
 // report, folded in the order the file holds them: how many there are of
@@ -46,6 +47,14 @@ import { matchLine, type EventSelection } from "./selection.js";
 // its commit state is kept until the reading, since a later `tx` line of
 // the trace decides it, and decided then from every line folded so far,
 // in any order.
+//
+// A line on a table the world's tables list marks as bookkeeping or
+// infrastructure is left out of a db selection that names no table
+// (tables.ts), and grouped apart, so a record names every line it left
+// out and why; a line the tables cannot place may match
+// (`holds_unknown`). Only a line that would have counted is named as
+// left out: one that rolled back, or that its fields do not match, is
+// not.
 //
 // Not whole is never read as "nothing more happened": each reason is one
 // gap word, from one closed list, so a reader branches on the word.
@@ -115,7 +124,7 @@ export type EventsGap =
   | { readonly gap: "kind-unreported"; readonly kind: EventKindName };
 
 /** Why a line may match a selection, as a count's `maybe` names it. */
-export const MAYBE_CAUSES = ["unreadable", "undefined_kind", "unknown_version", "field_unknown", "commit_unknown", "unowned"] as const;
+export const MAYBE_CAUSES = ["unreadable", "undefined_kind", "unknown_version", "field_unknown", "holds_unknown", "commit_unknown", "unowned"] as const;
 
 export type MaybeCause = (typeof MAYBE_CAUSES)[number];
 
@@ -128,6 +137,10 @@ export interface SelectionCount {
   readonly maybe: MaybeCounts;
   /** The `yes` lines, grouped by what they were. */
   readonly counted: readonly CountedGroup[];
+  /** The lines that would be `yes` by the selection's fields and that the
+   * count leaves out, since their table holds bookkeeping or
+   * infrastructure, grouped by what they were (module header). */
+  readonly left_out: readonly LeftOutGroup[];
 }
 
 /** What the folded lines say so far. */
@@ -180,19 +193,27 @@ export interface TallyInputs {
   readonly processSpans: readonly string[];
   /** What the counts count, one count each, in order. */
   readonly selections?: readonly EventSelection[];
+  /** What the world's tables list says: none marked when absent. */
+  readonly tables?: WorldTables;
 }
 
 type Maybe = Record<MaybeCause, number>;
 
 function noMaybe(): Maybe {
-  return { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 };
+  return { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, holds_unknown: 0, commit_unknown: 0, unowned: 0 };
 }
+
+/** How a line whose match waits on its commit state counts once it is
+ * decided: as the selection's fields say, as one that may be on a table
+ * the count leaves out, or not at all, its table being left out. */
+type AwaitingAs = "counted" | "unknown" | "left-out";
 
 export function createTraceTally(inputs: TallyInputs): TraceTally {
   const stamped = new Set(inputs.spans);
   const reported = new Set<string>();
   const processSpans = new Set(inputs.processSpans);
   const selections = inputs.selections ?? [];
+  const tables = inputs.tables ?? NO_MARKED_TABLES;
   let processRequests = 0;
   let bare = 0;
   let lines = 0;
@@ -203,9 +224,10 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
   const commits = createCommitIndex();
   const counts = selections.map(() => ({ yes: 0, maybe: noMaybe() }));
   const grouped = selections.map((selection) => createLineGroups(selection.kind));
+  const leftOut = selections.map((selection) => createLineGroups(selection.kind));
   // Per selection, the db lines that match it if their change persisted
   // as it states: decided at each reading (module header).
-  const awaitingCommit = selections.map((): JsonObject[] => []);
+  const awaitingCommit = selections.map((): { readonly object: JsonObject; readonly as: AwaitingAs }[] => []);
   return {
     owned(line) {
       lines += 1;
@@ -213,12 +235,19 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
       commits.note(line);
       selections.forEach((selection, index) => {
         const match = matchLine(selection, line);
-        if (match === "yes") {
-          counts[index]!.yes += 1;
-          grouped[index]!.add(line.object);
-        }
-        else if (match === "commit-state") awaitingCommit[index]!.push(line.object);
-        else if (match !== "no") counts[index]!.maybe[match] += 1;
+        if (match === "no") return;
+        const rule = tableRule(selection, line, tables);
+        const count = counts[index]!;
+        if (match === "commit-state") awaitingCommit[index]!.push({ object: line.object, as: rule === "counted" || rule === "unknown" ? rule : "left-out" });
+        else if (rule === "counted") {
+          if (match === "yes") {
+            count.yes += 1;
+            grouped[index]!.add(line.object);
+          } else count.maybe[match] += 1;
+        } else if (rule === "unknown") count.maybe[match === "yes" ? "holds_unknown" : match] += 1;
+        // A line on a table the count leaves out cannot count, whatever
+        // its other fields hold.
+        else if (match === "yes") leftOut[index]!.add(line.object);
       });
       if (line.state !== "event") return;
       if (line.kind === "request") {
@@ -242,7 +271,9 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
     unowned(line) {
       unowned += 1;
       selections.forEach((selection, index) => {
-        if (matchLine(selection, line) !== "no") counts[index]!.maybe.unowned += 1;
+        if (matchLine(selection, line) === "no") return;
+        const rule = tableRule(selection, line, tables);
+        if (rule === "counted" || rule === "unknown") counts[index]!.maybe.unowned += 1;
       });
     },
     reading(file) {
@@ -264,16 +295,24 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
         const count = counts[index]!;
         const wanted = "committed" in selection && selection.committed === true ? "persisted" : "not-persisted";
         const matched: JsonObject[] = [];
+        const outMatched: JsonObject[] = [];
         let unknown = 0;
-        for (const object of awaitingCommit[index]!) {
+        let holdsUnknown = 0;
+        for (const { object, as } of awaitingCommit[index]!) {
           const state = commits.stateOf(object);
-          if (state === wanted) matched.push(object);
-          else if (state === "unknown") unknown += 1;
+          if (state === "unknown") {
+            if (as !== "left-out") unknown += 1;
+          } else if (state === wanted) {
+            if (as === "counted") matched.push(object);
+            else if (as === "unknown") holdsUnknown += 1;
+            else outMatched.push(object);
+          }
         }
         return {
           yes: count.yes + matched.length,
-          maybe: { ...count.maybe, commit_unknown: count.maybe.commit_unknown + unknown },
+          maybe: { ...count.maybe, holds_unknown: count.maybe.holds_unknown + holdsUnknown, commit_unknown: count.maybe.commit_unknown + unknown },
           counted: grouped[index]!.groups(matched),
+          left_out: leftOut[index]!.groups(outMatched).map((group) => ({ ...group, holds: markOf(tables, group.fields.table)! })),
         };
       });
       return { lines, kinds: Object.fromEntries(kinds), unreadable, unowned, processRequests, whole: open.length === 0, open, counts: decided };

@@ -19,7 +19,7 @@ import { evaluateClaims, judgingBudget, readerNow, type ClaimInputs, type Events
 // it was measured. The run that reads the lines is
 // tests/events-claims-run.test.ts's.
 
-const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 };
+const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, holds_unknown: 0, commit_unknown: 0, unowned: 0 };
 const WRITES = { kind: "db", op: ["insert", "update", "delete", "other"], committed: true } as const;
 const LABEL = "events:post@4 count db where op in [insert, update, delete, other], committed true";
 const COMPARES_LISTED = COUNT_COMPARES.join(", ");

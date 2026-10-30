@@ -237,7 +237,7 @@
 import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { CountRange } from "../execution-events/count.js";
-import type { CountedGroup } from "../execution-events/counted.js";
+import type { CountedGroup, LeftOutGroup } from "../execution-events/counted.js";
 import type { EventSelection } from "../execution-events/selection.js";
 import type { EventsGap, MaybeCounts, TraceGap } from "../execution-events/tally.js";
 
@@ -807,6 +807,9 @@ export interface ClaimComparisonRecord {
   /** A claim on a count of execution events that read them: the lines
    * the count counted, as `events_read.<key>.counted` groups them. */
   readonly counted?: readonly CountedGroup[];
+  /** The lines that count left out, as `events_read.<key>.left_out`
+   * groups them; present when it left one out. */
+  readonly left_out?: readonly LeftOutGroup[];
   readonly actual_from: string;
   readonly view?: ClaimView;
   readonly at?: string;
@@ -1300,6 +1303,12 @@ export interface EventsReadRecord {
    * since the fields name the program's vocabulary, never a value one
    * line holds alone. */
   readonly counted: readonly CountedGroup[];
+  /** The lines the selection's fields match and the count left out,
+   * since the world's tables list marks their table as bookkeeping or
+   * infrastructure and the selection names no table, grouped as
+   * `counted` is, each group with what its table holds; present when the
+   * count left one out. */
+  readonly left_out?: readonly LeftOutGroup[];
   /** Every request the producer stamped has its line, every job enqueued
    * in its trace performed, the selected kind was reported somewhere in
    * the world, and nothing was lost: `open` is empty. */

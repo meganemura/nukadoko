@@ -137,6 +137,7 @@ const CAUSE_WORDS: Readonly<Record<(typeof MAYBE_CAUSES)[number], readonly [stri
   undefined_kind: ["is of a kind the format does not define", "are of a kind the format does not define"],
   unknown_version: ["is of a later version", "are of a later version"],
   field_unknown: ["lacks a selected field or holds an invalid one", "lack a selected field or hold an invalid one"],
+  holds_unknown: ["may be on a table the count leaves out", "may be on tables the count leaves out"],
   commit_unknown: ["has a commit state no line decides", "have a commit state no line decides"],
   unowned: ["carries no step's trace id and may be the step's", "carry no step's trace id and may be the step's"],
 };

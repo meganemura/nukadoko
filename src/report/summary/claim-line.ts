@@ -1,5 +1,5 @@
 import { describeRange } from "../../execution-events/count.js";
-import { describeCounted } from "../../execution-events/counted.js";
+import { describeCounted, describeLeftOut } from "../../execution-events/counted.js";
 import type { ClaimCompare, ClaimComparisonRecord, ClaimEachRecord, ClaimItemDeclaration, ClaimItemRecord } from "../../record/types.js";
 import { deepEqual, fieldMisfit, textFit } from "../../step/evaluate-claims.js";
 
@@ -397,10 +397,14 @@ function reasonText(record: ClaimComparisonRecord | ClaimEachRecord): string {
 
 /** What a count of execution events counted, after its outcome and its
  * reason, under every outcome: a count that held on the wrong table reads
- * as plainly as one that broke on it. */
+ * as plainly as one that broke on it. Then what it left out, since the
+ * program marks their table: a count that held only because it left a
+ * line out says which line and why. */
 function countedText(record: ClaimComparisonRecord | ClaimEachRecord): string {
-  const counted = isEach(record) || record.counted === undefined ? "" : describeCounted(record.counted);
-  return counted === "" ? "" : `; counted ${counted}`;
+  if (isEach(record)) return "";
+  const counted = record.counted === undefined ? "" : describeCounted(record.counted);
+  const leftOut = record.left_out === undefined ? "" : describeLeftOut(record.left_out);
+  return `${counted === "" ? "" : `; counted ${counted}`}${leftOut === "" ? "" : `; left out ${leftOut}`}`;
 }
 
 /** The outcome of the item an `each` line names. */

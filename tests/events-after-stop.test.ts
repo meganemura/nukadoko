@@ -1,4 +1,5 @@
 import * as hegel from "@hegeldev/hegel";
+import { NO_MARKED_TABLES } from "../src/execution-events/tables.js";
 import * as gs from "@hegeldev/hegel/generators";
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -26,7 +27,7 @@ import { op, PREFIX, render, SPANS, T, traceparent, U } from "./helpers/event-li
 // whose claim the whole count judges otherwise is `broke` in its cell.
 
 const WRITES: EventSelection = { kind: "db", op: ["insert", "update", "delete", "other"], committed: true };
-const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, commit_unknown: 0, unowned: 0 };
+const NO_MAYBE: MaybeCounts = { unreadable: 0, undefined_kind: 0, unknown_version: 0, field_unknown: 0, holds_unknown: 0, commit_unknown: 0, unowned: 0 };
 const OF = { step_record_id: "step-1", step: "place-score", line: 4 };
 const scores = (lines: number) => ({ kind: "db" as const, fields: { op: "insert", table: "scores" }, lines });
 
@@ -84,7 +85,7 @@ function scenarioOf(slice: EventsSlice | null, readings: Readonly<Record<string,
 const recountedOf = (yes: number, lines: number, over: Partial<Recounted> = {}): Recounted => ({
   lines,
   unreadable: 0,
-  count: { yes, maybe: NO_MAYBE, counted: yes === 0 ? [] : [scores(yes)] },
+  count: { yes, maybe: NO_MAYBE, counted: yes === 0 ? [] : [scores(yes)], left_out: [] },
   open: [],
   ...over,
 });
@@ -100,6 +101,7 @@ describe("the world's stop counts a reading again", () => {
       until: Date.now() + 1500,
       dir: path.join(dir, "reader"),
       secrets: [],
+      tables: NO_MARKED_TABLES,
     });
     expect(readings.writes).toMatchObject({ range: { at_least: 1, at_most: 1 }, whole: true, lines: 2 });
     // A second insert of the same request, written after the claim read.
@@ -110,7 +112,7 @@ describe("the world's stop counts a reading again", () => {
     expect(places).toEqual([{ scenario: 0, step: 1, key: "writes" }]);
     expect(recounts).toEqual([{ traceId: T, inputs: tallyInputsOfSlice(slice), selection: WRITES, replaced: false }]);
     const { recounted } = collectWorldEvents(file, PREFIX, [], [], path.join(dir, "world", "events.jsonl"), recounts);
-    expect(recounted).toEqual([{ lines: 3, unreadable: 0, count: { yes: 2, maybe: NO_MAYBE, counted: [scores(2)] }, open: [] }]);
+    expect(recounted).toEqual([{ lines: 3, unreadable: 0, count: { yes: 2, maybe: NO_MAYBE, counted: [scores(2)], left_out: [] }, open: [] }]);
 
     const judged = withAfterWorldStop(scenario, (step, key) => (step === 1 && key === "writes" ? recounted[0] : undefined));
     expect(judged.steps[1]!.claims).toEqual([
@@ -209,7 +211,7 @@ describe("afterWorldStop", () => {
 
   it("names what the whole count counted that the claim's did not, and nothing when it counted no more", () => {
     const rankings = { kind: "db" as const, fields: { op: "update", table: "rankings" }, lines: 1 };
-    const more = afterWorldStop(claimOn("writes", { compare: "equal", expected: 1 }), readRecord({ lines: 1 }), recountedOf(3, 4, { count: { yes: 3, maybe: NO_MAYBE, counted: [scores(2), rankings] } }));
+    const more = afterWorldStop(claimOn("writes", { compare: "equal", expected: 1 }), readRecord({ lines: 1 }), recountedOf(3, 4, { count: { yes: 3, maybe: NO_MAYBE, counted: [scores(2), rankings], left_out: [] } }));
     expect(more?.reason).toBe(
       '3 lines of the trace of step "place-score" arrived after this claim was judged on 1 line, and the stop counted 2 more lines: 1 db insert into scores, 1 db update rankings; over all 4 lines, the count is exactly 3, so the claim breaks',
     );
