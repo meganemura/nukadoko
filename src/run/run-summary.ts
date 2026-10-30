@@ -1001,6 +1001,7 @@ function afterStepEndItem(step: RunScenario["steps"][number]): string | undefine
   const parts = [
     ...(late.requests > 0 ? [`${countOf(late.requests, "request", "requests")} in ${cellCode(late.http ?? "http.jsonl")}`] : []),
     ...(late.processes > 0 ? [countOf(late.processes, "process", "processes")] : []),
+    ...((late.mcp ?? 0) > 0 ? [`${countOf(late.mcp!, "MCP call", "MCP calls")} in ${cellCode("mcp.jsonl")}`] : []),
   ];
   return parts.length === 0 ? undefined : `started after the step ended: ${parts.join(", ")}`;
 }

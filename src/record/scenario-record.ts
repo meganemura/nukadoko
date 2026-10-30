@@ -136,6 +136,10 @@ export interface AfterStepEndCounts {
    * those requests' lines, present when `requests` is above 0: the record
    * was written before them, so its `evidence.http` may not name it. */
   readonly http?: "http.jsonl";
+  /** MCP calls the step sent after its record was written, each a line of
+   * the step's mcp.jsonl marked `after_step_end`. Absent when there
+   * were none. */
+  readonly mcp?: number;
 }
 
 /** One Before/After hook's own outcome — a hook that didn't apply to this

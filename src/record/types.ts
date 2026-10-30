@@ -281,6 +281,57 @@ export interface ObservedCounts {
    * writes. Absent when the world has no events file: the program file
    * names no `{events}`, or the run has no world URL. */
   events?: EventsSlice | null;
+  /** How many MCP calls the step sent through a transport `measureMcp`
+   * wrapped, each one a line of the step's mcp.jsonl. Absent when it sent
+   * none. */
+  mcp?: number;
+}
+
+/** One line of mcp.jsonl: a JSON-RPC request or notification a step sent
+ * through a transport `measureMcp` wrapped, and the answer it got
+ * (docs/spec.md "Records"). */
+export interface McpCallLine {
+  /** The JSON-RPC method, such as `tools/call`. */
+  readonly method: string;
+  /** The request's id, as sent. Absent on a notification. */
+  readonly id?: string | number;
+  /** The message was a notification: no answer is expected. */
+  readonly notification?: true;
+  /** The tool a `tools/call` named. */
+  readonly tool?: string;
+  /** The prompt a `prompts/get` named. */
+  readonly prompt?: string;
+  /** The resource a `resources/read`, `resources/subscribe`, or
+   * `resources/unsubscribe` named. */
+  readonly uri?: string;
+  /** The params as sent, as JSON text, `_meta` included. Absent when the
+   * message had none. */
+  readonly params?: KeptText;
+  /** The `traceparent` in `params._meta`, nukadoko's or the step's own;
+   * absent when it went out with none. */
+  readonly traceparent?: string;
+  /** The origins that received `traceparent` as the `traceparent` header
+   * of an HTTP request the transport sent for the call. Absent when none
+   * did: a stdio transport, or a server at another origin than the
+   * world's. */
+  readonly header_sent_to?: readonly string[];
+  /** From the send to the answer. Absent on a notification and on a call
+   * with no answer. */
+  readonly duration_ms?: number;
+  /** The answer's `result`, as JSON text. */
+  readonly result?: KeptText;
+  /** The result said `isError: true`: the tool ran and reported an error. */
+  readonly is_error?: true;
+  /** The answer was a JSON-RPC error: its `code` (`null` when it is not a
+   * number) and the first line of its `message`. */
+  readonly error?: { readonly code: number | null; readonly message: string };
+  /** No answer had come when the step's record was written (`step`), when
+   * the run ended (`run`), or when the transport closed (`closed`). */
+  readonly unanswered?: "step" | "run" | "closed";
+  /** The transport's `send` failed: the first line of what it threw. */
+  readonly send_error?: string;
+  /** The call started after the step's record was written. */
+  readonly after_step_end?: true;
 }
 
 /** A step's slice of the program's execution events (docs/spec.md
@@ -317,6 +368,10 @@ export interface EventsSlice {
   /** Request lines that carry one of `process_spans`: requests a
    * process sent to the world with the TRACEPARENT it got. */
   readonly process_requests: number;
+  /** The span ids of the `traceparent` values nukadoko put in the
+   * `params._meta` of the step's MCP calls (`mcp.jsonl`), at most 1000.
+   * Absent when the step sent none. */
+  readonly mcp_spans?: readonly string[];
   /** Whether the lines say all of the step's work had reported its end
    * when the record was written: `open` is empty. */
   readonly whole: boolean;

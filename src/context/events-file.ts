@@ -130,7 +130,7 @@ export interface EventsReader {
 
 /** What a tally needs of a boundary's trace. */
 export function tallyInputsOf(trace: StampedBoundaryTrace): Omit<TallyInputs, "selections"> {
-  return { spans: trace.spans, spansNotKept: trace.spansNotKept, processes: trace.processes, processSpans: trace.processSpans };
+  return { spans: trace.spans, spansNotKept: trace.spansNotKept, processes: trace.processes, processSpans: trace.processSpans, ...((trace.mcpSpans ?? []).length === 0 ? {} : { mcpSpans: trace.mcpSpans }) };
 }
 
 /** A reader of the events file at `filePath` for the world whose trace
@@ -199,6 +199,7 @@ export function createEventsReader(filePath: string, prefix: string, secrets: Se
         unowned: reading.unowned,
         process_spans: trace.processSpans,
         process_requests: reading.processRequests,
+        ...((trace.mcpSpans ?? []).length === 0 ? {} : { mcp_spans: trace.mcpSpans }),
         whole: reading.whole,
         open: reading.open,
       };

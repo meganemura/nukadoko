@@ -7,6 +7,7 @@ import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js
 import { EVENTS_LATE_FILE_NAME, EVENTS_SLICE_FILE_NAME } from "./events-file.js";
 import { EVENTS_READ_FILE_NAME } from "./events-read.js";
 import { PROGRAM_LOG_LATE_FILE_NAME, PROGRAM_LOG_SLICE_FILE_NAME } from "./program-log-slice.js";
+import { MCP_LOG_FILE_NAME } from "./mcp-call.js";
 import { isProcessOutputFileName } from "./process-output.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
@@ -44,7 +45,7 @@ import { isProcessOutputFileName } from "./process-output.js";
 // the harness file names seeded, so a later step still cannot replace them.
 //
 // Those harness files (`record.json`, `final.png`, `trace.zip`,
-// `http.jsonl`, the step's lines of the program's log,
+// `http.jsonl`, `mcp.jsonl`, the step's lines of the program's log,
 // `program-log.txt` and `program-log-late.txt`, and of its execution
 // events, `events.jsonl` and `events-late.jsonl`) are refused up front,
 // including a spelling that differs only by case
@@ -82,6 +83,7 @@ const HARNESS_EVIDENCE_FILE_NAMES = [
   "trace.zip",
   "requests.zip",
   "http.jsonl",
+  MCP_LOG_FILE_NAME,
   PROGRAM_LOG_SLICE_FILE_NAME,
   PROGRAM_LOG_LATE_FILE_NAME,
   EVENTS_SLICE_FILE_NAME,

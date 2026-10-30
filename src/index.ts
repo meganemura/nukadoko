@@ -39,6 +39,7 @@ export type {
   FixtureUsageEntry,
   HttpOmittedCounts,
   KeptText,
+  McpCallLine,
   ObservedCounts,
   PageErrorEntry,
   PageEventsSnapshot,
@@ -49,6 +50,8 @@ export type {
   UsedEntryWithResult,
 } from "./record/types.js";
 export { runCommand } from "./context/run-command.js";
+export { measureMcp } from "./context/measure-mcp.js";
+export type { McpTransport } from "./context/measure-mcp.js";
 export type { RunCommandOptions, RunCommandResult } from "./context/run-command.js";
 export type { DeclaredLabel, DeclaredLink, DeclaredParameter, DeclaredSnapshot } from "./compat/declared.js";
 export type {

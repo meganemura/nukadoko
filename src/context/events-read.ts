@@ -116,6 +116,7 @@ export function tallyInputsOfSlice(slice: EventsSlice): Omit<TallyInputs, "selec
     spansNotKept: Math.max(0, slice.stamped - spans.length),
     processes: has("processes-unbounded") ? "unbounded" : has("no-requests") || slice.stamped > 0 ? "none" : "ended",
     processSpans: slice.process_spans ?? [],
+    ...(slice.mcp_spans === undefined ? {} : { mcpSpans: slice.mcp_spans }),
   };
 }
 

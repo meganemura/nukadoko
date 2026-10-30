@@ -111,7 +111,11 @@ export function describeGap(gap: EventsGap): string {
     case "producer-not-run":
       return "no earlier line of the scenario ran the step whose events are read";
     case "no-requests":
-      return "the step sent the world no request with a traceparent and ran no process";
+      return "the step sent the world no request with a traceparent, ran no process, and sent no MCP call";
+    case "mcp-unbounded":
+      return gap.calls === 1
+        ? "1 MCP call of the step went to its server by a way no line reports the end of (stdio, or another origin than the world's), and the server may still work for it"
+        : `${gap.calls} MCP calls of the step went to their server by a way no line reports the end of (stdio, or another origin than the world's), and the server may still work for them`;
     case "processes-unbounded":
       return "a process the step ran may still send the world requests, and no line can say that every one reported";
     case "no-lines":

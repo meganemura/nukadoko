@@ -139,6 +139,7 @@ const process = z.looseObject({
 const observed = z.looseObject({
   processes: z.array(process).nullable(),
   http: z.number().int().nullable(),
+  mcp: z.number().int().optional(),
   files: z
     .array(z.looseObject({ path: z.string(), change: z.enum(["added", "changed", "removed"]), bytes: z.number().int().optional() }))
     .nullable(),
@@ -159,6 +160,7 @@ const observed = z.looseObject({
       unowned: z.number().int(),
       process_spans: z.array(z.string()).optional(),
       process_requests: z.number().int().optional(),
+      mcp_spans: z.array(z.string()).optional(),
       whole: z.boolean(),
       open: z.array(eventsGap),
     })
@@ -229,7 +231,9 @@ const step = z.looseObject({
   record_unreadable: z.literal(true).optional(),
   error: z.looseObject({ kind: errorKind.nullable(), message: z.string() }).optional(),
   used: z.array(z.looseObject({ step: z.string(), record: z.string(), result: z.unknown() })).optional(),
-  after_step_end: z.looseObject({ requests: z.number().int(), processes: z.number().int(), http: z.literal("http.jsonl").optional() }).optional(),
+  after_step_end: z
+    .looseObject({ requests: z.number().int(), processes: z.number().int(), http: z.literal("http.jsonl").optional(), mcp: z.number().int().optional() })
+    .optional(),
   program_log_late: z.looseObject({ lines: z.number().int(), file: z.string().nullable(), truncated: z.literal(true).optional() }).optional(),
   events_late: z.looseObject({ lines: z.number().int(), file: z.string().nullable(), truncated: z.literal(true).optional() }).optional(),
   claims: z.array(z.union([eachClaim, comparisonClaim])).optional(),

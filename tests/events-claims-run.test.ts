@@ -127,7 +127,7 @@ describe("a claim on a count of execution events, under nuka run", () => {
       expected_text: "nothing",
       outcome: "unjudged",
       reason:
-        "the events of nothing@18 are not whole (no-requests): the step sent the world no request with a traceparent and ran no process, so the count is at least 0, with no upper bound, and equal 0 is not known",
+        "the events of nothing@18 are not whole (no-requests): the step sent the world no request with a traceparent, ran no process, and sent no MCP call, so the count is at least 0, with no upper bound, and equal 0 is not known",
       measured: { step_record_id: sentNothing.steps[1]!.step_record_id, channel: "events_read.writes" },
     });
 

@@ -262,7 +262,7 @@ function sameShape<T extends object>(wrapper: T, original: (...args: never[]) =>
 
 /** The first line of what was thrown, for a line's `error`. Anything can
  * be thrown, a Symbol or an object whose `toString` throws included. */
-function firstLine(error: unknown): string {
+export function firstLine(error: unknown): string {
   let message: string;
   try {
     message = error instanceof Error ? error.message : String(error);

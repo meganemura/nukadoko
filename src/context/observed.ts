@@ -4,10 +4,12 @@ import type { StepProcesses } from "../execution-events/tally.js";
 import type { ObservedCounts, ProcessEntry, ProcessOutput, UnmeasuredEntry } from "../record/types.js";
 import { redact, redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
-import { type ChannelHttpLine, type ChannelRecorder, type PendingCapture, type SocketUse, withoutChannelRecording } from "./channels.js";
+import { type ChannelHttpLine, type ChannelRecorder, type PendingCapture, type SocketUse, type WaitEnd, withoutChannelRecording } from "./channels.js";
 import { MAX_ENTRIES } from "./file-snapshot.js";
 import { type HttpLogEntry, httpLogEntryOf } from "./http-log.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
+import { MCP_LOG_FILE_NAME, mcpLineOf, type McpCallSeen } from "./mcp-call.js";
+import type { McpCallStart, McpRecorder } from "./measure-mcp.js";
 import { lateProcessFileName, processOutputFileName } from "./process-output.js";
 import type { ProcessRecorder } from "./run-command.js";
 import {
@@ -21,15 +23,17 @@ import {
   type ScratchState,
   snapshotScratch,
 } from "./step-files.js";
-import { newSpanId, newTraceId, stampsUrl, traceparentOf } from "./trace-context.js";
+import { newSpanId, newTraceId, originOf, stampsUrl, traceparentOf } from "./trace-context.js";
 
 // Responsibility: what one step boundary reached outside its own code, the
 // step record's `observed` (docs/spec.md "Records"): the processes
 // `runCommand` (run-command.ts) started, the requests the step's process
-// sent, the files the step changed, and what nukadoko could not measure.
-// The channel patches (channels.ts) and runCommand hand it what they saw;
-// this module owns the record's shape, the files beside the record
-// (process output, http.jsonl lines), and redaction of both.
+// sent, the MCP calls it sent through a measured transport, the files the
+// step changed, and what nukadoko could not measure. The channel patches
+// (channels.ts), runCommand, and measureMcp (measure-mcp.ts) hand it what
+// they saw; this module owns the record's shape, the files beside the
+// record (process output, http.jsonl and mcp.jsonl lines), and redaction
+// of them.
 //
 // Owned and reset by the executor's step boundary (create-context.ts's
 // `beginStep`), never reachable from a step's own `run`: a step cannot
@@ -75,9 +79,9 @@ import { newSpanId, newTraceId, stampsUrl, traceparentOf } from "./trace-context
 // to the step or to a `runCommand` process. The program's own work shows
 // in its log, not in `observed.files`.
 
-/** What a step's scope holds: the recorder runCommand and the channel
- * patches write into. */
-export type StepRecorder = ProcessRecorder & ChannelRecorder;
+/** What a step's scope holds: the recorder runCommand, the channel
+ * patches, and measureMcp write into. */
+export type StepRecorder = ProcessRecorder & ChannelRecorder & McpRecorder;
 
 /** What the current boundary knows of its trace, for the step's program
  * log slice (program-log-slice.ts). */
@@ -107,6 +111,9 @@ export interface StampedBoundaryTrace extends BoundaryTrace {
   /** The span ids of the `TRACEPARENT` values the boundary gave its
    * processes, at most MAX_KEPT_SPANS of them. */
   readonly processSpans: readonly string[];
+  /** The span ids of the `traceparent` values the boundary put in its MCP
+   * calls' `params._meta`, at most MAX_KEPT_SPANS of them. */
+  readonly mcpSpans?: readonly string[];
 }
 
 /** How many span ids a boundary keeps: a step that sends more requests
@@ -118,6 +125,7 @@ const MAX_KEPT_SPANS = 1000;
 export interface AfterStepEnd {
   readonly requests: number;
   readonly processes: number;
+  readonly mcp: number;
 }
 
 export interface ObservedCollector extends StepRecorder {
@@ -161,9 +169,10 @@ interface Boundary {
    * output and request lines go whenever they finish. */
   readonly dir: string | undefined;
   closed: boolean;
-  readonly afterEnd: { requests: number; processes: number };
+  readonly afterEnd: { requests: number; processes: number; mcp: number };
   processes: (ProcessEntry | undefined)[] | null;
   http: number;
+  mcp: number;
   /** The requests of this boundary whose line is not written yet. */
   readonly pending: Set<PendingCapture>;
   readonly touched: Map<string, Identity | Uninspected>;
@@ -180,6 +189,7 @@ interface Boundary {
   readonly spans: string[];
   spansNotKept: number;
   readonly processSpans: string[];
+  readonly mcpSpans: string[];
 }
 
 function newBoundary(dir: string | undefined, traceId: string | undefined): Boundary {
@@ -191,10 +201,12 @@ function newBoundary(dir: string | undefined, traceId: string | undefined): Boun
     spans: [],
     spansNotKept: 0,
     processSpans: [],
+    mcpSpans: [],
     closed: false,
-    afterEnd: { requests: 0, processes: 0 },
+    afterEnd: { requests: 0, processes: 0, mcp: 0 },
     processes: null,
     http: 0,
+    mcp: 0,
     pending: new Set(),
     touched: new Map(),
     touchesOverflowed: false,
@@ -384,7 +396,96 @@ export function createObservedCollector(
       isWorldUrl(url: string, base?: string): boolean {
         return trace !== undefined && stampsUrl(trace.origin, url, base);
       },
+      startMcpCall(stamp: boolean, atEnd: (end: WaitEnd) => McpCallSeen): McpCallStart {
+        return startMcpCall(current(), stamp, atEnd, recorderFor);
+      },
     };
+  }
+
+  // One MCP call (measure-mcp.ts): counted in the boundary it started in,
+  // with a span of its own when nukadoko stamps it. The transport's send
+  // runs under a recorder of the same boundary whose `traceparent` for a
+  // request to the world is the call's, so an HTTP transport's request
+  // carries the value `params._meta` does and is counted as a stamped
+  // request with that span, once however many requests the send makes.
+  function startMcpCall(
+    state: Boundary,
+    stamp: boolean,
+    atEnd: (end: WaitEnd) => McpCallSeen,
+    recorderOf: (current: () => Boundary) => StepRecorder,
+  ): McpCallStart {
+    const late = state.closed;
+    if (late) state.afterEnd.mcp += 1;
+    else state.mcp += 1;
+    const dir = state.dir;
+    const span = stamp && trace !== undefined && state.traceId !== undefined ? newSpanId() : undefined;
+    const traceparent = span === undefined ? undefined : traceparentOf(state.traceId!, span);
+    if (span !== undefined) {
+      state.lastStampAt = Date.now();
+      if (state.mcpSpans.length < MAX_KEPT_SPANS) state.mcpSpans.push(span);
+    }
+    const headerSentTo: string[] = [];
+    let spanSent = false;
+    const draft = (url: string, base?: string): { readonly value: string; sent(): void } | undefined => {
+      if (traceparent === undefined || trace === undefined || !stampsUrl(trace.origin, url, base)) return undefined;
+      let counted = false;
+      return {
+        value: traceparent,
+        sent() {
+          if (counted) return;
+          counted = true;
+          state.stamped += 1;
+          state.lastStampAt = Date.now();
+          if (!spanSent) {
+            spanSent = true;
+            if (state.spans.length < MAX_KEPT_SPANS) state.spans.push(span!);
+            else state.spansNotKept += 1;
+          }
+          const origin = originOf(url, base);
+          if (origin !== undefined && !headerSentTo.includes(origin)) headerSentTo.push(origin);
+        },
+      };
+    };
+    const sending: StepRecorder | undefined =
+      traceparent === undefined
+        ? undefined
+        : {
+            ...recorderOf(() => state),
+            draftTraceparent: draft,
+            traceparentFor(url: string, base?: string): string | undefined {
+              const drafted = draft(url, base);
+              drafted?.sent();
+              return drafted?.value;
+            },
+          };
+    let written = false;
+    let settle: () => void = () => {};
+    const done = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const release = recorderOf(() => state).track({ done, finalize: (end) => write(atEnd(end)) });
+    function write(seen: McpCallSeen): void {
+      if (written) return;
+      written = true;
+      if (typeof release === "function") release();
+      settle();
+      if (dir !== undefined) appendMcpLine(dir, seen, headerSentTo, late);
+    }
+    return { traceparent, sending, write };
+  }
+
+  function appendMcpLine(dir: string, seen: McpCallSeen, headerSentTo: readonly string[], late: boolean): void {
+    const line = { ...mcpLineOf(seen, headerSentTo, secrets), ...(late ? { after_step_end: true as const } : {}) };
+    const text = `${JSON.stringify(redact(line, secrets))}\n`;
+    withoutChannelRecording(() => {
+      try {
+        mkdirSync(dir, { recursive: true });
+        appendFileSync(path.join(dir, MCP_LOG_FILE_NAME), text);
+      } catch {
+        // Left out, as a process's output is: the call already happened,
+        // and `observed.mcp` still counts it.
+      }
+    });
   }
 
   function appendLine(dir: string, line: ChannelHttpLine, late: boolean): void {
@@ -457,7 +558,7 @@ export function createObservedCollector(
           ? [{ kind: "files" as const, detail: `more than ${MAX_ENTRIES} paths written; the rest are not listed` }]
           : []),
       ];
-      return { processes, http: state.http === 0 ? null : state.http, files, unmeasured };
+      return { processes, http: state.http === 0 ? null : state.http, files, unmeasured, ...(state.mcp === 0 ? {} : { mcp: state.mcp }) };
     },
     close(): void {
       boundary.closed = true;
@@ -479,6 +580,7 @@ export function createObservedCollector(
         spansNotKept: state.spansNotKept,
         processes: processesOf(state.processes),
         processSpans: [...state.processSpans],
+        mcpSpans: [...state.mcpSpans],
       };
     },
   };

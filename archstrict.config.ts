@@ -202,6 +202,7 @@ export default {
         "load-playwright.ts",
         "poll.ts",
         "run-command.ts",
+        "measure-mcp.ts",
         "windows-command.ts",
         "trace-actions.ts",
         "events-file.ts",

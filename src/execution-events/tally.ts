@@ -34,7 +34,14 @@ import { markOf, NO_MARKED_TABLES, tableRule, type WorldTables } from "./tables.
 // world's stop counts again what came later. Its `TRACEPARENT` names a
 // span of its own, so a request line that carries one is the process's
 // request, told apart from the step's and never waited for by span: the
-// process may send nothing.
+// process may send nothing. An MCP call the step sent through measureMcp
+// (src/context/measure-mcp.ts) carries a span of its own in
+// `params._meta`. Over HTTP to the world the same value is the request's
+// header, so that request's line closes the call. A call that reached its
+// server another way (stdio, or another origin) has no line that closes
+// it, and the server may go on working for it after it answers, so it
+// stays open. Either one is work the step caused, so a step whose only
+// work was an MCP call has no `no-requests` gap.
 //
 // A count never drops a line it cannot read as a match or a miss. A line
 // of the trace that is unreadable, of a kind the format does not define,
@@ -69,6 +76,7 @@ export const GAP_WORDS = [
   "producer-not-run",
   "no-requests",
   "processes-unbounded",
+  "mcp-unbounded",
   "no-lines",
   "request-unreported",
   "jobs-pending",
@@ -82,14 +90,20 @@ export type GapWord = (typeof GAP_WORDS)[number];
 
 /** A gap the lines of one trace show. */
 export type TraceGap =
-  /** The step sent the world no request with a `traceparent` and ran
-   * no `runCommand` process: it caused no work a line could report the
-   * end of, and no line can say that it caused none. */
+  /** The step sent the world no request with a `traceparent`, ran no
+   * `runCommand` process, and sent no MCP call nukadoko stamped: it
+   * caused no work a line could report the end of, and no line can say
+   * that it caused none. */
   | { readonly gap: "no-requests" }
   /** A `runCommand` process the step ran may still send the world
    * requests (StepProcesses), and a program may send any number of them
    * or none, so no line can say all of them reported. */
   | { readonly gap: "processes-unbounded" }
+  /** This many of the step's MCP calls reached their server by a way no
+   * line reports the end of: over stdio, or over HTTP to another origin
+   * than the world's. The server may do work for a call after it
+   * answers, so no line can say all of it reported. */
+  | { readonly gap: "mcp-unbounded"; readonly calls: number }
   /** The step stamped requests and no line carries its trace id: no
    * writer, a wrong variable, or lines still buffered. */
   | { readonly gap: "no-lines" }
@@ -191,6 +205,10 @@ export interface TallyInputs {
   readonly processes: StepProcesses;
   /** The span ids of the `TRACEPARENT` values its processes got. */
   readonly processSpans: readonly string[];
+  /** The span ids of the `traceparent` values its MCP calls carried in
+   * `params._meta`. A span that also went out as the header of a stamped
+   * request is that request's, and its `request` line closes the call. */
+  readonly mcpSpans?: readonly string[];
   /** What the counts count, one count each, in order. */
   readonly selections?: readonly EventSelection[];
   /** What the world's tables list says: none marked when absent. */
@@ -212,6 +230,7 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
   const stamped = new Set(inputs.spans);
   const reported = new Set<string>();
   const processSpans = new Set(inputs.processSpans);
+  const mcpSpans = [...new Set(inputs.mcpSpans ?? [])];
   const selections = inputs.selections ?? [];
   const tables = inputs.tables ?? NO_MARKED_TABLES;
   let processRequests = 0;
@@ -281,9 +300,11 @@ export function createTraceTally(inputs: TallyInputs): TraceTally {
       const unmatched = Math.max(0, requests - reported.size - bare);
       const pending = [...jobs].filter(([, job]) => job.performs < job.enqueues).map(([id]) => id);
       const silent = requests > 0 && lines === 0 && unreadable === 0 && !file.replaced;
+      const mcpUnbounded = mcpSpans.filter((span) => !stamped.has(span)).length;
       const open: TraceGap[] = [
-        ...(requests === 0 && inputs.processes === "none" ? [{ gap: "no-requests" as const }] : []),
+        ...(requests === 0 && inputs.processes === "none" && mcpSpans.length === 0 ? [{ gap: "no-requests" as const }] : []),
         ...(inputs.processes === "unbounded" ? [{ gap: "processes-unbounded" as const }] : []),
+        ...(mcpUnbounded > 0 ? [{ gap: "mcp-unbounded" as const, calls: mcpUnbounded }] : []),
         ...(silent ? [{ gap: "no-lines" as const }] : []),
         ...(!silent && unmatched > 0 ? [{ gap: "request-unreported" as const, requests: unmatched }] : []),
         ...(pending.length > 0 ? [{ gap: "jobs-pending" as const, job_ids: pending }] : []),
