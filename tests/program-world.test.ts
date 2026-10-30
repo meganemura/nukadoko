@@ -94,7 +94,7 @@ describe("a world nukadoko serves", () => {
       ),
     );
 
-    expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map(), eventsLate: new Map(), paths: new Map(), recounted: [] });
+    expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map(), eventsLate: new Map(), paths: new Map(), stateWrites: new Map(), recounted: [] });
     expect(await answers(port)).toBe(false);
     expect(readFileSync(path.join(dir, "program.log"), "utf8")).toBe("$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}\n");
     expect(world.record()).toEqual({
@@ -400,6 +400,8 @@ describe("a world nukadoko does not serve", () => {
       dir: path.join(runDir, "worlds", "pr-12"),
       tracePrefix: expect.stringMatching(/^[0-9a-f]{8}$/),
       events: null,
+      // A program file with no tables list marks no table.
+      tables: { marked: {} },
     });
     expect(progress.text()).toBe("");
     await world.stop();
