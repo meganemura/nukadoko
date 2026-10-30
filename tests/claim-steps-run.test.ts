@@ -2767,6 +2767,11 @@ export default defineStep({
       step("the output has no password field", "said: z.string()", `{ actual: "printed", view: "text", compare: "lacks-field", expected: { literal: "password" } }`),
       "claims[0] reads its actual value through view text, which always makes a string and never an object, so lacks-field always breaks. Read the text with view json, or claim a value that is an object",
     ],
+    [
+      "has-fields on a value read as lines",
+      step("the output reads", "fields: z.string(), said: z.string()", `{ actual: "printed", view: "lines", compare: "has-fields", expected: "fields", expected_view: "json" }, { actual: "said", compare: "equal", expected: { observe: "printed" } }`),
+      "claims[0] reads its actual value through view lines, which always makes an array and never an object, so has-fields always breaks. Read the text with view json, or claim a value that is an object",
+    ],
   ])("refuses %s", async (_name, source, message) => {
     const rootDir = await project({
       "features/steps/claim.ts": source,

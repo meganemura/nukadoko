@@ -1411,9 +1411,10 @@ describe("where", () => {
     const split = tc.draw(gs.integers({ minValue: 0, maxValue: segments.length }));
     const actual = segments.slice(0, split).join(".");
     const at = segments.slice(split).join(".");
-    // defineStep refuses lacks-field on a text with no at after it, which is
-    // never an object.
-    const view = tc.draw(gs.sampledFrom(compare === "lacks-field" && at === "" ? ([undefined, "json"] as const) : ([undefined, "text", "json"] as const)));
+    // defineStep refuses a text with no at after it under a compare that
+    // reads an array, an object, or a number, which a text never is.
+    const readsText = ["equal", "not-equal", "is-a", "contains-text", "starts-with-text", "ends-with-text", "matches", "fits-text"].includes(compare);
+    const view = tc.draw(gs.sampledFrom(!readsText && at === "" ? ([undefined, "json"] as const) : ([undefined, "text", "json"] as const)));
     // defineStep refuses has-fields on a sentence key it does not read as JSON.
     const read = compare === "has-fields" ? { expected_view: "json" as const } : {};
     return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected, ...read };
@@ -2305,6 +2306,53 @@ describe("an expected value a compare can never judge as the sentence means it",
       const claim = { actual: "result", compare: "has-fields", expected: "fields", ...(view === undefined ? {} : { expected_view: view }) };
       expect(claimsProblem([claim], literalShape("the result reads"))).toContain("never an object, so has-fields always breaks");
       expect(claimsProblem([{ ...claim, expected_view: "json" }], literalShape("the result reads"))).toBeNull();
+    }));
+
+  it("refuses a view that always makes a type the compare does not read, with no at or count after it, on a claim and on an item", () =>
+    hegel.test((tc) => {
+      // The type each compare reads on its actual side (docs/spec.md "The
+      // compares"); equal, not-equal, and is-a read any.
+      const reads: Record<string, string> = {
+        "contains-text": "a string",
+        "starts-with-text": "a string",
+        "ends-with-text": "a string",
+        matches: "a string",
+        "fits-text": "a string",
+        "has-item": "an array",
+        "has-same-items": "an array",
+        "has-fields": "an object",
+        "lacks-field": "an object",
+        "greater-than": "a number",
+        "at-least": "a number",
+        "less-than": "a number",
+        "at-most": "a number",
+      };
+      const makes: Record<string, string> = { text: "a string", lines: "an array", "comma-list": "an array" };
+      const compare = tc.draw(gs.sampledFrom(CLAIM_COMPARES.filter((name) => name !== "fits-aria-snapshot")));
+      const view = tc.draw(gs.sampledFrom(["text", "lines", "comma-list", "json"] as const));
+      const at = tc.draw(gs.booleans());
+      const count = tc.draw(gs.booleans()) && COUNT_COMPARES.includes(compare);
+      const item = tc.draw(gs.booleans());
+      const expected =
+        compare === "has-fields"
+          ? { expected: "fields", expected_view: "json" }
+          : compare === "lacks-field"
+            ? { expected: { literal: "password" } }
+            : compare === "is-a"
+              ? { expected: { literal: "uuid" } }
+              : { expected: "value" };
+      const entry = { actual: "a", view, ...(at ? { at: "0" } : {}), ...(count ? { count: true } : {}), compare, ...expected };
+      const claim = item ? { actual: "result", each: { claims: [entry] } } : { ...entry, actual: "result" };
+      const problem = claimsProblem([claim as Claim], literalShape("the result has no password field and is a uuid"));
+      const label = item ? "claims[0].each.claims[0]" : "claims[0]";
+      const made = makes[view];
+      if (count && view === "text" && !at) {
+        expect(problem).toContain(`${label} counts the items of a value read through view text`);
+      } else if (!at && !count && made !== undefined && reads[compare] !== undefined && reads[compare] !== made) {
+        expect(problem).toContain(`${label} reads its actual value through view ${view}, which always makes ${made} and never ${reads[compare]}, so ${compare} always breaks. `);
+      } else {
+        expect(problem).toBeNull();
+      }
     }));
 
   it("refuses is-a with a literal that names no kind, or a kind its view always makes, and takes any other kind", () =>

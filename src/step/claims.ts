@@ -894,9 +894,7 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
         : `reads args.${claim.expected} through expected_view ${view}, which makes ${article(VIEW_MAKES[view]!)}`;
     throw new InvalidClaimError(`${label}.expected ${what}, never an object, so has-fields always breaks. Read the docstring as JSON with expected_view: "json"`);
   },
-  // The expected side names one field, so it is a word and never a list,
-  // and a field can be absent only from an object: a view that always
-  // makes a string or an array leaves no field to lack.
+  // The expected side names one field, so it is a word and never a list.
   "lacks-field": (label, claim) => {
     const literal = literalOf(claim.expected);
     if (literal !== null && typeof literal.literal !== "string") {
@@ -908,13 +906,6 @@ const COMPARE_SIDES: Partial<Record<ClaimCompare, (label: string, claim: Record<
     if (expectedView !== undefined && VIEW_MAKES[expectedView] === "array") {
       throw new InvalidClaimError(
         `${label}.expected reads args.${String(claim.expected)} through expected_view ${expectedView}, which makes an array and never the name of a field, so lacks-field always breaks. Name one field, and leave expected_view out`,
-      );
-    }
-    const view = claim.view as (typeof CLAIM_VIEWS)[number] | undefined;
-    const made = view === undefined || claim.at !== undefined ? null : VIEW_MAKES[view];
-    if (made !== null) {
-      throw new InvalidClaimError(
-        `${label} reads its actual value through view ${view!}, which always makes ${article(made)} and never an object, so lacks-field always breaks. Read the text with view json, or claim a value that is an object`,
       );
     }
   },
@@ -997,6 +988,48 @@ function checkCount(label: string, claim: Record<string, unknown>): void {
   }
 }
 
+/** The JSON type a compare reads on its actual side, for each compare that
+ * reads one type alone. equal and not-equal read the expected value's
+ * type, and is-a reads any. */
+const ACTUAL_READS: Partial<Record<ClaimCompare, "string" | "array" | "object" | "number">> = {
+  "contains-text": "string",
+  "starts-with-text": "string",
+  "ends-with-text": "string",
+  matches: "string",
+  "fits-text": "string",
+  "has-item": "array",
+  "has-same-items": "array",
+  "has-fields": "object",
+  "lacks-field": "object",
+  "greater-than": "number",
+  "at-least": "number",
+  "less-than": "number",
+  "at-most": "number",
+};
+
+/** How to claim the value a view leaves, by the type the compare reads. */
+const READS_INSTEAD: Readonly<Record<"string" | "array" | "object" | "number", string>> = {
+  string: "Read the text with view text, or claim each line or item with each",
+  array: "Read the text with view lines or comma-list, or claim a value that is an array",
+  object: "Read the text with view json, or claim a value that is an object",
+  number: "Read the text with view json, or count the lines or items with count: true",
+};
+
+/** Refuses a claim whose view always makes a type its compare does not
+ * read, with no `at` to read inside the viewed value and no count to make
+ * a number of it: the view applies to a string alone, so the claim breaks
+ * on every value, a string or not. */
+function checkActualView(label: string, claim: Record<string, unknown>): void {
+  if (claim.view === undefined || claim.at !== undefined || claim.count !== undefined) return;
+  const view = claim.view as (typeof CLAIM_VIEWS)[number];
+  const reads = ACTUAL_READS[claim.compare as ClaimCompare];
+  const made = VIEW_MAKES[view];
+  if (reads === undefined || made === null || made === reads) return;
+  throw new InvalidClaimError(
+    `${label} reads its actual value through view ${view}, which always makes ${article(made)} and never ${article(reads)}, so ${String(claim.compare)} always breaks. ${READS_INSTEAD[reads]}`,
+  );
+}
+
 /** Refuses a `fits-aria-snapshot` claim the run could not judge as the
  * line states it. Its actual value is the ARIA snapshot nukadoko takes of
  * the locator or page `observe` returns at `actual`, so it reads nothing an
@@ -1063,6 +1096,7 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   checkExpectedView(label, claim, shape);
   checkCount(label, claim);
   COMPARE_SIDES[claim.compare as ClaimCompare]?.(label, claim);
+  checkActualView(label, claim);
   // Not a row of COMPARE_SIDES: it needs to know where the claim sits and
   // what its actual reads.
   if (claim.compare === ARIA_SNAPSHOT_COMPARE) checkAriaSnapshot(label, claim, shape, where, actualFromObserve);
