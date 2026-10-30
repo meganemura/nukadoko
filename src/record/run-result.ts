@@ -7,6 +7,7 @@ import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
 import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStatus, ScenarioStepStatus, ScenarioStop } from "./scenario-record.js";
 import type { CountRange } from "../execution-events/count.js";
 import type { PathKey, StepPath } from "../execution-events/path.js";
+import type { MarkedHolds } from "../execution-events/tables.js";
 import type { TraceGap } from "../execution-events/tally.js";
 import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, ObservedCounts } from "./types.js";
 
@@ -471,7 +472,14 @@ export interface RunPathComparison {
    * world wrote no execution events; `null` when they were. */
   readonly unread: string | null;
   /** The criteria by `result`, and those not compared. */
-  readonly counts: { readonly changed: number; readonly open: number; readonly same_so_far: number; readonly same: number; readonly not_compared: number };
+  readonly counts: {
+    readonly changed: number;
+    readonly open: number;
+    readonly same_so_far: number;
+    readonly marked_only: number;
+    readonly same: number;
+    readonly not_compared: number;
+  };
   /** Each criterion compared, in the table's row order. */
   readonly criteria: readonly RunPathCriterion[];
   /** Each criterion not compared, with why, in the table's row order. */
@@ -489,11 +497,14 @@ export interface RunPathCriterion {
   readonly feature: string;
   readonly line: number;
   readonly name: string;
-  /** `changed` when a step has a decided difference or ran on one side
-   * only, `open` when every difference is one a side's missing lines
-   * could still close, `same_so_far` when each of those reads the same
-   * on both sides under the same gap words, `same` otherwise. */
-  readonly result: "changed" | "open" | "same_so_far" | "same";
+  /** Over every difference not on a table the program marks as
+   * bookkeeping or infrastructure: `changed` when a step has a decided
+   * difference or ran on one side only, `open` when every difference is
+   * one a side's missing lines could still close, `same_so_far` when each
+   * of those reads the same on both sides under the same gap words.
+   * `marked_only` when every difference is on a marked table, and `same`
+   * when there is none. */
+  readonly result: "changed" | "open" | "same_so_far" | "marked_only" | "same";
   /** The execution each side is read from, its cell's first, with the
    * cell's outcome. */
   readonly a: RunPathExecution;
@@ -529,8 +540,9 @@ export type RunPathStep =
    * stopped before it. What it did is the step's own `path`. */
   | { readonly line: number | null; readonly text: string; readonly ran: "a" | "b" };
 
-/** One entry of a step's path, with the range of its count on each side. */
-export type RunPathDifference = PathKey & { readonly a: CountRange; readonly b: CountRange };
+/** One entry of a step's path, with the range of its count on each side,
+ * and what its table holds when either side's tables list marks it. */
+export type RunPathDifference = PathKey & { readonly holds?: MarkedHolds; readonly a: CountRange; readonly b: CountRange };
 
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
 export interface RunEnvironment {

@@ -147,7 +147,7 @@ describe("each step's path in run.json, and the paths of two environments compar
       a: { world: "head", environment: "reorder-off" },
       b: { world: "head", environment: "reorder-on" },
       unread: null,
-      counts: { changed: 1, open: 0, same_so_far: 1, same: 4, not_compared: 0 },
+      counts: { changed: 1, open: 0, same_so_far: 1, marked_only: 0, same: 4, not_compared: 0 },
       not_compared: [],
     });
     expect(pair!.criteria.map((criterion) => [criterion.line, criterion.result])).toEqual([

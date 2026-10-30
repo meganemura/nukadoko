@@ -243,6 +243,25 @@ describe("comparePaths", () => {
       expect(criterion.result === "same_so_far").toBe(criterion.steps !== undefined && alike);
     }));
 
+  it("labels a difference on a marked table with what it holds and changes nothing else it lists, and reads a criterion that differs only there as marked_only", () =>
+    hegel.test((tc) => {
+      const one = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 2 }));
+      const other = tc.draw(gs.arrays(stepPath, { minSize: one.length, maxSize: one.length }));
+      const mark = (paths: readonly StepPath[]): StepPath[] =>
+        paths.map((path) => ({ ...path, entries: path.entries.map((entry) => (entry.kind === "db" && entry.table === "rooms" ? { ...entry, holds: "bookkeeping" as const } : entry)) }));
+      const plain = compare({ paths: one }, { paths: other }).criteria[0]!;
+      const marked = compare({ paths: mark(one) }, { paths: mark(other) }).criteria[0]!;
+      const unlabelled = (marked.steps ?? []).map((step) =>
+        step.ran === "both" ? { ...step, changed: step.changed.map(({ holds: _, ...difference }) => difference), open: step.open.map(({ holds: _, ...difference }) => difference) } : step,
+      );
+      expect(unlabelled).toEqual(plain.steps ?? []);
+      const differences = (marked.steps ?? []).flatMap((step) => (step.ran === "both" ? [...step.changed, ...step.open] : []));
+      for (const difference of differences) expect(difference.holds !== undefined).toBe(difference.kind === "db" && difference.table === "rooms");
+      const onlyMarked = (marked.steps ?? []).length > 0 && (marked.steps ?? []).every((step) => step.ran === "both") && differences.every((difference) => difference.holds !== undefined);
+      expect(marked.result === "marked_only").toBe(onlyMarked);
+      if (marked.result !== "marked_only") expect(marked.result === "same").toBe(plain.result === "same");
+    }));
+
   it("compares two environments by their steps, names a step that ran on one side only, and keeps the flag out", () => {
     const off = [whole({ requests: [REQUESTS[1]], entries: [{ kind: "flag", name: "quick_reorder", side: "off", count: 1, gates: ["boolean"] }] })];
     const on = [
@@ -254,7 +273,7 @@ describe("comparePaths", () => {
       a: { world: "head", environment: "reorder-off" },
       b: { world: "head", environment: "reorder-on" },
       unread: null,
-      counts: { changed: 1, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
+      counts: { changed: 1, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 },
       criteria: [
         {
           feature: FEATURE,
@@ -307,7 +326,7 @@ describe("comparePaths", () => {
     const pending = whole({ requests: [REQUESTS[0]], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }], open: [GAPS[0]!] });
     const later = whole({ requests: [REQUESTS[0]], entries: [{ kind: "db", table: "scores", op: "insert", count: 1 }], open: [{ gap: "jobs-pending", job_ids: ["77aa"] }] });
     const alike = compare({ paths: [pending] }, { paths: [later] });
-    expect(alike.counts).toEqual({ changed: 0, open: 0, same_so_far: 1, same: 0, not_compared: 0 });
+    expect(alike.counts).toEqual({ changed: 0, open: 0, same_so_far: 1, marked_only: 0, same: 0, not_compared: 0 });
     expect(alike.criteria[0]!.steps).toEqual([
       { line: 4, text: "step 1", ran: "both", changed: [], open: [{ kind: "db", table: "scores", op: "insert", a: { at_least: 1, at_most: null }, b: { at_least: 1, at_most: null } }], gaps: { a: [GAPS[0]], b: [{ gap: "jobs-pending", job_ids: ["77aa"] }] } },
     ]);
@@ -334,7 +353,7 @@ describe("comparePaths", () => {
         a: { world: "head", environment: "reorder-off" },
         b: { world: "head", environment: "reorder-on" },
         unread: "world reorder-on runs at http://127.0.0.1:4100, which nukadoko did not start, so it read no execution events there",
-        counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
+        counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 },
         criteria: [],
         not_compared: [],
       },
@@ -344,7 +363,7 @@ describe("comparePaths", () => {
 
   it("names a criterion that did not run on a side as not compared", () => {
     const document = documentOf([{ line: 3, name: "a reorder goes through", steps: 1, sides: { "reorder-on": { paths: [whole()] } } }]);
-    expect(comparePaths(document)[0]).toMatchObject({ counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 1 }, criteria: [], not_compared: [{ feature: FEATURE, line: 3, reason: "did not run in reorder-off" }] });
+    expect(comparePaths(document)[0]).toMatchObject({ counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 1 }, criteria: [], not_compared: [{ feature: FEATURE, line: 3, reason: "did not run in reorder-off" }] });
   });
 });
 
@@ -375,7 +394,7 @@ describe("comparePaths against the base", () => {
       a: { world: "base", environment: "reorder-off" },
       b: { world: "head", environment: "reorder-off" },
       unread: null,
-      counts: { changed: 1, open: 0, same_so_far: 0, same: 0, not_compared: 1 },
+      counts: { changed: 1, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 1 },
       criteria: [
         {
           feature: FEATURE,
@@ -411,7 +430,7 @@ describe("comparePaths against the base", () => {
       table: { ...tagged.table, rows: tagged.table.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => (cell.world === "head" && cell.environment === "reorder-off" ? { ...cell, role: "control" as const } : cell)) })) },
     };
     const [off] = comparePaths(document);
-    expect(off).toMatchObject({ a: { environment: "reorder-off" }, counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 }, criteria: [], not_compared: [] });
+    expect(off).toMatchObject({ a: { environment: "reorder-off" }, counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 }, criteria: [], not_compared: [] });
   });
 
   it("says why a base whose program file names no {events} was not compared, and gives no base pair when neither side read events", () => {
@@ -422,7 +441,7 @@ describe("comparePaths against the base", () => {
         a: { world: "base", environment },
         b: { world: "head", environment },
         unread: "the base's program file names no {events}, so the base world wrote no execution events",
-        counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
+        counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 },
         criteria: [],
         not_compared: [],
       })),
@@ -452,7 +471,7 @@ describe("comparePaths against the base", () => {
         steps: [{ line: 9, text: "step 2", ran: "b" }],
       },
     ]);
-    expect(on).toMatchObject({ counts: { changed: 0, open: 0, same_so_far: 0, same: 1, not_compared: 0 }, criteria: [{ line: 7, result: "same", a: { outcome: "pass" } }] });
+    expect(on).toMatchObject({ counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 1, not_compared: 0 }, criteria: [{ line: 7, result: "same", a: { outcome: "pass" } }] });
   });
 
   it("reads a base world that did not start in an environment as each of its criteria not run at the base", () => {
@@ -584,6 +603,62 @@ describe("the Changed paths section of the summary", () => {
       "  - line 5 ran only at head, since the base stopped at line 4 (`broke@4`): 1 write",
       "- `features/orders.feature:10` a receipt goes out, in `reorder-off`",
       "  - line 11 `step 1`: flags `receipt_v2` `off` not evaluated → evaluated",
+      "",
+    ]);
+  });
+
+  it("lists a write to a table the program marks after every other difference, under a line of its own, and never reads it as the same", () => {
+    const visit = (count: number) => ({ kind: "db" as const, table: "events", op: "insert" as const, count, holds: "bookkeeping" as const });
+    const cache = (count: number) => ({ kind: "db" as const, table: "solid_cache_entries", op: "insert" as const, count, holds: "infrastructure" as const });
+    const dashboard: Criterion = {
+      line: 3,
+      name: "a dashboard is read",
+      steps: 1,
+      sides: { "reorder-off": { paths: [whole({ entries: [visit(1)] })] }, "reorder-on": { paths: [whole({ entries: [cache(1)] })] } },
+    };
+    const room: Criterion = {
+      line: 6,
+      name: "a room is closed",
+      steps: 1,
+      sides: {
+        "reorder-off": { paths: [whole({ entries: [{ kind: "db", table: "rooms", op: "update", count: 1 }, visit(1)] })] },
+        "reorder-on": { paths: [whole({ entries: [{ kind: "db", table: "rooms", op: "update", count: 2 }, visit(2)] })] },
+      },
+    };
+    const document = documentOf([dashboard, room]);
+    const [comparison] = comparePaths(document);
+    expect(comparison!.counts).toEqual({ changed: 1, open: 0, same_so_far: 0, marked_only: 1, same: 0, not_compared: 0 });
+    expect(comparison!.criteria.map((criterion) => [criterion.name, criterion.result])).toEqual([
+      ["a dashboard is read", "marked_only"],
+      ["a room is closed", "changed"],
+    ]);
+    // The path is what the program did: a marked difference stays, with
+    // what its table holds.
+    expect(comparison!.criteria[0]!.steps).toEqual([
+      {
+        line: 4,
+        text: "step 1",
+        ran: "both",
+        changed: [
+          { kind: "db", table: "events", op: "insert", holds: "bookkeeping", a: { at_least: 1, at_most: 1 }, b: { at_least: 0, at_most: 0 } },
+          { kind: "db", table: "solid_cache_entries", op: "insert", holds: "infrastructure", a: { at_least: 0, at_most: 0 }, b: { at_least: 1, at_most: 1 } },
+        ],
+        open: [],
+        gaps: { a: [], b: [] },
+      },
+    ]);
+    expect(section(document).slice(6)).toEqual([
+      "2 criteria compared: 1 changed, 1 different only in bookkeeping or infrastructure writes.",
+      "",
+      "- `features/orders.feature:6` a room is closed",
+      "  - line 7 `step 1`: writes `rooms` update 1 → 2",
+      "",
+      "Bookkeeping and infrastructure writes that differ, which no sentence is about, though another reader of those tables may be:",
+      "",
+      "- `features/orders.feature:3` a dashboard is read",
+      "  - line 4 `step 1`: writes `events` insert 1 → 0 (bookkeeping), `solid_cache_entries` insert 0 → 1 (infrastructure)",
+      "- `features/orders.feature:6` a room is closed",
+      "  - line 7 `step 1`: writes `events` insert 1 → 2 (bookkeeping)",
       "",
     ]);
   });

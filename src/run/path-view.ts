@@ -1,5 +1,5 @@
 import type { CountRange } from "../execution-events/count.js";
-import { boundingGaps, keysOf, kindRule, rangeOn, type PathKind, type StepPath } from "../execution-events/path.js";
+import { boundingGaps, holdsOn, keysOf, kindRule, rangeOn, type PathKind, type StepPath } from "../execution-events/path.js";
 import type { TraceGap } from "../execution-events/tally.js";
 import type {
   RunDocument,
@@ -47,6 +47,15 @@ import type {
 // to compare, so a kind PATH_KINDS marks as the premise is named in the
 // pair's heading and never among what changed. Against the base, a
 // flag's side is what the program did, so it is compared as any kind is.
+//
+// A write to a table the program's tables list marks as bookkeeping or
+// infrastructure is compared too, and its difference carries what the
+// table holds: no sentence is about it, but another reader of that table
+// may be, such as a guard that turns a flag off on what a telemetry table
+// counts. A criterion's `result` reads the other differences alone, so a
+// reader is sent to what the criteria are about first, and a criterion
+// whose only differences are on marked tables is `marked_only`, never
+// `same`: something did differ.
 
 type ComparedDocument = Pick<RunDocument, "scenarios" | "table" | "environments" | "worlds">;
 
@@ -145,10 +154,16 @@ function gapWords(gaps: readonly TraceGap[]): string {
   return JSON.stringify([...new Set(gaps.map((gap) => gap.gap))].sort());
 }
 
+/** The differences on a table that holds state, or of another kind: what
+ * a criterion's result reads. */
+function unmarked(differences: readonly RunPathDifference[]): RunPathDifference[] {
+  return differences.filter((difference) => difference.holds === undefined);
+}
+
 /** Whether an open step reads the same on both sides so far: every open
- * count has one range on both, under the same gap words. */
+ * count `result` reads has one range on both, under the same gap words. */
 function sameSoFar(step: Extract<RunPathStep, { ran: "both" }>): boolean {
-  return step.open.every(({ a, b }) => a.at_least === b.at_least && a.at_most === b.at_most) && gapWords(step.gaps.a) === gapWords(step.gaps.b);
+  return unmarked(step.open).every(({ a, b }) => a.at_least === b.at_least && a.at_most === b.at_most) && gapWords(step.gaps.a) === gapWords(step.gaps.b);
 }
 
 /** What changed between two paths of one step, over the kinds `compared`
@@ -160,7 +175,8 @@ function stepDifference(a: StepPath, b: StepPath, compared: (kind: PathKind) => 
   for (const key of keys) {
     const ranges = { a: rangeOn(a, key), b: rangeOn(b, key) };
     if (exact(ranges.a) && exact(ranges.b) && ranges.a.at_least === ranges.b.at_least) continue;
-    (apart(ranges.a, ranges.b) ? changed : open).push({ ...key, ...ranges });
+    const holds = holdsOn(b, key) ?? holdsOn(a, key);
+    (apart(ranges.a, ranges.b) ? changed : open).push({ ...key, ...(holds === undefined ? {} : { holds }), ...ranges });
   }
   return { changed, open };
 }
@@ -190,8 +206,17 @@ function compareCriterion(pair: Pair, row: RunTableRow, sides: readonly [Side, S
     const { changed, open } = stepDifference(stepA.path, stepB.path, compared);
     if (changed.length > 0 || open.length > 0) steps.push({ line: stepA.line, text: stepA.text, ran: "both", changed, open, gaps: { a: boundingGaps(stepA.path), b: boundingGaps(stepB.path) } });
   }
-  const isChanged = steps.some((step) => step.ran !== "both" || step.changed.length > 0);
-  const result = isChanged ? "changed" : steps.length === 0 ? "same" : steps.every((step) => step.ran === "both" && sameSoFar(step)) ? "same_so_far" : "open";
+  const isChanged = steps.some((step) => step.ran !== "both" || unmarked(step.changed).length > 0);
+  const read = steps.filter((step) => step.ran !== "both" || unmarked(step.changed).length + unmarked(step.open).length > 0);
+  const result = isChanged
+    ? "changed"
+    : read.length > 0
+      ? read.every((step) => step.ran === "both" && sameSoFar(step))
+        ? "same_so_far"
+        : "open"
+      : steps.length > 0
+        ? "marked_only"
+        : "same";
   return {
     criterion: {
       feature: row.feature,
@@ -210,7 +235,7 @@ function comparePair(document: ComparedDocument, pair: Pair): RunPathComparison 
   // Neither side read events: a run of a program that reports none says
   // nothing about paths.
   if (!readings.includes("read")) return undefined;
-  const empty = { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 };
+  const empty = { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 };
   const base = { between: pair.between, a: pair.a, b: pair.b };
   const why = readings.flatMap((reading) => (typeof reading === "object" ? [reading.unread] : []))[0];
   if (why !== undefined) return { ...base, unread: why, counts: empty, criteria: [], not_compared: [] };
@@ -230,7 +255,13 @@ function comparePair(document: ComparedDocument, pair: Pair): RunPathComparison 
     else criteria.push(found.criterion);
   }
   const count = (result: RunPathCriterion["result"]): number => criteria.filter((criterion) => criterion.result === result).length;
-  return { ...base, unread: null, counts: { changed: count("changed"), open: count("open"), same_so_far: count("same_so_far"), same: count("same"), not_compared: notCompared.length }, criteria, not_compared: notCompared };
+  return {
+    ...base,
+    unread: null,
+    counts: { changed: count("changed"), open: count("open"), same_so_far: count("same_so_far"), marked_only: count("marked_only"), same: count("same"), not_compared: notCompared.length },
+    criteria,
+    not_compared: notCompared,
+  };
 }
 
 /** One comparison per pair of sides the run can compare: each base pair,

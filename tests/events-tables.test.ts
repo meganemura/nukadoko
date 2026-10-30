@@ -263,3 +263,45 @@ describe("a step that declares mutates: false, set beside the writes its trace h
     expect(codes).not.toContain("undeclared-write");
   });
 });
+
+describe("a path under the program's tables list", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("events-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("keeps a marked write in the step's path, with what its table holds, and ranks a pair's difference on it below the rest", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      program(
+        "",
+        'lists: { tables: "node app/list.mjs tables {url}" },\n  environments: { "telemetry-off": { conditions: { telemetry: false }, env: { TELEMETRY: "off" } }, "telemetry-on": { conditions: { telemetry: true } } },',
+      ),
+    );
+    await writeFile(path.join(rootDir, "features", "events.feature"), ["Feature: A dashboard", "", "  Scenario: a dashboard is read", '    When the client gets "/dashboard"', ""].join("\n"));
+    const { exitCode, stderr } = await cli(rootDir, ["run", "--env", "telemetry-off", "--env", "telemetry-on"]);
+    expect(exitCode, stderr).toBe(0);
+    const run = latestRunJson(rootDir) as { scenarios: { environment: string; steps: { path?: { entries: unknown[] } }[] }[]; paths: { counts: unknown; criteria: { result: string }[] }[] };
+    expect(run.scenarios.find((scenario) => scenario.environment === "telemetry-on")!.steps[0]!.path!.entries).toEqual([
+      { kind: "db", table: "events", op: "insert", count: 1, holds: "bookkeeping" },
+      { kind: "db", table: "solid_cache_entries", op: "insert", count: 1, holds: "infrastructure" },
+    ]);
+    expect(run.paths[0]!.counts).toEqual({ changed: 0, open: 0, same_so_far: 0, marked_only: 1, same: 0, not_compared: 0 });
+    const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
+    const at = summary.indexOf("### `telemetry-off` → `telemetry-on` (`telemetry` false → true)");
+    expect(summary.slice(at + 2, at + 9)).toEqual([
+      "1 criterion compared: 1 different only in bookkeeping or infrastructure writes.",
+      "",
+      "Bookkeeping and infrastructure writes that differ, which no sentence is about, though another reader of those tables may be:",
+      "",
+      "- `features/events.feature:3` a dashboard is read",
+      '  - line 4 `the client gets "/dashboard"`: writes `events` insert 0 → 1 (bookkeeping)',
+      "",
+    ]);
+  });
+});

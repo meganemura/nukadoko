@@ -395,13 +395,14 @@ const pathComparison = z.looseObject({
   a: pathSide,
   b: pathSide,
   unread: z.string().nullable(),
-  counts: z.looseObject({ changed: count, open: count, same_so_far: count, same: count, not_compared: count }),
+  // A run.json an earlier build wrote has no `marked_only`.
+  counts: z.looseObject({ changed: count, open: count, same_so_far: count, marked_only: count.optional(), same: count, not_compared: count }),
   criteria: z.array(
     z.looseObject({
       feature: z.string(),
       line: z.number().int(),
       name: z.string(),
-      result: z.enum(["changed", "open", "same_so_far", "same"]),
+      result: z.enum(["changed", "open", "same_so_far", "marked_only", "same"]),
       a: pathExecution,
       b: pathExecution,
       steps: z.array(pathStep).optional(),

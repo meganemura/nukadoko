@@ -1,6 +1,7 @@
 import type { CountRange } from "./count.js";
 import { EVENT_KINDS, flagOf, requestOf, type EventKindName, type ReadableLine, type ServedRequest } from "./format.js";
 import { createTraceTally, type TallyInputs, type TraceGap } from "./tally.js";
+import { markOf, NO_MARKED_TABLES, type MarkedHolds } from "./tables.js";
 
 // Responsibility: a step's coarse execution path, what one trace's lines
 // say the program did, counted by what each line did and no finer: a
@@ -18,9 +19,12 @@ import { createTraceTally, type TallyInputs, type TraceGap } from "./tally.js";
 // A path leaves out what is too fine or too noisy to compare across two
 // runs of one criterion: a database read (a query count moves with every
 // cache), a `tx` line, a row's ids, and an actor. `pathKeyOf` is the one
-// place that decides whether a line is in a path, so a table the program
-// file will declare as bookkeeping (a ledger every page writes) is
-// dropped there, once, for every reader of a path.
+// place that decides whether a line is in a path. A write to a table the
+// program's tables list marks as bookkeeping or infrastructure stays in
+// it, since the path is what the program did and another reader of that
+// table, such as a guard that turns a flag off, may depend on it: its
+// entry carries what the table holds, and a reader ranks it below the
+// rest (src/run/path-view.ts).
 //
 // A count on a path is a range, as a count claim's is (count.ts). The
 // lines that may be any line (`maybe`) raise only its upper bound, and a
@@ -79,6 +83,9 @@ export type PathEntry = PathKey & {
   readonly count: number;
   /** A flag's gates, as run.json's `flags` cells name them. */
   readonly gates?: readonly (string | null)[];
+  /** What a db entry's table holds, when the world's tables list marks
+   * it as bookkeeping or infrastructure. */
+  readonly holds?: MarkedHolds;
 };
 
 /** What one trace's lines say the program did, coarsely. */
@@ -164,6 +171,7 @@ export function requestKey(request: ServedRequest): PathKey {
 
 export function createPathFold(inputs: Omit<TallyInputs, "selections">): PathFold {
   const tally = createTraceTally(inputs);
+  const tables = inputs.tables ?? NO_MARKED_TABLES;
   const sent = new Map(inputs.spans.map((span, index) => [span, index]));
   const requests: { readonly order: number; readonly arrived: number; readonly request: ServedRequest }[] = [];
   const counted = new Map<string, { readonly key: PathKey; count: number; readonly gates: Set<string | null> }>();
@@ -194,7 +202,11 @@ export function createPathFold(inputs: Omit<TallyInputs, "selections">): PathFol
     path(file) {
       const entries = [...counted.values()]
         .sort((a, b) => byPathKey(a.key, b.key))
-        .map(({ key, count, gates }): PathEntry => (key.kind === "flag" ? { ...key, count, gates: [...gates].sort(byGate) } : { ...key, count }));
+        .map(({ key, count, gates }): PathEntry => {
+          if (key.kind === "flag") return { ...key, count, gates: [...gates].sort(byGate) };
+          const holds = key.kind === "db" ? markOf(tables, key.table) : undefined;
+          return holds === undefined ? { ...key, count } : { ...key, count, holds };
+        });
       return {
         requests: [...requests].sort((a, b) => a.order - b.order || a.arrived - b.arrived).map((entry) => entry.request),
         entries,
@@ -218,6 +230,13 @@ export function keysOf(...paths: readonly StepPath[]): PathKey[] {
   const keys = new Map<string, PathKey>();
   for (const path of paths) for (const key of [...path.entries.map(keyOnly), ...path.requests.map(requestKey)]) keys.set(pathKeyText(key), key);
   return [...keys.values()].sort(byPathKey);
+}
+
+/** What the table of `key` holds on `path`, when its entry is marked. */
+export function holdsOn(path: StepPath, key: PathKey): MarkedHolds | undefined {
+  if (key.kind !== "db") return undefined;
+  const text = pathKeyText(key);
+  return path.entries.find((entry) => pathKeyText(entry) === text)?.holds;
 }
 
 /** What PATH_KINDS says of a kind, apart from its fields. */

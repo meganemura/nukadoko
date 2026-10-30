@@ -79,7 +79,7 @@ describe("--base with a ref whose program file names no {events}", () => {
         a: { world: "base", environment: "default" },
         b: { world: "head", environment: "default" },
         unread: "the base's program file names no {events}, so the base world wrote no execution events",
-        counts: { changed: 0, open: 0, same_so_far: 0, same: 0, not_compared: 0 },
+        counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 },
         criteria: [],
         not_compared: [],
       },

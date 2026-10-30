@@ -281,7 +281,7 @@ export function collectWorldEvents(
   let unowned = 0;
   let unreadable = 0;
   const undefinedKinds = new Map<string, number>();
-  const folds = new Map<string, PathFold>(steps.map((step) => [step.traceId, createPathFold(step.inputs)]));
+  const folds = new Map<string, PathFold>(steps.map((step) => [step.traceId, createPathFold({ ...step.inputs, tables })]));
   const writes = new Map<string, TraceTally>(steps.map((step) => [step.traceId, createTraceTally({ ...step.inputs, selections: [PERSISTED_WRITES], tables })]));
   const kinds = createKindsSeen();
   const tallies = recounts.map((recount) => createTraceTally({ ...recount.inputs, selections: [recount.selection], tables }));

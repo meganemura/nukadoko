@@ -530,7 +530,15 @@ function seenWords(range: CountRange): string {
 
 function differenceText(difference: RunPathDifference): string {
   const words = kindRule(difference.kind).compare === "seen" ? seenWords : rangeWords;
-  return `${pathEntryText(difference)} ${words(difference.a)} → ${words(difference.b)}`;
+  const holds = difference.holds === undefined ? "" : ` (${difference.holds})`;
+  return `${pathEntryText(difference)} ${words(difference.a)} → ${words(difference.b)}${holds}`;
+}
+
+// A difference on a table the program marks as bookkeeping or
+// infrastructure is listed after the rest, under a heading of its own, so
+// a reader is sent first to what the criteria are about (src/run/path-view.ts).
+function isMarked(difference: RunPathDifference): boolean {
+  return difference.holds !== undefined;
 }
 
 type DifferenceOf<K extends PathKind> = RunPathDifference & { readonly kind: K };
@@ -634,16 +642,24 @@ function oneSideKinds(reading: PathReading, criterion: RunPathCriterion, steps: 
   return counts;
 }
 
+// A criterion's step lines, of the differences `marked` picks out: those
+// on a marked table, or every other.
+function stepLines(reading: PathReading, criterion: RunPathCriterion, marked: boolean): string[] {
+  return (criterion.steps ?? []).flatMap((step) => {
+    if (step.ran !== "both") return [];
+    const changed = step.changed.filter((difference) => isMarked(difference) === marked);
+    const open = step.open.filter((difference) => isMarked(difference) === marked);
+    const parts = [
+      ...(changed.length > 0 ? [differencesText(changed)] : []),
+      ...(open.length > 0 ? [`open, since ${openWhy(step.gaps, reading.sideName)}: ${differencesText(open)}`] : []),
+    ];
+    return parts.length === 0 ? [] : [`  - line ${step.line ?? "?"} ${codeSpan(step.text)}: ${parts.join("; ")}`];
+  });
+}
+
 function criterionLines(reading: PathReading, criterion: RunPathCriterion): string[] {
   const steps = criterion.steps ?? [];
-  const lines = steps.flatMap((step) => {
-    if (step.ran !== "both") return [];
-    const parts = [
-      ...(step.changed.length > 0 ? [differencesText(step.changed)] : []),
-      ...(step.open.length > 0 ? [`open, since ${openWhy(step.gaps, reading.sideName)}: ${differencesText(step.open)}`] : []),
-    ];
-    return [`  - line ${step.line ?? "?"} ${codeSpan(step.text)}: ${parts.join("; ")}`];
-  });
+  const lines = stepLines(reading, criterion, false);
   const oneSide = steps.filter((step) => step.ran !== "both");
   if (oneSide.length > 0) {
     const ran = oneSide[0]!.ran as "a" | "b";
@@ -671,7 +687,7 @@ function pathRank(reading: PathReading, criterion: RunPathCriterion): number {
   const steps = criterion.steps ?? [];
   const oneSide = steps.filter((step) => step.ran !== "both");
   const kinds = [
-    ...steps.flatMap((step) => (step.ran === "both" ? step.changed.map((difference) => difference.kind) : [])),
+    ...steps.flatMap((step) => (step.ran === "both" ? step.changed.filter((difference) => !isMarked(difference)).map((difference) => difference.kind) : [])),
     ...(oneSide.length === 0 ? [] : [...oneSideKinds(reading, criterion, oneSide, oneSide[0]!.ran as "a" | "b").keys()]),
   ];
   return Math.min(PATH_KIND_ORDER.length, ...kinds.map((kind) => PATH_KIND_ORDER.indexOf(kind)));
@@ -694,6 +710,7 @@ const PATH_RESULTS: readonly (readonly [RunPathCriterion["result"], string])[] =
   ["changed", "changed"],
   ["open", "open"],
   ["same_so_far", "the same so far"],
+  ["marked_only", "different only in bookkeeping or infrastructure writes"],
   ["same", "the same"],
 ];
 
@@ -734,11 +751,22 @@ function renderPathSection(document: RunDocument, comparisons: readonly RunPathC
 
   const scenarios = new Map(document.scenarios.map((scenario) => [scenario.scenario_record_id, scenario]));
   const rowOrder = new Map(document.table.rows.map((row, index) => [place(row), index]));
-  const items = new Map<string, { readonly criterion: RunPathCriterion; readonly rank: number; readonly lines: readonly string[]; readonly environments: string[] }>();
+  type Item = { readonly criterion: RunPathCriterion; readonly rank: number; readonly lines: readonly string[]; readonly environments: string[] };
+  const items = new Map<string, Item>();
+  // The differences on marked tables, criterion by criterion, listed after
+  // the rest.
+  const asides = new Map<string, Item>();
   for (const comparison of read) {
     const reading = pathReading(comparison, scenarios);
     for (const criterion of comparison.criteria) {
-      if (criterion.result === "same") continue;
+      const marked = stepLines(reading, criterion, true);
+      if (marked.length > 0) {
+        const key = JSON.stringify([place(criterion), marked]);
+        const aside = asides.get(key) ?? { criterion, rank: 0, lines: marked, environments: [] };
+        aside.environments.push(comparison.b.environment);
+        asides.set(key, aside);
+      }
+      if (criterion.result === "same" || criterion.result === "marked_only") continue;
       const lines = criterion.result === "same_so_far" ? [sameSoFarText(criterion)] : criterionLines(reading, criterion);
       const key = JSON.stringify([place(criterion), lines]);
       const item = items.get(key) ?? { criterion, rank: pathRank(reading, criterion), lines, environments: [] };
@@ -755,6 +783,14 @@ function renderPathSection(document: RunDocument, comparisons: readonly RunPathC
     lines.push(...(criterion.result === "same_so_far" ? [`${head}: ${said[0]}`] : [head, ...said]));
   }
   if (listed.length > PATHS_SHOWN) lines.push(`- and ${listed.length - PATHS_SHOWN} more in run.json's \`paths\``);
+  const aside = [...asides.values()].sort((x, y) => (rowOrder.get(place(x.criterion)) ?? 0) - (rowOrder.get(place(y.criterion)) ?? 0));
+  if (aside.length > 0) {
+    lines.push("", "Bookkeeping and infrastructure writes that differ, which no sentence is about, though another reader of those tables may be:", "");
+    for (const { criterion, lines: said, environments } of aside.slice(0, PATHS_SHOWN)) {
+      lines.push(`- ${cellCode(place(criterion))} ${cellText(criterion.name)}${read.length > 1 ? `, in ${named(environments)}` : ""}`, ...said);
+    }
+    if (aside.length > PATHS_SHOWN) lines.push(`- and ${aside.length - PATHS_SHOWN} more in run.json's \`paths\``);
+  }
   return lines;
 }
 
