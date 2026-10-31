@@ -7366,6 +7366,20 @@ its scenario record's id, so either record leads to the other.
   before. A call the step's code sends after its record was written is
   not counted here: its line is still written to that step's mcp.jsonl,
   with `"after_step_end": true`.
+- `observed.websocket` counts the lines of the step's websocket.jsonl
+  (`evidence.websocket`, below): each socket made with the global
+  `WebSocket` that opened or closed, and each frame sent or received,
+  while the step ran. It is absent when there were none. A frame sent
+  counts for the step whose code sent it. An open, a frame received, and
+  a close arrive in the context the socket was made in, often a
+  fixture's, so they count for the step that was running when they
+  arrived. One that arrives after the step's record was written, before
+  the next step begins, is not counted: its line is written beside that
+  record with `"after_step_end": true`. The connection under such a
+  socket is accounted for, so it is no `unmeasured` socket. A socket made
+  with a library over `node:http` (the `ws` package) is not seen this
+  way: its handshake is an http.jsonl line, and what it carries is an
+  `unmeasured` socket.
 - `observed.files` (`null` when the execution changed none) lists the
   paths the step changed, sorted: `{ "path", "change", "bytes", "content" }`.
   Two sources are merged. Every scratch directory (see "Context API") is
@@ -7555,8 +7569,9 @@ its scenario record's id, so either record leads to the other.
   can be a Request, or an object whose members are getters on its
   prototype, and a copy would drop them. The `traceparent` of a request
   to the world is added to each hop as undici sends it, never to the
-  step's arguments (see "Program"). An upgrade
-  (a WebSocket) or a CONNECT is a line with the handshake's real status,
+  step's arguments (see "Program"). An upgrade through `node:http` (a
+  WebSocket from the `ws` package; the global `WebSocket` is
+  `evidence.websocket`'s) or a CONNECT is a line with the handshake's real status,
   101 or the tunnel's, and `url` is the CONNECT target `<host>:<port>`;
   what the connection carries afterwards is an `unmeasured` socket, and
   the step boundary does not wait for it. A failed append does
@@ -7575,6 +7590,18 @@ its scenario record's id, so either record leads to the other.
   call is answered, when the step boundary stops waiting for an answer, or
   when the transport closes; a notification's line is appended when it is
   sent. A failed append does not fail the step.
+- `evidence.websocket` (included only after at least one WebSocket event
+  was logged) points to websocket.jsonl, one JSON object per event, in
+  the order nukadoko saw them: `{ "event", "socket", "url", "at" }`, where
+  `event` is `open`, `sent`, `received`, or `close`, and `socket` numbers
+  the socket within the process, so the frames of two people's sockets
+  to one URL stay apart. A text frame has `data`, redacted with the
+  step's secrets and kept as a body is (at most 16 KiB, with
+  `"truncated": true` past that), and `bytes`, its UTF-8 size. A binary
+  frame has `"binary": true` and `bytes` only. `open` has `protocol` when
+  the server chose one; `close` has `code`, and `reason` when it is not
+  empty. A send on a socket that is not open is no frame, since the
+  socket drops it. A failed append does not fail the step.
 - `evidence.attachments` (included only when it has entries) lists what
   `evidence.attach`/`evidence.path` actually wrote this execution (see
   "Context API"), each `{ "name", "file", "at" }`: `name` is what the step

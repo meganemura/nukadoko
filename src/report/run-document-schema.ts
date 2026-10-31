@@ -140,6 +140,7 @@ const observed = z.looseObject({
   processes: z.array(process).nullable(),
   http: z.number().int().nullable(),
   mcp: z.number().int().optional(),
+  websocket: z.number().int().optional(),
   files: z
     .array(z.looseObject({ path: z.string(), change: z.enum(["added", "changed", "removed"]), bytes: z.number().int().optional() }))
     .nullable(),

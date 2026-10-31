@@ -8,6 +8,7 @@ import { EVENTS_LATE_FILE_NAME, EVENTS_SLICE_FILE_NAME } from "./events-file.js"
 import { EVENTS_READ_FILE_NAME } from "./events-read.js";
 import { PROGRAM_LOG_LATE_FILE_NAME, PROGRAM_LOG_SLICE_FILE_NAME } from "./program-log-slice.js";
 import { MCP_LOG_FILE_NAME } from "./mcp-call.js";
+import { WEBSOCKET_LOG_FILE_NAME } from "./websocket-line.js";
 import { isProcessOutputFileName } from "./process-output.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
@@ -84,6 +85,7 @@ const HARNESS_EVIDENCE_FILE_NAMES = [
   "requests.zip",
   "http.jsonl",
   MCP_LOG_FILE_NAME,
+  WEBSOCKET_LOG_FILE_NAME,
   PROGRAM_LOG_SLICE_FILE_NAME,
   PROGRAM_LOG_LATE_FILE_NAME,
   EVENTS_SLICE_FILE_NAME,

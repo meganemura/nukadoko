@@ -1199,8 +1199,8 @@ environment はそれでも `nukadoko.program.ts` の設定にすぎません。
   step record は計測した各 request を事実として残すため、誤った `mutates` の宣言は事後に確かめられます。
   判断を担うのは宣言とレビューです。
 - **step のすべての操作が見えるわけではありません。**
-  記録するのは、step が `fetch`、`node:http`、`node:https`、Playwright を通して送ったもの、`runCommand` で起動した各プロセス、scratch のディレクトリのファイル、そして自分のプロセスの `node:fs` の書き込みです。
-  `runCommand` を通さずに起動したプロセス(プログラムと引数の数だけで名指します)、Worker、step が開くか書き込む接続のうち記録したリクエストを運ばないもの、WebSocket がハンドシェイクのあとに運ぶものは `observed.unmeasured` に名前が挙がりますが、それが何をしたかの証拠はありません。
+  記録するのは、step が `fetch`、`node:http`、`node:https`、Playwright、グローバルの `WebSocket` を通して送ったもの、`runCommand` で起動した各プロセス、scratch のディレクトリのファイル、そして自分のプロセスの `node:fs` の書き込みです。
+  `runCommand` を通さずに起動したプロセス(プログラムと引数の数だけで名指します)、Worker、step が開くか書き込む接続のうち記録したリクエストを運ばないもの、`node:http` の上のライブラリ(`ws` パッケージ)で作った WebSocket がハンドシェイクのあとに運ぶものは `observed.unmeasured` に名前が挙がりますが、それが何をしたかの証拠はありません。
   ネイティブアドオン、子プロセス自身の通信、子プロセスが scratch のディレクトリと自分の作業ディレクトリの外で行う書き込み、step より前に開いた接続を step が読むだけのときのその接続、nukadoko の後に入れたインターセプタ(msw など)が自分で答えた `fetch` は、まったく見えません。
 - **CommonJS のスイートは、先にモジュール形式を変えない限り `nukadoko/compat` を使えません**(上記)。
 - **CI レポーティングと HTML のレンダリングは組み込まれていません。**

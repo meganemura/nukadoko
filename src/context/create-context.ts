@@ -36,7 +36,7 @@ import {
   snapshotContextOptions,
 } from "./context-name.js";
 import { createCallsCollector } from "./calls.js";
-import { installChannelPatches, withoutChannelRecording } from "./channels.js";
+import { installChannelPatches, setRunningRecorder, withoutChannelRecording } from "./channels.js";
 
 // The commands install the patches before they load the config and the
 // step files, earlier than any context exists, and write the line of every
@@ -70,6 +70,7 @@ import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
 import { withProcessRecording } from "./run-command.js";
 import { createUsedCollector } from "./used.js";
+import { WEBSOCKET_LOG_FILE_NAME } from "./websocket-line.js";
 import { createRequestStage } from "./request-stage.js";
 
 // Responsibility: assemble the real StepContext a `do`/`run` execution builds
@@ -348,6 +349,7 @@ export interface EvidenceResult {
   screenshots: ScreenshotEntry[];
   http?: string;
   mcp?: string;
+  websocket?: string;
 }
 
 export interface DisposeResult {
@@ -777,6 +779,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     httpLogFailed,
     ...(trace === undefined ? {} : { trace }),
   });
+  // A WebSocket frame received belongs to the step running when it
+  // arrives (channels.ts), which is this handle's current boundary until
+  // the handle is disposed.
+  setRunningRecorder(observed);
   // Created now, so it reads the log from its size at this moment: no line
   // before it can carry a trace id this handle makes.
   const programLog =
@@ -1292,6 +1298,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     try {
       return await disposeOpenedResources();
     } finally {
+      setRunningRecorder(undefined, observed);
       await scratch.removeAll();
     }
   }
@@ -1375,6 +1382,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     }
     if (existsSync(path.join(boundaryDir, "mcp.jsonl"))) {
       evidence.mcp = "mcp.jsonl";
+    }
+    if (existsSync(path.join(boundaryDir, WEBSOCKET_LOG_FILE_NAME))) {
+      evidence.websocket = WEBSOCKET_LOG_FILE_NAME;
     }
 
     return {

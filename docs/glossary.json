@@ -422,6 +422,11 @@
       "note": "net.Socket の接続。observed.unmeasured の socket の説明で使う。Socket#connect などの API 名と detail の connect <host>:<port> はコードスパンで英語のまま"
     },
     {
+      "en": ["frame (a WebSocket message)", "text frame", "binary frame"],
+      "ja": "フレーム / テキストのフレーム / バイナリのフレーム",
+      "note": "WebSocket で送受信する 1 通。websocket.jsonl の説明で使う。WebSocket という名前と event の値 open、sent、received、close は英語のまま"
+    },
+    {
       "en": ["after the step ended", "after its record was written"],
       "ja": "step が終わったあと / record を書いたあと",
       "note": "step のコードが残したタイマーなどから、step record を書いたあとに始めた操作。フィールド after_step_end と run サマリの started after the step ended はコードスパンで英語のまま"

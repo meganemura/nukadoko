@@ -5665,6 +5665,16 @@ scenario record は独立したファイルではなく、その run の `run.js
   1 つも送らなかったときは現れないので、MCP のクライアントを使わない step は前と同じに読めます。
   step のコードが record を書いたあとに送った呼び出しは、ここでは数えません。
   その行も、その step の mcp.jsonl に `"after_step_end": true` を付けて書かれます。
+- `observed.websocket` は、step の websocket.jsonl(下の `evidence.websocket`)の行を数えます。
+  行は、step が走っている間に、グローバルの `WebSocket` で作った socket が開いたこと、閉じたこと、送ったフレームと受け取ったフレームのそれぞれです。
+  1 つも無かったときは現れません。
+  送ったフレームは、それを送ったコードの step に数えます。
+  開いたこと、受け取ったフレーム、閉じたことは、socket を作った文脈(多くは fixture)に届くので、届いたときに走っていた step に数えます。
+  step の record を書いたあと、次の step が始まる前に届いたものは数えません。
+  その行は、その record の隣に `"after_step_end": true` を付けて書かれます。
+  このような socket の下の接続は記録されたものとして扱うので、`unmeasured` の socket にはなりません。
+  `node:http` の上のライブラリ(`ws` パッケージ)で作った socket はこの方法では見えません。
+  そのハンドシェイクは http.jsonl の行になり、運ぶものは `unmeasured` の socket になります。
 - `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
   各エントリは `{ "path", "change", "bytes", "content" }` です。
   2 つの出どころをまとめます。
@@ -5793,7 +5803,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   `fetch` は step が渡した引数を、複製せずそのまま受け取ります。
   `init` は Request でも、メンバーがプロトタイプ上の getter であるオブジェクトでもよく、複製するとそれらが落ちるからです。
   world へのリクエストの `traceparent` は、undici が送る各ホップに足し、step の引数には決して足しません(「テスト対象のプログラム」を参照)。
-  Upgrade(WebSocket)や CONNECT は、ハンドシェイクの実際のステータス(101 またはトンネルのステータス)を持つ行で、CONNECT の `url` はその宛先の `<host>:<port>` です。
+  `node:http` を通る Upgrade(`ws` パッケージの WebSocket で、グローバルの `WebSocket` は `evidence.websocket` に残ります)や CONNECT は、ハンドシェイクの実際のステータス(101 またはトンネルのステータス)を持つ行で、CONNECT の `url` はその宛先の `<host>:<port>` です。
   接続がそのあとに運ぶものは `unmeasured` の socket になり、step の境界はそれを待ちません。
   追記の失敗で step が失敗することはありません。
   失敗は `http_log_failed`(下記)に数えられます。
@@ -5805,6 +5815,16 @@ scenario record は独立したファイルではなく、その run の `run.js
   1 行に 1 つの JSON オブジェクトで、`measureMcp` が包んだ transport を通して step が送った呼び出しと通知のそれぞれです(行の形は「MCP の呼び出し」にあります)。
   行は、呼び出しに答えが来たとき、step の境界が答えを待つのをやめたとき、または transport が閉じたときに追記します。
   通知の行は、送ったときに追記します。
+  追記に失敗しても step は失敗しません。
+- `evidence.websocket`(少なくとも 1 つの WebSocket の出来事が記録されたときだけ現れます)は websocket.jsonl を指します。
+  1 行に 1 つの JSON オブジェクトで、nukadoko が見た順の出来事のそれぞれです。
+  形は `{ "event", "socket", "url", "at" }` で、`event` は `open`、`sent`、`received`、`close` のどれかです。
+  `socket` はプロセスの中で socket に振った番号なので、同じ URL への 2 人の socket のフレームも区別できます。
+  テキストのフレームは、step の secret を redact して本文と同じように残した `data`(最大 16 KiB で、それを超えて切り詰めたときは `"truncated": true`)と、UTF-8 での大きさ `bytes` を持ちます。
+  バイナリのフレームは `"binary": true` と `bytes` だけを持ちます。
+  `open` はサーバーが subprotocol を選んだときに `protocol` を持ち、`close` は `code` と、空でないときは `reason` を持ちます。
+  開いていない socket への send はフレームになりません。
+  socket がそれを捨てるからです。
   追記に失敗しても step は失敗しません。
 - `evidence.attachments`(空でないときだけ現れます)は、`evidence.attach`/`evidence.path` がこの実行で実際に書き込んだものを、`{ "name", "file", "at" }` の形でそれぞれ並べたものです(「Context API」を参照)。
   `name` は step が頼んだ名前、`file` は実際にディスクへ書かれたファイル名で、`evidence.dir` からの相対パスです。

@@ -1058,6 +1058,14 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
         path: joinRelative(stepRecord.evidence.dir, stepRecord.evidence.mcp),
       });
     }
+    if (stepRecord.evidence.websocket) {
+      attachments.push({
+        kind: "path",
+        name: "websocket log",
+        contentType: "text/plain",
+        path: joinRelative(stepRecord.evidence.dir, stepRecord.evidence.websocket),
+      });
+    }
     if (stepRecord.evidence.trace) {
       attachments.push({
         kind: "path",

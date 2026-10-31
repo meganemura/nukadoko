@@ -56,6 +56,19 @@ never a failure nukadoko decides. `nuka check` notes
 `mcp-transport-unmeasured` for a transport written inside `connect(...)`,
 which nothing can wrap: build it first.
 
+A step that talks to the program over a WebSocket uses Node's global
+`WebSocket`, usually kept in a scenario fixture; nukadoko adds no
+client. Each socket's open and close, and each frame sent or received,
+is a line of the step's `websocket.jsonl` (`evidence.websocket`, counted
+by `observed.websocket`): `event`, `socket` (a number per socket, so two
+people's sockets to one URL stay apart), `url`, `at`, and a text frame's
+`data` kept like a body. A frame sent belongs to the step that sent it;
+a frame received belongs to the step running when it arrived, so a Then
+that waits for a broadcast holds the frames it waited for. When such a
+step fails, read this file before putting the last message in the
+error text. A socket from the `ws` package goes over `node:http` and is
+not seen this way: what it carries is an `unmeasured` socket.
+
 A request, a `runCommand` process, or an MCP call the step's code starts after its
 record was written (a timer it left behind) is written beside that
 record, marked `after_step_end`, never in the next step's files, and the
@@ -69,7 +82,8 @@ process started through `node:child_process` instead of `runCommand`
 `NAME=value` word, however it ended), a
 `Worker`, a connection the step opened or wrote to that carries no
 recorded request (a database client, a pool opened before the step),
-what a WebSocket or a CONNECT tunnel carried after its handshake, a UDP
+what a WebSocket from a library over `node:http` (the `ws` package) or a
+CONNECT tunnel carried after its handshake, a UDP
 datagram sent through `node:dgram`, a Chromium page's request to the world that went without a `traceparent` because the page's DevTools session failed, or a path the step wrote whose identity nukadoko could not read. Such an
 entry says the record holds no evidence of what that action did. Start
 the program with `runCommand`, or attach the evidence the action

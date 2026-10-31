@@ -48,6 +48,7 @@ export type {
   UnmeasuredEntry,
   UsedEntry,
   UsedEntryWithResult,
+  WebSocketLine,
 } from "./record/types.js";
 export { runCommand } from "./context/run-command.js";
 export { measureMcp } from "./context/measure-mcp.js";

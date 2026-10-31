@@ -12,6 +12,7 @@ import { MCP_LOG_FILE_NAME, mcpLineOf, type McpCallSeen } from "./mcp-call.js";
 import type { McpCallStart, McpRecorder } from "./measure-mcp.js";
 import { lateProcessFileName, processOutputFileName } from "./process-output.js";
 import type { ProcessRecorder } from "./run-command.js";
+import { WEBSOCKET_LOG_FILE_NAME, type WebSocketSeen, webSocketLineOf } from "./websocket-line.js";
 import {
   changesFromTouches,
   compareScratch,
@@ -28,12 +29,12 @@ import { newSpanId, newTraceId, originOf, stampsUrl, traceparentOf } from "./tra
 // Responsibility: what one step boundary reached outside its own code, the
 // step record's `observed` (docs/spec.md "Records"): the processes
 // `runCommand` (run-command.ts) started, the requests the step's process
-// sent, the MCP calls it sent through a measured transport, the files the
-// step changed, and what nukadoko could not measure. The channel patches
-// (channels.ts), runCommand, and measureMcp (measure-mcp.ts) hand it what
-// they saw; this module owns the record's shape, the files beside the
-// record (process output, http.jsonl and mcp.jsonl lines), and redaction
-// of them.
+// sent, the MCP calls it sent through a measured transport, the WebSocket
+// frames, the files the step changed, and what nukadoko could not
+// measure. The channel patches (channels.ts), runCommand, and measureMcp
+// (measure-mcp.ts) hand it what they saw; this module owns the record's
+// shape, the files beside the record (process output, and the http.jsonl,
+// mcp.jsonl, and websocket.jsonl lines), and redaction of them.
 //
 // Owned and reset by the executor's step boundary (create-context.ts's
 // `beginStep`), never reachable from a step's own `run`: a step cannot
@@ -173,6 +174,7 @@ interface Boundary {
   processes: (ProcessEntry | undefined)[] | null;
   http: number;
   mcp: number;
+  websocket: number;
   /** The requests of this boundary whose line is not written yet. */
   readonly pending: Set<PendingCapture>;
   readonly touched: Map<string, Identity | Uninspected>;
@@ -207,6 +209,7 @@ function newBoundary(dir: string | undefined, traceId: string | undefined): Boun
     processes: null,
     http: 0,
     mcp: 0,
+    websocket: 0,
     pending: new Set(),
     touched: new Map(),
     touchesOverflowed: false,
@@ -377,6 +380,11 @@ export function createObservedCollector(
         const state = current();
         if (!state.sockets.has(use)) state.sockets.set(use, how);
       },
+      webSocketEvent(seen: WebSocketSeen): void {
+        const state = current();
+        if (!state.closed) state.websocket += 1;
+        if (state.dir !== undefined) appendWebSocketLine(state.dir, seen, state.closed);
+      },
       processTraceparent(): string | undefined {
         const state = current();
         if (trace === undefined || state.traceId === undefined) return undefined;
@@ -488,6 +496,19 @@ export function createObservedCollector(
     });
   }
 
+  function appendWebSocketLine(dir: string, seen: WebSocketSeen, late: boolean): void {
+    const line = { ...webSocketLineOf(seen, new Date(), secrets), ...(late ? { after_step_end: true as const } : {}) };
+    withoutChannelRecording(() => {
+      try {
+        mkdirSync(dir, { recursive: true });
+        appendFileSync(path.join(dir, WEBSOCKET_LOG_FILE_NAME), `${JSON.stringify(line)}\n`);
+      } catch {
+        // Left out, as an MCP call's line is: the frame already went, and
+        // `observed.websocket` still counts it.
+      }
+    });
+  }
+
   function appendLine(dir: string, line: ChannelHttpLine, late: boolean): void {
     const entry = { ...httpLogEntryOf(line, secrets), ...(late ? { after_step_end: true as const } : {}) };
     const redacted = redact(entry, secrets) as typeof entry;
@@ -558,7 +579,14 @@ export function createObservedCollector(
           ? [{ kind: "files" as const, detail: `more than ${MAX_ENTRIES} paths written; the rest are not listed` }]
           : []),
       ];
-      return { processes, http: state.http === 0 ? null : state.http, files, unmeasured, ...(state.mcp === 0 ? {} : { mcp: state.mcp }) };
+      return {
+        processes,
+        http: state.http === 0 ? null : state.http,
+        files,
+        unmeasured,
+        ...(state.mcp === 0 ? {} : { mcp: state.mcp }),
+        ...(state.websocket === 0 ? {} : { websocket: state.websocket }),
+      };
     },
     close(): void {
       boundary.closed = true;

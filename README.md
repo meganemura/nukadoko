@@ -1332,12 +1332,13 @@ first; the refusal names the command.
   wrong `mutates` declaration can be checked after the fact; the
   declaration and review carry the judgment.
 - **It does not see every action a step takes.** It records what a step
-  sends through `fetch`, `node:http`, `node:https`, and Playwright,
-  each `runCommand` process, the files in scratch directories, and the
-  `node:fs` writes of its own process. A process started without
-  `runCommand` (named by its program and argument count only), a
-  Worker, a connection the step opens or writes to that carries no
-  recorded request, and what a WebSocket carries after its handshake are
+  sends through `fetch`, `node:http`, `node:https`, Playwright, and the
+  global `WebSocket`, each `runCommand` process, the files in scratch
+  directories, and the `node:fs` writes of its own process. A process
+  started without `runCommand` (named by its program and argument count
+  only), a Worker, a connection the step opens or writes to that carries
+  no recorded request, and what a WebSocket from a library over
+  `node:http` (the `ws` package) carries after its handshake are
   named in `observed.unmeasured`, with no evidence of what they did. A
   native addon, a child process's own traffic, a write a child process
   makes outside a scratch directory and its working directory, a

@@ -82,7 +82,7 @@ measured there, not that nothing happened):
   run summary's line for the world (`program.md`); `null`: a `url` world.
 - `events` counts the step's execution events by kind, in `events.jsonl`
   (late ones in `events-late.jsonl`); `open` names why `whole` is false.
-- `mcp` counts the step's MCP calls, each a line of `mcp.jsonl` (`evidence.md`).
+- `mcp` and `websocket` count the lines of `mcp.jsonl` and `websocket.jsonl` (`evidence.md`).
 - `files` lists the paths the step changed in a scratch directory or wrote
   through `node:fs`, each with its content after the step. A file the step asked
   Playwright to write (a screenshot saved to a path, a trace from

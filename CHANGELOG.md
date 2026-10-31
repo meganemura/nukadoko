@@ -9,6 +9,26 @@ just until 0.1.
 
 ### Added
 
+- **A step's WebSocket traffic is in its record.** A step that talked to
+  the program only over Node's global `WebSocket` left nothing of that
+  traffic in its record: the connection read as an `unmeasured` socket,
+  and a failed step could say what it last saw only by putting it in its
+  error text. Each socket's open and close, and each frame sent or
+  received, is now a line of the step's `websocket.jsonl`
+  (`evidence.websocket`, counted by `observed.websocket`): `event`,
+  `socket` (a number per socket, so two people's sockets to one URL stay
+  apart), `url`, `at`, and a text frame's `data`, redacted and cut as a
+  body is, or `binary` and `bytes` for a binary frame. A frame sent
+  belongs to the step that sent it; an open, a frame received, and a
+  close belong to the step running when they arrived, since a socket kept
+  in a fixture delivers them outside every step. One that arrives after a
+  step's record, before the next step, is written beside that record with
+  `after_step_end: true` and is not counted. The connection under such a
+  socket is no longer an `unmeasured` socket. A WebSocket from a library
+  over `node:http` (the `ws` package) is not seen this way and stays
+  `unmeasured`. `nuka report --format allure` attaches the file as
+  `websocket log`.
+
 - **The Allure report attaches a step's MCP calls.** `nuka report
   --format allure` attaches `evidence.mcp` as `mcp log` beside the
   `http log`, so a reader of the report sees the measured MCP calls of a

@@ -16,12 +16,14 @@ import { childProcessDetail } from "./child-process-detail.js";
 import { BODY_CAP, type RawBody, rawBodyOf, windowFor } from "./kept-text.js";
 import type { Identity } from "./step-files.js";
 import { originOf, TRACEPARENT } from "./trace-context.js";
+import type { WebSocketSeen } from "./websocket-line.js";
 import { writeMadeByPlaywrightServer } from "./write-origin.js";
 
 // Responsibility: measure, inside a step's own `run`, the channels a step
 // reaches without a nukadoko helper (docs/spec.md "Records"): requests
-// through `globalThis.fetch`, `node:http`, and `node:https`; writes through
-// `node:fs`; and, as unmeasured actions, a process started without
+// through `globalThis.fetch`, `node:http`, and `node:https`; the events of
+// a global `WebSocket`; writes through `node:fs`; and, as unmeasured
+// actions, a process started without
 // `runCommand`, a `worker_threads.Worker`, a connection that carries
 // no recorded request, and a UDP datagram sent through `node:dgram`. It
 // records nothing itself: each patch hands what it
@@ -206,9 +208,12 @@ export interface ChannelRecorder {
   draftTraceparent?(url: string, base?: string): { readonly value: string; sent(): void } | undefined;
   /** Whether a request to `url` goes to the world, counting nothing. */
   isWorldUrl?(url: string, base?: string): boolean;
+  /** Writes one event of a global `WebSocket` into the step. */
+  webSocketEvent?(seen: WebSocketSeen): void;
 }
 
 const SCOPE_KEY = Symbol.for("nukadoko.runCommand.scope");
+const RUNNING_KEY = Symbol.for("nukadoko.channels.running");
 const SUPPRESS_KEY = Symbol.for("nukadoko.channels.suppress");
 const INSTALLED_KEY = Symbol.for("nukadoko.channels.installed");
 
@@ -250,6 +255,20 @@ export function channelRecorder(): ChannelRecorder | undefined {
   return store !== undefined && typeof store.startHttp === "function" && typeof store.noteSocket === "function"
     ? (store as ChannelRecorder)
     : undefined;
+}
+
+/** Executor-only: names the recorder of the step boundary that runs now in
+ * this process, for an event that arrives in no step's scope (a WebSocket
+ * frame received), or clears it when `recorder` is `undefined`. Clearing
+ * with `owner` clears only while that recorder is still the one named. */
+export function setRunningRecorder(recorder: Partial<ChannelRecorder> | undefined, owner?: Partial<ChannelRecorder>): void {
+  const holder = globalThis as { [RUNNING_KEY]?: Partial<ChannelRecorder> };
+  if (recorder === undefined && owner !== undefined && holder[RUNNING_KEY] !== owner) return;
+  holder[RUNNING_KEY] = recorder;
+}
+
+function runningRecorder(): Partial<ChannelRecorder> | undefined {
+  return (globalThis as { [RUNNING_KEY]?: Partial<ChannelRecorder> })[RUNNING_KEY];
 }
 
 /** `wrapper`, given the name and length of `original`, so code that reads
@@ -972,6 +991,29 @@ function ownSocket(socket: unknown): void {
   }
 }
 
+/** Connections not accounted for when they connected, so a WebSocket that
+ * opens over one can account for it later. Held weakly: the set only
+ * names sockets, and a socket that is gone or accounted for leaves it the
+ * next time it is read. */
+const unownedConnections = new Set<WeakRef<net.Socket>>();
+
+/** Accounts for the connection a global `WebSocket` opened over, found by
+ * the local address undici publishes on `undici:websocket:open`: from then
+ * on the socket's traffic is websocket.jsonl's frames. */
+function ownWebSocketConnection(message: unknown): void {
+  const local = (message as { address?: { address?: unknown; port?: unknown } } | undefined)?.address;
+  if (local === undefined || typeof local.port !== "number") return;
+  for (const ref of unownedConnections) {
+    const socket = ref.deref();
+    if (socket === undefined || socket.destroyed || sockets.get(socket)?.owned !== false) {
+      unownedConnections.delete(ref);
+    } else if (socket.localPort === local.port && socket.localAddress === local.address) {
+      ownSocket(socket);
+      unownedConnections.delete(ref);
+    }
+  }
+}
+
 function noteWrite(socket: object): void {
   const use = sockets.get(socket);
   if (use !== undefined && !use.owned) channelRecorder()?.noteSocket(use, "write");
@@ -996,6 +1038,7 @@ function installNet(): void {
       throw error;
     }
     rec?.noteSocket(use, "connect");
+    if (!use.owned) unownedConnections.add(new WeakRef(this));
     return result;
   }, connect);
   // `write` is Writable's, and `end` with data does not call it, so both
@@ -1216,6 +1259,66 @@ function datagramAddress(socket: dgram.Socket, args: readonly unknown[]): string
   }
 }
 
+const webSocketNumbers = new WeakMap<object, number>();
+let lastWebSocketNumber = 0;
+
+function webSocketNumber(socket: object): number {
+  let number = webSocketNumbers.get(socket);
+  if (number === undefined) {
+    lastWebSocketNumber += 1;
+    number = lastWebSocketNumber;
+    webSocketNumbers.set(socket, number);
+  }
+  return number;
+}
+
+function recordWebSocket(rec: Partial<ChannelRecorder> | undefined, seen: () => WebSocketSeen | undefined): void {
+  if (typeof rec?.webSocketEvent !== "function") return;
+  try {
+    const event = seen();
+    if (event !== undefined) rec.webSocketEvent(event);
+  } catch {
+    // A missing line, never a failed send or a lost event.
+  }
+}
+
+// The global `WebSocket` is undici's. A frame sent is the sending step's,
+// read from the step's scope as a request is. An open, a frame received,
+// and a close arrive in the context the socket was made in, often a
+// fixture's, so they belong to the step running when they arrive. Both are
+// caught on the prototype (`send`, and `dispatchEvent`, which undici calls
+// for every event), so a socket keeps its own class and `instanceof`.
+// Measured on Node 22.23.4 and 24.22.1.
+function installWebSocket(): void {
+  const constructor = (globalThis as { WebSocket?: unknown }).WebSocket;
+  if (typeof constructor !== "function") return;
+  const proto = constructor.prototype as Record<"send" | "dispatchEvent", (...args: unknown[]) => unknown>;
+  const send = proto.send;
+  proto.send = sameShape(function (this: WebSocket, ...args: unknown[]): unknown {
+    const result = send.apply(this, args);
+    // A socket that is closing or closed drops the data without a throw,
+    // so only a send on an open socket is a frame that went.
+    if (this.readyState === 1) {
+      recordWebSocket(channelRecorder() ?? runningRecorder(), () => ({ event: "sent", socket: webSocketNumber(this), url: this.url, data: args[0] }));
+    }
+    return result;
+  }, send);
+  const dispatchEvent = proto.dispatchEvent;
+  proto.dispatchEvent = sameShape(function (this: WebSocket, ...args: unknown[]): unknown {
+    recordWebSocket(runningRecorder(), () => {
+      const event = args[0];
+      if (!(event instanceof Event)) return undefined;
+      const socket = { socket: webSocketNumber(this), url: this.url };
+      if (event.type === "open") return { event: "open", ...socket, protocol: this.protocol };
+      if (event.type === "message") return { event: "received", ...socket, data: (event as MessageEvent).data };
+      if (event.type === "close") return { event: "close", ...socket, code: (event as CloseEvent).code, reason: (event as CloseEvent).reason };
+      return undefined;
+    });
+    return dispatchEvent.apply(this, args);
+  }, dispatchEvent);
+  diagnosticsChannel.subscribe("undici:websocket:open", ownWebSocketConnection);
+}
+
 /** Installs every patch, once per process. Later calls, from this copy of
  * nukadoko or another, do nothing. */
 export function installChannelPatches(): void {
@@ -1229,5 +1332,6 @@ export function installChannelPatches(): void {
   installFs();
   installWorker();
   installDgram();
+  installWebSocket();
   syncBuiltinESMExports();
 }

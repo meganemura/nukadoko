@@ -116,6 +116,7 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "UseFn",
     "UsedEntry",
     "UsedEntryWithResult",
+    "WebSocketLine",
   ],
   "nukadoko/compat": [
     "AttachOptions",

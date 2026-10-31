@@ -285,6 +285,43 @@ export interface ObservedCounts {
    * wrapped, each one a line of the step's mcp.jsonl. Absent when it sent
    * none. */
   mcp?: number;
+  /** How many lines the step's websocket.jsonl holds: each socket opened
+   * or closed and each frame sent or received through the global
+   * `WebSocket` while the step ran. Absent when there were none. */
+  websocket?: number;
+}
+
+/** One line of websocket.jsonl: one event of a socket made with the
+ * global `WebSocket` (docs/spec.md "Records"). A frame sent counts for
+ * the step that sent it; an open, a frame received, and a close count
+ * for the step that was running when it arrived. */
+export interface WebSocketLine {
+  readonly event: "open" | "sent" | "received" | "close";
+  /** The socket, numbered from 1 in the order the run's process first saw
+   * an event of it, so two sockets to one URL stay apart. */
+  readonly socket: number;
+  /** The socket's URL, redacted. */
+  readonly url: string;
+  /** When nukadoko saw the event. */
+  readonly at: string;
+  /** The subprotocol the server chose, on `open`; absent when none. */
+  readonly protocol?: string;
+  /** A text frame's text, redacted and cut at the body cap. */
+  readonly data?: string;
+  /** The text was cut. */
+  readonly truncated?: true;
+  /** The frame is binary, or text that is not UTF-8: only its size is
+   * kept. */
+  readonly binary?: true;
+  /** The frame's size in bytes, when it is known. */
+  readonly bytes?: number;
+  /** The close code, on `close`. */
+  readonly code?: number;
+  /** The close reason, redacted, on `close`; absent when empty. */
+  readonly reason?: string;
+  /** The event came after the step's record was written, before the next
+   * step began. */
+  readonly after_step_end?: true;
 }
 
 /** One line of mcp.jsonl: a JSON-RPC request or notification a step sent
@@ -1179,6 +1216,9 @@ export interface EvidenceMeta {
   /** `mcp.jsonl`, the MCP calls the boundary sent through a transport
    * `measureMcp` wrapped. Present only when at least one was logged. */
   mcp?: string;
+  /** `websocket.jsonl`, the WebSocket events of the boundary. Present only
+   * when at least one was logged. */
+  websocket?: string;
   /** Application-specific evidence `evidence.attach`/`evidence.path` added
    * this execution — this file's own header, above. Present
    * only when non-empty; capped at 100 entries, sorted by `at`. The true

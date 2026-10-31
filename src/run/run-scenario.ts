@@ -1291,6 +1291,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const stepFinishedAt = new Date();
     const httpLogExists = existsSync(path.join(begun.recordDir, "http.jsonl"));
     const mcpLogExists = existsSync(path.join(begun.recordDir, "mcp.jsonl"));
+    const webSocketLogExists = existsSync(path.join(begun.recordDir, "websocket.jsonl"));
     const claimFields = claimExecution === undefined ? {} : claimRecordFields(claimExecution, begun, observed, httpLogExists, argsOrigin);
 
     const stepRecord: StepRecord =
@@ -1318,6 +1319,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(mcpLogExists ? { mcp: "mcp.jsonl" } : {}),
+              ...(webSocketLogExists ? { websocket: "websocket.jsonl" } : {}),
               ...traceFileFields(traceEvidence),
               ...evidenceMetaFields(evidenceSnapshot),
             },
@@ -1373,6 +1375,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
               ...(mcpLogExists ? { mcp: "mcp.jsonl" } : {}),
+              ...(webSocketLogExists ? { websocket: "websocket.jsonl" } : {}),
               ...traceFileFields(traceEvidence),
               ...evidenceMetaFields(evidenceSnapshot),
             },
@@ -2345,6 +2348,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const stepFinishedAt = new Date();
         const httpLogExists = existsSync(path.join(began.recordDir, "http.jsonl"));
         const mcpLogExists = existsSync(path.join(began.recordDir, "mcp.jsonl"));
+        const webSocketLogExists = existsSync(path.join(began.recordDir, "websocket.jsonl"));
         const usedEntries = contextHandle.usedSnapshot();
         // Same backstop-only read as `observed`/`used` just above —
         // whatever labels this step
@@ -2406,6 +2410,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             screenshots: [],
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
             ...(mcpLogExists ? { mcp: "mcp.jsonl" } : {}),
+            ...(webSocketLogExists ? { websocket: "websocket.jsonl" } : {}),
             ...traceFileFields(traceEvidence),
             ...evidenceMetaFields(evidenceSnapshot),
           },
