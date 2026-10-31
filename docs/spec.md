@@ -886,6 +886,9 @@ names the step and the command `npm install -D -E playwright@<version>`.
 `nuka check` reports the same line first, as the error `playwright-missing`,
 once for each step that a checked feature line binds and whose fixtures build
 `page`, `context`, `pageAs`, or `request`, directly or through `config.fixtures`.
+The text output prints every such step as one finding, `(<n> steps)` in
+its location column, with each step's line and what it builds under it
+and the install line once; `--json` keeps one finding per step.
 It resolves `playwright` the way the run loads it and builds nothing, so
 `nuka run` stops before any step runs.
 A step defined in a step file that no checked line binds is not reported.

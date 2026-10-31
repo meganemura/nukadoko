@@ -81,8 +81,22 @@ export interface RunCheckOptions {
 // is missing (one message for every such file, so one install line).
 const FOLDED_CODES: ReadonlySet<string> = new Set(["step-file-import-failed", "playwright-missing"]);
 
-function foldKey(issue: { readonly code: string; readonly message: string }): string {
-  return `${issue.code}\u0000${issue.message}`;
+// A bound step that needs Playwright names its own line in its message, so
+// those findings fold by their install command instead: a suite with 18
+// such steps has one thing to do, and printing it 18 times hides that.
+function stepNeedsPlaywright(issue: CheckFinding): boolean {
+  return issue.code === "playwright-missing" && issue.step !== undefined && issue.do !== undefined;
+}
+
+function foldKey(issue: CheckFinding): string {
+  return stepNeedsPlaywright(issue) ? `${issue.code}\u0000do\u0000${issue.do}` : `${issue.code}\u0000${issue.message}`;
+}
+
+// The part of a bound step's message before " needs ": what needs
+// Playwright, and on which line of the scenario.
+function neededBy(issue: CheckFinding): string {
+  const at = issue.message.indexOf(" needs ");
+  return at === -1 ? issue.message : issue.message.slice(0, at);
 }
 
 // Groups the import-failure findings by exact message, for the text form
@@ -99,13 +113,15 @@ function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMa
       continue;
     }
     const files = byMessage.get(foldKey(issue)) ?? [];
-    if (issue.file !== undefined) {
+    if (stepNeedsPlaywright(issue)) {
+      files.push(`${whereOf(issue)} ${neededBy(issue)}`);
+    } else if (issue.file !== undefined) {
       files.push(issue.file);
     }
     byMessage.set(foldKey(issue), files);
   }
   for (const files of byMessage.values()) {
-    files.sort((a, b) => a.localeCompare(b));
+    files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }
   return byMessage;
 }
@@ -116,6 +132,11 @@ function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMa
 // and a reader of the group line cannot tell which.
 function importFailureGroupText(issue: CheckFinding, files: readonly string[]): FindingText {
   const one = toText(asFinding("error", issue));
+  if (stepNeedsPlaywright(issue)) {
+    if (files.length <= 1) return one;
+    const rest = issue.message.slice(neededBy(issue).length);
+    return { ...one, where: `(${files.length} steps)`, message: `${files.length} steps${rest.replace(/^ needs /, " need ")}`, paths: files };
+  }
   if (files.length <= 1) return { ...one, where: whereOf({ ...issue, ...(files[0] !== undefined ? { file: files[0] } : {}) }) };
   return { ...one, where: `(${files.length} files)`, paths: files };
 }

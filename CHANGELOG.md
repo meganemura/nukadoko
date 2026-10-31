@@ -29,6 +29,14 @@ just until 0.1.
   `unmeasured`. `nuka report --format allure` attaches the file as
   `websocket log`.
 
+- **`nuka check` prints one `playwright-missing` for every step that
+  needs the same install.** A suite with 18 steps that build `page` or
+  `request` printed 18 errors with the same `do:` line, which hid that
+  there is one thing to do. The text output now prints one finding,
+  `(18 steps)` in its location column, with each step's line and what it
+  builds under it, and the install line once. `--json` keeps one finding
+  per step.
+
 - **The Allure report attaches a step's MCP calls.** `nuka report
   --format allure` attaches `evidence.mcp` as `mcp log` beside the
   `http log`, so a reader of the report sees the measured MCP calls of a

@@ -3,11 +3,13 @@ import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { findPlaywrightMissing, playwrightImportMissing } from "../src/check/playwright-check.js";
+import { writeCheckIssueLines } from "../src/cli/check.js";
 import type { BoundStepLine } from "../src/check/feature-check.js";
 import { PLAYWRIGHT_VERSION } from "../src/context/load-playwright.js";
 import type { Vocabulary, VocabularyEntry } from "../src/discover/discover-steps.js";
 import { buildFixtureGraph } from "../src/fixture/graph.js";
 import { defineStep } from "../src/step/define-step.js";
+import { createCaptureSink } from "./helpers/fixtures.js";
 import type { FixtureDefinition } from "../src/step/fixture-types.js";
 
 // Responsibility: the `playwright-missing` judgment in
@@ -253,5 +255,32 @@ describe("playwrightImportMissing", () => {
   it("leaves any other import failure alone", () => {
     expect(playwrightImportMissing({ filePath: "a.ts" })).toBeUndefined();
     expect(playwrightImportMissing({ filePath: "a.ts", missingPackage: { name: "playwright-extra" } })).toBeUndefined();
+  });
+});
+
+describe("the text form of playwright-missing for bound steps", () => {
+  function text(lines: readonly BoundStepLine[], steps: Record<string, readonly string[]>): string {
+    const sink = createCaptureSink();
+    writeCheckIssueLines(findPlaywrightMissing(lines, vocabularyOf(steps), buildFixtureGraph({ fixtures: {} }), () => false), [], sink);
+    return sink.text();
+  }
+
+  it("prints a step that needs Playwright as it is when it is the only one", () => {
+    expect(text([bound("fetch")], { fetch: ["request"] })).toBe(
+      'error\tplaywright-missing\tfeatures/a.feature:3\tctx.request() in "When fetch happens" needs "playwright", and this project has not installed it; ' +
+        `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}\n` +
+        `  do: npm install -D -E playwright@${PLAYWRIGHT_VERSION}\n`,
+    );
+  });
+
+  it("prints every step that needs the same install as one finding, with each line under it in line order", () => {
+    expect(text([bound("fetch", 10), bound("browse", 3), bound("both", 7)], { fetch: ["request"], browse: ["page"], both: ["page", "request"] })).toBe(
+      'error\tplaywright-missing\t(3 steps)\t3 steps need "playwright", and this project has not installed it; ' +
+        `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}\n` +
+        '  features/a.feature:3 ctx.page() in "When browse happens"\n' +
+        '  features/a.feature:7 ctx.page() and ctx.request() in "When both happens"\n' +
+        '  features/a.feature:10 ctx.request() in "When fetch happens"\n' +
+        `  do: npm install -D -E playwright@${PLAYWRIGHT_VERSION}\n`,
+    );
   });
 });

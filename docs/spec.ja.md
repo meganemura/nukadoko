@@ -690,6 +690,8 @@ nukadoko は現在この shadowing 自体を検出しないため、上の説明
 それが無いときは、fixture の構築が step を失敗させ、その step とコマンド `npm install -D -E playwright@<version>` を名指す 1 行を出します。
 `nuka check` は同じ行を先に error `playwright-missing` として報告します。
 対象は、check する feature の行が束縛する step のうち、fixture が直接か `config.fixtures` を通して `page`、`context`、`pageAs`、`request` を構築するもので、step ごとに 1 回です。
+テキスト出力では、そうした step のすべてを 1 つの finding として出し、場所の列に `(<n> steps)` を書き、その下に各 step の行と構築するものを並べ、インストール行は 1 回だけ出します。
+`--json` では step ごとに 1 つの finding のままです。
 check は run が読み込むのと同じ方法で `playwright` を解決し、何も構築しないので、`nuka run` はどの step も実行する前に止まります。
 step ファイルに定義されていても、check する行のどれも束縛しない step は報告しません。
 `playwright`、`playwright-core`、`@playwright/test` を自分で import する step ファイルは、そのパッケージが無いと import そのものに失敗します。
