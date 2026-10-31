@@ -128,6 +128,12 @@ a scenario in which no Then claim was judged with `judged_by`. Add the Then line
 what the reader must observe afterwards; a step that checks something
 but sits under Given or When belongs under Then instead.
 
+A Then that says something is absent ("no message to Ben holds the card
+"8"") binds a claim step whose claim is an `each` over what was read, with
+the item claim `not-equal` the captured value (`checking-steps.md`). An
+`each` breaks on an empty array, so the Then cannot hold on a reading that
+saw nothing at all, which a plain "is not in the list" would.
+
 ## A Then about a page
 
 State what a page shows by role and name, in a docstring written as an ARIA
