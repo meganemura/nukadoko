@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.25.0 — 2026-11-02
+
 ### Added
 
 - **A step's WebSocket traffic is in its record.** A step that talked to
@@ -883,6 +885,40 @@ just until 0.1.
   has nothing at profile`, or `, since from:a@3.body is undefined` for
   a `from` value that is missing itself. An actual side, an expected
   side, and an item claim all say it.
+
+### Skill eval
+
+One run of one model, as `docs/releasing.md` describes: the `workflow`
+example, Claude Opus 5.5, without `workflow.md` in the installed skill.
+A fresh agent ran it, with only the installed package to read.
+`nuka check` and `nuka run` passed (6 scenarios, 6 criteria held), in
+file order and shuffled.
+
+| Rule | Result | Reason |
+| --- | --- | --- |
+| S1 | met | Each Then claims the outcome a step returned, or that two refusal messages are equal. |
+| S2 | met | Every scenario ends with its Then lines after its When. |
+| S3 | met | The ticket states no refusal text for three cases, so the agent wrote the question under `Feature:` and claimed only the outcome there. It also wrote down that it read "shorter than 8" as 7 refused and 8 accepted. |
+| S4 | met | The sentences name a registration, the confirmation link, and the sign-in, never the store. |
+| S5 | met | Every email and password is in the sentence or the Examples table. |
+| S6 | not met | Each refusal is its own scenario, but the unconfirmed sign-in, the second registration, and the short password claim `refused` without the reason. The ticket gives no text, so S3 and S6 pulled in different directions. |
+| S7 | met | The Outline's name carries `<length>` and `<outcome>`. |
+| S8 | met | A fixture gives each scenario its own store. |
+| S9 | not met | The wrong-password scenario has two actions: the wrong password and the unknown email. Comparing the two messages needs both, and the skill does not say how to write that. |
+| S10 | met | The registration is a Given where it sets up and the When where it is under test. |
+| S11 | met | No step failed in the final run. The one failure read during the work, from `nuka do`, named the token and that no registration held it. |
+| S12 | met | The ticket sits under `Feature:` word for word, and each scenario proves one of its sentences. |
+
+The agent reported four things that slowed it. The skill has no shape
+for a program that is a library called in-process: a per-scenario
+fixture fit, but `fixtures.md` says the program under test is not a
+fixture, and every claim then reads `measured: none` with nothing that
+says this is expected. `nuka do` cannot run a step that needs state an
+earlier step left in a fixture, since `--use` fills args only. The note
+`repeated-scenario-prefix` closed every run about two shared steps that
+took no measurable time, with "No change is necessary". The claims of
+both Outline rows are listed under the Outline's Then line, so only the
+expected value tells them apart.
 
 ## 0.24.0 — 2026-10-29
 

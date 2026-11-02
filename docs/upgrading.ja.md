@@ -38,7 +38,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   たとえば 0.13.0、0.13.1、0.14.0 のプロジェクトは、「0.14.0 から 0.14.1 へ」から読み始めます。
   0.18.0、0.19.0、0.20.0 のプロジェクトは、「0.20.0 から 0.21.0 へ」から読み始めます。
 
-## 0.24.0 から次のリリースへ
+## 0.24.0 から 0.25.0 へ
 
 - **前の step の `returns` が落としたキーで結果が変わりうる claim は、成り立っていたところで `unjudged` になり、scenario はそこで失敗します。**
   run は、値を返す step の record が `returns_dropped` で名指すキーを読み、理由は step、場所、キーを名指しします。
@@ -685,7 +685,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `connectMcpServer` や `callMcpTool` を呼んでいた fixture は、SDK 自身の client を使います。
   `@modelcontextprotocol/client` をプロジェクトに加え、fixture の setup で `StdioClientTransport`(`@modelcontextprotocol/client/stdio` から)を使う `Client` を作り、teardown で閉じてください。
   そのクライアントの呼び出しは、あとのリリースで計測できるようになりました。
-  「0.24.0 から次のリリースへ」の MCP の項目を参照してください。
+  「0.24.0 から 0.25.0 へ」の MCP の項目を参照してください。
 
 - **各 run は 1 つのディレクトリ `.nukadoko/runs/<run_id>/` になり、`records/` は書かれなくなりました。**
   state directory を読むスクリプト、CI の step、ツールは、次のパスを変えます。

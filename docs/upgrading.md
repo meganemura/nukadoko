@@ -46,7 +46,7 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
-## 0.24.0 to the next release
+## 0.24.0 to 0.25.0
 
 - **A claim that a key an earlier step's `returns` dropped could change
   is `unjudged` where it held,** and the scenario fails on it. The run
