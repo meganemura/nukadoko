@@ -6595,6 +6595,16 @@ Its scenario line on stderr ends with `(for paths)`.
 It costs about one more pass of head's rows at the base, and a base whose
 program file names no `{events}` runs none of them, since its world has
 no path to compare.
+The base tree is made for this alone too: when no selected row is `new`
+or `changed` and head's program file names `{events}` in an
+environment of the run, the run still checks out the base and starts its
+world in each such environment, so a refactor, whose criteria all stay
+`unchanged`, gets its paths compared.
+That is the cost of one more world per environment, its build and its
+start included, on a run that without `{events}` would run head alone.
+Head's program file decides, since the base's is read only from the
+tree: a base whose program file names no `{events}` then makes the tree
+and runs nothing in it.
 
 **Cells.** A cell is what its executions came to:
 

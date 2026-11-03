@@ -5087,6 +5087,13 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 stderr のその scenario の行は `(for paths)` で終わります。
 費用は、基点での head の行のおよそ 1 回分の pass です。
 プログラムのファイルが `{events}` を名指さない基点は、その world に比べる実行経路が無いので、どれも走らせません。
+base の tree も、このためだけに作ります。
+選んだ行がどれも `new` でも `changed` でもなく、head のプログラムのファイルが run の environment で `{events}` を名指すとき、run は基点を checkout し、そうした各 environment でその world を始めます。
+受け入れ基準がすべて `unchanged` のままのリファクタでも、実行経路が比べられるようにするためです。
+費用は environment ごとにもう 1 つの world で、そのビルドと起動も含みます。
+`{events}` が無ければ head だけを走らせる run での費用です。
+基点のプログラムのファイルは tree からしか読めないので、決めるのは head のものです。
+そのため、プログラムのファイルが `{events}` を名指さない基点では、tree を作ってもその中では何も走らせません。
 
 **セル。**
 セルは、その実行がどうなったかです:

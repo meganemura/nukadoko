@@ -249,6 +249,9 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // cell runs, so a criterion that did not change still shows what the code
 // change did to its path. Such an entry carries `for_paths` and is no
 // cell, so the table, the proof runs, and the verdicts never read it.
+// Where head's program names `{events}`, the base tree is made for this
+// alone too, when no row is new or changed: a refactor's evidence is that
+// its unchanged criteria did the same at the base.
 
 /** The `nuka check` codes that mean a step's pattern did not build at all
  * (src/check/binding-check.ts's own classification of a pattern error, plus
@@ -1234,6 +1237,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           options.featureArgs.length === 0
             ? null
             : [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
+        // The base's own program file is not read until its tree is made,
+        // so head's decides; a base that names no {events} then runs nothing
+        // for paths, below.
+        pathsWanted: passes.some((pass) => writesEvents(pass.resolvedEnv.program)),
       });
       signals.setProcessCleanup(async () => {
         await (await preparing.catch(() => undefined))?.cleanup();

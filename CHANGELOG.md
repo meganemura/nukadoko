@@ -23,6 +23,18 @@ just until 0.1.
   reader finds its evidence, or the criteria that break it, without
   reading every difference.
 
+### Fixed
+
+- **A refactor gets its paths compared against the base.** `nuka run
+  --base` built the base world only when a selected criterion was new or
+  changed, so a change that left every criterion unchanged, a refactor's
+  shape, compared no path, and each criterion read `did not run at the
+  base`. The base world is now built too when head's program file names
+  `{events}` in an environment of the run, and runs each row for
+  `paths` alone (`for_paths`). Those executions are no cells: the table,
+  the verdicts, and the exit code are what they were. It costs one more
+  world per environment, its build and its start included.
+
 ## 0.25.0 — 2026-11-02
 
 ### Added

@@ -101,8 +101,8 @@ export interface PreparedBase {
   readonly mapping: MappingComparison;
   /** `mapping` as run.json's `table.mapping_changes` says it. */
   readonly mappingChanges: RunMappingChanges;
-  /** `null` when no selected row is new or changed, or the base world has
-   * an obstacle. */
+  /** `null` when no selected row is new or changed and head's program
+   * writes no execution events, or the base world has an obstacle. */
   readonly base: (PreparedTree & { readonly programFromHead: boolean }) | null;
   /** `null` unless a selected row is unchanged and the mapping changed or
    * the row was retagged or renamed, and the old world has no obstacle. */
@@ -148,6 +148,10 @@ export interface PrepareBaseInput {
   /** The run's targets, relative to the project root, without a line, or
    * `null` when the run was given none and runs the features directory. */
   readonly targets: readonly string[] | null;
+  /** Whether head's program writes execution events in an environment
+   * of the run, so the base world can run unchanged rows for run.json's
+   * `paths` alone. */
+  readonly pathsWanted: boolean;
 }
 
 function toPosix(relativePath: string): string {
@@ -418,7 +422,14 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     const mapping = found.mappingUnseen.length === 0 ? compared : { ...compared, changed: true };
 
     const changes = [...input.selected].map((key) => criteria.changes.get(key));
-    const baseNeeded = !blocked("base") && changes.some((change) => change?.change === "changed" || change?.change === "new");
+    // A change with no new or changed criterion, a refactor among them,
+    // is the one whose paths a reader most wants compared: an unchanged
+    // criterion that did the same at the base is its evidence. So the base
+    // world is made for paths alone too, when head's program writes the
+    // events they are read from. Its unchanged rows are no cells, so they
+    // move no verdict (src/run/verdict-table.ts's `plannedWorldCells`).
+    const baseNeeded =
+      !blocked("base") && (changes.some((change) => change?.change === "changed" || change?.change === "new") || (input.pathsWanted && changes.length > 0));
     const oldNeeded =
       !blocked("old") && changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true || change.renamedFrom !== undefined));
     const treeInput: TreeInput = { headFiles, refFiles, head: headSide, ref: refSide, stateDir };
