@@ -15,6 +15,7 @@ import { claimLine } from "../summary/claim-line.js";
 import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
 import type { ScenarioVerdict } from "../scenario-verdict.js";
+import { judgedViewAttachments } from "../judged-view-files.js";
 import { ownStepSpan, placeSteps, type StepSpan } from "../step-timeline.js";
 
 // Responsibility: the pure transform at the center of this module, kept in
@@ -1092,6 +1093,12 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
         contentType: "image/png",
         path: joinRelative(stepRecord.evidence.dir, screenshot.file),
       });
+    }
+    // What a claim step's pages showed right after the reading its claims
+    // were judged on, beside the step it belongs to, where final.png is the
+    // scenario's end.
+    for (const file of judgedViewAttachments(stepRecord.judged_view)) {
+      attachments.push({ kind: "path", name: file.name, contentType: file.contentType, path: joinRelative(stepRecord.evidence.dir, file.file) });
     }
     // Application-specific evidence `evidence.attach`/`.path` produced —
     // same path-attachment shape as trace/screenshots above, `name` kept as

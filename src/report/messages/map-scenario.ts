@@ -214,6 +214,9 @@ function claimsAttachment(stepRecord: StepRecord, testCaseStartedId: string, tes
           ...(stepRecord.settled === undefined ? {} : { settled: stepRecord.settled }),
           ...(stepRecord.pages === undefined ? {} : { pages: stepRecord.pages }),
           ...(stepRecord.page_requests === undefined ? {} : { page_requests: stepRecord.page_requests }),
+          // The view's files are named, not embedded: screenshots stay
+          // Allure-only, where they cost no base64 in the stream.
+          ...(stepRecord.judged_view === undefined ? {} : { judged_view: stepRecord.judged_view }),
         }),
         contentEncoding: AttachmentContentEncoding.IDENTITY,
         mediaType: CLAIMS_MEDIA_TYPE,

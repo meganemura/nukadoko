@@ -1952,3 +1952,28 @@ describe("mapGwtStep: a claim step's claims as child steps", () => {
     expect(parameters[2]!.map((parameter) => parameter.name)).not.toContain("measured");
   });
 });
+
+describe("mapGwtStep: the view of a claim step's judged reading", () => {
+  it("attaches each screenshot and ARIA snapshot to the step, the page named in parentheses when several were open", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const file = (name: string) => ({ file: `judged/${name}`, after_reading_ms: 40 });
+    const stepRecord = baseStepRecord({
+      judged_view: {
+        pages: [
+          { as: null, page: 1, url: "http://localhost/cart", title: "Cart", screenshot: file("page.png"), aria: file("page.aria.yml") },
+          { as: "aki", page: 1, url: "http://localhost/cart", title: null, screenshot: file("page.aki.png"), aria: null },
+        ],
+      },
+    });
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+
+    const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
+
+    expect(mapped.attachments.filter((attachment) => attachment.name.startsWith("judged view"))).toEqual([
+      { kind: "path", name: "judged view (page 1)", contentType: "image/png", path: ".nukadoko/runs/run-1/steps/step-1/judged/page.png" },
+      { kind: "path", name: "judged view ARIA (page 1)", contentType: "text/plain", path: ".nukadoko/runs/run-1/steps/step-1/judged/page.aria.yml" },
+      { kind: "path", name: "judged view (page 1 of aki)", contentType: "image/png", path: ".nukadoko/runs/run-1/steps/step-1/judged/page.aki.png" },
+    ]);
+  });
+});
