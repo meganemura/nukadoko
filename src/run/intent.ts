@@ -152,9 +152,10 @@ export function valueOf(text: string): unknown {
 }
 
 /** A value as a cell writes it: bare when that reads back as the same
- * value and holds no space, JSON otherwise. */
+ * value and holds no space, pipe, quote, or bracket, which splitTerms
+ * reads as the start of a JSON term, and JSON otherwise. */
 export function valueText(value: unknown): string {
-  if (typeof value === "string" && value !== "" && !/[\s|]/.test(value) && valueOf(value) === value) return value;
+  if (typeof value === "string" && value !== "" && !/[\s|"[\]{}]/.test(value) && valueOf(value) === value) return value;
   return JSON.stringify(value);
 }
 
