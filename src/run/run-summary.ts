@@ -24,6 +24,7 @@ import {
 import type { MeasuredChannel, PageRequestRecord } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
+import { LATE_VIEW_MS, markdownLink, seenLinks, type SeenLink } from "../report/summary/seen-links.js";
 import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
 import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 
@@ -66,6 +67,8 @@ interface SummaryFailure {
   /** The failed step's record, or the scenario's evidence directory for a
    * hook failure; `null` when nothing was written. */
   readonly recordPath: string | null;
+  /** Where a failed Then's judged moment can be seen (`seenLinks`). */
+  readonly seen?: readonly SeenLink[];
   /** The last command the failed step ran that did not exit 0. */
   readonly command?: string;
   /** The steps the failed step read from whose process exited nonzero. */
@@ -323,6 +326,7 @@ function describeFailure(scenario: RunScenario): SummaryFailure | undefined {
       where: `step "${step.text}"`,
       errorLine: firstErrorLine(step.error?.message ?? ""),
       recordPath: step.record,
+      ...(step.claims === undefined ? {} : { seen: seenLinks(step) }),
       ...(exited.length === 0 ? {} : { exited }),
       ...(command === undefined ? {} : { command }),
     };
@@ -343,6 +347,8 @@ function renderFailure(failure: SummaryFailure): string {
   }
   if (failure.command !== undefined) parts.push(`ran ${codeSpan(failure.command)}`);
   if (failure.recordPath !== null) parts.push(`record ${codeSpan(failure.recordPath)}`);
+  const seen = seenText(failure.seen ?? []);
+  if (seen !== "") parts.push(`seen ${seen}`);
   return parts.join("; ");
 }
 
@@ -384,23 +390,65 @@ function renderTable(document: RunDocument): string[] {
     const renamed = row.renamed_from === undefined ? "" : `, renamed from ${cellCode(row.renamed_from.feature)} ${cellText(row.renamed_from.name)}`;
     return [`${row.change ?? ""}${renamed}${row.retagged === true ? ", retagged" : ""}`];
   };
+  const seen = seenColumn(document);
   return [
     ...renderBase(document),
     "",
-    `| verdict | criterion | ${base === null ? "" : "change | "}${worlds.map((column) => cellText(heading(column))).join(" | ")} |`,
-    `| --- | --- | ${base === null ? "" : "--- | "}${worlds.map(() => "---").join(" | ")} |`,
+    `| verdict | criterion | ${base === null ? "" : "change | "}${worlds.map((column) => cellText(heading(column))).join(" | ")}${seen === null ? "" : " | seen"} |`,
+    `| --- | --- | ${base === null ? "" : "--- | "}${worlds.map(() => "---").join(" | ")}${seen === null ? "" : " | ---"} |`,
     ...rows.map((row) => {
       const tags = row.conditions.length === 0 ? "" : ` ${row.conditions.map((tag) => cellCode(tag)).join(" ")}`;
       const cells = worlds.map((column) => {
         const cell = row.cells.find((entry) => entry.world === column.world && entry.environment === column.environment);
         return cell === undefined ? "" : tableCell(cell);
       });
-      return `| ${[row.verdict, `${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags}`, ...change(row), ...cells].join(" | ")} |`;
+      return `| ${[row.verdict, `${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags}`, ...change(row), ...cells, ...(seen === null ? [] : [seen(row)])].join(" | ")} |`;
     }),
     // A criterion `--env` left out has no row, so the table says how many
     // there were, or the run would read as covering the whole selection.
     ...(document.table.left_out > 0 ? ["", leftOutText(document.table.left_out)] : []),
   ];
+}
+
+// The table's `seen` column: in each row, each Then of the criterion's
+// head execution that declared claims and can be seen (`seenLinks`), by its
+// line, linked to the first place it can be seen, so a reader goes from the
+// row they scan to what the verdict stood beside in one step. The execution
+// is the first head one that did not pass, since that is the one a red row
+// is about, and otherwise the first. Absent when no row has a link, so a run
+// with nothing to show reads as before.
+function seenColumn(document: RunDocument): ((row: RunTableRow) => string) | null {
+  const chosen = new Map<string, RunScenario>();
+  for (const scenario of headScenarios(document)) {
+    const key = scenarioKey(scenario.feature, scenario.line);
+    const held = chosen.get(key);
+    if (held === undefined || (held.status === "passed" && scenario.status !== "passed")) chosen.set(key, scenario);
+  }
+  const linksOf = (scenario: RunScenario): string[] =>
+    scenario.steps.flatMap((step) => {
+      if (step.claims === undefined) return [];
+      const [first] = seenLinks(step);
+      return first === undefined ? [] : [cellLink(String(step.line ?? scenario.line), first.href)];
+    });
+  if (![...chosen.values()].some((scenario) => linksOf(scenario).length > 0)) return null;
+  return (row) => {
+    const scenario = chosen.get(scenarioKey(row.feature, row.line));
+    return scenario === undefined ? "" : linksOf(scenario).join(" ");
+  };
+}
+
+// A link inside a table cell, where a `|` would end the cell.
+function cellLink(label: string, href: string): string {
+  return markdownLink(label, href).replace(/\|/g, "\\|");
+}
+
+// The links of a Claims entry or a failure line: each place the Then's
+// judged moment can be seen, and, after a capture taken late enough to
+// matter, how long after the reading it was taken.
+function seenText(links: readonly SeenLink[]): string {
+  return links
+    .map((link) => `${markdownLink(link.label, link.href)}${link.afterReadingMs !== undefined && link.afterReadingMs >= LATE_VIEW_MS ? ` (taken ${link.afterReadingMs} ms after the reading)` : ""}`)
+    .join(", ");
 }
 
 // The line above the table under `--base`: what the run compared with, how
@@ -1247,6 +1295,7 @@ function renderClaims(document: RunDocument): string[] {
   let anyControl = false;
   let anyLate = false;
   let anyInFlight = false;
+  let anySeen = false;
   const entries = new Map<string, { readonly sortKey: [string, number]; readonly lines: readonly string[] }>();
   for (const scenario of headScenarios(document)) {
     for (const step of scenario.steps) {
@@ -1262,10 +1311,15 @@ function renderClaims(document: RunDocument): string[] {
       if (inFlight !== "") anyInFlight = true;
       const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${settledText(step)}${cellText(inFlight)}${observation}`;
       if (step.claims.some((claim) => afterWorldStopText(claim) !== "")) anyLate = true;
-      const lines = [head, ...step.claims.map((claim) => `  - ${cellText(`${claimLine(claim)}${afterWorldStopText(claim)}${measuredText(claim, step.step_record_id)}`)}`)];
-      const key = lines.join("\n");
+      const claimLines = step.claims.map((claim) => `  - ${cellText(`${claimLine(claim)}${afterWorldStopText(claim)}${measuredText(claim, step.step_record_id)}`)}`);
+      // The links name this execution's own files, so a Then that came out
+      // the same under --repeat is one entry, linked to its first
+      // execution.
+      const key = [head, ...claimLines].join("\n");
       if (entries.has(key)) continue;
-      entries.set(key, { sortKey: [scenario.feature, step.line ?? scenario.line], lines });
+      const seen = seenText(seenLinks(step));
+      if (seen !== "") anySeen = true;
+      entries.set(key, { sortKey: [scenario.feature, step.line ?? scenario.line], lines: [`${head}${seen === "" ? "" : `; seen: ${seen}`}`, ...claimLines] });
     }
   }
   if (entries.size === 0) return [];
@@ -1279,6 +1333,9 @@ function renderClaims(document: RunDocument): string[] {
       (anyLate ? " A claim on a count of execution events that the world's stop counted again and judged otherwise says what the whole count came to, after its outcome: it was judged on lines still on their way." : "") +
       (anyInFlight
         ? " An entry read with a request in flight names each request a page sent to the world that was in flight during the reading the claims were judged on: its response had not finished when the reading began, or the page sent it while it read. The page may have changed while it was read or just after. This is the order nukadoko received the page's events in, never what the page drew, and the claims stand as judged."
+        : "") +
+      (anySeen
+        ? " `seen` links what the Then's pages showed right after the reading its claims were judged on, or, for a Then that read no page, the requests its step sent; a capture taken " + String(LATE_VIEW_MS) + " ms or more after the reading says so. The claims judged the values above, not these files, and the scenario's `final.png` is the page as the scenario ended, not as it was judged."
         : ""),
     "",
     ...sorted.flatMap((entry) => entry.lines),

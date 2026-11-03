@@ -310,6 +310,7 @@ export default {
         "step-records.ts",
         "summary/claim-line.ts",
         "summary/hook-label.ts",
+        "summary/seen-links.ts",
       ],
     },
     {

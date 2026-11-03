@@ -662,6 +662,84 @@ describe("renderRunSummary", () => {
     expect(markdown).toContain("An entry read with a request in flight names each request");
   });
 
+  it("links each Then to what it can be seen in: a seen column in the table, the end of its Claims entry, and a red row's failure line", () => {
+    const view = (record: string, screenshotMs: number) => ({
+      pages: [
+        {
+          as: null,
+          page: 1,
+          url: "http://localhost:4100/cart",
+          title: "Cart",
+          screenshot: { file: `${record}/judged/page.png`, after_reading_ms: screenshotMs },
+          aria: { file: `${record}/judged/page.aria.yml`, after_reading_ms: screenshotMs + 5 },
+        },
+      ],
+    });
+    const held = { actual: "Saving...", actual_from: "observe:badge", compare: "equal" as const, expected: "Saving...", expected_from: "sentence:text", expected_text: "Saving...", outcome: "held" as const, measured: null };
+    const counted = { ...held, actual: 2, actual_from: "observe:reported", expected: 2, expected_from: "sentence:count", expected_text: "2" };
+    const broken = { ...held, actual: 3, actual_from: "observe:shown", expected: 2, expected_from: "sentence:count", expected_text: "2", outcome: "broken" as const };
+    const markdown = renderRunSummary(
+      run({
+        verdict: "failed",
+        scenarios: [
+          scenario("features/cart.feature", 3, "Adding an item shows it", "passed", 100, {
+            steps: [
+              step("the shopper adds an item", { line: 5, record: "steps/stp-5" }),
+              step('the badge reads "Saving..."', { line: 6, record: "steps/stp-6", claims: [held], judged_view: view("steps/stp-6", 121) }),
+            ],
+          }),
+          scenario("features/cart.feature", 9, "The API counts the items", "passed", 100, {
+            steps: [step("the cart API reports 2 items", { line: 10, record: "steps/stp-10", claims: [counted], observed: { processes: null, http: 1, files: null, unmeasured: [] } })],
+          }),
+          scenario("features/cart.feature", 13, "Adding twice shows two items", "failed", 100, {
+            steps: [
+              step("the cart shows 2 items", {
+                line: 14,
+                status: "failed",
+                record: "steps/stp-14",
+                error: { kind: "claim_broken", message: "claim broken: 3 (observe:shown) equal 2 (sentence:count)" },
+                claims: [broken],
+                judged_view: view("steps/stp-14", 41),
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(markdown).toContain(
+      [
+        "| verdict | criterion | head default | seen |",
+        "| --- | --- | --- | --- |",
+        "| held | `features/cart.feature:3` Adding an item shows it | pass | [6](<steps/stp-6/judged/page.png>) |",
+        "| held | `features/cart.feature:9` The API counts the items | pass | [10](<steps/stp-10/http.jsonl>) |",
+        "| failed | `features/cart.feature:13` Adding twice shows two items | fail@14 | [14](<steps/stp-14/judged/page.png>) |",
+      ].join("\n"),
+    );
+    expect(markdown).toContain(
+      '  - step "the cart shows 2 items": `claim broken: 3 (observe:shown) equal 2 (sentence:count)`; record `steps/stp-14`; seen [page](<steps/stp-14/judged/page.png>), [page ARIA](<steps/stp-14/judged/page.aria.yml>)\n',
+    );
+    expect(markdown).toContain(
+      [
+        '- `features/cart.feature:6` the badge reads "Saving..."; seen: [page](<steps/stp-6/judged/page.png>) (taken 121 ms after the reading), [page ARIA](<steps/stp-6/judged/page.aria.yml>) (taken 126 ms after the reading)',
+        '  - "Saving..." (observe:badge) equal "Saving..." (sentence:text) held; measured: none',
+        "- `features/cart.feature:10` the cart API reports 2 items; seen: [responses](<steps/stp-10/http.jsonl>)",
+        "  - 2 (observe:reported) equal 2 (sentence:count) held; measured: none",
+        "- `features/cart.feature:14` the cart shows 2 items; seen: [page](<steps/stp-14/judged/page.png>), [page ARIA](<steps/stp-14/judged/page.aria.yml>)",
+        "  - 3 (observe:shown) equal 2 (sentence:count) broken; measured: none",
+      ].join("\n"),
+    );
+    expect(markdown).toContain("`seen` links what the Then's pages showed right after the reading its claims were judged on");
+  });
+
+  it("adds no seen column, link, or sentence to a run whose Thens have nothing to be seen in", () => {
+    const held = { actual: "1", actual_from: "observe:n", compare: "equal" as const, expected: "1", expected_from: "sentence:n", expected_text: "1", outcome: "held" as const, measured: null };
+    const markdown = renderRunSummary(
+      run({ scenarios: [scenario("features/a.feature", 3, "one", "passed", 100, { steps: [step("it is 1", { line: 4, record: "steps/stp-4", claims: [held] })] })] }),
+    );
+    expect(markdown).toContain("| verdict | criterion | head default |\n");
+    expect(markdown).not.toContain("seen");
+  });
+
 });
 
 // A world record as `nuka run` writes it.
