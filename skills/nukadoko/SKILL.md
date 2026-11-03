@@ -1,7 +1,7 @@
 ---
 name: nukadoko
 description: Use when turning a requirement into a Gherkin scenario and the run that is its evidence, for a person to review, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first, or a scenario a person wants to walk one step at a time, the run paused after each step while the agent explains its record and waits for the person's answer.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka step).
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka step, nuka verdict).
 license: MIT
 ---
 
@@ -21,11 +21,10 @@ Say in two or three sentences what the loop is for and what it will
 touch, then one line for each of these that applies:
 
 - A `mutates: true` step that reaches past the project (a real service, a
-  shared database, a file outside `scratch`) gets a go-ahead before its
-  first `nuka do`, once, not on every retry. A step that writes only under
-  `scratch`, or only to a server a fixture or `nukadoko.program.ts`
-  started, needs none (`references/writing-steps.md`, "Asking before a
-  step changes something").
+  shared database, a file outside `scratch`) gets a go-ahead before its first
+  `nuka do`, once, not on every retry. A step that writes only under `scratch`,
+  or only to a server a fixture or `nukadoko.program.ts` started, needs none
+  (`references/writing-steps.md`, "Asking before a step changes something").
 - A step that needs `page`, `context`, `pageAs`, or `request` needs the project's
   own `playwright`; `nuka check` reports `playwright-missing` with the
   install line. Adding it is a dependency change: ask first. A `page` step
@@ -97,6 +96,7 @@ If none is true, ask what this is supposed to do before writing anything.
 5. **Commit before the run you report**, push, and open the pull request;
    CI posts the summary of `nuka run --base <the base>` (`docs/ci.md`). Run
    it first: `unproven` and `moved` rows are red (`references/verdicts.md`).
+   Before you say done, `nuka verdict` must pass (`references/done.md`).
 6. **Decide where the feature lives**, in the same pull request: the
    product's core path moves into `featuresDir`, which `nuka run` runs on
    every commit; a feature for one change stays outside it, named in

@@ -178,7 +178,9 @@ has run.
    summary's "Changed paths" says under `base → head` what the program
    did differently at head, step by step, and lists first each unchanged
    criterion that did something else, which no sentence asks for: read
-   those before calling the fix contained.
+   those before calling the fix contained. Before you call it fixed,
+   `nuka verdict` says whether that run judged the tree you have and left
+   nothing red (`skills/nukadoko/references/done.md`).
 5. Link the scenario from the map's sub-feature.
 
 When the scenario and the program file live in the product's repository,

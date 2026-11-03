@@ -9,6 +9,31 @@ just until 0.1.
 
 ### Added
 
+- **`nuka verdict` says whether the newest run speaks for the working tree
+  you have.** run.json's `commit` said whether the tree had uncommitted
+  changes, and `dirty: true` is the same for every edit, so a later reader
+  could not tell a run of the tree there is now from a run of an earlier
+  edit. `commit.working_tree` now records the tree as one git tree id when
+  the run starts: tracked files as on disk and untracked files
+  `.gitignore` does not leave out, the state directory left out. It is
+  `HEAD^{tree}` on a clean tree, so a commit after the run does not move
+  it. It is computed through a copy of the index in a temporary directory,
+  never staging into the real one and writing no file's contents to the
+  object database, in about 20 ms on a repository of 2,000 tracked files.
+  `nuka verdict [--json]` reads the newest run that ended, never starts
+  one, and exits 1 with `run-missing`, `run-stale` (the tree moved after
+  the run started), `run-partial` (a `:line` target, `--tag`, or a walk),
+  or the run's own failed findings, relayed as it printed them. A pass
+  says that run judged exactly this tree and left nothing red, and no
+  more: a change no scenario touches passes while the old criteria hold,
+  which the notes `criteria-unchanged` and `run-without-base` point at.
+  Outside git it notes `working-tree-unknown` and leaves the verdict to the
+  run's own table. The skill runs it before a change is called done, and
+  `skills/nukadoko/scripts/claude-code-verdict-hook.mjs` is an example
+  Claude Code hook, opt-in and installed by nothing, that holds a turn
+  that changed the tree once while the verdict is failed
+  (`skills/nukadoko/references/done.md`).
+
 - **A Then that reads a page keeps what the page showed when its claims
   were judged.** `final.png` is taken when the scenario ends, and a page
   that changes on a timer can show another state by then: in a measured
