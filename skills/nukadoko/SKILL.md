@@ -1,7 +1,7 @@
 ---
 name: nukadoko
 description: Use when turning a requirement into a Gherkin scenario and the run that is its evidence, for a person to review, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first, or a scenario a person wants to walk one step at a time, the run paused after each step while the agent explains its record and waits for the person's answer.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka step, nuka verdict).
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka step, nuka verdict, nuka judge).
 license: MIT
 ---
 
@@ -92,7 +92,7 @@ If none is true, ask what this is supposed to do before writing anything.
    `held` row whose control passed (`references/verdicts.md`), is fixed in
    the code or by asking the person, never by weakening it. Read "What this
    run does not show" and `measured: none` (`references/reviewing.md`),
-   and `undeclared-write`.
+   `undeclared-write`, and each `judgment-` finding (`references/judgments.md`).
 5. **Commit before the run you report**, push, and open the pull request;
    CI posts the summary of `nuka run --base <the base>` (`docs/ci.md`). Run
    it first: `unproven`, `moved`, and `intent-` findings are red

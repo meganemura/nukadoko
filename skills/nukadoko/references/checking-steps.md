@@ -126,9 +126,9 @@ order), `has-fields` (the expected fields at any depth, each array whole),
 `fits-text` (line by line; a line `...` is any lines, `[..]` any text in its
 line, `[..:id]` too, one text per name, no two alike), `is-a` (a kind: a JSON type, `integer`, `uuid`, `date`, `timestamp`,
 `url`), `fits-aria-snapshot` (a page by role and name, below), `matches`,
-`greater-than`, `at-least`, `less-than`, `at-most`. A JSON docstring
-(`expected_view: "json"`) claims a whole response with `equal` (a
-field it leaves out breaks it, a `null` one too) or some of its fields with
+`greater-than`, `at-least`, `less-than`, `at-most`, and `judged-as` for a
+quality only a reader can judge (`judgments.md`). A JSON docstring (`expected_view: "json"`)
+claims a whole response with `equal` (a field it leaves out breaks it, a `null` one too) or some of its fields with
 `has-fields`; output that changes each run takes `fits-text`, never `{ from }`
 or `{ observe }`. Two values of different JSON types break the claim (`is-a` and
 `lacks-field` aside), and so does an expected value nearly every value holds (a
