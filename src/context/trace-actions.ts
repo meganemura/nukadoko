@@ -71,6 +71,17 @@ const KNOWN_TRACE_VERSIONS: readonly number[] = [8];
  * this exact name is excluded, never a pattern guessed to match others. */
 const INTERNAL_WAIT_METHOD = "__waitInfo__";
 
+/** The title of the trace group the view of a claim step's judged reading
+ * runs in (browser-evidence.ts's `screenshotPages` and `ariaPages`). The
+ * view runs inside the step's chunk, so its screenshot, ARIA snapshot,
+ * title, and mask lookups would read as calls the step made; the group and
+ * every call under it are left out of `actions`. Only a group of this
+ * exact title, as `tracing.group` wrote it (Playwright 1.61.1:
+ * `method: "tracingGroup"` with `title`, each call inside naming it as
+ * `parentId`), so a group a step opens itself is still its own. */
+export const JUDGED_VIEW_TRACE_GROUP = "nukadoko: view of the judged reading";
+const TRACING_GROUP_METHOD = "tracingGroup";
+
 /** Capped the same way `page_events` is (src/context/page-events.ts) — a
  * step that clicks through a long flow can rack up hundreds of trace calls,
  * and a step record trying to hold all of them stops being something a
@@ -201,6 +212,8 @@ interface TraceHeader {
 
 interface TraceBefore {
   readonly method: string;
+  readonly title?: string;
+  readonly parentId?: string;
   readonly params?: Record<string, unknown>;
   readonly startTime: number;
 }
@@ -225,6 +238,8 @@ function readBefore(entry: Record<string, unknown>): TraceBefore | undefined {
   if (typeof entry.method === "string" && typeof entry.startTime === "number") {
     return {
       method: entry.method,
+      ...(typeof entry.title === "string" ? { title: entry.title } : {}),
+      ...(typeof entry.parentId === "string" ? { parentId: entry.parentId } : {}),
       ...(isRecord(entry.params) ? { params: entry.params } : {}),
       startTime: entry.startTime,
     };
@@ -282,6 +297,8 @@ function buildActionEntry(before: TraceBefore, after: TraceAfter, header: TraceH
 export function parseTraceActions(traceTraceBuffer: Buffer): TraceActionsParseResult {
   let header: TraceHeader | undefined;
   const pendingBefores = new Map<string, TraceBefore>();
+  // The judged view's groups, and every call under one.
+  const nukadokoCalls = new Set<string>();
   const actions: ActionEntry[] = [];
   let totalActionCount = 0;
 
@@ -310,9 +327,15 @@ export function parseTraceActions(traceTraceBuffer: Buffer): TraceActionsParseRe
     }
     if (entry.type === "before" && typeof entry.callId === "string") {
       const before = readBefore(entry);
-      if (before !== undefined) {
-        pendingBefores.set(entry.callId, before);
+      if (before === undefined) {
+        continue;
       }
+      const ownGroup = before.method === TRACING_GROUP_METHOD && before.title === JUDGED_VIEW_TRACE_GROUP;
+      if (ownGroup || (before.parentId !== undefined && nukadokoCalls.has(before.parentId))) {
+        nukadokoCalls.add(entry.callId);
+        continue;
+      }
+      pendingBefores.set(entry.callId, before);
       continue;
     }
     if (entry.type === "after" && typeof entry.callId === "string") {

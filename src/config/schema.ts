@@ -256,6 +256,16 @@ export const configSchema = z
      * it launches a browser, which a suite with no page may not have
      * installed. */
     showRequests: z.boolean().optional(),
+    /** Whether a Then whose `observe` reads a page keeps a view of each
+     * open page right after the reading its claims were judged on
+     * (`judged_view`): a screenshot and an ARIA snapshot, linked from the
+     * run summary. On by default, since a reviewer who opens the scenario's
+     * `final.png` instead sees the page as the scenario ended, which can
+     * contradict the verdict. `false` saves the time the view takes,
+     * measured at 50 to 100 ms for each such Then, and its files. Optional
+     * rather than defaulted, so a config built in code without the key keeps
+     * the default; only `false` turns it off. */
+    judgedView: z.boolean().optional(),
     /** Playwright's own `LaunchOptions` type, taken as-is: coupling to
      * Playwright is an accepted design
      * choice (docs/spec.md "Out of scope"), so there is no vocabulary of our

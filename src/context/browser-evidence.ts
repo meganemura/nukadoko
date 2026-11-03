@@ -19,6 +19,7 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 import { instrumentApiRequestContext } from "./http-log.js";
 import { type PageStamp, stampPageRequests } from "./browser-trace.js";
 import { contextFileName } from "./context-name.js";
+import { JUDGED_VIEW_TRACE_GROUP } from "./trace-actions.js";
 import { loadPlaywright } from "./load-playwright.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
@@ -289,6 +290,15 @@ export interface TracedContextHandle {
    * the pause. The URL, the title, and the snapshot are redacted with
    * `secrets`, and the screenshot covers what shows one (secret-masks.ts). */
   viewPages(dir: string, recordedAs: string): Promise<PageView[]>;
+  /** The first pass of a view of a claim step's judged reading: a
+   * screenshot of each open page, named as `viewPages` names it, with when
+   * the browser gave it. Screenshots of every page come before any ARIA
+   * snapshot, because a screenshot is what a person opens first, and each
+   * capture moves it further from the reading. */
+  screenshotPages(dir: string, recordedAs: string): Promise<PageShot[]>;
+  /** The second pass: an ARIA snapshot of each open page, as `viewPages`
+   * takes it, with when the browser gave it. */
+  ariaPages(dir: string, recordedAs: string): Promise<PageAria[]>;
   /** Captures the final screenshot as `fileName` in `evidenceDir` and
    * closes the context. Returns the screenshot actually written, at most
    * one (best effort: a screenshot failure here must never mask the step's
@@ -412,6 +422,7 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       options.stamp === undefined || options.pageBoundary === undefined ? undefined : subscribePageOrder(context, options.stamp.origin, options.pageBoundary);
     await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();
+    const capture = pageCaptures(as, options.secrets);
 
     return {
       page,
@@ -432,35 +443,34 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       beginPageReading: () => pageOrder?.begin(),
       async viewPages(dir: string, recordedAs: string): Promise<PageView[]> {
         const views: PageView[] = [];
-        const redacted = (text: string): string => redactString(text, options.secrets);
         for (const [index, open] of context.pages().entries()) {
-          const stem = contextFileName(index === 0 ? "page" : `page-${index + 1}`, as);
-          const screenshotName = `${stem}.png`;
-          const ariaName = `${stem}.aria.yml`;
-          const recorded = (name: string): string => path.posix.join(recordedAs, name);
-          const written = (name: string, data: string | Buffer): Promise<string | null> =>
-            writeFile(path.join(dir, name), data).then(
-              () => recorded(name),
-              () => null,
-            );
           const deadline = Date.now() + VIEW_DEADLINE_MS;
-          // Taken as a buffer and written only once it arrived in time, so a
-          // capture that finishes after the pause moved on writes nothing.
-          // No screenshot rather than one that shows a secret: masks that
-          // were not found in time give none.
-          const masks = await beforeDeadline(deadline, () => secretMasks(open, options.secrets));
-          const shot =
-            masks === null ? null : await beforeDeadline(deadline, (timeout) => open.screenshot({ caret: "initial", timeout, mask: masks, maskColor: MASK_COLOR }));
-          const screenshot = shot === null ? null : await written(screenshotName, shot);
-          // The snapshot holds what fields hold, passwords included, so a
-          // loaded secret a step typed is redacted like in any record.
-          const tree = await beforeDeadline(deadline, (timeout) => open.ariaSnapshot({ mode: "ai", timeout }));
-          const aria = tree === null ? null : await written(ariaName, redacted(tree.endsWith("\n") ? tree : `${tree}\n`));
-          const title = await beforeDeadline(deadline, () => open.title());
-          views.push({ as: as ?? null, page: index + 1, url: redacted(open.url()), title: title === null ? null : redacted(title), screenshot, aria });
+          const shot = await capture.screenshot(open, index, dir, recordedAs, deadline);
+          const aria = await capture.aria(open, index, dir, recordedAs, deadline);
+          const title = await capture.title(open, deadline);
+          views.push({ as: as ?? null, page: index + 1, url: capture.url(open), title, screenshot: shot?.file ?? null, aria: aria?.file ?? null });
         }
         return views;
       },
+      screenshotPages: (dir: string, recordedAs: string): Promise<PageShot[]> =>
+        inViewGroup(context, async () => {
+          const shots: PageShot[] = [];
+          for (const [index, open] of context.pages().entries()) {
+            const deadline = Date.now() + VIEW_DEADLINE_MS;
+            const shot = await capture.screenshot(open, index, dir, recordedAs, deadline);
+            const title = await capture.title(open, deadline);
+            shots.push({ index, url: capture.url(open), title, screenshot: shot });
+          }
+          return shots;
+        }),
+      ariaPages: (dir: string, recordedAs: string): Promise<PageAria[]> =>
+        inViewGroup(context, async () => {
+          const trees: PageAria[] = [];
+          for (const [index, open] of context.pages().entries()) {
+            trees.push({ index, url: capture.url(open), aria: await capture.aria(open, index, dir, recordedAs, Date.now() + VIEW_DEADLINE_MS) });
+          }
+          return trees;
+        }),
       async finalize(fileName: string): Promise<ScreenshotEntry[]> {
         const screenshots: ScreenshotEntry[] = [];
         try {
@@ -498,5 +508,90 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       // failed.
     }
     throw error;
+  }
+}
+
+/** One capture a view wrote, and when the browser gave it (epoch ms), so a
+ * reader can tell how far it is from the moment it stands beside. */
+export interface CapturedFile {
+  readonly file: string;
+  readonly at: number;
+}
+
+/** One page's screenshot, in the first pass of a view of the judged
+ * reading (`screenshotPages`). `index` counts the context's pages from 0. */
+export interface PageShot {
+  readonly index: number;
+  readonly url: string;
+  readonly title: string | null;
+  readonly screenshot: CapturedFile | null;
+}
+
+/** One page's ARIA snapshot, in the second pass (`ariaPages`). */
+export interface PageAria {
+  readonly index: number;
+  readonly url: string;
+  readonly aria: CapturedFile | null;
+}
+
+// The captures a view takes of one page, shared by a pause's view and the
+// view of a claim step's judged reading, so both name, mask, and redact
+// their files the same way: `page.png` and `page.aria.yml` for the first
+// page, `page-<n>.*` for the others, with the context's name before the
+// extension as `final.png` has it. A capture that fails or does not finish
+// before `deadline` is `null`: a page that closed, crashed, or froze is
+// no reason to lose the rest of the view.
+function pageCaptures(as: string | undefined, secrets: SecretSet) {
+  const redacted = (text: string): string => redactString(text, secrets);
+  const stem = (index: number): string => contextFileName(index === 0 ? "page" : `page-${index + 1}`, as);
+  const written = async (dir: string, recordedAs: string, name: string, data: string | Buffer, at: number): Promise<CapturedFile | null> =>
+    writeFile(path.join(dir, name), data).then(
+      () => ({ file: path.posix.join(recordedAs, name), at }),
+      () => null,
+    );
+  return {
+    url: (open: Page): string => redacted(open.url()),
+    async title(open: Page, deadline: number): Promise<string | null> {
+      const title = await beforeDeadline(deadline, () => open.title());
+      return title === null ? null : redacted(title);
+    },
+    // Taken as a buffer and written only once it arrived in time, so a
+    // capture that finishes after the view moved on writes nothing. No
+    // screenshot rather than one that shows a secret: masks that were not
+    // found in time give none.
+    async screenshot(open: Page, index: number, dir: string, recordedAs: string, deadline: number): Promise<CapturedFile | null> {
+      const masks = await beforeDeadline(deadline, () => secretMasks(open, secrets));
+      if (masks === null) return null;
+      const shot = await beforeDeadline(deadline, (timeout) => open.screenshot({ caret: "initial", timeout, mask: masks, maskColor: MASK_COLOR }));
+      // When the browser gave the image, not after the write, which
+      // measures the disk rather than the page.
+      const at = Date.now();
+      return shot === null ? null : written(dir, recordedAs, `${stem(index)}.png`, shot, at);
+    },
+    // The snapshot holds what fields hold, passwords included, so a
+    // loaded secret a step typed is redacted like in any record.
+    async aria(open: Page, index: number, dir: string, recordedAs: string, deadline: number): Promise<CapturedFile | null> {
+      const tree = await beforeDeadline(deadline, (timeout) => open.ariaSnapshot({ mode: "ai", timeout }));
+      const at = Date.now();
+      return tree === null ? null : written(dir, recordedAs, `${stem(index)}.aria.yml`, redacted(tree.endsWith("\n") ? tree : `${tree}\n`), at);
+    },
+  };
+}
+
+// The view runs inside the step's trace chunk, so its calls go in a group
+// of their own: the trace viewer shows them under that name, and the step
+// record's `actions` leave the group out (trace-actions.ts), since they are
+// nukadoko's calls, not the step's.
+// A group that cannot open (a context already closed) costs the grouping,
+// never the view: the captures fail on their own if the context is gone.
+async function inViewGroup<T>(context: BrowserContext, take: () => Promise<T>): Promise<T> {
+  const opened = await context.tracing.group(JUDGED_VIEW_TRACE_GROUP).then(
+    () => true,
+    () => false,
+  );
+  try {
+    return await take();
+  } finally {
+    if (opened) await context.tracing.groupEnd().catch(() => undefined);
   }
 }

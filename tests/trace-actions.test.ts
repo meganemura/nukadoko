@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   collectTraceEvidence,
   createTraceVersionWarner,
+  JUDGED_VIEW_TRACE_GROUP,
   parseTraceActions,
 } from "../src/context/trace-actions.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
@@ -132,6 +133,34 @@ const WAIT_INFO_BEFORE = {
 const WAIT_INFO_AFTER = { type: "after", callId: "call@21", endTime: 599.631 };
 
 describe("parseTraceActions", () => {
+  it("leaves out the view of a judged reading, its group and every call under it, and keeps a group the step opened itself", () => {
+    // As Playwright 1.61.1 writes a `tracing.group`: a `tracingGroup`
+    // call with the group's title, each call inside naming it as parentId.
+    const before = (callId: string, method: string, extra: Record<string, unknown> = {}) =>
+      JSON.stringify({ type: "before", callId, startTime: 200, class: "Frame", method, params: {}, ...extra });
+    const after = (callId: string) => JSON.stringify({ type: "after", callId, endTime: 210 });
+    const traceTrace = [
+      headerLine(8),
+      before("call@1", "textContent"),
+      after("call@1"),
+      before("call@2", "tracingGroup", { class: "Tracing", title: JUDGED_VIEW_TRACE_GROUP }),
+      before("call@3", "evalOnSelectorAll", { parentId: "call@2" }),
+      after("call@3"),
+      before("call@4", "screenshot", { parentId: "call@2" }),
+      after("call@4"),
+      before("call@5", "title", { parentId: "call@2" }),
+      after("call@5"),
+      after("call@2"),
+      before("call@6", "tracingGroup", { class: "Tracing", title: "the step's own group" }),
+      before("call@7", "click", { parentId: "call@6" }),
+      after("call@7"),
+      after("call@6"),
+    ].join("\n");
+    const result = parseTraceActions(Buffer.from(traceTrace, "utf8"));
+    if (result.kind !== "ok") throw new Error("expected ok");
+    expect(result.actions.map((action) => action.method)).toEqual(["textContent", "click", "tracingGroup"]);
+  });
+
   it("turns a before/after expect pair into one action with ms/at/outcome", () => {
     const traceTrace = [headerLine(8), JSON.stringify(EXPECT_BEFORE), JSON.stringify(EXPECT_AFTER)].join(
       "\n",

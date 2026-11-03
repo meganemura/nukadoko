@@ -8,7 +8,7 @@ import {
   type RunUsed,
 } from "../record/run-result.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
-import type { ClaimRecord, ObservedCounts, StepRecord } from "../record/types.js";
+import type { ClaimRecord, JudgedView, JudgedViewFile, ObservedCounts, StepRecord } from "../record/types.js";
 
 // Responsibility: one scenario's entry in run.json, built from the scenario
 // as it ran and the step records it wrote. Pure: the caller reads the step
@@ -237,6 +237,9 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
             ...(stepRecord.settled === undefined ? {} : { settled: stepRecord.settled }),
             ...(stepRecord.pages === undefined ? {} : { pages: stepRecord.pages }),
             ...(stepRecord.page_requests === undefined ? {} : { page_requests: stepRecord.page_requests }),
+            ...(stepRecord.judged_view === undefined || entry.step_record_id === null
+              ? {}
+              : { judged_view: judgedViewForRun(stepRecord.judged_view, input.recordPath(entry.step_record_id)) }),
           }),
       ...(stepRecord?.events_read === undefined ? {} : { events_read: stepRecord.events_read }),
     };
@@ -295,4 +298,14 @@ export function pickleStepLines(pickle: Pickle, lines: ReadonlyMap<string, numbe
     const id = pickle.steps[index]?.astNodeIds[0];
     return id === undefined ? null : (lines.get(id) ?? null);
   };
+}
+
+/** A step record's `judged_view` as run.json holds it: each file named
+ * from the run directory, where summary.md is, by joining it to `record`,
+ * the step record's directory as run.json names it. A step record names
+ * its files from its own directory, so it reads the same wherever the run
+ * directory is copied; the summary links from the run directory. Pure. */
+export function judgedViewForRun(view: JudgedView, record: string): JudgedView {
+  const under = (file: JudgedViewFile | null): JudgedViewFile | null => (file === null ? null : { ...file, file: `${record.replace(/\/+$/, "")}/${file.file}` });
+  return { ...view, pages: view.pages.map((page) => ({ ...page, screenshot: under(page.screenshot), aria: under(page.aria) })) };
 }

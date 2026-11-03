@@ -5,6 +5,7 @@ import { parseStepReturns } from "../step/parse-returns.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { PageAtReadingOf, PageRequest, StepContextHandle } from "../context/create-context.js";
 import type { EventsProducer, EventsRequest } from "../context/events-read.js";
+import { JUDGED_VIEW_DIR } from "../context/evidence.js";
 import { describeSelection, resolveSelection } from "../execution-events/selection.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
@@ -15,6 +16,7 @@ import type {
   ErrorKind,
   EventsReadRecord,
   FixtureUsageEntry,
+  JudgedView,
   PageReadingRecord,
   PageRequestRecord,
   ReturnsDrop,
@@ -23,6 +25,8 @@ import type {
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import { types } from "node:util";
 import { describeSettled, eventsShapeOf, observeWithheldKeys, pathSegments, sentenceUnreadReason, settledConditions, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
@@ -129,6 +133,9 @@ export interface ClaimExecution {
   readonly pages?: readonly PageReadingRecord[];
   /** The requests `pages` and the readings' `pages` name by index. */
   readonly pageRequests?: readonly PageRequestRecord[];
+  /** A step whose `observe` read a page: what each open page showed
+   * right after the reading the claims were judged on. */
+  readonly judgedView?: JudgedView;
 }
 
 export type ValidatedStepOutcome =
@@ -195,6 +202,10 @@ export interface RunValidatedStepInput {
   readonly secrets: SecretSet;
   /** Injected by tests; the wall clock otherwise. */
   readonly clock?: PollClock;
+  /** A claim step only: the step's evidence directory, where the view of
+   * its judged reading goes, under `judged/`. Absent when `judgedView` is
+   * off, so no view is taken. */
+  readonly judgedViewDir?: string;
   /** A claim step with `events` only: the step each events key counts the
    * execution events of. */
   readonly eventsSource?: (key: string) => EventsSource;
@@ -584,6 +595,32 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     return id;
   };
   let latestPages: readonly PageReadingRecord[] | undefined;
+  // When the latest reading ended, on the clock the browser's captures are
+  // timed on, so the view says how long after the reading each file was
+  // taken.
+  let readingEndedAt: number | undefined;
+  // Set once the fixtures are known: only a step whose observe reaches a
+  // page gets a view, since a page another step left open is not what this
+  // one read.
+  let readsPages = false;
+  const judgedViewField = async (): Promise<{ readonly judgedView?: JudgedView }> => {
+    if (!readsPages || input.judgedViewDir === undefined || readingEndedAt === undefined) return {};
+    // A claim that compares an ARIA snapshot already holds the tree it
+    // judged, read within the reading; a second one taken later would only
+    // be further from it.
+    const ariaInClaims = reads.ariaSnapshots.length > 0;
+    try {
+      const dir = path.join(input.judgedViewDir, JUDGED_VIEW_DIR);
+      await mkdir(dir, { recursive: true });
+      const pages = await handle.viewJudgedPages(dir, JUDGED_VIEW_DIR, { aria: !ariaInClaims, readingEndedAt });
+      if (pages.length === 0) return {};
+      return { judgedView: { pages, ...(ariaInClaims ? { aria_in_claims: true as const } : {}) } };
+    } catch {
+      // A view that cannot be taken is evidence lost, never a reason to
+      // change what the claims come to.
+      return {};
+    }
+  };
   const pagesOf = (found: readonly PageAtReadingOf[]): readonly PageReadingRecord[] | undefined =>
     found.length === 0
       ? undefined
@@ -635,6 +672,11 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     return [`${first}${redact(why, input.secrets) as string}`, ...rest].join("\n");
   };
   const judge = async (observed: Reader, end?: PollEnd): Promise<ValidatedStepOutcome> => {
+    // Before the claims are judged, so the view is as near the reading as
+    // the browser allows: a page that keeps changing (a toast, a spinner,
+    // a "Saving..." badge) shows another state by the time the scenario
+    // ends, which is when final.png is taken.
+    const view = await judgedViewField();
     const judged = await evaluateClaims(step.claims, claimInputs(observed));
     const claims: ClaimExecution = {
       judged,
@@ -643,6 +685,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       ...(await pageFields(true)),
       ...settledField(end),
       ...eventsField(),
+      ...view,
     };
     const records = judged.map((entry) => entry.record);
     if (records.every((record) => record.outcome === "held")) return { status: "passed", result: {}, fixtureUsage, claims };
@@ -788,7 +831,6 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   // pages had received is taken around both. Only for an `observe` that
   // reaches `page`, `context`, or `pageAs`, as `claim-poll-unstated`
   // reads it: a page another step left open is not what this one read.
-  let readsPages: boolean;
   try {
     readsPages = stepNeeds(step, input.fixtureGraph).needsBrowser;
   } catch {
@@ -798,6 +840,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     attempts += 1;
     const reading = readsPages ? handle.beginPageReading() : undefined;
     const close = (): void => {
+      readingEndedAt = Date.now();
       if (reading !== undefined) latestPages = pagesOf(reading.end());
     };
     let taken: Reader | Promise<Reader>;

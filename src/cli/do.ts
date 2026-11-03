@@ -734,6 +734,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       step: entry.step,
       args: parsedArgs,
       handle: contextHandle,
+      ...(config.judgedView !== false ? { judgedViewDir: evidenceDir } : {}),
       fixtureGraph,
       scenarioCache: fixtureScenarioCache,
       processCache: fixtureProcessCache,
@@ -890,6 +891,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(outcome.claims.pages === undefined ? {} : { pages: [...outcome.claims.pages] }),
             ...(outcome.claims.pageRequests === undefined ? {} : { page_requests: [...outcome.claims.pageRequests] }),
             ...(outcome.claims.eventsRead === undefined ? {} : { events_read: outcome.claims.eventsRead }),
+            ...(outcome.claims.judgedView === undefined ? {} : { judged_view: outcome.claims.judgedView }),
           };
 
     const stepRecord: StepRecord =

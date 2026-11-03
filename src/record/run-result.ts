@@ -9,7 +9,7 @@ import type { CountRange } from "../execution-events/count.js";
 import type { PathKey, StepPath } from "../execution-events/path.js";
 import type { MarkedHolds } from "../execution-events/tables.js";
 import type { TraceGap } from "../execution-events/tally.js";
-import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, ObservedCounts, PageReadingRecord, PageRequestRecord, SettledRecord } from "./types.js";
+import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, JudgedView, ObservedCounts, PageReadingRecord, PageRequestRecord, SettledRecord } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
 // own directory, `<stateDir>/runs/<run_id>/`, and what `nuka run --json`
@@ -108,6 +108,9 @@ export interface RunStep {
    * record. */
   readonly pages?: readonly PageReadingRecord[];
   readonly page_requests?: readonly PageRequestRecord[];
+  /** A claim step's `judged_view`, copied from its step record with each
+   * file named from the run directory, where summary.md is. */
+  readonly judged_view?: JudgedView;
   /** A claim step's readings of execution events, copied from its step
    * record. */
   readonly events_read?: Readonly<Record<string, EventsReadRecord>>;

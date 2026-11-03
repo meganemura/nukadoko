@@ -48,7 +48,8 @@ import { isProcessOutputFileName } from "./process-output.js";
 // Those harness files (`record.json`, `final.png`, `trace.zip`,
 // `http.jsonl`, `mcp.jsonl`, the step's lines of the program's log,
 // `program-log.txt` and `program-log-late.txt`, and of its execution
-// events, `events.jsonl` and `events-late.jsonl`) are refused up front,
+// events, `events.jsonl` and `events-late.jsonl`, and the `judged`
+// directory a claim step's view goes in) are refused up front,
 // including a spelling that differs only by case
 // (`ReservedEvidenceNameError`). A suffixed copy would not be
 // the name the step asked for, and writing the name as given would replace
@@ -75,6 +76,11 @@ import { isProcessOutputFileName } from "./process-output.js";
 
 const MAX_ATTACHMENTS = 100;
 
+/** The directory in a claim step's evidence directory that holds the view
+ * of its judged reading (`judged_view`). Reserved like the harness files:
+ * a step's attachment of that name would be the directory's place. */
+export const JUDGED_VIEW_DIR = "judged";
+
 /** Files the harness writes into the same directory `attach`/`path` use.
  * Seeded into the name registry, and refused when a step asks for one,
  * including a spelling that differs only by case. */
@@ -91,6 +97,7 @@ const HARNESS_EVIDENCE_FILE_NAMES = [
   EVENTS_SLICE_FILE_NAME,
   EVENTS_LATE_FILE_NAME,
   EVENTS_READ_FILE_NAME,
+  JUDGED_VIEW_DIR,
 ] as const;
 
 /** Registry key. `toLowerCase` is the locale-independent Unicode default

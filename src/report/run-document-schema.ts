@@ -220,6 +220,23 @@ const pageRequest = z.looseObject({
   step: z.looseObject({ line: z.number().int().nullable() }).optional(),
 });
 
+// The summary renders each file as a link, so a file is checked to be
+// text before a summary is rendered from a run.json copied off a machine.
+const judgedViewFile = z.looseObject({ file: z.string(), after_reading_ms: z.number() }).nullable();
+const judgedView = z.looseObject({
+  pages: z.array(
+    z.looseObject({
+      as: z.string().nullable(),
+      page: z.number().int(),
+      url: z.string(),
+      title: z.string().nullable(),
+      screenshot: judgedViewFile,
+      aria: judgedViewFile,
+    }),
+  ),
+  aria_in_claims: z.literal(true).optional(),
+});
+
 const step = z.looseObject({
   line: z.number().int().nullable(),
   text: z.string(),
@@ -243,6 +260,7 @@ const step = z.looseObject({
   settled: z.looseObject({ conditions: z.array(z.string()), stop: z.looseObject({ reading: z.number().int() }).optional() }).optional(),
   pages: z.array(pageReading).optional(),
   page_requests: z.array(pageRequest).optional(),
+  judged_view: judgedView.optional(),
   events_read: z.record(z.string(), eventsRead).optional(),
   path: stepPath.optional(),
 }).refine(

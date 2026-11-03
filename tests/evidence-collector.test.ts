@@ -132,7 +132,9 @@ describe("EvidenceCollector", () => {
   // matches one of those, or differs only by case, would replace that file
   // on a case-insensitive volume. Linux keeps the two cases apart, so the
   // assertion compares the case-folded names rather than the raw paths.
-  const harnessFiles = ["record.json", "final.png", "trace.zip", "http.jsonl", "program-log.txt", "program-log-late.txt"] as const;
+  // `judged` is the directory a claim step's view of its judged reading
+  // goes in.
+  const harnessFiles = ["record.json", "final.png", "trace.zip", "http.jsonl", "program-log.txt", "program-log-late.txt", "judged"] as const;
 
   it.each(harnessFiles)(
     "refuses to attach or allocate a harness file name, including a different case: %s",

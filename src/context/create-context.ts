@@ -13,6 +13,8 @@ import type {
   EventsProducerRecord,
   EventsReadRecord,
   HttpOmittedCounts,
+  JudgedPageView,
+  JudgedViewFile,
   ObservedCounts,
   PageEventsSnapshot,
   PageRequestRecord,
@@ -27,7 +29,7 @@ import { fixtureParameterNames } from "../step/fixture-names.js";
 import { fixtureSourceOf, type RunStep, type Step } from "../step/define-step.js";
 import { parseStepReturns } from "../step/parse-returns.js";
 import { strictArgsSchema } from "../step/strict-args.js";
-import { launchBrowser, type BrowserHandle, type TracedContextHandle } from "./browser-evidence.js";
+import { launchBrowser, type BrowserHandle, type CapturedFile, type PageAria, type PageShot, type TracedContextHandle } from "./browser-evidence.js";
 import {
   assertValidContextName,
   ContextOptionsConflictError,
@@ -475,6 +477,14 @@ export interface StepContextHandle {
    * browser was launched. `nuka run --step` calls it at a pause, between
    * two steps. Never exposed on `ctx`. */
   viewOpenPages(dir: string, recordedAs: string): Promise<PageView[]>;
+  /** Executor-only: what each page each browser context has open shows
+   * right after a claim step's judged reading ended at `readingEndedAt`
+   * (epoch ms), written into `dir` with the files named under
+   * `recordedAs`, in `viewOpenPages`' order: a screenshot of every page
+   * first, then, when `aria`, an ARIA snapshot of every page. Each file
+   * says how long after the reading the browser gave it. `[]` when no
+   * browser was launched. Never exposed on `ctx`. */
+  viewJudgedPages(dir: string, recordedAs: string, options: { readonly aria: boolean; readonly readingEndedAt: number }): Promise<JudgedPageView[]>;
   /** Executor-only: opens a reading of a claim step on every page each
    * browser context has open, in `viewOpenPages`' order, and returns
    * what closes it with what each page had received from the world
@@ -1464,6 +1474,24 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return views;
   }
 
+  async function viewJudgedPages(dir: string, recordedAs: string, options: { readonly aria: boolean; readonly readingEndedAt: number }): Promise<JudgedPageView[]> {
+    const opened = openedInOrder();
+    const shots: { readonly as: string | null; readonly shots: PageShot[] }[] = [];
+    for (const each of opened) shots.push({ as: each.as ?? null, shots: await each.handle.screenshotPages(dir, recordedAs) });
+    const trees: PageAria[][] = [];
+    for (const each of opened) trees.push(options.aria ? await each.handle.ariaPages(dir, recordedAs) : []);
+    const after = (file: CapturedFile | null): JudgedViewFile | null =>
+      file === null ? null : { file: file.file, after_reading_ms: Math.max(0, file.at - options.readingEndedAt) };
+    return shots.flatMap(({ as, shots: pages }, at) =>
+      pages.map((shot): JudgedPageView => {
+        // A page that closed or opened between the two passes has no
+        // snapshot that belongs to its screenshot.
+        const tree = trees[at]!.find((entry) => entry.index === shot.index && entry.url === shot.url);
+        return { as, page: shot.index + 1, url: shot.url, title: shot.title, screenshot: after(shot.screenshot), aria: after(tree?.aria ?? null) };
+      }),
+    );
+  }
+
   function envReadsSnapshot(): string[] {
     return envReads.snapshot();
   }
@@ -1551,6 +1579,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     pollsSnapshot,
     namedContexts,
     viewOpenPages,
+    viewJudgedPages,
     beginPageReading,
     pageRequestRecords: (requests) => Promise.all(requests.map((request) => pageRequestRecord(request, pageBoundary))),
     envReadsSnapshot,

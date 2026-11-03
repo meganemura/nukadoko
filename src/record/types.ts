@@ -1440,6 +1440,12 @@ export interface StepRecordBase {
   pages?: PageReadingRecord[];
   /** The requests `pages` and each reading's `pages` name by index. */
   page_requests?: PageRequestRecord[];
+  /** A claim step whose `observe` read a page: what each open page
+   * showed right after the reading its claims were judged on (the last,
+   * under `poll`), and how long after that reading each file was taken.
+   * Absent when the view is turned off (`judgedView: false`), or when no
+   * page was open or no reading ended. */
+  judged_view?: JudgedView;
   /** A claim step that reads execution events only: each `events` key,
    * as it read (docs/spec.md "Execution events"). A claim measured on one
    * names `events_read.<key>` as its channel. */
@@ -1544,3 +1550,48 @@ export interface StepRecordFailed extends StepRecordBase {
 }
 
 export type StepRecord = StepRecordPassed | StepRecordFailed;
+
+/** What the open pages showed right after the reading a claim step's
+ * claims were judged on (`judged_view`). The claims judged the values
+ * `observe` returned, not these files: a view shows what was around those
+ * values, and it was taken after the reading, so a page that kept changing
+ * can show a later state. */
+export interface JudgedView {
+  /** Each open page, the default context first and then each `pageAs`
+   * context in the order it opened, as `pages` lists them. */
+  readonly pages: readonly JudgedPageView[];
+  /** Present when a claim compared an ARIA snapshot: the claim already
+   * holds the tree it judged, read within the reading itself, so the view
+   * takes no second one, and each page's `aria` is `null`. */
+  readonly aria_in_claims?: true;
+}
+
+/** One open page in a `judged_view`. */
+export interface JudgedPageView {
+  /** The `pageAs(name)` context the page belongs to; `null` for the
+   * default context. */
+  readonly as: string | null;
+  /** The page's place among its context's open pages, from 1. */
+  readonly page: number;
+  /** Redacted, as the title and the ARIA snapshot are. */
+  readonly url: string;
+  /** `null` when the page did not give it in time. */
+  readonly title: string | null;
+  /** A viewport screenshot, with what shows a secret covered; `null` when
+   * it failed, ran out of time, or what shows a secret was not found in
+   * time. */
+  readonly screenshot: JudgedViewFile | null;
+  /** The page's ARIA snapshot, redacted; `null` when it failed, ran out
+   * of time, or `aria_in_claims` left it out. */
+  readonly aria: JudgedViewFile | null;
+}
+
+/** One file of a judged view. */
+export interface JudgedViewFile {
+  /** Relative to the step record's directory; relative to the run
+   * directory in run.json, so a link in the summary opens it. */
+  readonly file: string;
+  /** Milliseconds from the end of the judged reading to the moment the
+   * browser gave this capture. The page may have changed in between. */
+  readonly after_reading_ms: number;
+}

@@ -72,6 +72,27 @@ describe("parseRunDocument", () => {
       expect("problem" in result && result.problem.includes(`${key}: `)).toBe(true);
     }));
 
+  it("reads a Then's judged view, whose files the summary links, and refuses one whose file is not text", () => {
+    const withView = (screenshot: unknown) => ({
+      ...VALID,
+      scenarios: [
+        {
+          ...VALID.scenarios[0]!,
+          steps: [
+            {
+              ...VALID.scenarios[0]!.steps[0]!,
+              judged_view: { pages: [{ as: null, page: 1, url: "http://localhost/", title: null, screenshot, aria: null }] },
+            },
+          ],
+        },
+      ],
+    });
+    const read = withView({ file: "steps/s1/judged/page.png", after_reading_ms: 40 });
+    expect(parseRunDocument(JSON.stringify(read))).toEqual({ document: read });
+    const result = parseRunDocument(JSON.stringify(withView({ file: 7, after_reading_ms: 40 })));
+    expect("problem" in result && result.problem.includes("judged_view")).toBe(true);
+  });
+
   it("refuses a fail, broke, stopped, or flaky cell with no line, which the summary would print as @undefined", () =>
     hegel.test((tc) => {
       const outcome = tc.draw(gs.sampledFrom(["fail", "broke", "stopped", "flaky"]));

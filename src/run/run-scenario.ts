@@ -1098,7 +1098,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     observed: StepRecord["observed"],
     httpLogExists: boolean,
     argsOrigin: Record<string, ArgOrigin> | undefined,
-  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings" | "readings_left_out" | "settled" | "pages" | "page_requests" | "events_read"> {
+  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings" | "readings_left_out" | "settled" | "pages" | "page_requests" | "events_read" | "judged_view"> {
     const claims = withMeasured(execution.judged, {
       ownRecordId: begun.recordId,
       ownChannels: recordedChannels({ observed, dir: begun.recordDir, ...(httpLogExists ? { http: "http.jsonl" } : {}) }),
@@ -1122,6 +1122,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       ...(execution.pages === undefined ? {} : { pages: [...execution.pages] }),
       ...(execution.pageRequests === undefined ? {} : { page_requests: [...execution.pageRequests] }),
       ...(execution.eventsRead === undefined ? {} : { events_read: execution.eventsRead }),
+      ...(execution.judgedView === undefined ? {} : { judged_view: execution.judgedView }),
     };
   }
 
@@ -2101,6 +2102,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               args: argsResult.data,
               ...(claimArgs === undefined ? {} : { claimArgs }),
               handle: contextHandle,
+              ...(config.judgedView !== false ? { judgedViewDir: recordDir } : {}),
               fixtureGraph,
               scenarioCache: fixtureScenarioCache,
               processCache: fixtureProcessCache,
