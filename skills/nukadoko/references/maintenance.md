@@ -77,3 +77,21 @@ those runs writes its own run summary. A feature kept outside
 `featuresDir` and listed in `additionalFeatureDirs` still counts for the
 steps it binds, so `pattern-unbound` and `fixture-unused` do not report
 its steps as dead, but nothing runs it unattended.
+
+## What runs keep not showing
+
+Each run.json's `limits` lists what that run does not show, by `kind`
+(docs/spec.md "Records"), and the summary lists the same entries under
+"What this run does not show". A gap that comes back run after run is the
+next thing to fix: a criterion whose control never fails at a Then, a step
+nukadoko cannot measure. Rank them across the runs you have, each counted
+once per run:
+
+```sh
+jq -s 'map([.limits[]? | {kind, at: (if .feature then "\(.feature):\(.line)" else (.environment // "run") end)}] | unique)
+  | add // [] | group_by(.) | map(.[0] + {runs: length}) | sort_by(-.runs) | .[:10]' .nukadoko/runs/*/run.json
+```
+
+`retention` deletes old run directories, so a longer window reads the
+run.json files CI kept as artifacts. Fix the top entry with its `fix` or
+`do`, and the next runs show whether it stayed closed.
