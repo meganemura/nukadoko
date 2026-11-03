@@ -78,7 +78,7 @@ describe.skipIf(!chromiumAvailable)("what the page had received when a Then read
     expect(record.readings).toBeUndefined();
     expect(runStep.pages).toEqual(record.pages);
     expect(runStep.page_requests).toEqual(record.page_requests);
-    expect(summary).toContain('- `features/room.feature:5` the room shows "ready"\n');
+    expect(summary).toContain('- `features/room.feature:5` the room shows "ready"; seen: [page](<steps/');
   });
 
   it("names a request still in flight while the Then read, in the record and on the summary's line, with the claim held as judged", () => {
@@ -94,7 +94,7 @@ describe.skipIf(!chromiumAvailable)("what the page had received when a Then read
     });
     expect(record.claims.map((claim: { outcome: string }) => claim.outcome)).toEqual(["held"]);
     expect(summary).toContain(
-      `- \`features/room.feature:10\` the room shows "ready", read with a request in flight (GET ${origin}/state?hold=1500 on page 1, sent during the step at line 9)\n`,
+      `- \`features/room.feature:10\` the room shows "ready", read with a request in flight (GET ${origin}/state?hold=1500 on page 1, sent during the step at line 9); seen: [page](<steps/`,
     );
     expect(summary).toContain("An entry read with a request in flight names each request a page sent to the world that was in flight during the reading the claims were judged on");
   });
@@ -110,7 +110,7 @@ describe.skipIf(!chromiumAvailable)("what the page had received when a Then read
     expect(seen.at(-1)).toEqual([true, false, true]);
     expect(seen.every(([holds, inFlight, last]: boolean[]) => holds === last && inFlight === !last)).toBe(true);
     expect(record.pages).toEqual(record.readings.at(-1).pages);
-    expect(summary).toMatch(new RegExp(`- \`features/room\\.feature:15\` the room comes to show "refreshed", ${record.attempts} readings\\n`));
+    expect(summary).toMatch(new RegExp(`- \`features/room\\.feature:15\` the room comes to show "refreshed", ${record.attempts} readings; seen: `));
   });
 
   it("tells two tabs' requests of one step apart by span id, each the one on its own http.jsonl line and the program's request line", () => {
