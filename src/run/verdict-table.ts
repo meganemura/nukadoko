@@ -61,7 +61,7 @@ import { stepJudgedTooEarly } from "./events-after-stop.js";
  * it did not run, which is neither a pass nor something the program
  * broke. */
 export type ExecutionOutcome =
-  | { readonly kind: "pass"; readonly judgedBy?: "compat" | "nothing" }
+  | { readonly kind: "pass"; readonly judgedBy?: "compat" | "nothing" | "judgment" }
   | { readonly kind: "fail"; readonly line: number; readonly claim: number; readonly actual: ClaimReadingValue }
   | { readonly kind: "broke"; readonly line: number; readonly reason?: string }
   | { readonly kind: "stopped"; readonly line: number };
@@ -211,9 +211,10 @@ export interface RowContext {
   readonly retagged: boolean;
   readonly renamed: boolean;
   /** Why head's passing executions judged no claim in Then position, when
-   * they did not: a compat step stands there (`compat`), or no claim step
-   * does (`nothing`). */
-  readonly thenJudgesNoClaim?: "compat" | "nothing";
+   * they did not: a compat step stands there (`compat`), no claim step
+   * does (`nothing`), or its only claims are judged-as claims, which a
+   * judgment decides (`judgment`). */
+  readonly thenJudgesNoClaim?: "compat" | "nothing" | "judgment";
 }
 
 function listed(parts: readonly string[]): string {
@@ -249,6 +250,9 @@ export function plannedWorldCells(
     return { base: [], old: oldRoles.filter((cell) => cell.role === "required").map((cell) => cell.environment) };
   }
   if (!context.held && headCells.some((cell) => proves({ ...cell, world: "head" }, proofRuns))) return none;
+  // A Then a judgment decides compares nothing, so a base cell passes
+  // whatever the base does and cannot change the verdict.
+  if (!context.held && context.thenJudgesNoClaim === "judgment") return none;
   return { base: environments, old: [] };
 }
 
@@ -388,6 +392,16 @@ export function judgeRow(
     ...base.map((cell) => `base ${cell.environment}: ${cellText(cell)}${cell.outcome === "not-run" && cell.reason !== undefined ? ` (${cell.reason})` : ""}`),
     ...controls.map((cell) => `control ${cell.environment}: ${cellText(cell)}`),
   ];
+  // A Then whose claims a reader judges compares nothing, so no world can
+  // prove it, and no world can leave it unproven either: the judgment
+  // column decides it (src/run/judgments.ts), and the row is held on what
+  // the machine compared, which is everything before that Then.
+  if (context.thenJudgesNoClaim === "judgment" && !context.held) {
+    return {
+      verdict: "held",
+      reason: `passes in ${passedIn}, and its Then asks for a judgment and compares nothing, so no world can show it failing where its behaviour is absent: its judgment decides it`,
+    };
+  }
   // Only a claim in Then position proves, so a row whose Then judges none
   // is unproven by what its Then is, not by what the base did.
   if (context.thenJudgesNoClaim !== undefined) {

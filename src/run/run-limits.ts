@@ -39,6 +39,7 @@ export const LIMIT_KINDS: readonly RunLimitKind[] = [
   "check-skipped",
   "control-not-proving",
   "no-claim",
+  "judgment",
   "unmeasured",
   "after-record",
   "unrecorded-log",
@@ -72,17 +73,23 @@ export function limitsOf(fields: LimitSource): RunLimit[] {
   // and that is the control's entry, not the scenario's. A red row's
   // reason already says it stopped before a claim was judged.
   const red = new Set(fields.table.rows.filter((row) => RED_VERDICTS.has(row.verdict)).map((row) => placeKey(row.feature, row.line)));
-  const unjudged = head.filter((scenario) => scenario.role !== "control" && scenario.judged_by !== undefined && !red.has(placeKey(scenario.feature, scenario.line)));
+  const unjudged = head.filter(
+    (scenario) => scenario.role !== "control" && scenario.judged_by !== undefined && scenario.judged_by !== "judgment" && !red.has(placeKey(scenario.feature, scenario.line)),
+  );
+  // A row a judgment decides compares nothing in its Then, so no control
+  // of it could fail there: its entry is the judgment's, not a control's.
+  const judgedRows = new Set(fields.table.rows.filter((row) => row.judgment !== undefined).map((row) => placeKey(row.feature, row.line)));
   // A scenario no claim judged is its own entry: a control of it passes
   // whatever the program does, and the fix a control entry names would
   // not close that.
   const unjudgedPlaces = new Set(unjudged.map((scenario) => placeKey(scenario.feature, scenario.line)));
   for (const row of fields.table.rows) {
-    if (row.verdict !== "held" || unjudgedPlaces.has(placeKey(row.feature, row.line))) continue;
+    if (row.verdict !== "held" || unjudgedPlaces.has(placeKey(row.feature, row.line)) || judgedRows.has(placeKey(row.feature, row.line))) continue;
     const limit = controlLimit(row, head);
     if (limit !== undefined) limits.push(limit);
   }
   limits.push(...noClaimLimits(unjudged).sort(byPlace));
+  limits.push(...judgmentLimits(fields.table.rows));
   limits.push(...stepLimits(head).sort(byPlace));
   for (const world of fields.worlds ?? []) limits.push(...worldLimits(world));
   const rank = (limit: RunLimit): number => LIMIT_KINDS.indexOf(limit.kind);
@@ -150,6 +157,31 @@ function noClaimLimits(unjudged: readonly RunScenario[]): RunLimit[] {
     });
   }
   return [...limits.values()];
+}
+
+// One entry per row a judgment holds green: nukadoko checked that the
+// value is the one judged, and nothing of the judgment itself, so a green
+// row that stands on a person's or an agent's word says so here. A value
+// judged as an ARIA snapshot names what that leaves out: a change only to
+// how the page looks keeps the snapshot, and so the judgment, as it is.
+function judgmentLimits(rows: readonly RunTableRow[]): RunLimit[] {
+  return rows.flatMap((row): RunLimit[] => {
+    const judgment = row.judgment;
+    if (judgment === undefined || judgment.state !== "judged") return [];
+    const by = [...new Set(judgment.reads.map((read) => read.judgment?.by ?? ""))].map((name) => codeSpan(name)).join(", ");
+    const aria = judgment.reads.some((read) => read.measured === "aria-snapshot")
+      ? "; it is bound to the ARIA snapshot, so a change only to how the page looks keeps it current"
+      : "";
+    return [
+      {
+        kind: "judgment",
+        feature: row.feature,
+        line: row.line,
+        text: row.name,
+        detail: `stands on a judgment by ${by}: nukadoko checked that the value is the one judged, not the judgment${aria}`,
+      },
+    ];
+  });
 }
 
 // Per step: what it did that nukadoko saw and could not measure

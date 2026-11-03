@@ -85,6 +85,40 @@ const RUN_CODES = {
       "Under nuka run --base, the change's INTENT.md holds a row, or a table, that cannot be read as an intent, or git did not answer what the run asked of the file. A row that cannot be read declares nothing, so the run fails rather than judge less than the file says.",
     fix: "Write the row as docs/intent.md describes, so each difference the change means is declared.",
   },
+  "judgment-misses": {
+    severity: "failed",
+    description:
+      "A criterion's Then asks for a judgment, and the committed judgment that cites the value this run read says the value does not meet the sentence. The criterion fails until the value changes, and the judgment of the new value says it meets.",
+    fix: "Change the program until the value meets the sentence, run the criterion again, and have a judge who did not write the change judge the new value with nuka judge.",
+  },
+  "judgment-pending": {
+    severity: "failed",
+    description:
+      "A criterion's Then asks for a judgment (a judged-as claim), the run read the value, and no committed judgment cites that claim yet. nukadoko compares nothing for such a claim, so nothing shows the criterion holds until a reader judges the value.",
+    fix: "Have a judge who did not write the change read the value with nuka judge <file>:<line> --run <run>, then record it with --meets or --misses, --by, and --because, commit the judgment file, and run again.",
+  },
+  "judgment-stale": {
+    severity: "failed",
+    description:
+      "A criterion's Then asks for a judgment, and the committed judgments of its claim cite other values than the one this run read: the value changed since it was judged, so no judgment covers what ran.",
+    fix: "Have a judge who did not write the change read the new value with nuka judge <file>:<line> --run <run> and record a judgment of it; a value that changes on every run (a time, an id) means the claim reads too much, so narrow it with at.",
+  },
+  "judgment-uncitable": {
+    severity: "failed",
+    description:
+      "A criterion's Then asks for a judgment of a value that no channel nukadoko recorded holds (measured: none): a value step code wrote or worked out. A judgment cites only a value the tool measured, so none can cite this one.",
+    fix: "Read the value whole from a channel the step record holds (a response body, a process's output, a file) and narrow it with view and at, or return the locator or page from observe so nukadoko takes its ARIA snapshot.",
+  },
+  "judgments-not-compared": {
+    severity: "warning",
+    description: "Under nuka run --base, git did not answer when the run compared the judgment files with the base, so the summary lists no changed judgment.",
+    fix: "Run the git command the message names to see its error; the verdicts and the judgments themselves are not affected.",
+  },
+  "judgments-unread": {
+    severity: "failed",
+    description: "A judgment file under judgments/ does not parse or lacks a field, so the criteria of its feature file read as judged by nothing.",
+    fix: "Repair the file the message names by hand, or remove it and judge its criteria again with nuka judge.",
+  },
   "nothing-selected": {
     severity: "failed",
     description:

@@ -43,6 +43,7 @@ describe("nuka --help", () => {
       "run",
       "report",
       "verdict",
+      "judge",
       "steps",
       "describe",
       "Exploring:",

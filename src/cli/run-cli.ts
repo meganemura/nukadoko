@@ -172,6 +172,16 @@ interface CheckArgs {
   env?: string | string[];
 }
 
+interface JudgeArgs {
+  target?: string;
+  run?: string;
+  meets?: boolean;
+  misses?: boolean;
+  by?: string;
+  because?: string;
+  json?: boolean;
+}
+
 interface CleanArgs {
   dryRun?: boolean;
   json?: boolean;
@@ -1040,6 +1050,44 @@ export async function runCli(
     },
   };
 
+  // A judgment of a value a run read, which nukadoko cites and never
+  // checks (src/cli/judge.ts): shown without a verdict flag, recorded
+  // with one.
+  const judgeCommand: CommandModule<Record<string, never>, JudgeArgs> = {
+    command: "judge <target>",
+    describe:
+      "show the values a run read for a criterion whose Then asks for a judgment (<feature file>:<scenario line>), or record a judgment of them with --meets or --misses",
+    builder: (y: Argv) =>
+      y
+        .positional("target", { type: "string", describe: "the criterion, as <feature file>:<scenario line>" })
+        .option("run", { type: "string", nargs: 1, describe: "the run whose records hold the values; the newest run that ended when omitted" })
+        .option("meets", { type: "boolean", default: false, describe: "record that each value meets the quality its sentence names" })
+        .option("misses", { type: "boolean", default: false, describe: "record that each value does not: the criterion fails until the value changes" })
+        .option("by", { type: "string", nargs: 1, describe: "who judged, as they name themselves; the commit of the judgment file is the record" })
+        .option("because", { type: "string", nargs: 1, describe: "why the values meet or miss the sentence, in one sentence" })
+        .option("json", { type: "boolean", default: false, describe: "machine-readable output" }) as Argv<JudgeArgs>,
+    handler: async (args: Arguments<JudgeArgs>) => {
+      if (argsFailed) return;
+      const { runJudge } = await import("./judge.js");
+      if (args.meets === true && args.misses === true) {
+        exitCode = refuse({ json: args.json ?? false, stdout, stderr, command: "judge" }, new Error("--meets and --misses say opposite things: give one"), "judgment-refused", undefined, notices);
+        return;
+      }
+      exitCode = await runJudge({
+        rootDir,
+        target: args.target ?? "",
+        ...(args.run === undefined ? {} : { run: args.run }),
+        ...(args.meets === true ? { verdict: "meets" as const } : args.misses === true ? { verdict: "misses" as const } : {}),
+        ...(args.by === undefined ? {} : { by: args.by }),
+        ...(args.because === undefined ? {} : { because: args.because }),
+        json: args.json ?? false,
+        notices,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
   const reportCommand: CommandModule<Record<string, never>, ReportArgs> = {
     command: "report [run]",
     describe: "render a finished run as Markdown, Allure results, or a cucumber-messages stream, from its run directory alone",
@@ -1185,6 +1233,7 @@ export async function runCli(
         namingMissingConfig(runCommand),
         namingMissingConfig(reportCommand),
         namingMissingConfig(verdictCommand),
+        namingMissingConfig(judgeCommand),
         namingMissingConfig(stepsCommand),
         namingMissingConfig(describeCommand),
       ],

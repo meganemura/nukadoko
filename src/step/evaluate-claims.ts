@@ -16,6 +16,7 @@ import type { CountedGroup, LeftOutGroup } from "../execution-events/counted.js"
 import { judgeSnapshots } from "./aria-snapshot.js";
 import {
   ARIA_SNAPSHOT_COMPARE,
+  JUDGED_COMPARE,
   isEachClaim,
   KIND_JSON_TYPES,
   kindNamed,
@@ -94,6 +95,13 @@ export function jsonType(value: unknown): JsonType {
 
 function article(word: string): string {
   return /^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`;
+}
+
+/** Whether a claim outcome lets its step pass: a claim that held, and a
+ * judged-as claim that read its value, which a judgment decides later and
+ * never the step. */
+export function claimPasses(outcome: ClaimComparisonRecord["outcome"]): boolean {
+  return outcome === "held" || outcome === "for-judgment";
 }
 
 /** Structural equality over plain JSON values: object key order does not
@@ -705,6 +713,10 @@ export async function compareValues(
       if (compare === "less-than") return { holds: a < e };
       return { holds: a <= e };
     }
+    // A reader decides a judged-as claim after the run, and judgeComparison
+    // records it before any compare; nothing compares it here.
+    case "judged-as":
+      return { reason: "judged-as is decided by a judgment a reader records, never by a compare" };
   }
 }
 
@@ -781,6 +793,11 @@ export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<strin
     const fromArgs = segments !== null && fromKeys.has(segments[0]!);
     const ariaSnapshot = !isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE;
     if (segments !== null) add(fromArgs ? args : ariaSnapshot ? ariaSnapshots : observed, segments);
+    // A judged value observe returned is read both ways: as the ARIA
+    // snapshot nukadoko takes when it is a locator or a page, and as its
+    // plain snapshot when it is not. A locator has no plain snapshot, and a
+    // plain value no ARIA one, so one of the two reads is always empty.
+    if (!isEachClaim(claim) && claim.compare === JUDGED_COMPARE && !fromArgs) add(ariaSnapshots, segments);
     if (!isEachClaim(claim)) {
       if (fromArgs) add(argValues, segments);
       addExpected(claim.expected);
@@ -1060,6 +1077,15 @@ function topLevelSide(claim: Claim, inputs: ClaimInputs): Side & { readonly from
   const atRead = segments.length > path.length;
   const fromKey = inputs.fromKeys.has(path[0]!) ? path[0]! : null;
   if (!isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE) return { ...ariaSnapshotSide(path, fromKey, inputs), fromKey, atRead: false };
+  if (!isEachClaim(claim) && claim.compare === JUDGED_COMPARE && fromKey === null) {
+    const taken = inputs.ariaSnapshots?.(segments);
+    // A locator or a page is judged as the tree the browser printed, which
+    // nukadoko took; anything else falls through to its plain snapshot.
+    if (taken !== undefined && !("broken" in taken)) {
+      const place = placeAriaSnapshot(placeAt(OBSERVE_PLACE, segments.join(".")));
+      return "text" in taken ? { place, value: taken.text, fromKey, atRead } : { place, unjudged: `${place.label} ${taken.unjudged}`, fromKey, atRead };
+    }
+  }
   const read = fromKey === null ? inputs.observed(segments) : inputs.args(segments);
   const base = fromKey === null ? OBSERVE_PLACE : argPlace(fromKey, inputs);
   const skip = fromKey === null ? 0 : 1;
@@ -1300,6 +1326,9 @@ async function judgeComparison(claim: ItemClaim, rawActual: Side, inputs: ClaimI
   };
   const stop = precondition(actual, readSegments, expected, inputs);
   if (stop !== null) return "broken" in stop ? { ...base, outcome: "broken", reason: stop.broken } : { ...base, outcome: "unjudged", reason: stop.unjudged };
+  // The run reads a judged value and compares nothing: whether it meets
+  // the quality is a judgment the table reads later (src/run/judgments.ts).
+  if (claim.compare === JUDGED_COMPARE) return { ...base, outcome: "for-judgment" };
   const result = await compareValues(claim.compare, (actual as { value: unknown }).value, (expected as { value: unknown }).value, (pattern, text) =>
     testWithinBudget(pattern, text, inputs),
   );
@@ -2083,7 +2112,7 @@ export function readingOf(
   settled?: boolean,
   pages?: readonly PageReadingRecord[],
 ): { readonly reading: ClaimReading; readonly content: string } {
-  const held = judged.every((entry) => entry.record.outcome === "held");
+  const held = judged.every((entry) => claimPasses(entry.record.outcome));
   const both = judged.some((entry) => entry.expectedOrigins.includes("observe"));
   const expected = judged.map((entry) => expectedOfRecord(entry.record));
   const reading: ClaimReading = {

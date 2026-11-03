@@ -143,7 +143,15 @@ export interface RunEventsLate {
  * `actual_bytes` or `expected_bytes` holds the whole value's size; the
  * step record keeps the value whole. An item claim of `each` is cut the
  * same way. */
-export type RunClaim = ClaimRecord & { readonly actual_bytes?: number; readonly expected_bytes?: number; readonly after_world_stop?: RunAfterWorldStop };
+export type RunClaim = ClaimRecord & {
+  readonly actual_bytes?: number;
+  readonly expected_bytes?: number;
+  readonly after_world_stop?: RunAfterWorldStop;
+  /** On a `for-judgment` claim: the digest of the value the step record
+   * holds whole (`sha256:` and the hex of its JSON with object keys
+   * sorted), which a judgment cites (docs/spec.md "Judgments"). */
+  readonly value_digest?: string;
+};
 
 /** A claim on a count of execution events, judged again once the world
  * stopped, over every line of the producer's trace the program wrote:
@@ -219,8 +227,10 @@ export interface RunScenario {
    * judged (held, broken, or unjudged; a claim on another line does not
    * count): `compat` when a compat step is bound in Then position, so a
    * judgment nukadoko cannot see may have been made by a throw, and
-   * `nothing` otherwise. */
-  readonly judged_by?: "compat" | "nothing";
+   * `nothing` otherwise; `judgment` when every claim judged on a Then
+   * line was a judged-as claim, so a judgment decides the criterion and
+   * no compare does. */
+  readonly judged_by?: "compat" | "nothing" | "judgment";
 }
 
 /** A scenario's claim counts by outcome. */
@@ -229,6 +239,9 @@ export interface RunScenarioClaims {
   readonly broken: number;
   readonly unobserved?: number;
   readonly unjudged?: number;
+  /** judged-as claims that read their value: a judgment decides each, so
+   * none is counted as `held`. */
+  readonly for_judgment?: number;
 }
 
 /** What one cell of the table holds after its executions: `pass` when
@@ -283,6 +296,59 @@ export type RunRowVerdict = "held" | "proven" | "removed" | "failed" | "unproven
 /** The verdicts that turn the gate red. */
 export const RED_VERDICTS: ReadonlySet<RunRowVerdict> = new Set(["failed", "unproven", "moved"]);
 
+/** Where a judged value stands against the committed judgments: one
+ * cites it and says it meets the sentence (`judged`) or misses it
+ * (`misses`); one cites another value of the same claim (`stale`); none
+ * cites the claim (`pending`); or the value is in no channel nukadoko
+ * recorded, so no judgment can cite it (`uncitable`). Only `judged`
+ * leaves the gate green. */
+export type RunJudgmentState = "judged" | "misses" | "stale" | "pending" | "uncitable";
+
+/** The judgment a judged value is read against: the one that cites it,
+ * or, for a `stale` value, the latest one of the same claim. */
+export interface RunCitedJudgment {
+  readonly value_digest: string;
+  readonly verdict: "meets" | "misses";
+  readonly by: string;
+  readonly because: string;
+  readonly run_id: string;
+  readonly at: string;
+  /** For a `stale` value: the value that judgment cited, as its file
+   * holds it, and where it first differs from the value read now. */
+  readonly value?: unknown;
+  readonly difference?: string;
+}
+
+/** One value a run read for a judgment: which Then and claim read it, in
+ * which environment, its digest, and where it stands. */
+export interface RunJudgedRead {
+  readonly line: number;
+  readonly step: string;
+  readonly claim: number;
+  readonly environment: string;
+  /** The quality the sentence names: the claim's `expected_text`. */
+  readonly quality: string | null;
+  readonly value_from: string;
+  readonly value_digest: string;
+  /** The channel the value was measured on, `aria-snapshot` for a tree
+   * nukadoko took, or `null` when nukadoko recorded no channel that
+   * holds it. */
+  readonly measured: string | null;
+  /** The step record, relative to the run directory. */
+  readonly record: string | null;
+  readonly state: RunJudgmentState;
+  readonly judgment?: RunCitedJudgment;
+}
+
+/** run.json's `judgment` on a row: the state that decides the gate (the
+ * first of `misses`, `uncitable`, `stale`, `pending` that a value is
+ * in, else `judged`), why, and each value read. */
+export interface RunRowJudgment {
+  readonly state: RunJudgmentState;
+  readonly reason: string;
+  readonly reads: readonly RunJudgedRead[];
+}
+
 /** How a criterion compares with `nuka run --base`'s ref. */
 export type RunRowChange = "unchanged" | "changed" | "new" | "removed";
 
@@ -309,6 +375,11 @@ export interface RunTableRow {
   readonly verdict: RunRowVerdict;
   /** Why the row has its verdict, in one sentence. */
   readonly reason: string;
+  /** For a criterion whose Then asks for a judgment and whose required
+   * head cells passed: what the judgments say of the values this run
+   * read, beside the verdict and never folded into it (docs/spec.md
+   * "Judgments"). */
+  readonly judgment?: RunRowJudgment;
   /** For a `removed` criterion: its sentences at the ref, as a person
    * reads them, since head no longer holds them. */
   readonly lines?: readonly string[];
@@ -342,6 +413,11 @@ export interface RunTable {
    * changed; whether `defaultEnvironments` changed; and what the
    * comparison could not see. */
   readonly mapping_changes: RunMappingChanges | null;
+  /** Under `--base`: each judgment file added, removed, or edited since
+   * the ref, relative to the project root. Judgments are not mapping (a
+   * judgment changes no step), so a reviewer reads them here. Absent
+   * without `--base`. */
+  readonly judgments_changed?: readonly string[];
   /** The table's columns, in order: each world and environment. */
   readonly worlds: readonly { readonly world: RunWorldName; readonly environment: string }[];
   readonly rows: readonly RunTableRow[];
@@ -813,6 +889,7 @@ export type RunLimitKind =
   | "check-skipped"
   | "control-not-proving"
   | "no-claim"
+  | "judgment"
   | "unmeasured"
   | "after-record"
   | "unrecorded-log"

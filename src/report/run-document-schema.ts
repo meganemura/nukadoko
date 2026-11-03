@@ -36,7 +36,7 @@ const errorKind = z.enum([
 ]);
 
 // What the summary reads of one claim (src/report/summary/claim-line.ts).
-const claimOutcome = z.enum(["held", "broken", "unobserved", "unjudged"]);
+const claimOutcome = z.enum(["held", "broken", "unobserved", "unjudged", "for-judgment"]);
 
 const measuredChannel = z.looseObject({ step_record_id: z.string(), channel: z.string() });
 
@@ -326,9 +326,10 @@ const scenario = z.looseObject({
       broken: z.number().int(),
       unobserved: z.number().int().optional(),
       unjudged: z.number().int().optional(),
+      for_judgment: z.number().int().optional(),
     })
     .optional(),
-  judged_by: z.enum(["compat", "nothing"]).optional(),
+  judged_by: z.enum(["compat", "nothing", "judgment"]).optional(),
   role: z.enum(["required", "control"]).optional(),
 }).refine((entry) => entry.status !== "stopped" || entry.stopped !== undefined, {
   message: "a stopped scenario names the step it was stopped after",
@@ -365,12 +366,38 @@ const tableCell = z
     path: ["claim"],
   });
 
+// A row's judgment (src/run/judgments.ts): the summary reads its state
+// and reason, and each value's line, state, and the judgment it cites.
+const judgmentState = z.enum(["judged", "misses", "stale", "pending", "uncitable"]);
+const rowJudgment = z.looseObject({
+  state: judgmentState,
+  reason: z.string(),
+  reads: z.array(
+    z.looseObject({
+      line: z.number().int(),
+      step: z.string(),
+      claim: z.number().int().min(0),
+      environment: z.string(),
+      quality: z.string().nullable(),
+      value_from: z.string(),
+      value_digest: z.string(),
+      measured: z.string().nullable(),
+      record: z.string().nullable(),
+      state: judgmentState,
+      judgment: z
+        .looseObject({ value_digest: z.string(), verdict: z.enum(["meets", "misses"]), by: z.string(), because: z.string(), run_id: z.string(), at: z.string() })
+        .optional(),
+    }),
+  ),
+});
+
 const table = z.looseObject({
   base: z.looseObject({ ref: z.string(), commit: z.string() }).nullable(),
   mapping_changed: z.boolean().nullable(),
   mapping_changes: z
     .looseObject({ files: z.array(z.string()), config: z.boolean(), conditions: z.array(z.string()), default_environments: z.boolean(), unseen: z.array(z.string()) })
     .nullable(),
+  judgments_changed: z.array(z.string()).optional(),
   worlds: z.array(z.looseObject({ world: worldName, environment: z.string() })),
   rows: z.array(
     z.looseObject({
@@ -384,6 +411,7 @@ const table = z.looseObject({
       cells: z.array(tableCell),
       verdict: z.enum(["held", "proven", "removed", "failed", "unproven", "moved"]),
       reason: z.string(),
+      judgment: rowJudgment.optional(),
       lines: z.array(z.string()).optional(),
     }),
   ),

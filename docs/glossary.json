@@ -1011,6 +1011,31 @@
       "en": ["a writer's own kind", "own kind"],
       "ja": "書き手自身の種類",
       "note": "`x_` で始まる実行イベントの種類(`x_decision`)。実行経路は、意図がそのフィールドを名指すときだけ、それで数える"
+    },
+    {
+      "en": ["judgment", "a judgment", "judge (a value)"],
+      "ja": "判断 / 判断する",
+      "note": "受け入れ基準の Then が judged-as で求める、run のあとにエージェントか人が下す見立て。run の record にある値を 1 つ引き、meets か misses と 1 文の理由を添える。claim の判定(判定できなかった の 判定)とも、行の断定とも別の語。比較 `judged-as`、コマンド `nuka judge`、フィールド `judgment`、値 `meets` と `misses`、ディレクトリ judgments/ はコードスパンで英語のまま"
+    },
+    {
+      "en": ["judge (the one who judges)", "the judge"],
+      "ja": "判断する人",
+      "note": "判断を下すエージェントか人。変更のコードを書いたエージェントとは別の者。`--by` がその名を記す"
+    },
+    {
+      "en": ["pending (judgment)", "for-judgment"],
+      "ja": "判断待ち / 判断に回した",
+      "note": "judged-as の claim が読んだ値を、どの判断もまだ引いていないこと。行の `judgment` の state `pending` と claim の outcome `for-judgment` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["uncitable"],
+      "ja": "引けない",
+      "note": "judged-as の claim が読んだ値を step record のどの channel も保持しておらず、判断が引けないこと。state `uncitable` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["digest (of a value)", "value_digest"],
+      "ja": "ダイジェスト",
+      "note": "値を正規化した JSON の sha256。判断はこれで値を引く。フィールド `value_digest` はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

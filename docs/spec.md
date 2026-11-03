@@ -2088,6 +2088,8 @@ stand-ins for the parts that change), `is-a` (the actual value is of the
 kind the expected text names),
 `fits-aria-snapshot` (the ARIA snapshot nukadoko takes of a page or a
 locator holds the part of one the docstring states),
+`judged-as` (nothing is compared: a judge decides, after the run, whether
+the value reads as the sentence says; see "Judgments"),
 `matches` (the expected text, as a regular expression, matches),
 `greater-than`, `at-least`, `less-than`, and `at-most`. Equality is
 structural over JSON values: object key order does not count, and `0`
@@ -2918,8 +2920,9 @@ A claim step's record has these fields of its own (see "Records"):
   `actual_from`,
   `view`, `at`, and `count` when the claim names them, `compare`, `expected` (absent on the
   same terms), `expected_from`, `expected_view` when the claim names it,
-  `expected_text`, `outcome` (`held`, `broken`, `unobserved`, or
-  `unjudged`), a `reason` when it broke for something other than the
+  `expected_text`, `outcome` (`held`, `broken`, `unobserved`,
+  `unjudged`, or `for-judgment` for a `judged-as` claim that read its
+  value, with `value_digest` in run.json; see "Judgments"), a `reason` when it broke for something other than the
   comparison itself (an undefined value, two JSON types, an expected text
   every string holds, a view that could not apply, a side compared with
   itself, a value the line states that no claim reads) or when nukadoko
@@ -6268,9 +6271,10 @@ to act on the run without opening another file:
   result stay in its step record: they can be large, and the next decision
   does not need them.
 - Every scenario has `claims`, the claims of its step records counted
-  by outcome: `held` and `broken` always, and `unobserved` and `unjudged`
-  when there are any. A scenario in which no claim on a Then line was
-  judged (held, broken, or unjudged) has `judged_by`: `compat` when a
+  by outcome: `held` and `broken` always, and `unobserved`, `unjudged`,
+  and `for_judgment` when there are any. A scenario in which no claim on a Then line was
+  judged (held, broken, or unjudged) has `judged_by`: `judgment` when its
+  Then claims are all `for-judgment` (see "Judgments"), `compat` when a
   compat step is bound in Then position, which may have judged by
   throwing or not, and `nothing` otherwise. It is read from the step
   records, not from what the lines bind, so a scenario whose Then claim
@@ -6379,6 +6383,9 @@ to act on the run without opening another file:
     ids, or tagged none of the steps' lines in time (see "Program").
   - `unrecorded-events`: a world whose execution events were not read, got no
     line, or hold lines no step record holds (see "Execution events").
+  - `judgment`: a row held on a judgment (see "Judgments"), once per
+    row, naming its judges: nukadoko checked that the value is the one judged, never the
+    judgment.
 
   A step's entry is one per step, environment, and gap, citing its first
   record under `--repeat`. A late line of a head step is on that step's
@@ -7038,6 +7045,116 @@ name is fetched from `origin` under its own name, and a full `refs/` name
 under the same name. A server fetches a commit only by its full hash, so
 an abbreviated hash, or a revision expression such as `main~2`, gets
 `git fetch --unshallow origin`, which fetches the whole history.
+
+### Judgments
+
+Some criteria no compare can decide: whether a greeting is friendly to a
+first-time visitor, whether an error message tells the reader what to do
+next, whether a page reads as finished. A Then that states one asks for a
+judgment: a claim with `compare: "judged-as"`, whose actual is the value
+to judge and whose expected is the quality the sentence names, from a
+capture or from the pattern's fixed words.
+
+```ts
+export default defineStep({
+  pattern: "the greeting reads as {quality:string}",
+  args: z.object({ quality: z.string(), stdout: runGreet.returns.shape.stdout }),
+  from: { stdout: [runGreet, "stdout"] },
+  claims: [{ actual: "stdout", view: "text", compare: "judged-as", expected: "quality" }],
+});
+```
+
+The run reads the value and judges nothing. The claim's outcome is
+`for-judgment`: the step passes on it, it is never counted as `held`,
+and run.json records the value with `value_digest`, the sha256 of its
+JSON with each object's keys sorted, of the value as the step record
+holds it (redacted). A judge reads that value after the run, against the
+sentence, and records a judgment with `nuka judge`: `meets` or `misses`,
+a name (`--by`), and one sentence (`--because`). The next run reads the
+criterion against it. nukadoko checks two things, both exactly: that the
+judgment cites a value a run's records hold, by its digest, and whether
+the value this run read is that value. It never checks the judgment
+itself, and it never checks who made it: `--by` is a name, and the
+commit that adds the judgment, with its review, is the record of who
+judged.
+
+The judge is not the agent that wrote the change. That agent read the
+sentence while it wrote the code, so its reading of the value is the
+reading the code was written to satisfy. A second agent, given only the
+sentence and the value, or a person, judges what a reader would see.
+
+**What a judgment can cite.** Only a value nukadoko measured: one a
+channel of a step record holds (a response, a process's output, a file),
+read through `view` and `at`, or the ARIA snapshot
+nukadoko takes when observe returns a locator or a page. A value step
+code computed is the code's word, so a judgment of it would judge the
+code's arithmetic rather than what ran, and the read is `uncitable`. On
+a page, the snapshot is the value: a change to how the page looks that
+keeps its roles, names, and text keeps the judgment, and the judged
+view, the screenshot and ARIA snapshot the step takes right after the
+reading (see "What the pages showed"), is what the judge looks at beside
+it. A judged value under `poll` holds the poll only when two readings in
+a row read the same value, so the value judged is one the page settled
+on.
+
+`defineStep` refuses `judged-as` inside `each` (a judgment cites one
+value, not one of many items), with `count` (a count is a number a
+compare decides), with an expected value from `from` or observe (a
+reader of the feature has to see what was asked), and with
+`expected_view`.
+
+**Where judgments live.** One file per feature file,
+`judgments/<feature path>.json` at the project root
+(`judgments/features/greeting.feature.json` for
+`features/greeting.feature`), outside the features directory so the
+features stay the criteria and the judgments their review, and outside
+the state directory so retention never removes one. The file is
+committed. An entry names the criterion, the Then's text, the claim's
+index, the quality, the value and its digest, the verdict, the reason,
+the judge's name, the run and the commit it judged, and when. Judging
+the same value again replaces its entry; judging another value of the
+same claim adds one beside it, so a value that comes back (a text that
+changed and changed back) finds its judgment again.
+
+**The judgment column.** A row whose required head cells all passed and
+read a value for a judgment gains `judgment`, beside its verdict and
+never folded into it: `state`, `reason`, and `reads`, one per value with
+its line, Then, claim, environment, quality, `value_from`,
+`value_digest`, `measured`, `record`, its own state, and the judgment
+it cites. A judged Then compares nothing, so it passes in a control and
+at the base alike: folded into the verdict, a criterion whose only Then
+is judged could never be proven, and a judgment could turn a row green
+that no comparison held. The states, in the order a row's state is
+chosen from its reads:
+
+- `misses`: a judgment cites this value and says it misses the sentence.
+- `uncitable`: no channel of a step record holds the value, so no
+  judgment can cite it. The step has to read the value from one.
+- `stale`: every judgment of this claim cites a value this run did not
+  read, so none covers what ran. The reason names where the value
+  differs from the latest judged one. A value one environment reads
+  beside a judged value another reads is `pending`, not stale: it is a
+  value of its own to judge.
+- `pending`: no judgment cites the value.
+- `judged`: a judgment cites each value and says it meets the sentence.
+
+A row whose state is anything but `judged` is a `judgment-<state>`
+finding (failed), with the reason and, but for `uncitable`, a `do:` that
+shows the value to judge, and the run exits 1. So does a judgment file
+that does not read (`judgments-unread`). A row whose head did not pass
+has no judgment: what it read is not the criterion holding, and its
+verdict is red already.
+
+**Under `--base`.** A scenario whose Then claims are only `judged-as`
+has `judged_by: "judgment"`. Its row is never `unproven`: no base or
+control could break a claim that compares nothing, so a new or changed
+one is `held`, its reason says its judgment decides it, and the base
+world does not run it (unless it is `@held`). It is no `no-claim` limit
+and no `control-not-proving` one. A row held on a judgment is a
+`judgment` limit instead: what stands on the judge's word. Under
+`--base`, `table.judgments_changed` lists the judgment files that differ
+from the base's, so a reviewer sees which judgments the change brings,
+and the summary says so in one line.
 
 ### Single steps (the agent path)
 
@@ -9470,6 +9587,22 @@ nuka verdict [--json]         whether the newest run that ended judged the
                               "Records"). --json adds judged (missing,
                               stale, judged, unknown), working_tree,
                               run_id, run_dir, run_working_tree, and base
+nuka judge <feature:line> [--run <run-id>] [--meets|--misses --by <name> --because <sentence>] [--json]
+                              show what a criterion's judged-as Thens read
+                              in a run that ended (the newest, or --run):
+                              each value, the quality the sentence names,
+                              the channel that holds it, its digest, its
+                              step record, and the judged view's files.
+                              With --meets or --misses, --by, and
+                              --because (one sentence), record one judgment
+                              of each value in judgments/<feature>.json;
+                              it never runs. Refused (judgment-refused)
+                              for a criterion whose required head cells
+                              did not pass or that read no value for a
+                              judgment, an uncitable value, both verdicts,
+                              a missing --by or --because, and a step
+                              record whose value does not have the digest
+                              run.json recorded (see "Judgments")
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               A claim step reads its values, judges every
@@ -10001,7 +10134,7 @@ reading either stream.
 | Exit | Meaning | Examples |
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported, a `nuka verdict` that found no run speaking for the working tree or a red one |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported, a `nuka verdict` that found no run speaking for the working tree or a red one, a `nuka run` with a judgment that is not `judged` |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat`, `--concurrency`, or `--order`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code or a note code with targets, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
@@ -10013,6 +10146,7 @@ reading either stream.
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |
 | `nuka clean` | one line per path, or with `--json` the envelope | nothing, except a refusal or a `walk-run-kept` note without `--json` |
 | `nuka verdict` | one line that says what the newest run speaks for, then its findings, or with `--json` the envelope | nothing, except a refusal without `--json` |
+| `nuka judge` | the values to judge, or one line per value judged, or with `--json` the envelope | the judgment file written, with the run that reads it; a refusal without `--json` |
 
 A refusal under `--json` replaces the report: the envelope holds the
 refusal finding and none of the command's own fields. A step record's

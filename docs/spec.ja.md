@@ -1678,7 +1678,7 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 
 #### 比較
 
-`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`lacks-field`(実際のオブジェクトに期待する名前のフィールドがない)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`is-a`(実際の値が、期待するテキストが名指す種類である)、`fits-aria-snapshot`(nukadoko がページかロケーターから取る ARIA スナップショットが、docstring が述べるその一部を含む)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`has-same-items`(2 つの配列が順序を問わず同じ要素を持つ)、`has-fields`(実際のオブジェクトが期待するオブジェクトのすべてのフィールドを持つ)、`lacks-field`(実際のオブジェクトに期待する名前のフィールドがない)、`fits-text`(実際のテキストが、変わる部分を代わりの記号で表した期待するテキストに行ごとに合う)、`is-a`(実際の値が、期待するテキストが名指す種類である)、`fits-aria-snapshot`(nukadoko がページかロケーターから取る ARIA スナップショットが、docstring が述べるその一部を含む)、`judged-as`(何も比較せず、値が文の言うとおりに読めるかを run のあとで判断する人が決める、「判断」を参照)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
 そのため、2 つのオブジェクトへの `equal` は、それぞれのフィールドちょうどを述べ、ほかのフィールドを許しません。
@@ -2263,7 +2263,7 @@ compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)�
 claim step の record には、次の固有のフィールドがあります(「Records」を参照)。
 
 - `claims`: step が宣言した順の、各 claim です。
-  比較は、`actual`(`view`、`at`、`count` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し、実行イベントの数では 1 つの数のときのその数で、範囲のときは代わりに `actual_range` で、どちらにも数えた行の `counted` が付きます)、`actual_from`、claim が名指しするときの `view`、`at`、`count`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
+  比較は、`actual`(`view`、`at`、`count` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し、実行イベントの数では 1 つの数のときのその数で、範囲のときは代わりに `actual_range` で、どちらにも数えた行の `counted` が付きます)、`actual_from`、claim が名指しするときの `view`、`at`、`count`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`、または値を読んだ `judged-as` の claim の `for-judgment` で、run.json では `value_digest` が付く、「判断」を参照)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
   `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値、parameter type の transformer が書き換えた値、読み取りの途中で過ぎた step の締め切り)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
@@ -4860,9 +4860,9 @@ run が終わったとき、最後の step record と run サマリの後に、�
   args と step 自身の結果は step record に残ります。
   大きくなりうるうえ、次の判断には要らないからです。
 - すべての scenario は `claims` を持ちます。
-  その scenario の step record の claim を成否ごとに数えたもので、`held` と `broken` は常にあり、`unobserved` と `unjudged` は 1 つでもあるときにあります。
+  その scenario の step record の claim を成否ごとに数えたもので、`held` と `broken` は常にあり、`unobserved`、`unjudged`、`for_judgment` は 1 つでもあるときにあります。
   Then の行のどの claim も判定されなかった(成り立つ、成り立たない、判定できなかったのどれでもない)scenario は `judged_by` を持ちます。
-  Then の位置に compat step が結び付いていて、それが throw するかどうかで判定したかもしれないときは `compat`、それ以外は `nothing` です。
+  Then の claim がすべて `for-judgment` のときは `judgment`(「判断」を参照)、Then の位置に compat step が結び付いていて、それが throw するかどうかで判定したかもしれないときは `compat`、それ以外は `nothing` です。
   これは行が何に結び付くかではなく step record から読みます。
   そのため、Then の claim step が動かなかった(前の step が失敗した)、何も観測できなかった、判定する claim がなかった scenario も挙げ、どの step にも結び付かない Then の行を持つ scenario も挙げます。
   Given、When、`*` の行にある claim は数えません。
@@ -4921,6 +4921,9 @@ run が終わったとき、最後の step record と run サマリの後に、�
   - `after-record`: `after_step_end`、`program_log_late`、`events_late` のどれかを持つ head の step で、record を書いたあとにそのファイルに届いたものです。
   - `unrecorded-log`: ログを読まなかった world、ログが trace id を持たなかった world、step たちの行をどれも間に合うように付けなかった world(「テスト対象のプログラム」を参照)。
   - `unrecorded-events`: 実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world(「実行イベント」を参照)。
+  - `judgment`: 判断の上に成り立った行(「判断」を参照)。
+    行ごとに 1 つで、判断した人を名指します。
+    nukadoko が確かめたのは値が判断した値であることで、判断そのものではありません。
 
   step の要素は、step、environment、示さないことの組ごとに 1 つで、`--repeat` のもとでは最初の record を名指します。
   head の step の遅れた行は、その step の要素だけが名指します。
@@ -5414,6 +5417,91 @@ CI のジョブは終了コードでゲートし、このストリームから�
 `origin/main` は `main` を `refs/remotes/origin/main` へ取ってきます。
 ブランチの名前は `origin` から同じ名前で取ってきて、完全な `refs/` の名前も同じ名前で取ってきます。
 サーバーがコミットを取らせるのは完全なハッシュのときだけなので、短くしたハッシュや `main~2` のようなリビジョンの式には `git fetch --unshallow origin` を出し、これは履歴全体を取ってきます。
+
+### 判断
+
+どの比較でも決められない受け入れ基準があります。
+挨拶が初めての訪問者に親しみやすいか、エラーメッセージが次に何をすればよいかを読み手に伝えるか、ページが仕上がって見えるか、といったものです。
+それを述べる Then は判断を求めます。
+`compare: "judged-as"` の claim で、実際の値は判断する値、期待値は文が名指す性質で、キャプチャかパターンの固定の語から取ります。
+
+```ts
+export default defineStep({
+  pattern: "the greeting reads as {quality:string}",
+  args: z.object({ quality: z.string(), stdout: runGreet.returns.shape.stdout }),
+  from: { stdout: [runGreet, "stdout"] },
+  claims: [{ actual: "stdout", view: "text", compare: "judged-as", expected: "quality" }],
+});
+```
+
+run は値を読み、何も判定しません。
+claim の outcome は `for-judgment` です。
+step はこれで通り、`held` には数えず、run.json は値を `value_digest` とともに記録します。
+`value_digest` は、step record が持つとおりの(伏せ字を入れた)値の JSON を、各オブジェクトのキーを並べ替えてから取った sha256 です。
+判断する人は run のあとでその値を文に照らして読み、`nuka judge` で判断を記録します。
+`meets` か `misses`、名前(`--by`)、1 文(`--because`)です。
+次の run は受け入れ基準をそれに照らして読みます。
+nukadoko が確かめるのは 2 つだけで、どちらも厳密です。
+判断が run の record にある値をダイジェストで引いていること、そしてこの run が読んだ値がその値であるかどうかです。
+判断そのものは確かめず、誰が下したかも確かめません。
+`--by` は名前で、判断を加えるコミットとそのレビューが、誰が判断したかの記録です。
+
+判断する人は、変更を書いたエージェントではありません。
+そのエージェントはコードを書きながら文を読んだので、その値の読み方は、コードが満たすように書かれた読み方そのものです。
+文と値だけを渡された別のエージェントか人が、読み手に見えるものを判断します。
+
+**判断が引ける値。**
+nukadoko が計測した値だけです。
+step record のどこかの channel が持つ値(レスポンス、プロセスの出力、ファイル)を `view` と `at` で読んだものか、observe がロケーターかページを返したときに nukadoko が取る ARIA スナップショットです。
+step のコードが計算した値はコードの言い分なので、それを判断すると、走ったものではなくコードの計算を判断することになり、その読みは `uncitable` です。
+ページでは、スナップショットが値です。
+役割、名前、テキストを保ったまま見た目だけを変えても判断は残ります。
+判断する人がその隣で見るのは、判定した読み取りのビューです(「ページが見せていたもの」を参照)。
+step が読み取りの直後に取るスクリーンショットと ARIA スナップショットです。
+`poll` のもとで判断する値は、続けて 2 回同じ値を読んだときだけ poll を止めるので、判断する値はページが落ち着いた値です。
+
+`defineStep` は、`each` の中の `judged-as`(判断は 1 つの値を引き、多くの要素の 1 つを引くのではありません)、`count` との組み合わせ(要素の数は比較が決める数です)、`from` や observe から来る期待値(feature を読む人に、何を求めたかが見えなければなりません)、`expected_view` を拒否します。
+
+**判断を置く場所。**
+feature ファイルごとに 1 つ、プロジェクトのルートの `judgments/<feature のパス>.json` です(`features/greeting.feature` なら `judgments/features/greeting.feature.json`)。
+features のディレクトリの外に置くので、feature は受け入れ基準のまま、判断はそのレビューのままです。
+state directory の外に置くので、retention が消すこともありません。
+このファイルはコミットします。
+要素は、受け入れ基準、Then のテキスト、claim の番号、性質、値とそのダイジェスト、断定、理由、判断する人の名前、判断した run とコミット、日時を持ちます。
+同じ値をもう一度判断するとその要素を置き換えます。
+同じ claim の別の値を判断すると、隣に要素を足します。
+そのため、戻ってきた値(変わってから元に戻ったテキスト)は、前の判断をまた見つけます。
+
+**判断の列。**
+必須の head のセルがすべて通り、判断のための値を読んだ行は `judgment` を持ちます。
+これは断定の隣に置き、断定に混ぜません。
+`state`、`reason`、`reads` を持ち、`reads` は値ごとに 1 つで、行、Then、claim、environment、性質、`value_from`、`value_digest`、`measured`、`record`、自身の state、引いている判断を持ちます。
+判断する Then は何も比較しないので、対照でも基点でも通ります。
+断定に混ぜると、判断する Then だけを持つ受け入れ基準は決して証明できず、どの比較も成り立たせていない行を判断が緑にできてしまいます。
+state は次のとおりで、行の state はこの順で各読みから選びます。
+
+- `misses`: この値を引く判断が、文を満たさないと言っています。
+- `uncitable`: step record のどの channel もこの値を持たないので、どの判断も引けません。
+  step はその値を channel から読まなければなりません。
+- `stale`: この claim のどの判断も、この run が読まなかった値を引いているので、走ったものを覆う判断がありません。
+  理由は、最後に判断した値とどこが違うかを名指します。
+  ある environment が読む値が、別の environment が読んだ判断済みの値と並ぶときは、古びたのではなく `pending` です。
+  それはそれで判断する値です。
+- `pending`: この値を引く判断がありません。
+- `judged`: 各値を引く判断があり、文を満たすと言っています。
+
+state が `judged` でない行は `judgment-<state>` の所見(failed)になり、理由と、`uncitable` を除いて判断する値を見せる `do:` を持ち、run は 1 で終わります。
+読めない判断のファイル(`judgments-unread`)も同じです。
+head が通らなかった行は判断を持ちません。
+読んだものは受け入れ基準が成り立っていることではなく、その断定はすでに赤です。
+
+**`--base` のもとで。**
+Then の claim が `judged-as` だけの scenario は `judged_by: "judgment"` を持ちます。
+その行は `unproven` になりません。
+何も比較しない claim は基点でも対照でも成り立たなくならないので、新しいか変わった行は `held` で、理由は判断が決めると言い、base の world はそれを走らせません(`@held` のときを除きます)。
+これは `no-claim` の limit にも `control-not-proving` の limit にもなりません。
+判断の上に成り立った行は、代わりに `judgment` の limit になり、判断する人の言葉の上に立つものを示します。
+`--base` のもとでは、`table.judgments_changed` が基点と違う判断のファイルを並べるので、レビューする人は変更がどの判断を持ち込むかがわかり、サマリもそれを 1 行で言います。
 
 ### 単体 step(agent の経路)
 
@@ -7394,6 +7482,22 @@ nuka verdict [--json]         whether the newest run that ended judged the
                               "Records"). --json adds judged (missing,
                               stale, judged, unknown), working_tree,
                               run_id, run_dir, run_working_tree, and base
+nuka judge <feature:line> [--run <run-id>] [--meets|--misses --by <name> --because <sentence>] [--json]
+                              show what a criterion's judged-as Thens read
+                              in a run that ended (the newest, or --run):
+                              each value, the quality the sentence names,
+                              the channel that holds it, its digest, its
+                              step record, and the judged view's files.
+                              With --meets or --misses, --by, and
+                              --because (one sentence), record one judgment
+                              of each value in judgments/<feature>.json;
+                              it never runs. Refused (judgment-refused)
+                              for a criterion whose required head cells
+                              did not pass or that read no value for a
+                              judgment, an uncitable value, both verdicts,
+                              a missing --by or --because, and a step
+                              record whose value does not have the digest
+                              run.json recorded (see "Judgments")
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               A claim step reads its values, judges every
@@ -7911,7 +8015,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code、作業ツリーを判定した run が無いか red の run を見つけた `nuka verdict` |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code、作業ツリーを判定した run が無いか red の run を見つけた `nuka verdict`、`judged` でない判断を持つ `nuka run` |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat`、`--concurrency`、`--order`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code や対象を指定したときの注記の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
@@ -7923,6 +8027,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |
 | `nuka clean` | パスごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否と `walk-run-kept` の note を除く) |
 | `nuka verdict` | 最新の run が何を判定したかを言う 1 行とその所見、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
+| `nuka judge` | 判断する値、判断した値ごとに 1 行、`--json` なら envelope | 書いた判断のファイルと、それを読む run(`--json` なしの拒否を含む) |
 
 `--json` のときの拒否は報告の代わりになります。
 envelope は拒否の所見を持ち、コマンド自身のフィールドは持ちません。

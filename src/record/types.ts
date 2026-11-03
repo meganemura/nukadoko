@@ -852,15 +852,19 @@ export type ClaimCompare =
   | "greater-than"
   | "at-least"
   | "less-than"
-  | "at-most";
+  | "at-most"
+  | "judged-as";
 
 /** How a claim normalizes its actual value before `at` and the compare. */
 export type ClaimView = "text" | "lines" | "json" | "comma-list";
 
 /** `held` and `broken` are the two outcomes of a comparison. `unobserved`
  * when the step read no values, so nothing was judged; `unjudged` when the
- * step read its values and nukadoko failed while judging this claim. */
-export type ClaimOutcome = "held" | "broken" | "unobserved" | "unjudged";
+ * step read its values and nukadoko failed while judging this claim.
+ * `for-judgment` is a `judged-as` claim that read its value: nukadoko
+ * compared nothing, and a judgment a reader records decides it
+ * (docs/spec.md "Judgments"), so it is never counted as `held`. */
+export type ClaimOutcome = "held" | "broken" | "unobserved" | "unjudged" | "for-judgment";
 
 /** A recorded channel whose content equals a claim's raw actual value, or
  * an expected value an earlier step returned or `observe` read:

@@ -34,6 +34,7 @@ export const CLAIM_COMPARES = [
   "at-least",
   "less-than",
   "at-most",
+  "judged-as",
 ] as const satisfies readonly ClaimCompare[];
 
 /** Every view a claim may name. */
@@ -229,11 +230,22 @@ export function placeCounted(place: ClaimPlace, count: boolean | undefined): Cla
  * the locator or page at its path, and not the value there. */
 export const ARIA_SNAPSHOT_COMPARE = "fits-aria-snapshot" satisfies ClaimCompare;
 
+/** The compare no code decides: a reader judges the value the claim
+ * read against the quality the sentence names, after the run, and records
+ * a judgment that cites the value (docs/spec.md "Judgments"). The run only
+ * reads the value and records it, so the claim record says
+ * `for-judgment`, never `held`. */
+export const JUDGED_COMPARE = "judged-as" satisfies ClaimCompare;
+
+/** The label prefix of a place read through an ARIA snapshot nukadoko
+ * took, which is how a record shows that nukadoko took the value. */
+export const ARIA_SNAPSHOT_LABEL = "ARIA snapshot of ";
+
 /** `place` read through the ARIA snapshot nukadoko takes of the locator or
  * page there: like a count, the last step a claim takes, so the label
  * names it first. Pure. */
 export function placeAriaSnapshot(place: ClaimPlace): ClaimPlace {
-  return { origin: place.origin, segments: [...place.segments, "#aria-snapshot"], label: `ARIA snapshot of ${place.label}`, open: false };
+  return { origin: place.origin, segments: [...place.segments, "#aria-snapshot"], label: `${ARIA_SNAPSHOT_LABEL}${place.label}`, open: false };
 }
 
 function sameSegment(a: string, b: string): boolean {
@@ -1151,6 +1163,31 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   // Not a row of COMPARE_SIDES: it needs to know where the claim sits and
   // what its actual reads.
   if (claim.compare === ARIA_SNAPSHOT_COMPARE) checkAriaSnapshot(label, claim, shape, where, actualFromObserve);
+  if (claim.compare === JUDGED_COMPARE) checkJudged(label, claim, where);
+}
+
+/** Refuses a `judged-as` claim a judgment could not cite as the line
+ * states it. A judgment cites one value one Then read, so the claim sits
+ * at the top level, never inside an `each`, and reads the value itself,
+ * never a count of it, which a number compare decides. The quality the
+ * judge reads the value against is the sentence's own words, so a reader
+ * of the feature sees what was asked: a value a step returned or
+ * `observe` read could say anything. */
+function checkJudged(label: string, claim: Record<string, unknown>, where: Where): void {
+  if (where === "item") {
+    throw new InvalidClaimError(
+      `${label} compares with judged-as inside each, and a judgment cites one value a Then read, not one of many items. Claim the value at the top level, and name it in actual`,
+    );
+  }
+  const expected = claim.expected;
+  if (typeof expected === "object" && expected !== null && !("literal" in expected)) {
+    throw new InvalidClaimError(
+      `${label}.expected reads ${describe(expected)}, and the quality a judge reads a judged-as value against is the sentence's own words, so a reader of the feature sees what was asked. Take it from a capture, or from the pattern's fixed words as a literal`,
+    );
+  }
+  if (claim.expected_view !== undefined) {
+    throw new InvalidClaimError(`${label}.expected_view is ${describe(claim.expected_view)}, and a judge reads the quality as the sentence states it. Drop expected_view`);
+  }
 }
 
 /** Whether a top-level claim's `actual` reads observe: it is not a key

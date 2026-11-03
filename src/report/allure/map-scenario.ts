@@ -900,7 +900,11 @@ function mapCalls(calls: readonly CallEntry[] | undefined): MappedChildStep[] {
 // what was compared without opening record.json. The values themselves
 // are parameters of that child step.
 
+// A judged-as claim compared nothing, so it neither passed nor failed
+// here: a judgment decides it outside the results (docs/spec.md
+// "Judgments"), and "skipped" is the one status that claims neither.
 function claimStatus(outcome: ClaimRecord["outcome"]): MappedStatus {
+  if (outcome === "for-judgment") return "skipped";
   return outcome === "held" ? "passed" : outcome === "broken" ? "failed" : "broken";
 }
 

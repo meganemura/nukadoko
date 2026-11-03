@@ -9,6 +9,7 @@ import {
 } from "../record/run-result.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import type { ClaimRecord, JudgedView, JudgedViewFile, ObservedCounts, StepRecord } from "../record/types.js";
+import { valueDigest } from "./judgments.js";
 
 // Responsibility: one scenario's entry in run.json, built from the scenario
 // as it ran and the step records it wrote. Pure: the caller reads the step
@@ -157,7 +158,7 @@ export function claimsForRun(claims: readonly ClaimRecord[]): RunClaim[] {
             ),
           },
         }
-      : boundComparison(claim),
+      : withValueDigest(boundComparison(claim), claim),
   );
 }
 
@@ -169,7 +170,7 @@ function observedForRun(observed: ObservedCounts): ObservedCounts {
 
 /** The claims of a scenario's step records, counted by outcome. Pure. */
 export function scenarioClaims(stepRecords: readonly (StepRecord | null)[]): RunScenarioClaims {
-  const counts = { held: 0, broken: 0, unobserved: 0, unjudged: 0 };
+  const counts = { held: 0, broken: 0, unobserved: 0, unjudged: 0, "for-judgment": 0 };
   for (const stepRecord of stepRecords) {
     for (const claim of stepRecord?.claims ?? []) counts[claim.outcome] += 1;
   }
@@ -178,6 +179,7 @@ export function scenarioClaims(stepRecords: readonly (StepRecord | null)[]): Run
     broken: counts.broken,
     ...(counts.unobserved > 0 ? { unobserved: counts.unobserved } : {}),
     ...(counts.unjudged > 0 ? { unjudged: counts.unjudged } : {}),
+    ...(counts["for-judgment"] > 0 ? { for_judgment: counts["for-judgment"] } : {}),
   };
 }
 
@@ -189,18 +191,22 @@ export function scenarioClaims(stepRecords: readonly (StepRecord | null)[]): Run
  * somehow empty judged nothing, and a scenario that passed with no claim
  * judged must not read as judged. A claim step on a Given, When, or `*`
  * line is not the scenario's criterion (`claims-outside-then`), so its
- * claims do not count. `compat` when a compat step is bound in Then
- * position, since it may have judged by throwing, and `nothing`
- * otherwise. Pure. */
+ * claims do not count. `judgment` when every claim judged in Then
+ * position was a judged-as claim, which a judgment decides and no compare
+ * does; `compat` when a compat step is bound in Then position, since it
+ * may have judged by throwing, and `nothing` otherwise. Pure. */
 export function judgedBy(
   names: readonly (string | null)[],
   inThen: (index: number) => boolean,
   stepKind: RunScenarioInput["stepKind"],
   stepRecords: readonly (StepRecord | null)[],
-): "compat" | "nothing" | undefined {
+): "compat" | "nothing" | "judgment" | undefined {
   const thenIndexes = names.flatMap((_, index) => (inThen(index) ? [index] : []));
-  const judged = thenIndexes.some((index) => (stepRecords[index]?.claims ?? []).some((claim) => claim.outcome !== "unobserved"));
-  if (judged) return undefined;
+  const thenClaims = thenIndexes.flatMap((index) => stepRecords[index]?.claims ?? []);
+  if (thenClaims.some((claim) => claim.outcome !== "unobserved" && claim.outcome !== "for-judgment")) return undefined;
+  // A Then whose only claims a reader judges compared nothing: no world
+  // can show it failing, and its judgment is what decides it.
+  if (thenClaims.some((claim) => claim.outcome === "for-judgment")) return "judgment";
   const compat = thenIndexes.some((index) => {
     const name = names[index];
     return name !== null && name !== undefined && stepKind(name) === "compat";
@@ -308,4 +314,12 @@ export function pickleStepLines(pickle: Pickle, lines: ReadonlyMap<string, numbe
 export function judgedViewForRun(view: JudgedView, record: string): JudgedView {
   const under = (file: JudgedViewFile | null): JudgedViewFile | null => (file === null ? null : { ...file, file: `${record.replace(/\/+$/, "")}/${file.file}` });
   return { ...view, pages: view.pages.map((page) => ({ ...page, screenshot: under(page.screenshot), aria: under(page.aria) })) };
+}
+
+/** A claim as run.json carries it, with the digest a judgment cites when
+ * it is a judged-as claim that read its value: taken of the whole value
+ * the step record holds, before run.json cuts a long one. Pure. */
+function withValueDigest<T extends object>(bounded: T, claim: ClaimRecord): T {
+  if ("each" in claim || claim.outcome !== "for-judgment" || !Object.hasOwn(claim, "actual")) return bounded;
+  return { ...bounded, value_digest: valueDigest(claim.actual) };
 }

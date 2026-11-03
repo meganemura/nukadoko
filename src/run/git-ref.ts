@@ -235,6 +235,12 @@ export async function fileAtCommit(top: string, commit: string, file: string): P
   return git(top, ["show", `${commit}:${file}`]);
 }
 
+/** The files `commit` holds under `dir` (a path relative to `top`
+ * that ends in `/`), relative to `top`. */
+export async function filesAtCommit(top: string, commit: string, dir: string): Promise<string[]> {
+  return nulList(await git(top, ["ls-tree", "-r", "-z", "--name-only", commit, "--", dir]));
+}
+
 /** The commits after `base` up to HEAD, oldest first, each with its
  * subject: all of them, or with `file`, those that changed it. */
 export async function commitsSince(top: string, base: string, file?: string): Promise<{ readonly commit: string; readonly subject: string }[]> {

@@ -1601,9 +1601,16 @@ describe("where", () => {
   const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
   // Judges a locator or page observe returned, which no item is.
   const noItemTakes = ["fits-aria-snapshot"] as const;
+  // Asks for a judgment of one value a Then read, which no item is.
+  const judged = ["judged-as"] as const;
 
   it("sorts every compare into one that a where clause may not use on an overlapping place, one the run judges, or one no item claim takes", () => {
-    expect([...decides, ...leaves, ...noItemTakes].sort()).toEqual([...CLAIM_COMPARES].sort());
+    expect([...decides, ...leaves, ...noItemTakes, ...judged].sort()).toEqual([...CLAIM_COMPARES].sort());
+    for (const list of ["where", "claims"] as const) {
+      const entry = { actual: "a", compare: "judged-as", expected: "least" };
+      const each = list === "where" ? { where: [entry], claims: [{ actual: "b", compare: "at-least", expected: "least" }] } : { claims: [entry] };
+      expect(claimsProblem([{ actual: "result", each } as Claim], shape)).toContain(`claims[0].each.${list}[0] compares with judged-as inside each, and a judgment cites one value a Then read, not one of many items`);
+    }
     for (const compare of noItemTakes) {
       for (const list of ["where", "claims"] as const) {
         const entry = { actual: "a", compare, expected: "least" };
@@ -2689,7 +2696,7 @@ describe("an expected value a compare can never judge as the sentence means it",
         "at-most": "a number",
       };
       const makes: Record<string, string> = { text: "a string", lines: "an array", "comma-list": "an array" };
-      const compare = tc.draw(gs.sampledFrom(CLAIM_COMPARES.filter((name) => name !== "fits-aria-snapshot")));
+      const compare = tc.draw(gs.sampledFrom(CLAIM_COMPARES.filter((name) => name !== "fits-aria-snapshot" && name !== "judged-as")));
       const view = tc.draw(gs.sampledFrom(["text", "lines", "comma-list", "json"] as const));
       const at = tc.draw(gs.booleans());
       const count = tc.draw(gs.booleans()) && COUNT_COMPARES.includes(compare);
@@ -2797,4 +2804,22 @@ describe("settled conditions", () => {
       expect(refused === null ? false : refused.startsWith("poll.settled names every claim of the step")).toBe(coversEvery);
       if (!coversEvery) expect(refused).toBeNull();
     }));
+});
+
+describe("judged-as", () => {
+  const shape = { ...literalShape("the greeting reads as {quality:string}"), argsKeys: new Set(["quality", "result"]), requiredArgsKeys: new Set(["quality", "result"]), stringArgs: new Set(["quality"]) };
+
+  it("takes a value with the quality from a capture or a literal, and refuses a count, a quality from a value, and expected_view", () => {
+    expect(claimsProblem([{ actual: "result", compare: "judged-as", expected: "quality" }], shape)).toBeNull();
+    expect(claimsProblem([{ actual: "result", view: "text", compare: "judged-as", expected: { literal: "greeting" } }], shape)).toBeNull();
+    expect(claimsProblem([{ actual: "result", count: true, compare: "judged-as", expected: "quality" }], shape)).toContain(
+      "claims[0] counts the items of its actual value, which makes a number, and judged-as does not compare two numbers",
+    );
+    expect(claimsProblem([{ actual: "result", compare: "judged-as", expected: { from: "result" } }], shape)).toContain(
+      "and the quality a judge reads a judged-as value against is the sentence's own words",
+    );
+    expect(claimsProblem([{ actual: "result", compare: "judged-as", expected: "quality", expected_view: "text" }], shape)).toContain(
+      "claims[0].expected_view is \"text\", and a judge reads the quality as the sentence states it",
+    );
+  });
 });

@@ -146,6 +146,12 @@ function renderTitle(document: RunDocument): string[] {
   for (const word of ["proven", "removed", "failed", "unproven", "moved"] as const) {
     if (count(word) > 0) counts.push(`${count(word)} ${word}`);
   }
+  // Judgments are counted apart from the verdicts they stand beside, so a
+  // reader never adds a judged row to the held ones it is also counted in.
+  for (const state of JUDGMENT_STATES) {
+    const judged = rows.filter((row) => row.judgment?.state === state).length;
+    if (judged > 0) counts.push(`${judged} ${judged === 1 ? "judgment" : "judgments"} ${state}`);
+  }
   const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
   if (document.walk !== undefined) lines.push("", walkSentence(document.walk));
   // A red row whose red cells all did not run says why in its reason, but
@@ -154,6 +160,7 @@ function renderTitle(document: RunDocument): string[] {
   // own to explain.
   const explained = rows.some((row) => {
     if (row.verdict === "unproven" || row.verdict === "moved") return true;
+    if (row.judgment !== undefined && row.judgment.state !== "judged") return true;
     if (row.verdict !== "failed") return false;
     const required = row.cells.filter((cell) => cell.role === "required");
     return required.length === 0 || required.some((cell) => cell.outcome !== "pass" && cell.outcome !== "not-run");
@@ -320,18 +327,22 @@ function renderTable(document: RunDocument): string[] {
     return [`${row.change ?? ""}${renamed}${row.retagged === true ? ", retagged" : ""}`];
   };
   const seen = seenColumn(document);
+  // The judgment column only when a row has one, beside the verdict and
+  // never in it: the verdict is what the machine compared.
+  const judged = rows.some((row) => row.judgment !== undefined);
+  const judgment = (row: RunTableRow): string[] => (judged ? [row.judgment?.state ?? ""] : []);
   return [
     ...renderBase(document),
     "",
-    `| verdict | criterion | ${base === null ? "" : "change | "}${worlds.map((column) => cellText(heading(column))).join(" | ")}${seen === null ? "" : " | seen"} |`,
-    `| --- | --- | ${base === null ? "" : "--- | "}${worlds.map(() => "---").join(" | ")}${seen === null ? "" : " | ---"} |`,
+    `| verdict | ${judged ? "judgment | " : ""}criterion | ${base === null ? "" : "change | "}${worlds.map((column) => cellText(heading(column))).join(" | ")}${seen === null ? "" : " | seen"} |`,
+    `| --- | ${judged ? "--- | " : ""}--- | ${base === null ? "" : "--- | "}${worlds.map(() => "---").join(" | ")}${seen === null ? "" : " | ---"} |`,
     ...rows.map((row) => {
       const tags = row.conditions.length === 0 ? "" : ` ${row.conditions.map((tag) => cellCode(tag)).join(" ")}`;
       const cells = worlds.map((column) => {
         const cell = row.cells.find((entry) => entry.world === column.world && entry.environment === column.environment);
         return cell === undefined ? "" : tableCell(cell);
       });
-      return `| ${[row.verdict, `${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags}`, ...change(row), ...cells, ...(seen === null ? [] : [seen(row)])].join(" | ")} |`;
+      return `| ${[row.verdict, ...judgment(row), `${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags}`, ...change(row), ...cells, ...(seen === null ? [] : [seen(row)])].join(" | ")} |`;
     }),
   ];
 }
@@ -417,7 +428,14 @@ function renderBase(document: RunDocument): string[] {
         : "The mapping did not change, so no unchanged criterion needed the old world.";
   // A ref that is itself an abbreviated hash would only repeat.
   const compared = base.commit.startsWith(base.ref) ? cellCode(base.ref) : `${cellCode(base.ref)} (\`${base.commit.slice(0, 7)}\`)`;
-  return ["", `Compared with ${compared}: ${changes}. ${mappingLine}`];
+  // Judgments are not mapping, so the line names them apart: a reviewer
+  // approves what a judge said beside what the steps do.
+  const judgments = document.table.judgments_changed ?? [];
+  const judgmentLine =
+    judgments.length === 0
+      ? ""
+      : ` ${judgments.length === 1 ? "A judgment file" : "Judgment files"} changed since the base: ${judgments.map((file) => cellCode(file)).join(", ")}.`;
+  return ["", `Compared with ${compared}: ${changes}. ${mappingLine}${judgmentLine}`];
 }
 
 // One line per red row, under the table: the reason the row is red, and,
@@ -427,8 +445,14 @@ function renderBase(document: RunDocument): string[] {
 // cells already say what it came to.
 function renderReasons(document: RunDocument): string[] {
   const red = document.table.rows.filter((row) => RED_VERDICTS.has(row.verdict));
-  if (red.length === 0) return [];
+  // A row the judgments leave red says why on a line of its own, after the
+  // verdicts' reasons: its verdict may be green.
+  const open = document.table.rows.filter((row) => row.judgment !== undefined && row.judgment.state !== "judged");
+  if (red.length === 0 && open.length === 0) return [];
   const lines = [""];
+  for (const row of open) {
+    lines.push(`- ${codeSpan(`${row.feature}:${row.line}`)} ${cellText(row.name)}: judgment ${row.judgment!.state}: ${cellText(row.judgment!.reason)}`);
+  }
   for (const row of red) {
     lines.push(`- ${codeSpan(`${row.feature}:${row.line}`)} ${cellText(row.name)}: ${cellText(row.reason)}`);
     // The cell the reason names: a required head cell for `failed`, an old
@@ -1284,6 +1308,9 @@ function renderRerun(document: RunDocument): string[] {
   return ["", `## Rerun a ${what} scenario`, "", "```sh", ...commands, "```"];
 }
 
+/** The judgment states in the order the title counts them. */
+const JUDGMENT_STATES = ["judged", "misses", "stale", "pending", "uncitable"] as const;
+
 // Each kind of limit as a reader learns it once, at the head of its
 // group: a name, and the sentence its entries share, so each entry says
 // only where and what.
@@ -1295,6 +1322,10 @@ const LIMIT_HEADINGS: Readonly<Record<RunLimitKind, { readonly name: string; rea
     lead: "a control of each criterion below ran where its conditions do not hold, and none failed at a Then, so nothing shows its Then notices the behaviour is absent",
   },
   "no-claim": { name: "Scenarios with no claim", lead: "in each scenario below, no claim on a Then line was judged (held, broken, or unjudged)" },
+  judgment: {
+    name: "Held on a judgment",
+    lead: "each criterion below asks a reader to judge a value its Then read, and a committed judgment cites that value; nukadoko checks the citation, never the judgment",
+  },
   unmeasured: {
     name: "Unmeasured actions",
     lead: "each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did",

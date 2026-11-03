@@ -325,6 +325,8 @@ export default {
         "path-view.ts",
         "intent-file.ts",
         "intent-view.ts",
+        "judgment-file.ts",
+        "judgments.ts",
         "match-step.ts",
         "probe-git.ts",
         "verdict-table.ts",

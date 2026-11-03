@@ -67,6 +67,15 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **`judged` は予約された evidence の名前になります。**
   ビューがその名前のディレクトリに入るので、`evidence.attach("judged", ...)` と `evidence.path("judged")` は `ReservedEvidenceNameError` を投げます。
   別の名前を選んでください。
+- **run.json に、厳密に読む側が知らないかもしれない列挙の値が加わります。**
+  claim の `outcome` は `for-judgment` になりえ、scenario の `claims` は `for_judgment` を数え、その `judged_by` は `"judgment"` になりえます。
+  表の行は `judgment` を、表は `--base` のもとで `judgments_changed` を、claim は `value_digest` を、`limits` は種類 `judgment` を持ちえます(docs/spec.ja.md の「判断」を参照)。
+  知らない値を拒否するジョブは、これらを受け入れてください。
+  成り立った claim を数えて scenario を成り立ったとするジョブは、`for-judgment` を通ったが成り立ってはいないものとして読みます。
+  `judged-as` の claim を持たないプロジェクトでは何も変わりません。
+- **プロジェクトのルートの `judgments/` に `nuka judge` が書きます。**
+  関係の無いディレクトリをその名前で持ち、`judged-as` を使い始めるプロジェクトは、それを移してください。
+  `nuka run` は判断を求める feature ごとに `judgments/<feature のパス>.json` を読み、読めないファイルでは `judgments-unread` で失敗します。
 
 ## 0.24.0 から 0.25.0 へ
 

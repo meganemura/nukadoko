@@ -9,6 +9,32 @@ just until 0.1.
 
 ### Added
 
+- **A Then can ask for a judgment, and a run checks that the judgment
+  cites the value it read.** Some criteria no compare can decide: whether
+  a greeting is friendly to a first-time visitor, whether a page reads as
+  finished. A claim with `compare: "judged-as"` reads the value and
+  judges nothing (outcome `for-judgment`; run.json records the value's
+  `value_digest`, the sha256 of its key-sorted JSON). `nuka judge
+  <feature>:<line>` shows each value, the quality the sentence names, and
+  the judged view, and with `--meets` or `--misses`, `--by`, and
+  `--because` records one judgment per value in
+  `judgments/<feature path>.json`, a file the project commits. It refuses
+  a value no channel of a step record holds, and a step record whose
+  value no longer has the digest run.json recorded. The next run gives the
+  row a `judgment` beside its verdict, never folded into it: `judged`,
+  `pending`, `stale` (every judgment cites a value this run did not
+  read, with the first difference), `misses`, or `uncitable`; anything
+  but `judged` fails the run with a `judgment-<state>` finding whose
+  `do:` is the `nuka judge` line. A value from a page is its ARIA
+  snapshot, so a change only to how it looks keeps the judgment. Under
+  `--base`, a new criterion whose Thens only ask for judgments is `held`
+  on its judgment rather than `unproven`, the base world does not run
+  it, and `table.judgments_changed` names the judgment files the change
+  brings. The summary gains a judgment column and a "Held on a judgment"
+  limit. The skill's new `references/judgments.md` says the judge is
+  not the agent that wrote the change, and is given only the sentence and
+  the value.
+
 - **A change declares what it means to do differently, and `nuka run
   --base` checks each path difference against it.** "Changed paths" said
   what the program did differently at head, but only a criterion whose

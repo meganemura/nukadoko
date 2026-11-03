@@ -105,6 +105,11 @@ const REFUSAL_CODES = {
     description: "A flag has a value the command cannot use.",
     fix: "Correct the flag's value as the message says.",
   },
+  "judgment-refused": {
+    description:
+      "nuka judge cannot record the judgment: the target names no criterion of the run, the criterion did not pass or asks for no judgment, a value is in no recorded channel, the step record and run.json disagree about a value, or the flags do not say meets or misses, by whom, and why.",
+    fix: "Run the criterion, read what nuka judge <file>:<line> prints, and record with exactly one of --meets and --misses, and with --by and --because.",
+  },
   "line-on-directory": {
     description: "A target names a directory with a :line suffix, and a line selects a scenario in one file only.",
     fix: "Remove the :line suffix from the directory, or name a feature file.",

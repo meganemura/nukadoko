@@ -69,6 +69,8 @@ import { generateRunId } from "../run/run-id.js";
 import { inRunOrder, orderFlags, orderText, readOrder, replayTargets, runCommand } from "../run/run-order.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { limitsOf, renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
+import { judgmentFindings, judgmentsOpen, withJudgments, type JudgmentEntry } from "../run/judgments.js";
+import { changedJudgmentFiles, judgmentFileOf, readJudgmentFile } from "../run/judgment-file.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { judgedEarlyFindings, readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
 import { undeclaredWriteFindings } from "../run/undeclared-writes.js";
@@ -1508,7 +1510,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       } catch (error) {
         warn({ severity: "warning", code: "retention-failed", message: `retention failed: ${error instanceof Error ? error.message : String(error)}` });
       }
-      const table = buildTable({
+      const machineTable = buildTable({
         criteria: flatPickles.map(({ feature, pickle }) => ({
           feature: feature.relativePath,
           line: pickle.location?.line ?? 0,
@@ -1558,6 +1560,41 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               },
             }),
       });
+      // Judgments sit beside the verdicts, read after the table is built
+      // and never folded into a row's verdict (src/run/judgments.ts). A
+      // file that cannot be read is a failed finding of its own, and its
+      // rows read as judged by nothing.
+      const judgmentProblems: Finding[] = [];
+      const judgmentEntries = new Map<string, readonly JudgmentEntry[]>();
+      const entriesOf = (feature: string): readonly JudgmentEntry[] => {
+        const known = judgmentEntries.get(feature);
+        if (known !== undefined) return known;
+        const read = readJudgmentFile(rootDir, feature);
+        if ("problem" in read) {
+          judgmentProblems.push({
+            severity: "failed",
+            code: "judgments-unread",
+            file: judgmentFileOf(feature),
+            message: `the judgments of ${feature} were not read: ${read.problem}, so its criteria read as judged by nothing`,
+            fix: `repair ${judgmentFileOf(feature)} by hand, or remove it and judge the criteria again with nuka judge`,
+          });
+        }
+        const entries = "problem" in read ? [] : read.entries;
+        judgmentEntries.set(feature, entries);
+        return entries;
+      };
+      const judgedTable = withJudgments(machineTable, runScenarios, entriesOf);
+      // Under --base a reviewer reads which judgments the change added or
+      // replaced, as the summary lists the mapping files that changed.
+      let judgmentsChanged: readonly string[] | undefined;
+      if (base !== undefined) {
+        try {
+          judgmentsChanged = await changedJudgmentFiles(rootDir, base.commit);
+        } catch (error) {
+          warn({ severity: "warning", code: "judgments-not-compared", message: `the judgment files were not compared with the base: ${error instanceof Error ? error.message : String(error)}` });
+        }
+      }
+      const table = judgmentsChanged === undefined ? judgedTable : { ...judgedTable, judgments_changed: judgmentsChanged };
       // A red row with no required cell has no failed execution to carry
       // its finding, so it gets one of its own. An environment the run did
       // not start that meets the row is the one its `do:` line runs.
@@ -1578,6 +1615,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // A step that declares it changes nothing and whose trace holds a
       // committed write to state is set beside that write.
       rows.push(...undeclaredWriteFindings(runScenarios, (traceId) => stateWrites.get(traceId), conditionsOf));
+      // A judgment that does not hold a row green has no failed execution
+      // to carry it either.
+      rows.push(...judgmentFindings(table, runId), ...judgmentProblems);
       runFindings.push(...rows);
       // Each environment whose flags list was read, in the run's order.
       const listedFlags = passes.flatMap((pass) => {
@@ -1660,7 +1700,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // A change that declares its intent opts into one more gate: a
       // difference it does not declare, or a row that did not happen.
       const intentFailed = runFindings.some((finding) => finding.severity === "failed" && finding.code.startsWith("intent-"));
-      let exitCode = verdict === "passed" && !intentFailed && !table.rows.some((row) => RED_VERDICTS.has(row.verdict)) ? 0 : 1;
+      // A criterion whose Then asks for a judgment holds only once one
+      // cites the value it read and says it meets the sentence: the
+      // judgment column has a gate of its own beside the verdicts.
+      const judgmentFailed = judgmentsOpen(table) || judgmentProblems.length > 0;
+      let exitCode = verdict === "passed" && !intentFailed && !judgmentFailed && !table.rows.some((row) => RED_VERDICTS.has(row.verdict)) ? 0 : 1;
       // sources.json first, before anything is serialized, so a failure to
       // write it is a finding in the summary, in run.json, and in the
       // `--json` document alike. It fails the run, as run.json does: without

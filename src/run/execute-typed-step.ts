@@ -28,7 +28,7 @@ import type { SecretSet } from "../secrets/types.js";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { types } from "node:util";
-import { describeSettled, eventsShapeOf, observeWithheldKeys, pathSegments, sentenceUnreadReason, settledConditions, type Claim } from "../step/claims.js";
+import { ARIA_SNAPSHOT_COMPARE, describeSettled, eventsShapeOf, isEachClaim, observeWithheldKeys, pathSegments, sentenceUnreadReason, settledConditions, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
 import { isClaimStep, type ClaimStep, type RunStep, type Step } from "../step/define-step.js";
 import {
@@ -62,7 +62,9 @@ import {
   type Reading,
   type ReadingsLeftOut,
   type ReadingsLog,
+  claimPasses,
 } from "../step/evaluate-claims.js";
+import { canonicalJson } from "./judgments.js";
 import { inputCopy, readAt, snapshotKeys, type Read, type Refusal, type Snapshot } from "../step/snapshot.js";
 import { filesSide, type FilesSource } from "./changed-files.js";
 import { startPatternWorker, testPatternInWorker } from "./pattern-worker.js";
@@ -608,7 +610,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     // A claim that compares an ARIA snapshot already holds the tree it
     // judged, read within the reading; a second one taken later would only
     // be further from it.
-    const ariaInClaims = reads.ariaSnapshots.length > 0;
+    const ariaInClaims = step.claims.some((claim) => !isEachClaim(claim) && claim.compare === ARIA_SNAPSHOT_COMPARE);
     try {
       const dir = path.join(input.judgedViewDir, JUDGED_VIEW_DIR);
       await mkdir(dir, { recursive: true });
@@ -688,7 +690,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       ...view,
     };
     const records = judged.map((entry) => entry.record);
-    if (records.every((record) => record.outcome === "held")) return { status: "passed", result: {}, fixtureUsage, claims };
+    if (records.every((record) => claimPasses(record.outcome))) return { status: "passed", result: {}, fixtureUsage, claims };
     // A claim nukadoko failed to judge is never the criterion failing, so
     // it decides the kind even when another claim broke.
     const kind = records.some((record) => record.outcome === "unjudged") ? "claim_unjudged" : "claim_broken";
@@ -890,6 +892,10 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       return { ok: false, error };
     }
   };
+  // A value read for a judgment holds a poll only once two consecutive
+  // readings read it the same: a judge judges the last reading, and a page
+  // still changing would hand them a frame it then left.
+  let judgedBefore: string | undefined;
   const judgeReading = async (value: unknown): Promise<{ readonly held: boolean; readonly settled: boolean }> => {
     const inputs = claimInputs(value as Reader);
     const judged = await evaluateClaims(step.claims, inputs);
@@ -900,7 +906,10 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     }
     const { reading, content } = readingOf(attempts, readingAt(), judged, settled.length > 0 ? isSettled : undefined, latestPages);
     log.add(reading, content);
-    return { held: reading.held, settled: isSettled };
+    const judgedNow = canonicalJson(judged.filter((entry) => entry.record.outcome === "for-judgment").map((entry) => ("actual" in entry.record ? entry.record.actual : null)));
+    const steady = judgedNow === "[]" || judgedNow === judgedBefore;
+    judgedBefore = judgedNow;
+    return { held: reading.held && steady, settled: isSettled };
   };
   // A poll does not outlast the step: the deadline's timer starts with the
   // poll, and the poll stops one interval before it, so its last reading

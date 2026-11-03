@@ -86,6 +86,20 @@ This part does not change release to release.
 - **`judged` is a reserved evidence name.** `evidence.attach("judged", ...)`
   and `evidence.path("judged")` throw `ReservedEvidenceNameError`, since
   the view goes in that directory. Pick another name.
+- **run.json gains enum values a strict reader may not know.** A claim's
+  `outcome` can be `for-judgment`, a scenario's `claims` can count
+  `for_judgment` and its `judged_by` can be `"judgment"`, a table row
+  can carry `judgment`, the table `judgments_changed` under `--base`,
+  a claim `value_digest`, and `limits` the kind `judgment` (see
+  "Judgments" in docs/spec.md). A job that rejects an unknown value
+  accepts these; one that counts `held` claims to decide a scenario held
+  reads `for-judgment` as passed but not held. Nothing changes for a
+  project with no `judged-as` claim.
+- **`judgments/` at the project root is where `nuka judge` writes.** A
+  project that keeps an unrelated directory under that name and starts
+  using `judged-as` moves it, since `nuka run` reads
+  `judgments/<feature path>.json` for each feature that asks for a
+  judgment and fails with `judgments-unread` on a file it cannot read.
 
 ## 0.24.0 to 0.25.0
 
