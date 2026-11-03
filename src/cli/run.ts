@@ -28,7 +28,7 @@ import {
 } from "../environment/resolve-environment.js";
 import { hookDisplayTitle } from "../record/scenario-record.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
-import { probeGitState } from "../run/probe-git.js";
+import { probeGitState, probeWorkingTree } from "../run/probe-git.js";
 import { runConcurrentPickles } from "../run/run-concurrent.js";
 import {
   createStepProgressLogger,
@@ -1211,7 +1211,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
       if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${tree === "head" ? name : `${name} (${tree})`}: ${exitedEarly}` });
     };
-    const git = await probeGitState(rootDir);
+    const [git, workingTree] = await Promise.all([probeGitState(rootDir), probeWorkingTree(rootDir, config.stateDir)]);
     // Under `--base`, the criteria and the mapping are compared with the
     // ref, and the trees made, before the first scenario runs (this file's
     // header). A failure here still writes nothing: no scenario ran.
@@ -1591,7 +1591,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
         started_at: invocationStartedAt.toISOString(),
         finished_at: new Date().toISOString(),
-        commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean },
+        commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean, ...(workingTree === undefined ? {} : { working_tree: workingTree }) },
         environments,
         // Each world's record is redacted with its own values already.
         worlds,

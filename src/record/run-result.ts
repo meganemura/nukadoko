@@ -681,7 +681,16 @@ export type RunFields = {
   readonly finished_at: string;
   /** The commit and whether the working tree had uncommitted changes when
    * the run started; `null` outside git or before the first commit. */
-  readonly commit: { readonly sha: string; readonly dirty: boolean } | null;
+  readonly commit: {
+    readonly sha: string;
+    readonly dirty: boolean;
+    /** The working tree as one git tree id when the run started, untracked
+     * files included and ignored files and the state directory left out
+     * (src/run/probe-git.ts), so `nuka verdict` can tell whether the run
+     * judged the tree there is now. Absent when git could not give it, and
+     * in a run.json an earlier build wrote. */
+    readonly working_tree?: string;
+  } | null;
   /** Every environment the run ran under, in the order `--env` named
    * them, or without `--env`, the ones that declare conditions in the
    * program file's order, or `default` alone when none does. Each

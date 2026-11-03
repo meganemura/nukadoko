@@ -64,7 +64,7 @@ describe("nuka run: run.json", () => {
       started_at: expect.any(String),
       finished_at: expect.any(String),
       // The fixture copy sits inside this repository's own working tree.
-      commit: { sha: expect.stringMatching(/^[0-9a-f]{40}$/), dirty: expect.any(Boolean) },
+      commit: { sha: expect.stringMatching(/^[0-9a-f]{40}$/), dirty: expect.any(Boolean), working_tree: expect.stringMatching(/^[0-9a-f]{40}$/) },
       environments: [{ name: "default", target_version: null, base_url: null }],
       // The fixture has no program file, so the run started no world.
       worlds: [],

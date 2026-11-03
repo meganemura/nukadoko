@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import {
@@ -12,6 +14,8 @@ import {
   removeTempDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
+
+const execFileAsync = promisify(execFile);
 
 // Responsibility: `nuka run`'s own `run_id`/`commit` provenance fields end
 // to end, as run.json and the step records carry them. Companion to
@@ -76,10 +80,12 @@ describe("nuka run: git provenance", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(latestRunJson(rootDir).commit).toEqual({ sha: commit, dirty: false });
+    // A clean tree is the commit's own tree, so its id is the one git names.
+    const { stdout: headTree } = await execFileAsync("git", ["rev-parse", "HEAD^{tree}"], { cwd: rootDir, encoding: "utf8" });
+    expect(latestRunJson(rootDir).commit).toEqual({ sha: commit, dirty: false, working_tree: headTree.trim() });
   });
 
-  it("records commit.dirty: true once the working tree has an untracked file", async () => {
+  it("records commit.dirty: true once the working tree has an untracked file, and a working tree id that is not the commit's", async () => {
     await initGitRepo(rootDir);
     await writeFile(path.join(rootDir, "untracked.txt"), "never added or committed");
 
@@ -91,6 +97,9 @@ describe("nuka run: git provenance", () => {
 
     expect(exitCode).toBe(0);
     expect(latestRunJson(rootDir).commit.dirty).toBe(true);
+    const { stdout: headTree } = await execFileAsync("git", ["rev-parse", "HEAD^{tree}"], { cwd: rootDir, encoding: "utf8" });
+    expect(latestRunJson(rootDir).commit.working_tree).toMatch(/^[0-9a-f]{40}$/);
+    expect(latestRunJson(rootDir).commit.working_tree).not.toBe(headTree.trim());
   });
 
   it("writes commit: null, without failing the run, outside any git repository", async () => {
