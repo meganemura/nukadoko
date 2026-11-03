@@ -212,13 +212,14 @@ describe("the program's execution events", () => {
     expect(readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).not.toContain("## Flags");
 
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
-    expect(summary.filter((line) => line.includes("events of world"))).toEqual([
-      "- events of world default: 1 line carrying a step's trace id arrived after that step ended (`events-late.jsonl`); " +
-        "2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`",
+    // The late line is named once, on its step's own entry. The first
+    // world line is the program log's: this program does not log trace ids.
+    expect(summary.filter((line) => line.startsWith("  - world "))).toEqual([
+      "  - world default: carries no trace ids, so each step's slice of it is empty",
+      "  - world default: 2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`",
     ]);
-    expect(summary.filter((line) => line.includes("events-late.jsonl") && !line.includes("events of world"))).toEqual([
-      "A line of the program's events that carries a step's trace id and arrived after its record was written is in that step's `events-late.jsonl`, and not in its record.",
-      `- \`features/events.feature:9\` the client gets "/late": 1 line of the program's events after the step ended, in \`events-late.jsonl\`; record \`${steps!.get("late")!.record}\``,
+    expect(summary.filter((line) => line.includes("events-late.jsonl"))).toEqual([
+      `  - \`features/events.feature:9\` the client gets "/late": 1 line of the program's events after the step ended, in \`events-late.jsonl\`; record \`${steps!.get("late")!.record}\``,
     ]);
   });
 
@@ -414,7 +415,7 @@ describe("the program's execution events", () => {
     // The order page evaluated the flag, but no file took the line.
     expect(latestRunJson(rootDir)).not.toHaveProperty("flags");
     expect(existsSync(path.join(latestRunDir(rootDir), "worlds", "default", "events.jsonl"))).toBe(false);
-    expect(readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).not.toContain("events of world");
+    expect(readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).not.toContain("unrecorded-events");
   });
 });
 
@@ -456,8 +457,10 @@ describe("execution events of a world at a URL", () => {
     // reads lines; here it reads none, so run.json names no flag.
     expect(latestRunJson(rootDir)).not.toHaveProperty("flags");
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
-    expect(summary.filter((line) => line.includes("events of world"))).toEqual([
-      `- events of world default: not read, since the program runs at ${url}, which nukadoko did not start`,
+    // Once for the program's log and once for its events.
+    expect(summary.filter((line) => line.startsWith("  - world "))).toEqual([
+      `  - world default: not read, since the program runs at ${url}, which nukadoko did not start`,
+      `  - world default: not read, since the program runs at ${url}, which nukadoko did not start`,
     ]);
   });
 

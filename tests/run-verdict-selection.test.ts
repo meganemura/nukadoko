@@ -78,7 +78,9 @@ describe("nuka run: which criteria a run selects", () => {
         expect((document.scenarios as { line: number }[]).map((scenario) => scenario.line).sort((a, b) => a - b)).toEqual([3, 4, 7]);
         expect(stderr).toContain("\n1 criterion not run: its conditions hold in no selected environment\n");
         const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
-        expect(summary).toContain("| held | `features/value.feature:7` the banner has a value where it is on `@with:banner` `@held` | pass |\n\n1 criterion not run: its conditions hold in no selected environment\n");
+        // The table says nothing of it; the limits right under it do.
+        expect(summary).toContain("| held | `features/value.feature:7` the banner has a value where it is on `@with:banner` `@held` | pass |\n\n## What this run does not show\n");
+        expect(summary).toContain("\n- **Criteria not run** (`left-out`): 1 criterion not run: its conditions hold in no selected environment; ");
       }));
   }
 

@@ -135,8 +135,22 @@ describe("a step record's observed", () => {
     });
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary).toContain(
-      "- `features/channels.feature:7` a step starts a process without runCommand: child process `execFileSync node with 2 arguments`; start a process with `runCommand` to record it; record `",
+      "- **Unmeasured actions** (`unmeasured`, 1): each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did\n" +
+        "  - `features/channels.feature:7` a step starts a process without runCommand: child process `execFileSync node with 2 arguments`; record `",
     );
+    expect(summary).toMatch(/; record `[^`]+`; fix: start a process with `runCommand` to record it\n/);
+    expect(latestRunJson(rootDir).limits.filter((limit: { kind: string }) => limit.kind === "unmeasured")).toEqual([
+      {
+        kind: "unmeasured",
+        feature: "features/channels.feature",
+        line: 7,
+        text: "a step starts a process without runCommand",
+        environment: "default",
+        record: latestRunJson(rootDir).scenarios[0].steps[0].record,
+        detail: "child process `execFileSync node with 2 arguments`",
+        fix: "start a process with `runCommand` to record it",
+      },
+    ]);
   });
 });
 
@@ -191,7 +205,7 @@ describe("an action a step started after its record was written", () => {
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary.match(/started after the step ended/g)).toHaveLength(1);
     expect(summary).toContain(
-      `- \`features/channels.feature:17\` a step leaves a request and a command for later: started after the step ended: 2 requests in \`http.jsonl\`, 1 process; record \``,
+      `  - \`features/channels.feature:17\` a step leaves a request and a command for later: started after the step ended: 2 requests in \`http.jsonl\`, 1 process; record \``,
     );
   });
 });

@@ -72,11 +72,11 @@ describe("lines of the program's log after their step", () => {
 
     const summary = readFileSync(path.join(runDir, "summary.md"), "utf8");
     const named = summary.split("\n").filter((line) => line.includes("program-log-late.txt"));
+    // Each late line is named once, on its step's own entry: the world
+    // adds no count of its own while some lines came in time.
     expect(named).toEqual([
-      "- program log of world default: 2 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`).",
-      "A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record.",
-      `- \`features/late.feature:4\` the step calls the slow path: 1 line of the program's log after the step ended, in \`program-log-late.txt\`; record \`${waits!.steps[0]!.record}\``,
-      `- \`features/late.feature:8\` the step calls the slow path: 1 line of the program's log after the step ended, in \`program-log-late.txt\`; record \`${fast!.steps[0]!.record}\``,
+      `  - \`features/late.feature:4\` the step calls the slow path: 1 line of the program's log after the step ended, in \`program-log-late.txt\`; record \`${waits!.steps[0]!.record}\``,
+      `  - \`features/late.feature:8\` the step calls the slow path: 1 line of the program's log after the step ended, in \`program-log-late.txt\`; record \`${fast!.steps[0]!.record}\``,
     ]);
     expect(summary).not.toContain("buffers its output");
   });
@@ -114,10 +114,10 @@ describe("lines of the program's log after their step", () => {
     const run = latestRunJson(rootDir);
     expect(run.worlds[0].program_log).toEqual({ stamped: 3, lines: 0, late: 6, tagged: 6 });
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
-    expect(summary.split("\n").filter((line) => line.includes("program log of world"))).toEqual([
-      "- program log of world buffered: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`). " +
-        "None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; " +
-        "if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
+    expect(summary.split("\n").filter((line) => line.startsWith("  - world "))).toEqual([
+      "  - world buffered: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`), and none in time, " +
+        "which is what a program that buffers its output on a pipe looks like; " +
+        "fix: if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python",
     ]);
     expect(summary).not.toContain("carries no trace ids");
     const slow = (run.scenarios[0].steps as RunStepFacts[])[0]!;

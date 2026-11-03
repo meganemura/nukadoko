@@ -91,9 +91,9 @@ If none is true, ask what this is supposed to do before writing anything.
    record a failure names first (`references/diagnosing.md`), then once more
    with `--order shuffled` (`references/running.md`). A red Then, or a
    `held` row whose control passed (`references/verdicts.md`), is fixed in
-   the code or by asking the person, never by weakening it. Read "Unmeasured
-   actions" (`references/evidence.md`), "Scenarios with no claim",
-   `measured: none` (`references/reviewing.md`), `undeclared-write`.
+   the code or by asking the person, never by weakening it. Read "What this
+   run does not show" and `measured: none` (`references/reviewing.md`),
+   and `undeclared-write`.
 5. **Commit before the run you report**, push, and open the pull request;
    CI posts the summary of `nuka run --base <the base>` (`docs/ci.md`). Run
    it first: `unproven` and `moved` rows are red (`references/verdicts.md`).

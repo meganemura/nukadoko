@@ -1,4 +1,5 @@
 import type { Finding } from "../finding/finding.js";
+import type { RunLimit, RunLimitKind } from "../record/run-result.js";
 import { stepRecordRelativeDir } from "../record/state-layout.js";
 import type { ScenarioStatus, ScenarioStop } from "../record/scenario-record.js";
 import type { UsedEntryWithResult } from "../record/types.js";
@@ -574,4 +575,15 @@ export function failedScenarioFindings(failures: readonly FailedScenario[], cond
  * copy. */
 export function formatRerunCommand(failure: Pick<FailedScenario, "feature" | "line">, rerunFlags: readonly string[]): string {
   return ["nuka", "run", `${failure.feature}:${failure.line}`, ...rerunFlags].map(shellWord).join(" ");
+}
+
+/** The line after the criteria counts for a run with a limit: how many
+ * entries run.json's `limits` holds of each kind, in the summary's order,
+ * so an agent that reads only stderr knows a green run has gaps and the
+ * field that lists them. Nothing for a run with none. */
+export function writeLimitCounts(stderr: WritableSink, limits: readonly Pick<RunLimit, "kind">[]): void {
+  if (limits.length === 0) return;
+  const counts = new Map<RunLimitKind, number>();
+  for (const limit of limits) counts.set(limit.kind, (counts.get(limit.kind) ?? 0) + 1);
+  stderr.write(`limits: ${[...counts].map(([kind, count]) => `${count} ${kind}`).join(", ")} (run.json limits)\n`);
 }

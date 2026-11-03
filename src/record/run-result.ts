@@ -742,7 +742,53 @@ export type RunFields = {
    * open to anything, so a reader or a gate tells such a run apart by
    * this field. */
   readonly walk?: RunWalk;
+  /** What the run does not show (src/run/run-limits.ts): each gap a
+   * green verdict does not cover, restated from the fields above so one
+   * list holds them, under a kind a reader counts across runs. Written
+   * for a reader of run.json; the summary computes the same list from
+   * the other fields and never reads this one. Absent in a run.json an
+   * earlier build wrote. */
+  readonly limits?: readonly RunLimit[];
 };
+
+/** What one entry of run.json's `limits` is about. The kinds, not the
+ * wording, are what a reader counts across runs, so a kind is renamed
+ * only as a breaking change. */
+export type RunLimitKind =
+  | "left-out"
+  | "check-skipped"
+  | "control-not-proving"
+  | "no-claim"
+  | "unmeasured"
+  | "after-record"
+  | "unrecorded-log"
+  | "unrecorded-events";
+
+/** One entry of run.json's `limits`. */
+export interface RunLimit {
+  readonly kind: RunLimitKind;
+  /** The criterion, or the step's line in its feature file, the entry is
+   * about; absent for an entry about the whole run or about a world. */
+  readonly feature?: string;
+  readonly line?: number;
+  /** The criterion's name, or the step's text, as its line reads. */
+  readonly text?: string;
+  /** The environment: the scenario's for a step, the world's for a
+   * world. */
+  readonly environment?: string;
+  /** For an entry about a world: which tree it was built from. */
+  readonly world?: RunWorldName;
+  /** The step record that holds what the entry is about, relative to the
+   * run directory. */
+  readonly record?: string;
+  /** What is not shown, in one sentence of Markdown, with the program's
+   * and the step's own words in code spans. */
+  readonly detail: string;
+  /** A command that closes the gap, given only when one is known to. */
+  readonly do?: string;
+  /** An edit that closes the gap, when no command does. */
+  readonly fix?: string;
+}
 
 /** One open page as a walk's pause saw it, after its step ended. */
 export interface PageView {

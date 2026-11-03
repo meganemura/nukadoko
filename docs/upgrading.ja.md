@@ -48,6 +48,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   run のどれかの Then に見せるものがあるときです。
   Claims の各項目と、赤い行の失敗の行の終わりにも `seen` のリンクが付きます。
   `summary.md` を列で読むジョブは、最後の列を `seen` として読むか、代わりに `run.json` の `table` を読みます。
+- **run サマリは、示さないことを述べる節を 1 つにまとめました。**
+  「Scenarios with no claim」、「Unmeasured actions」、`--env` が外した受け入れ基準を数える表の下の行、条件の行の `check: skipped`、`program log of world ...`、`events of world ...` は無くなりました。
+  それぞれは、表の理由の直後にある「What this run does not show」の要素になります。
+  `summary.md` でそれらの見出しや行を探していたジョブは、代わりに run.json の `limits` を `kind`(`no-claim`、`unmeasured`、`after-record`、`left-out`、`check-skipped`、`unrecorded-log`、`unrecorded-events`)で読みます。
+  stderr が件数の行で終わると確かめていたテストは、run に示さないことがあるとき、所見の後ろに `limits: ...` の行を見ます。
 - **`judged` は予約された evidence の名前になります。**
   ビューがその名前のディレクトリに入るので、`evidence.attach("judged", ...)` と `evidence.path("judged")` は `ReservedEvidenceNameError` を投げます。
   別の名前を選んでください。

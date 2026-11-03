@@ -2895,8 +2895,8 @@ for a write, which this tool does not let overrule a declaration.
   lines binds a claim step. It stays a warning, since a scenario that
   only drives a flow can be what the author meant, but the run records
   it: the scenario's entry in `run.json` says what judged it
-  (`judged_by`), and the run summary lists it under "Scenarios with no
-  claim". The run decides that from what it judged, not from what the
+  (`judged_by`), and the run summary lists it as a `no-claim` entry under
+  "What this run does not show". The run decides that from what it judged, not from what the
   lines bind: a scenario whose Then claim step never ran, observed
   nothing, or judged no claim for any other reason is listed too.
 
@@ -4229,44 +4229,46 @@ When the world stops, after the program has, one pass over the whole
 `program-log-late.txt` beside the step record, redacted.
 The step in `run.json` carries `"program_log_late": { "lines", "file" }`,
 with `"truncated": true` past 16 MiB, and the run summary names the
-lines once, on the step's line under "Unmeasured actions".
+lines once, on the step's `after-record` entry under "What this run does
+not show" (see "Records").
 `nuka do` writes the same file and names it in a `program-log-late`
 note on stderr.
 
-The world's stop also decides the run summary's line for the world, from
-the whole log.
+The world's stop also decides the world's `unrecorded-log` entry in
+`run.json`'s `limits` and under the run summary's "What this run does
+not show", from the whole log.
 A log in which no line carries a trace id of the world does not tag its
-lines, and the summary says so once, so a reader knows why each slice is
+lines, and the entry says so once, so a reader knows why each slice is
 empty:
 
 ```text
-- program log of world default: carries no trace ids, so each step's slice of it is empty
+- **The program's log** (`unrecorded-log`, 1): what of it no step's record holds
+  - world default: carries no trace ids, so each step's slice of it is empty
 ```
 
-A log with lines that arrived after their step ended gets one line that
-counts them:
-
-```text
-- program log of world default: 2 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`).
-```
-
+A line that arrived after its step ended is named on that step's own
+entry, so the world adds no count of its own while some lines came in
+time.
 nukadoko does not know why a line came late, so it names no cause for
-that count.
-When none of the steps' lines arrived in time, the line adds one
-possible cause, since output buffered on a pipe looks like that: Ruby
-and Python buffer standard output when it is not a terminal, and write
-it in blocks, or when the program stops.
+it.
+When none of the steps' lines arrived in time, the world gets an entry
+that counts them and names one possible cause, since output buffered on
+a pipe looks like that: Ruby and Python buffer standard output when it
+is not a terminal, and write it in blocks, or when the program stops.
 
 ```text
-- program log of world default: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`). None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
+  - world default: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`), and none in time, which is what a program that buffers its output on a pipe looks like; fix: if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python
 ```
+
+A world of the base or the old tree counts its late lines on its own
+entry too, since only head's steps get entries of their own.
 
 A world at a `url` has no log nukadoko can read.
 Each step's `observed.program_log` is `null`, the world's `program_log`
-in `run.json` is `null`, and the run summary says:
+in `run.json` is `null`, and the entry says:
 
 ```text
-- program log of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+  - world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
 Its requests still carry a `traceparent`, so the server's own log or
@@ -4517,7 +4519,7 @@ file writes those lines to `events-late.jsonl` beside the step record,
 redacted the same way.
 The step in `run.json` carries `"events_late": { "lines", "file" }`,
 with `"truncated": true` past 16 MiB, the run summary names the lines on
-the step's line under "Unmeasured actions", and `nuka do` names the file
+the step's `after-record` entry under "What this run does not show", and `nuka do` names the file
 in an `events-late` note on stderr and in its record's `events_late`,
 which it writes after the world stops.
 
@@ -4537,23 +4539,27 @@ into `run.json`:
   lines of each kind the format does not define, by kind.
 - `file` is `null` when the copy could not be written.
 
-The run summary gives the world one line when the program wrote no line
-at all, or when the file holds lines no step record holds:
+The world gets an `unrecorded-events` entry in `run.json`'s `limits` and
+under the run summary's "What this run does not show" when the program
+wrote no line at all, or when the file holds lines no step record holds.
+A late line is named on its step's own entry, and on the world's only
+for a world of the base or the old tree:
 
 ```text
-- events of world default: 1 line carrying a step's trace id arrived after that step ended (`events-late.jsonl`); 2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`
+- **The program's execution events** (`unrecorded-events`, 1): what of them no step's record holds
+  - world default: 2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`
 ```
 
 ```text
-- events of world default: the program wrote no line to the file {events} names, so no step's record has an event
+  - world default: the program wrote no line to the file `{events}` names, so no step's record has an event
 ```
 
 A world at a `url` has no file nukadoko can read.
 Each step's `observed.events` is `null`, the world's `events` in
-`run.json` is `null`, and the run summary says:
+`run.json` is `null`, and the entry says:
 
 ```text
-- events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+  - world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
 The same pass folds each step's path: what the lines of its trace say
@@ -6232,6 +6238,62 @@ to act on the run without opening another file:
   names: its handlers, the environments whose list holds it, the
   requests head steps sent it and their statuses, and the criteria that
   sent them (see "Lists").
+- `limits`, present only when the run has one, lists what the run does
+  not show: each gap a green verdict does not cover, restated from the
+  fields above so one list holds them. An entry has a `kind`, a
+  `detail` (one sentence of Markdown, with the program's and the step's
+  own words in code spans), and, as the kind needs, `feature` and
+  `line` (the criterion, or the step's line), `text` (the criterion's
+  name or the step's text), `environment`, `world` (the tree of a
+  world's entry), and `record` (the step record to open). `do` is a
+  command that closes the gap, given only when one is known to; `fix` is
+  an edit that would, when no command does. The kinds, in the order the
+  summary lists them:
+  - `left-out`: `table.left_out` criteria `--env` left out (see
+    "Verdicts").
+  - `check-skipped`: the run started with `--no-check`; `do` is
+    `nuka check`.
+  - `control-not-proving`: a `held` row with a head control, none of
+    which failed at a Then: one that passed says the switch does not reach
+    what the Then checks, or the Then does not check what the switch
+    changes, and one that is `broke@<line>` stopped before its Then,
+    which no other place than the row's `reason` said before. `record`
+    is where the first such control stopped.
+  - `no-claim`: a scenario whose required execution has `judged_by`,
+    once whatever its environments and repeats, unless its row is red,
+    whose reason already says it stopped before a claim was judged. A
+    control that broke before its Then judged none either, and that is
+    its row's `control-not-proving` entry. A row with a `no-claim` entry
+    gets no `control-not-proving` one, since a control of it passes
+    whatever the program does.
+  - `unmeasured`: a head step with `observed.unmeasured` entries, up to
+    three named and the rest counted, with a `fix` when one is a
+    `child_process`.
+  - `after-record`: a head step with `after_step_end`,
+    `program_log_late`, or `events_late`: what reached its files after
+    its record was written.
+  - `unrecorded-log`: a world whose log was not read, carries no trace
+    ids, or tagged none of the steps' lines in time (see "Program").
+  - `unrecorded-events`: a world whose execution events were not read, got no
+    line, or hold lines no step record holds (see "Execution events").
+
+  A step's entry is one per step, environment, and gap, citing its first
+  record under `--repeat`. A late line of a head step is on that step's
+  entry only; a world of the base or the old tree counts its own.
+  `limits` holds no red row (its reason and the exit code say why it is
+  red), no entry for a `held` row that no control or base could have
+  proven (that is what `held` means, so an entry on every row would only
+  repeat the word), and none for the commit, the selection, the order,
+  or a walk, which the summary's condition lines and title state with
+  their consequence. The routes no step requested and the flag sides no
+  criterion evaluated stay in "Routes" and "Flags", whose counts they
+  belong to, and a path comparison that stayed open stays in "Changed
+  paths". An unchanged criterion whose path changed under `--base` is a
+  finding about the change, not a gap in what the run measured, so it is
+  no limit. Nothing reads `limits` back: the run summary computes the
+  same list from the other fields, so a run.json an earlier build wrote,
+  or one whose `limits` was edited, renders the same. A kind is renamed
+  only as a breaking change, since a reader counts them across runs.
 - `counts` holds `scenarios`, `passed`, `failed`, and `stopped` (the ones
   a walk stopped, 0 outside `--step`), which count the
   executions of required head cells, and `not_run`, which counts the
@@ -6482,9 +6544,10 @@ the order the program file lists them, and `default` when none does (see
 "Environments"). An environment outside that selection, such as a
 deployment target, runs when `--env` names it. Under `--env`, a scenario
 no named environment meets is not run: its row is left out of the table,
-`run.json`'s `table.left_out` counts it, and the summary, under the
-table, and stderr, after the count line, say so in one line: `<n> criteria
-not run: their conditions hold in no selected environment`. Naming one
+`run.json`'s `table.left_out` counts it, stderr says so in one line after
+the count line, `<n> criteria not run: their conditions hold in no
+selected environment`, and the summary says the same as its `left-out`
+entry under "What this run does not show". Naming one
 environment runs what applies there, so a hook failure's `do:` line,
 which names one, runs as printed. When `--env` leaves out every selected
 scenario, nothing runs and the run fails with `nothing-selected`.
@@ -6823,7 +6886,10 @@ alone: their executions, and the cells that did not run. A run with a
 control adds `<n> control runs, <k> not run` after it, which counts the
 controls the same way, and `criteria: <held> held, <proven> proven,
 <failed> failed`, a line every run under `--base` has too, with the
-`unproven`, `moved`, and `removed` counts after them.
+`unproven`, `moved`, and `removed` counts after them. A run with a
+limit adds `limits: <n> <kind>, ... (run.json limits)` after the findings
+that follow those lines, counting `run.json`'s `limits` by kind in the
+summary's order.
 
 Some changes cannot reach `proven`. A fix for an intermittent bug passes
 at the base too, often enough, so no Then fails there in every run. A
@@ -8044,17 +8110,32 @@ holds:
   stderr), the last command the step ran through `runCommand` that did
   not exit 0, the record's path, and for a Then `seen` with each place it
   can be seen, after `base:` or `old:` for a cell of that world;
+- "What this run does not show", when `run.json` has `limits`: one item
+  per kind, in the order "Records" lists them, with its name, its kind
+  in a code span, and its count, then the sentence its entries share and,
+  when every entry of a group of several has the same one, its `do:` or
+  `fix:`; then one line per entry with its location and text (its
+  environment in a run of several), or its world, its `detail`, its
+  record, and its own `do:` or `fix:`. A kind with one entry about the
+  whole run (`left-out`, `check-skipped`) is one line. The list is
+  computed again from the other fields of `run.json`, never read from
+  its `limits`:
+
+  ```text
+  ## What this run does not show
+
+  Each item below is something the verdicts above do not cover, listed under its kind in run.json's `limits`.
+
+  - **Static check skipped** (`check-skipped`): the run started with `nuka run --no-check`, so no finding of `nuka check` held it back; do: `nuka check`
+  - **Held, and no control failed at a Then** (`control-not-proving`, 1): a control of each criterion below ran where its conditions do not hold, and none failed at a Then, so nothing shows its Then notices the behaviour is absent
+    - `features/orders.feature:3` criterion 3: no control failed at a Then where its conditions do not hold (reorder-off: broke@4); record `steps/c`; fix: make the steps before the Then run where its conditions do not hold, so the Then is what fails there
+  ```
 - the condition: the short commit sha and whether the tree had uncommitted
   changes (from `commit`, or "unknown" without one), each environment and its
-  target version, a line for each world whose program log was not read,
-  carries no trace ids, or tagged the steps' lines only after they ended
-  (see "Program"), a line for each world whose execution events were not
-  read, got no line, or hold lines no step record holds (see "Execution
-  events"), every browser a scenario launched or "none launched", the
+  target version, every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
   file), `order: shuffled, seed <n>` under `--order shuffled` (nothing in
-  file order), `proof runs: <n>` when `--proof-runs` is not 2, `check: skipped`
-  under `nuka run --no-check` (nothing when the check ran), the nukadoko
+  file order), `proof runs: <n>` when `--proof-runs` is not 2, the nukadoko
   version, the run id, and the start and finish times;
 - under `--base`, "Removed criteria": each removed criterion's location
   and name, and its sentences at the ref in a `gherkin` block;
@@ -8095,24 +8176,6 @@ holds:
   outcome after them and `measured: <channel>` or `measured: none`, then
   `expected measured` for an expected value from `from` or `observe`
   (see "Claims");
-- "Scenarios with no claim", one line per scenario whose entry has
-  `judged_by`: its location, its name, and that no claim judged it (with
-  a compat step in Then position that may have);
-- "Unmeasured actions", when a step did something the tool saw but could
-  not measure (`observed.unmeasured`), started a request, a
-  `runCommand` process, or an MCP call after its record was written (`after_step_end`),
-  or has lines of the program's log or of its execution events that
-  arrived after it (`program_log_late`, `events_late`):
-  one line per step, with its location, its text, its environment when
-  the run had more than one, up to three of its actions and how many
-  more, `started after the step ended: <n> request(s) in http.jsonl, <n>
-  process(es), <n> MCP call(s) in mcp.jsonl` when it did, `<n> line(s) of the program's log after the
-  step ended, in program-log-late.txt` and `<n> line(s) of the program's
-  events after the step ended, in events-late.jsonl` when the world's stop
-  found any (see "Program"), the advice to start a process with `runCommand` when one
-  of its actions is a `child_process`, and its record's path. A step
-  with neither adds nothing, and under `--repeat` the same step with the
-  same line is one line;
 - "Findings", when the run raised any finding other than a failed scenario
   (a warning such as a file that was not written or a teardown that
   failed), one line each with its severity, code, location, and message;

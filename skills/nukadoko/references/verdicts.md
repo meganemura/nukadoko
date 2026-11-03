@@ -31,8 +31,8 @@ switch from them with `{condition.<name>}` (`references/program.md`).
 `nuka run`
 without `--env` runs every environment that declares `conditions`, or
 the ones the program file's `defaultEnvironments` names. Under `--env`,
-a scenario no named environment meets is not run, and the summary counts
-it (`<n> criteria not run`). A control never turns the run red. Tag only what the criteria say depends
+a scenario no named environment meets is not run, and the summary's
+`left-out` entry counts it (`<n> criteria not run`). A control never turns the run red. Tag only what the criteria say depends
 on the switch, and write the Then so it would fail on the other side: a
 When that errors there proves nothing.
 

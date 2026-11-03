@@ -2249,7 +2249,7 @@ step record は、他の step の書き込みと同じようにそれを計測�
 - `scenario-without-then`(警告): scenario がどの claim も判定しません。
   Then を持たないか(`*` の行だけの scenario を含みます)、どの Then の行も claim step に結び付きません。
   流れを動かすだけの scenario が作者の意図どおりのこともあるので警告のままですが、実行はそれを記録します。
-  `run.json` のその scenario の要素が何で判定したか(`judged_by`)を述べ、run サマリが「Scenarios with no claim」の下に並べます。
+  `run.json` のその scenario の要素が何で判定したか(`judged_by`)を述べ、run サマリが「What this run does not show」の `no-claim` の要素として並べます。
   run はそれを、行が何に結び付くかではなく、何を判定したかから決めます。
   Then の claim step が動かなかった、何も観測できなかった、ほかの理由でどの claim も判定しなかった scenario も並べます。
 
@@ -3265,38 +3265,37 @@ step の record は確定していて書き直しません。
 step が終わったあとに始まったリクエストと同じ規則です(「Records」を参照)。
 world が止まるとき、プログラムが止まったあとに、`program.log` 全体を 1 回読んでそうした行を見つけ、redact して step record の隣の `program-log-late.txt` に書きます。
 `run.json` の step は `"program_log_late": { "lines", "file" }` を持ち、16 MiB を超えたときは `"truncated": true` も持ちます。
-run サマリは、「Unmeasured actions」の step の行で、その行たちを一度名指します。
+run サマリは、「What this run does not show」のその step の `after-record` の要素で、その行たちを一度名指します(「Records」を参照)。
 `nuka do` は同じファイルを書き、stderr の `program-log-late` の注記でそれを名指します。
 
-world が止まるときには、run サマリの world の行も、ログ全体から決めます。
+world が止まるときには、`run.json` の `limits` と run サマリの「What this run does not show」にある world の `unrecorded-log` の要素も、ログ全体から決めます。
 world の trace id を持つ行が 1 つも無いログは、行に何も付けていません。
-サマリは一度そう言うので、読み手はどの切り出しも空である理由がわかります:
+その要素は一度そう言うので、読み手はどの切り出しも空である理由がわかります:
 
 ```text
-- program log of world default: carries no trace ids, so each step's slice of it is empty
+- **The program's log** (`unrecorded-log`, 1): what of it no step's record holds
+  - world default: carries no trace ids, so each step's slice of it is empty
 ```
 
-step が終わったあとに届いた行があるログには、その数を数える行が 1 つ付きます:
-
-```text
-- program log of world default: 2 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`).
-```
-
-nukadoko は行が遅れた理由を知らないので、その数には原因を書きません。
-step たちの行が 1 つも間に合わなかったときは、ありうる原因を 1 つ書き足します。
+step が終わったあとに届いた行は、その step 自身の要素が名指します。
+そのため、いくつかの行が間に合ったあいだは、world は自分で数えません。
+nukadoko は行が遅れた理由を知らないので、原因を書きません。
+step たちの行が 1 つも間に合わなかったときは、world がその数を数え、ありうる原因を 1 つ書く要素を持ちます。
 パイプの上でバッファされた出力がそう見えるからです。
 Ruby と Python は、標準出力が端末でないときにそれをバッファし、ブロックごとに、あるいはプログラムが止まるときに書きます。
 
 ```text
-- program log of world default: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`). None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
+  - world default: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`), and none in time, which is what a program that buffers its output on a pipe looks like; fix: if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python
 ```
+
+自分の要素を持つのは head の step だけなので、基点の木や old の木の world は、遅れた行も自分の要素で数えます。
 
 `url` の world には、nukadoko が読めるログがありません。
 各 step の `observed.program_log` は `null` で、`run.json` の world の `program_log` も `null` です。
-run サマリはこう言います:
+その要素はこう言います:
 
 ```text
-- program log of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+  - world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
 そのリクエストはそれでも `traceparent` を運ぶので、サーバ自身のログやトレーシングは、http.jsonl の行にある id で step のリクエストを見つけられます。
@@ -3477,7 +3476,7 @@ record を書いたあとに届いた step の行も、その step のもので�
 record は書き直しません。
 world が止まるとき、プログラムが止まったあとに、ファイル全体を 1 回読んでそうした行を step record の隣の `events-late.jsonl` に、同じように redact して書きます。
 `run.json` の step は `"events_late": { "lines", "file" }` を持ち、16 MiB を超えたときは `"truncated": true` も持ちます。
-run サマリは「Unmeasured actions」の step の行でその行たちを名指し、`nuka do` は stderr の `events-late` の注記と、world が止まったあとに書く自身の record の `events_late` で、そのファイルを名指します。
+run サマリは「What this run does not show」のその step の `after-record` の要素でその行たちを名指し、`nuka do` は stderr の `events-late` の注記と、world が止まったあとに書く自身の record の `events_late` で、そのファイルを名指します。
 
 同じ 1 回の読みで、world のファイルの写し `worlds/<environment>/events.jsonl` も書きます。
 各行は同じように redact し、読めなかった行は redact したテキストのまま残します。
@@ -3492,22 +3491,24 @@ run サマリは「Unmeasured actions」の step の行でその行たちを名�
   `undefined_kinds` は、形式が定めない種類の行を種類ごとに数えます。
 - `file` は、写しを書けなかったとき `null` です。
 
-run サマリは、プログラムが 1 行も書かなかったとき、またはどの step record も持たない行をファイルが持つとき、world に 1 行を付けます:
+プログラムが 1 行も書かなかったとき、またはどの step record も持たない行をファイルが持つとき、world は `run.json` の `limits` と run サマリの「What this run does not show」に `unrecorded-events` の要素を持ちます。
+遅れた行はその step 自身の要素が名指し、world の要素が名指すのは基点の木か old の木の world のときだけです:
 
 ```text
-- events of world default: 1 line carrying a step's trace id arrived after that step ended (`events-late.jsonl`); 2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`
+- **The program's execution events** (`unrecorded-events`, 1): what of them no step's record holds
+  - world default: 2 lines are not one readable line of the format; the whole file is in `worlds/default/events.jsonl`
 ```
 
 ```text
-- events of world default: the program wrote no line to the file {events} names, so no step's record has an event
+  - world default: the program wrote no line to the file `{events}` names, so no step's record has an event
 ```
 
 `url` の world には、nukadoko が読めるファイルがありません。
 各 step の `observed.events` は `null` で、`run.json` の world の `events` も `null` です。
-run サマリはこう言います:
+その要素はこう言います:
 
 ```text
-- events of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+  - world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
 ```
 
 同じ 1 回の読みで、各 step の実行経路も数えます。
@@ -4817,6 +4818,46 @@ run が終わったとき、最後の step record と run サマリの後に、�
   一覧があるときは、その側を宣言する environment も持ちます(「実行イベント」を参照)。
 - `routes` は、head の world がルートの一覧を読んだときだけあり、一覧か head の step の `request` の行が名指すメソッドとルートの組ごとに 1 つの要素を持ちます。
   要素は、そのハンドラ、一覧がそれを持つ environment、head の step が送ったリクエストとそのステータス、それを送った受け入れ基準を持ちます(「一覧」を参照)。
+- `limits` は、run に示さないことがあるときだけあり、run が示さないことを並べます。
+  緑の断定が覆わないことの 1 つずつを、上のフィールドから言い直して 1 つの一覧に集めたものです。
+  要素は `kind` と `detail`(Markdown の 1 文で、プログラムと step 自身の言葉はコードスパンで書きます)を持ちます。
+  種類に応じて、`feature` と `line`(受け入れ基準か step の行)、`text`(受け入れ基準の名前か step のテキスト)、`environment`、`world`(world の要素の木)、`record`(開く step record)も持ちます。
+  `do` はそれを閉じるコマンドで、閉じるとわかっているものがあるときだけ付けます。
+  `fix` は、閉じるコマンドが無いときの、閉じる編集です。
+  種類は、サマリが並べる順に次のとおりです。
+  - `left-out`: `--env` が外した `table.left_out` 件の受け入れ基準(「断定」を参照)。
+  - `check-skipped`: run が `--no-check` で始まったこと。
+    `do` は `nuka check` です。
+  - `control-not-proving`: head の対照を持ち、そのどれも Then で失敗しなかった `held` の行。
+    通った対照は、スイッチが Then の確かめるものに届いていないか、Then がスイッチの変えるものを確かめていないことを言います。
+    `broke@<line>` の対照は Then の前で止まっていて、これまでは行の `reason` だけがそれを言っていました。
+    `record` は、そうした最初の対照が止まった場所です。
+  - `no-claim`: 必須の実行が `judged_by` を持つ scenario で、environment や繰り返しがいくつあっても 1 つです。
+    ただし行が赤いときは付けません。
+    その理由が、claim を判定する前に止まったことをすでに言うからです。
+    Then の前で壊れた対照もどの claim も判定していませんが、それはその行の `control-not-proving` の要素です。
+    `no-claim` の要素を持つ行には `control-not-proving` の要素を付けません。
+    その対照は、プログラムが何をしても通るからです。
+  - `unmeasured`: `observed.unmeasured` を持つ head の step で、最大 3 つを名指して残りを数え、`child_process` があるときは `fix` を付けます。
+  - `after-record`: `after_step_end`、`program_log_late`、`events_late` のどれかを持つ head の step で、record を書いたあとにそのファイルに届いたものです。
+  - `unrecorded-log`: ログを読まなかった world、ログが trace id を持たなかった world、step たちの行をどれも間に合うように付けなかった world(「テスト対象のプログラム」を参照)。
+  - `unrecorded-events`: 実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world(「実行イベント」を参照)。
+
+  step の要素は、step、environment、示さないことの組ごとに 1 つで、`--repeat` のもとでは最初の record を名指します。
+  head の step の遅れた行は、その step の要素だけが名指します。
+  基点の木や old の木の world は、自分で数えます。
+  `limits` は赤い行を持ちません。
+  その理由と終了コードが、なぜ赤いかを言うからです。
+  どの対照も基点も証明しえなかった `held` の行の要素も持ちません。
+  それが `held` の意味なので、行ごとの要素はその語を繰り返すだけです。
+  コミット、選択、順序、walk の要素も持ちません。
+  サマリの条件の行とタイトルが、その帰結と一緒に言うからです。
+  どの step もリクエストしなかったルートと、どの受け入れ基準も評価しなかった flag の側は、それらが属する数を持つ「Routes」と「Flags」に残ります。
+  `open` のままの実行経路の比較は「Changed paths」に残ります。
+  `--base` のもとで実行経路が変わった、変わっていない受け入れ基準は、その変更についての所見であって、run が計測しなかったことではないので、要素にしません。
+  `limits` を読み返すものはありません。
+  run サマリは同じ一覧を他のフィールドから計算し直すので、以前のビルドが書いた run.json も、`limits` を書き換えた run.json も、同じに描かれます。
+  読み手は種類を run をまたいで数えるので、種類の名前を変えるのは破壊的な変更としてだけです。
 - `counts` は、必須の head のセルの実行を数える `scenarios`、`passed`、`failed`、`stopped`(walk が中止したもので、`--step` の外では 0)と、`not-run` の必須の head のセルを数える `not_run` と、証明の実行を含めて head の対照の実行を数える `controls` と、`not-run` の head の対照のセルを数える `controls_not_run` を持ちます。
   対照はゲートするテストではなく証拠なので、別に数えます。
   base と old の実行は、表が読むものです。
@@ -5008,8 +5049,9 @@ program ファイルは、プログラムの設定を condition から導くこ�
 それが無ければ、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に選び、1 つも宣言していなければ `default` を選びます(「Environment」を参照)。
 配備先のようにその選択の外にある environment は、`--env` が名指したときに走ります。
 `--env` のもとでは、名指したどの environment も満たさない scenario は走りません。
-その行は表から外れ、`run.json` の `table.left_out` がそれを数え、サマリ(表の下)と stderr(件数の行の後ろ)が 1 行でそう言います。
+その行は表から外れ、`run.json` の `table.left_out` がそれを数え、stderr が件数の行の後ろで 1 行でそう言います。
 `<n> criteria not run: their conditions hold in no selected environment` です。
+サマリは同じことを「What this run does not show」の `left-out` の要素として言います。
 environment を 1 つ名指せばそこに当てはまるものが走るので、environment を 1 つ名指す hook の失敗の `do:` 行は、出力されたとおりに走ります。
 `--env` が選んだすべての scenario を外すと何も走らず、run は `nothing-selected` で失敗します。
 その fix は、このプロジェクトで `--env` の無い run がどの environment を選ぶかを言います。
@@ -5262,6 +5304,8 @@ stderr の件数の行は必須の head のセルだけを数えます。
 その実行と、走らなかったセルです。
 対照のある run は、その後ろに、対照を同じように数える `<n> control runs, <k> not run` の行と、`criteria: <held> held, <proven> proven, <failed> failed` の行を加えます。
 `--base` のもとではどの run もこの `criteria:` の行を持ち、そのあとに `unproven`、`moved`、`removed` の数が続きます。
+示さないことのある run は、それらの行に続く所見の後ろに `limits: <n> <kind>, ... (run.json limits)` の行を加えます。
+この行は `run.json` の `limits` を、サマリの順に種類ごとに数えます。
 
 `proven` に届かない変更もあります。
 間欠的なバグの修正は、基点でも十分な頻度で通るので、そこで毎回失敗する Then はありません。
@@ -6120,8 +6164,24 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - 赤い行ごとに 1 行。
   その場所、名前、行の理由を載せます。
   その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、record のパス、Then ではそれを見られる各場所を載せた `seen` を載せ、base か old の world のセルではその前に `base:` か `old:` を付けます。
+- `run.json` が `limits` を持つときは「What this run does not show」。
+  種類ごとに 1 つの項目で、その名前、コードスパンの種類、数を載せ、続けてその要素が共有する文を載せます。
+  2 つ以上の要素を持つ種類で、どの要素も同じ `do:` か `fix:` を持つときは、それもここに 1 度だけ載せます。
+  その下に要素ごとに 1 行で、その場所とテキスト(environment が 2 つ以上の run ではその environment)か world、`detail`、record、その要素自身の `do:` か `fix:` を載せます。
+  run 全体についての要素が 1 つだけの種類(`left-out`、`check-skipped`)は 1 行です。
+  この一覧は `run.json` の他のフィールドから計算し直したもので、`limits` からは読みません:
+
+  ```text
+  ## What this run does not show
+
+  Each item below is something the verdicts above do not cover, listed under its kind in run.json's `limits`.
+
+  - **Static check skipped** (`check-skipped`): the run started with `nuka run --no-check`, so no finding of `nuka check` held it back; do: `nuka check`
+  - **Held, and no control failed at a Then** (`control-not-proving`, 1): a control of each criterion below ran where its conditions do not hold, and none failed at a Then, so nothing shows its Then notices the behaviour is absent
+    - `features/orders.feature:3` criterion 3: no control failed at a Then where its conditions do not hold (reorder-off: broke@4); record `steps/c`; fix: make the steps before the Then run where its conditions do not hold, so the Then is what fails there
+  ```
 - 条件。
-  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world ごとの 1 行(「実行イベント」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--order shuffled` のときの `order: shuffled, seed <n>`(ファイル順では何もなし)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
+  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--order shuffled` のときの `order: shuffled, seed <n>`(ファイル順では何もなし)、`--proof-runs` が 2 でないときの `proof runs: <n>`、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--base` のもとでは「Removed criteria」。
   消えた各受け入れ基準の場所と名前、そして基点での文を `gherkin` のブロックで載せます。
 - run.json が `paths` を持つときは「Changed paths」。
@@ -6139,12 +6199,6 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   1 行が名指すルートは 20 までで、残りは数だけを書きます。
 - 「Claims」。
   claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数、`settled` を宣言して失敗した step なら落ち着いた読み取り(`settled on reading 4 (screen equal "scoring")`)か `not settled`、claim を判定した読み取りでレスポンス待ちだった各リクエスト(`read with a request in flight (GET <url> on page 1, sent during the step at line 9)`、「ページが受け取っていたもの」を参照)、`judged_view` の各ファイルへのリンクを載せた `seen:`(読み取りの 100 ms 以上あとに取ったものには `(taken <n> ms after the reading)` が続きます)、またはページを読まず step がリクエストを送った Then ではその step の `http.jsonl` へのリンクを載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
-- 「Scenarios with no claim」。
-  要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、どの claim も判定しなかったこと(判定したかもしれない compat step が Then の位置にあればそのこと)を載せます。
-- 「Unmeasured actions」。
-  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、record を書いたあとにリクエスト、`runCommand` のプロセス、MCP の呼び出しのどれかを始めたとき(`after_step_end`)、または step のあとに届いたプログラムのログや実行イベントの行があるとき(`program_log_late`、`events_late`)、step ごとに 1 行を載せます。
-  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es), <n> MCP call(s) in mcp.jsonl`、world の停止がそうした行を見つけたときは `<n> line(s) of the program's log after the step ended, in program-log-late.txt` と `<n> line(s) of the program's events after the step ended, in events-late.jsonl`(「テスト対象のプログラム」を参照)、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
-  どちらもない step は何も加えず、`--repeat` のときは同じ行を持つ同じ step が 1 行になります。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。
 - 失敗した run では、失敗した各 scenario の `do` である `nuka run <feature>:<line>` コマンド。

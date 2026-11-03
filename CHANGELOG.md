@@ -45,6 +45,32 @@ just until 0.1.
   reader finds its evidence, or the criteria that break it, without
   reading every difference.
 
+### Changed
+
+- **The run summary says in one place what the run does not show.** A
+  green table read as covering more than it did, because each gap was
+  stated somewhere else: "Scenarios with no claim" and "Unmeasured
+  actions" after the claims, a left-out line under the table, a
+  `check: skipped` line and a line per world for the program's log and
+  execution events among the condition lines, and a held row whose
+  control broke before its Then (`broke@<line>`) only in run.json's
+  `reason`. They are now one section, "What this run does not show",
+  right after the table's reasons, and the places they were no longer
+  state them. run.json gains `limits`, the same entries, each with a
+  stable `kind` (`left-out`, `check-skipped`, `control-not-proving`,
+  `no-claim`, `unmeasured`, `after-record`, `unrecorded-log`,
+  `unrecorded-events`), the place it is about, a `detail`, and a `do`
+  where a command closes the gap or a `fix` where an edit would, so a
+  jq query counts which criteria and kinds recur across runs. A head
+  step's late lines are named once, on its own entry, and no longer
+  counted again on its world. stderr ends with `limits: <n> <kind>, ...`
+  for a run that has any. The summary computes the list from run.json's
+  other fields and never reads `limits`, so a run.json an earlier build
+  wrote renders with the section too. Left out on purpose, each because
+  another section already states it with its consequence: red rows, held
+  rows no control or base could prove, the commit, the selection, a
+  walk, "Routes", "Flags", and "Changed paths".
+
 ### Fixed
 
 - **A refactor gets its paths compared against the base.** `nuka run

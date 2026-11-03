@@ -155,6 +155,17 @@ describe("nuka run: run.json", () => {
         left_out: 0,
         proof_runs: 2,
       },
+      limits: [
+        { kind: "check-skipped", detail: "the run started with `nuka run --no-check`, so no finding of `nuka check` held it back", do: "nuka check" },
+        {
+          kind: "no-claim",
+          feature: "features/failure/b.feature",
+          line: 3,
+          text: "concurrent pass",
+          detail: "no claim on a Then line was judged in it",
+          fix: "end the scenario with a Then whose step declares claims",
+        },
+      ],
     });
     // Paths in run.json are relative to the run directory.
     expect(existsSync(path.join(rootDir, ".nukadoko", "runs", runId, passedStep.record, "record.json"))).toBe(true);

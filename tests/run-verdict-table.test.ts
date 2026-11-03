@@ -176,7 +176,15 @@ describe("nuka run: the verdict table", () => {
     expect(document.table.rows.map((row: { line: number; verdict: string; reason: string }) => [row.line, row.verdict, row.reason])).toEqual([[4, "held", "passes in flag-on"]]);
     expect(document.table.left_out).toBe(1);
     expect(summary.split("\n").slice(1, 3)).toEqual(["# nukadoko run passed: 1 criterion, 1 held", ""]);
-    expect(summary).toContain("\n1 criterion not run: its conditions hold in no selected environment\n");
+    expect(summary).toContain(
+      "\n- **Criteria not run** (`left-out`): 1 criterion not run: its conditions hold in no selected environment; " +
+        "fix: run again with `--env` naming an environment that meets their conditions\n",
+    );
+    expect(document.limits[0]).toEqual({
+      kind: "left-out",
+      detail: "1 criterion not run: its conditions hold in no selected environment",
+      fix: "run again with `--env` naming an environment that meets their conditions",
+    });
   });
 
   it("runs an environment that declares no conditions only when --env names it", async () => {

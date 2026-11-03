@@ -138,8 +138,8 @@ of a JSON response), so it is a place to look, not a verdict. An expected
 value that came from `from` or `observe` gets the same after it, `expected
 measured: <channel>` or `expected measured: none`, and `none` there is
 what a When step that returns the value its Then compares with looks like.
-A scenario under "Scenarios with no claim" ran with no claim on a Then
-line judged, and a run with `check: skipped` started past `nuka check`. A
+"What this run does not show" lists what a green row does not cover, by
+kind (`limits`): `no-claim`, `control-not-proving`, `unmeasured`, and more. A
 Then whose `observe` reads a file and claims on it often comes back as cannot
 tell, with `measured: null`: the record keeps what a process printed and the
 files it changed, and nothing of a file the step read itself. That is a gap in

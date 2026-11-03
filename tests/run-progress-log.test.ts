@@ -159,6 +159,7 @@ describe("nuka run: progress output", () => {
         "1 scenario: 0 passed, 1 failed  (<duration>)",
         "failed\tscenario-failed\tfeatures/failing.feature:3\tan operation fails partway through: operation failed on purpose",
         "  do: nuka run features/failing.feature:3",
+        "limits: 1 check-skipped (run.json limits)",
         "",
       ].join("\n"),
     );

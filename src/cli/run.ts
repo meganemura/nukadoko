@@ -41,6 +41,7 @@ import {
   writeProofRunBoundary,
   writeCriteriaCounts,
   writeControlCounts,
+  writeLimitCounts,
   writeRepeatTallies,
   createRepeatTally,
   formatRerunCommand,
@@ -65,7 +66,7 @@ import { openWalk, restartCommand, type WalkHandle } from "../run/walk-files.js"
 import { generateRunId } from "../run/run-id.js";
 import { inRunOrder, orderFlags, orderText, readOrder, replayTargets, runCommand } from "../run/run-order.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
-import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
+import { limitsOf, renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { judgedEarlyFindings, readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
 import { undeclaredWriteFindings } from "../run/undeclared-writes.js";
@@ -80,6 +81,7 @@ import {
   runResultRelativePath,
   writeRunResult,
   type RunFields,
+  type RunLimit,
   type RunScenario,
   type RunWorld,
   type RunWorldName,
@@ -1452,6 +1454,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       notes: readonly Finding[];
       criteria: CriteriaCounts | null;
       rows: readonly Finding[];
+      limits: readonly RunLimit[];
     }> => {
       // Every request a step was counted for gets its line before run.json
       // is written, one its step left open after it ended included. Under
@@ -1583,7 +1586,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(pass.resolvedEnv.conditions === undefined ? {} : { conditions: pass.resolvedEnv.conditions }),
       }));
       const paths = comparePaths({ scenarios: runScenarios, table, environments, worlds });
-      const fields: RunFields = {
+      const facts: RunFields = {
         run_id: runId,
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
         started_at: invocationStartedAt.toISOString(),
@@ -1604,6 +1607,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(paths.length === 0 ? {} : { paths }),
         ...(walk === undefined ? {} : { walk: walk.record() }),
       };
+      // The limits restate the fields above, so they are read from them
+      // once every other field is final. The summary reads them again
+      // from those fields and never from this copy.
+      const limits = limitsOf(facts);
+      const fields: RunFields = limits.length === 0 ? facts : { ...facts, limits };
       // The gate: red when the run failed outside the table, or when a row
       // is red, which a run with no failed execution can still have: a
       // criterion no environment of the run meets, under `--no-check`, or,
@@ -1689,6 +1697,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         notes,
         criteria,
         rows,
+        limits,
       };
     };
     // The text a person reads at the end, after the files are written: where
@@ -1708,6 +1717,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         notes?: readonly Finding[];
         criteria?: CriteriaCounts | null;
         rows?: readonly Finding[];
+        limits?: readonly RunLimit[];
       },
     ): void => {
       writeOutputLocations(progress, [...locations, ...summaryLocation(end.summaryPath, end.runResultWritten)]);
@@ -1727,6 +1737,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...(end.rows ?? []), ...(end.notes ?? [])]) {
         progress.write(formatFinding(withHint(finding)));
       }
+      // After the failures, which come first: a gap matters only once the
+      // verdicts it qualifies are read.
+      if (end.limits !== undefined) writeLimitCounts(progress, end.limits);
       writeRepeatTallies(progress, tallies, conditionsOf);
       if (end.retention !== null) progress.write(`${end.retention}\n`);
     };

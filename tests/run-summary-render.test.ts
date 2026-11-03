@@ -81,6 +81,16 @@ function scenario(
   };
 }
 
+// The list under the summary's "What this run does not show", without
+// its heading and its one sentence, up to the blank line after it.
+function limitsSection(markdown: string): string[] {
+  const lines = markdown.split("\n");
+  const start = lines.indexOf("## What this run does not show");
+  if (start === -1) return [];
+  expect(lines.slice(start + 1, start + 4)).toEqual(["", "Each item below is something the verdicts above do not cover, listed under its kind in run.json's `limits`.", ""]);
+  return lines.slice(start + 4, lines.indexOf("", start + 4));
+}
+
 function step(text: string, extra: Partial<RunStep> = {}): RunStep {
   return { line: 4, text, step: "a-step", status: "passed", step_record_id: null, record: null, ...extra };
 }
@@ -132,21 +142,18 @@ describe("renderRunSummary", () => {
         }),
       ],
     }));
-    expect(markdown.split("\n").slice(-10)).toEqual([
-      "## Unmeasured actions",
-      "",
-      "Each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did.",
-      "An action a step started after its record was written is in that step's own files, marked `after_step_end`, and not in its record.",
-      "",
-      "- `features/sync.feature:4` the mirror is fetched: child process `exec git with 2 arguments`, socket `connect db.internal:5432`; start a process with `runCommand` to record it; record `steps/stp-1`",
-      "- `features/sync.feature:6` the mirror is pinged: started after the step ended: 2 requests in `http.jsonl`, 1 process; record `steps/stp-4`",
-      "- `features/sync.feature:7` the mirror is closed: socket `write to db.internal:5432, a connection opened before the step`, started after the step ended: 1 process; record `steps/stp-5`",
-      "- `features/sync.feature:10` the report is built: worker thread `new Worker ./render.js`, child process `spawn convert with 2 arguments`, child process `spawn optipng with 1 argument`, and 1 more; start a process with `runCommand` to record it; record `steps/stp-3`",
-      "",
+    expect(limitsSection(markdown)).toEqual([
+      "- **Unmeasured actions** (`unmeasured`, 3): each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did",
+      "  - `features/sync.feature:4` the mirror is fetched: child process `exec git with 2 arguments`, socket `connect db.internal:5432`; record `steps/stp-1`; fix: start a process with `runCommand` to record it",
+      "  - `features/sync.feature:7` the mirror is closed: socket `write to db.internal:5432, a connection opened before the step`; record `steps/stp-5`",
+      "  - `features/sync.feature:10` the report is built: worker thread `new Worker ./render.js`, child process `spawn convert with 2 arguments`, child process `spawn optipng with 1 argument`, and 1 more; record `steps/stp-3`; fix: start a process with `runCommand` to record it",
+      "- **After a step's record was written** (`after-record`, 2): each step below started an action, or has lines of the program's log or events, after its record was written: they are in that step's own files, and not in its record",
+      "  - `features/sync.feature:6` the mirror is pinged: started after the step ended: 2 requests in `http.jsonl`, 1 process; record `steps/stp-4`",
+      "  - `features/sync.feature:7` the mirror is closed: started after the step ended: 1 process; record `steps/stp-5`",
     ]);
     expect(renderRunSummary(run({
       scenarios: [scenario("features/sync.feature", 3, "the mirror syncs", "passed", 100, { steps: [step("the count is shown", { observed: quiet })] })],
-    }))).not.toContain("Unmeasured");
+    }))).not.toContain("What this run does not show");
   });
 
   it("renders a green run", () => {
@@ -771,21 +778,16 @@ describe("the program log lines of the summary", () => {
         ],
       }),
     );
-    expect(markdown.split("\n").slice(3, 15)).toEqual([
-      "- commit: `0123456`",
-      "- environment: default at http://localhost:41873",
-      "- environment: untagged at http://localhost:41874",
-      "- environment: buffered at http://localhost:41876",
-      "- environment: staging at https://staging.example.test",
-      "- environment: quiet at http://localhost:41875",
-      "- program log of world default: 2 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`).",
-      "- program log of world untagged: carries no trace ids, so each step's slice of it is empty",
-      "- program log of world buffered: 8 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`). " +
-        "None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; " +
-        "if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
-      "- program log of world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
-      "- browser: none launched",
-      "- selection: full",
+    // The condition lines name the worlds and no longer say what of the
+    // log no record holds: that is a limit, said once.
+    expect(markdown).not.toContain("program log of world");
+    expect(limitsSection(markdown)).toEqual([
+      "- **The program's log** (`unrecorded-log`, 3): what of it no step's record holds",
+      "  - world untagged: carries no trace ids, so each step's slice of it is empty",
+      "  - world buffered: 8 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`), and none in time, " +
+        "which is what a program that buffers its output on a pipe looks like; " +
+        "fix: if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python",
+      "  - world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
     ]);
   });
 
@@ -798,7 +800,9 @@ describe("the program log lines of the summary", () => {
       const stamped = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
       const markdown = renderRunSummary(run({ worlds: [{ ...world("default", "http://localhost:1"), program_log: { stamped, lines, late, tagged } }] }));
       expect(markdown.includes(NO_TRACE_IDS)).toBe(stamped > 0 && tagged === 0);
-      expect(markdown.includes(CAME_LATE)).toBe(stamped > 0 && tagged > 0 && late > 0);
+      // A head world's late lines are each step's own entry, so the world
+      // counts them only when none came in time.
+      expect(markdown.includes(CAME_LATE)).toBe(stamped > 0 && tagged > 0 && late > 0 && lines === 0);
       expect(markdown.includes(BUFFERED)).toBe(stamped > 0 && tagged > 0 && lines === 0 && late > 0);
     }));
 
@@ -817,11 +821,10 @@ describe("the program log lines of the summary", () => {
         ],
       }),
     );
-    const section = markdown.slice(markdown.indexOf("## Unmeasured actions"));
-    expect(section.split("\n").filter((line) => line.startsWith("- ") || line.includes("program-log-late"))).toEqual([
-      "A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record.",
-      "- `features/a.feature:4` the step calls slow: 2 lines of the program's log after the step ended, in `program-log-late.txt`; record `steps/step-1`",
-      "- `features/a.feature:5` the step calls slow again: 1 line of the program's log after the step ended, which could not be written; record `steps/step-2`",
+    expect(limitsSection(markdown)).toEqual([
+      "- **After a step's record was written** (`after-record`, 2): each step below started an action, or has lines of the program's log or events, after its record was written: they are in that step's own files, and not in its record",
+      "  - `features/a.feature:4` the step calls slow: 2 lines of the program's log after the step ended, in `program-log-late.txt`; record `steps/step-1`",
+      "  - `features/a.feature:5` the step calls slow again: 1 line of the program's log after the step ended, which could not be written; record `steps/step-2`",
     ]);
   });
 });
@@ -841,12 +844,13 @@ describe("the execution events lines of the summary", () => {
         ],
       }),
     );
-    expect(markdown.split("\n").filter((line) => line.includes("events of world"))).toEqual([
-      "- events of world silent: the program wrote no line to the file {events} names, so no step's record has an event",
-      "- events of world busy: 3 lines carrying a step's trace id arrived after that step ended (`events-late.jsonl`); " +
-        "1 line is not one readable line of the format; 3 lines name a kind the format does not define (`queue`, `cache`); " +
+    expect(markdown).not.toContain("events of world");
+    expect(limitsSection(markdown)).toEqual([
+      "- **The program's execution events** (`unrecorded-events`, 3): what of them no step's record holds",
+      "  - world silent: the program wrote no line to the file `{events}` names, so no step's record has an event",
+      "  - world busy: 1 line is not one readable line of the format; 3 lines name a kind the format does not define (`queue`, `cache`); " +
         "the world's copy of the file could not be written",
-      "- events of world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
+      "  - world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
     ]);
   });
 
@@ -864,13 +868,28 @@ describe("the execution events lines of the summary", () => {
         ],
       }),
     );
-    const section = markdown.slice(markdown.indexOf("## Unmeasured actions"));
-    expect(section.split("\n").filter((line) => line.startsWith("- ") || line.includes("-late."))).toEqual([
-      "A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record.",
-      "A line of the program's events that carries a step's trace id and arrived after its record was written is in that step's `events-late.jsonl`, and not in its record.",
-      "- `features/a.feature:4` the client gets late: 1 line of the program's events after the step ended, in `events-late.jsonl`; record `steps/step-1`",
-      "- `features/a.feature:5` the client gets late again: 1 line of the program's log after the step ended, in `program-log-late.txt`, " +
+    expect(limitsSection(markdown)).toEqual([
+      "- **After a step's record was written** (`after-record`, 2): each step below started an action, or has lines of the program's log or events, after its record was written: they are in that step's own files, and not in its record",
+      "  - `features/a.feature:4` the client gets late: 1 line of the program's events after the step ended, in `events-late.jsonl`; record `steps/step-1`",
+      "  - `features/a.feature:5` the client gets late again: 1 line of the program's log after the step ended, in `program-log-late.txt`, " +
         "2 lines of the program's events after the step ended, which could not be written; record `steps/step-2`",
+    ]);
+  });
+
+  it("names a base world's late lines on the world, since its steps have no entries", () => {
+    const markdown = renderRunSummary(
+      run({
+        worlds: [
+          { ...world("default", "http://localhost:41873"), events: { ...counts, late: 2 } },
+          { ...world("default", "http://localhost:41874"), tree: "base", events: { ...counts, late: 3 }, program_log: { stamped: 4, lines: 2, late: 1, tagged: 3 } },
+        ],
+      }),
+    );
+    expect(limitsSection(markdown)).toEqual([
+      "- **The program's log** (`unrecorded-log`, 1): what of it no step's record holds",
+      "  - world default (base): 1 line carrying a step's trace id arrived after that step ended (`program-log-late.txt`)",
+      "- **The program's execution events** (`unrecorded-events`, 1): what of them no step's record holds",
+      "  - world default (base): 3 lines carrying a step's trace id arrived after that step ended (`events-late.jsonl`); the whole file is in `worlds/default/events.jsonl`",
     ]);
   });
 });

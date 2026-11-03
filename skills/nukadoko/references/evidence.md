@@ -72,7 +72,7 @@ not seen this way: what it carries is an `unmeasured` socket.
 A request, a `runCommand` process, or an MCP call the step's code starts after its
 record was written (a timer it left behind) is written beside that
 record, marked `after_step_end`, never in the next step's files, and the
-run summary names it under the step, with the file that holds the
+run summary names it on the step's `after-record` entry, with the file that holds the
 requests (`http.jsonl`, which the record may not name). A request still
 open when the run ends gets its line then. The record does not count it.
 

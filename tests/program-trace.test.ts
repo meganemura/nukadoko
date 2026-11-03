@@ -136,7 +136,7 @@ describe("trace context and the program's log", () => {
       pageStep.observed.program_log,
     ]);
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
-    expect(summary).not.toContain("program log of world");
+    expect(summary).not.toContain("unrecorded-log");
   });
 
   it("stamps a Before, AfterStep, or After hook's requests with a trace id of the hook's own, and BeforeAll's and AfterAll's with none", async () => {
@@ -206,7 +206,7 @@ describe("trace context and the program's log", () => {
     // The trace-only line of the request step is still that step's.
     expect(run.worlds[0].program_log).toEqual({ stamped: 6, lines: 1, late: 0, tagged: 1 });
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
-    expect(summary).not.toContain("program log of world untagged");
+    expect(summary).not.toContain("unrecorded-log");
   });
 
   it("says so in the summary when no line carries a trace id", async () => {
@@ -218,9 +218,10 @@ describe("trace context and the program's log", () => {
     expect(exitCode).toBe(0);
     expect(latestRunJson(rootDir).worlds[0].program_log).toEqual({ stamped: 4, lines: 0, late: 0, tagged: 0 });
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
-    expect(summary.split("\n").filter((line) => line.includes("program log of world"))).toEqual([
-      "- program log of world untagged: carries no trace ids, so each step's slice of it is empty",
-    ]);
+    expect(summary).toContain(
+      "- **The program's log** (`unrecorded-log`, 1): what of it no step's record holds\n" +
+        "  - world untagged: carries no trace ids, so each step's slice of it is empty\n",
+    );
   });
 
   it("nuka do slices the log of the world it starts for its one execution", async () => {
@@ -273,8 +274,9 @@ describe("a world at a URL nukadoko did not start", () => {
     const run = latestRunJson(rootDir);
     expect(run.worlds[0].program_log).toBeNull();
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
-    expect(summary.split("\n").filter((line) => line.includes("program log of world"))).toEqual([
-      `- program log of world default: not read, since the program runs at ${run.worlds[0].url}, which nukadoko did not start`,
-    ]);
+    expect(summary).toContain(
+      "- **The program's log** (`unrecorded-log`, 1): what of it no step's record holds\n" +
+        `  - world default: not read, since the program runs at ${run.worlds[0].url}, which nukadoko did not start\n`,
+    );
   });
 });

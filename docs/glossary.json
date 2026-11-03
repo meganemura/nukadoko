@@ -961,6 +961,11 @@
       "en": ["explained_by", "what accounts for a difference (of a path, against the base)"],
       "ja": "違いを説明するもの",
       "note": "基点との組で `changed` の受け入れ基準が持つフィールド。`criterion_change` は受け入れ基準が新しいか変わったので人が新しい文を承認すること、`null` は変わっていないのに feature ファイルのどこもその違いを求めていないこと。フィールド名と値はコードスパンで英語のまま"
+    },
+    {
+      "en": ["limit (of a run)", "limits", "what this run does not show"],
+      "ja": "示さないこと / `limits` の要素",
+      "note": "run.json の `limits` が並べる、緑の断定が覆わないことの 1 つ。run.json の他のフィールドから言い直したもので、計測ではない。run サマリの節の見出し What this run does not show、フィールド `limits`、種類の値(`no-claim`、`control-not-proving` など)はコードスパンで英語のまま。kind は 種類 と書く。実行イベントの 欠け(gap)とは別の語"
     }
   ],
   "keep_english": [

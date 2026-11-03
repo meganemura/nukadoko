@@ -58,6 +58,17 @@ This part does not change release to release.
   of the run can be seen, and Claims entries and red rows' failure lines
   end in `seen` links. A job that parses `summary.md` by column reads the
   last column as `seen`, or reads `run.json`'s `table` instead.
+- **The run summary moved its gap sections into one.** "Scenarios with
+  no claim", "Unmeasured actions", the line under the table that counts
+  criteria `--env` left out, and the condition lines `check: skipped`,
+  `program log of world ...`, and `events of world ...` are gone; each
+  is an entry under "What this run does not show", right after the
+  table's reasons. A job that searched `summary.md` for one of those
+  headings or lines reads run.json's `limits` instead, by `kind`
+  (`no-claim`, `unmeasured`, `after-record`, `left-out`,
+  `check-skipped`, `unrecorded-log`, `unrecorded-events`). A test that
+  asserted stderr ends with the count line now sees a `limits: ...`
+  line after the findings when the run has a limit.
 - **`judged` is a reserved evidence name.** `evidence.attach("judged", ...)`
   and `evidence.path("judged")` throw `ReservedEvidenceNameError`, since
   the view goes in that directory. Pick another name.

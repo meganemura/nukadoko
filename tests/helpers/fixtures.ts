@@ -276,6 +276,10 @@ const RERUN_LINE = /^ {2}do: nuka run /;
 // The lines a world writes as each phase starts, and once its program is
 // ready (src/program/world.ts).
 const WORLD_READY_LINE = /^world \S+: /;
+// The line after the counts that counts run.json's `limits` by kind
+// (src/run/progress-log.ts): the run's own chrome, like the summary line,
+// asserted in tests/run-limits.test.ts.
+const LIMITS_LINE = /^limits: \d+ [a-z-]+(?:, \d+ [a-z-]+)* \(run\.json limits\)$/;
 // The run's repeated-opening note. Whether it fires depends on what each
 // step took on this machine, against a 2% floor, so a test that asserts
 // "nothing unexpected happened" would pass or fail with the machine's load.
@@ -305,7 +309,8 @@ export function stripRunProgressLines(text: string): string {
         !FAILED_SCENARIO_LINE.test(line) &&
         !STEP_FAILURE_LINE.test(line) &&
         !RERUN_LINE.test(line) &&
-        !WORLD_READY_LINE.test(line),
+        !WORLD_READY_LINE.test(line) &&
+        !LIMITS_LINE.test(line),
     )
     .join("\n");
 }

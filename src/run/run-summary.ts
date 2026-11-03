@@ -10,6 +10,8 @@ import {
   RED_VERDICTS,
   type RunClaim,
   type RunDocument,
+  type RunLimit,
+  type RunLimitKind,
   type RunPathComparison,
   type RunPathCriterion,
   type RunPathDifference,
@@ -26,14 +28,20 @@ import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { LATE_VIEW_MS, markdownLink, seenLinks, type SeenLink } from "../report/summary/seen-links.js";
 import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
-import { cellText as cellWord, leftOutText } from "./verdict-table.js";
+import { LIMIT_KINDS, limitsOf } from "./run-limits.js";
+// The CLI writes the same list into run.json that the summary renders, so
+// it reaches limitsOf through the summary rather than past it.
+export { limitsOf } from "./run-limits.js";
+import { cellCode, cellText, codeSpan, countOf } from "./summary-markdown.js";
+import { cellText as cellWord } from "./verdict-table.js";
 
 // Responsibility: the Markdown run summary one `nuka run` invocation leaves
 // for a person: in its own run directory always, appended to
 // `$GITHUB_STEP_SUMMARY` when that is set, and wherever
 // `nuka report --format markdown` is pointed later. It says what ran, at which commit, under which condition, and how
 // each criterion came out: the verdict table first, then why each red row
-// is red. Under `nuka run --base` the table says what each criterion's
+// is red, then, in one section, what the run does not show
+// (src/run/run-limits.ts). Under `nuka run --base` the table says what each criterion's
 // change is, the line above it what the run compared with and whether the
 // mapping changed, and a section after the reasons quotes each removed
 // criterion, since head no longer holds its sentences. When the run
@@ -42,7 +50,7 @@ import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 // execution events named a flag, a section counts each side's criteria.
 //
 // Only head's executions feed the sections after the table (claims,
-// unmeasured actions, scenarios with no claim, reruns): an execution of
+// a step's or a scenario's limits, reruns): an execution of
 // the base or the old world is a cell of the table, read there, and its
 // claims are about code or steps the change replaced.
 //
@@ -73,31 +81,6 @@ interface SummaryFailure {
   readonly command?: string;
   /** The steps the failed step read from whose process exited nonzero. */
   readonly exited?: readonly ExitedProducer[];
-}
-
-// Text a reader sees outside a code span. The table parser removes a `\`
-// that sits immediately before a `|`, and the inline parser then removes a
-// `\` that sits before ASCII punctuation, so a single `\` written for the
-// pipe leaves `\\|`, which renders as `|`. Doubling every `\` first makes
-// `\\\|` render as `\|`. `<` would open an HTML tag in GitHub's renderer.
-function cellText(text: string): string {
-  return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/</g, "&lt;");
-}
-
-// A code span longer than any backtick run inside it, so an error message
-// that quotes code cannot close it early. In a table, `|` still needs its
-// backslash inside a code span. A code span shows any other `\` as itself,
-// so those are left alone.
-function cellCode(text: string): string {
-  return codeSpan(text).replace(/\|/g, "\\|");
-}
-
-// A code span outside a table, where a `\` before `|` would show.
-function codeSpan(text: string): string {
-  const longestRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
-  const fence = "`".repeat(longestRun + 1);
-  const padded = text.startsWith("`") || text.endsWith("`") ? ` ${text} ` : text;
-  return `${fence}${padded}${fence}`;
 }
 
 /** The findings the verdict table already shows: a failed scenario is its
@@ -190,52 +173,6 @@ function renderCondition(document: RunDocument): string[] {
     const notes = [...declared, ...version];
     return `- environment: ${environment.name}${at}${notes.length === 0 ? "" : ` (${notes.join(", ")})`}`;
   });
-  // Once per world, so a reader of an empty slice knows why it is empty.
-  // Decided from the whole log when the world stopped: a log with no line
-  // that carries a trace id of the world does not tag its lines, and a
-  // log with lines that came after their step ended says how many. Why
-  // they came late is not known, so it is only offered as a possibility,
-  // and only when no line of the world came in time, the pattern a
-  // program that buffers its output on a pipe makes.
-  const programLogs = (document.worlds ?? []).flatMap((world) => {
-    const log = world.program_log;
-    if (log === null) {
-      return [`- program log of world ${worldName(world)}: not read, since the program runs at ${world.url ?? "a URL"}, which nukadoko did not start`];
-    }
-    if (log === undefined || log.stamped === 0) return [];
-    if (log.tagged === 0) return [`- program log of world ${worldName(world)}: carries no trace ids, so each step's slice of it is empty`];
-    if (log.late > 0) {
-      const fact = `- program log of world ${worldName(world)}: ${countOf(log.late, "line", "lines")} carrying a step's trace id arrived after that step ended (\`program-log-late.txt\`).`;
-      if (log.lines > 0) return [fact];
-      return [
-        `${fact} None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; ` +
-          "if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
-      ];
-    }
-    return [];
-  });
-  // Once per world whose program file names {events}, and per world at a
-  // URL, only for what a reader of a step's events has to know: that the
-  // file was not read, that the program wrote no line to it, or what of it
-  // no step's record holds.
-  const events = (document.worlds ?? []).flatMap((world) => {
-    const read = world.events;
-    if (read === undefined) return [];
-    const head = `- events of world ${worldName(world)}:`;
-    if (read === null) return [`${head} not read, since the program runs at ${world.url ?? "a URL"}, which nukadoko did not start`];
-    if (read.lines === 0) return [`${head} the program wrote no line to the file {events} names, so no step's record has an event`];
-    const undefinedKinds = Object.entries(read.undefined_kinds);
-    const facts = [
-      ...(read.late > 0 ? [`${countOf(read.late, "line", "lines")} carrying a step's trace id arrived after that step ended (\`events-late.jsonl\`)`] : []),
-      ...(read.unreadable > 0 ? [`${countOf(read.unreadable, "line is", "lines are")} not one readable line of the format`] : []),
-      ...(undefinedKinds.length > 0
-        ? [`${countOf(undefinedKinds.reduce((total, [, count]) => total + count, 0), "line names", "lines name")} a kind the format does not define (${undefinedKinds.map(([kind]) => cellCode(kind)).join(", ")})`]
-        : []),
-    ];
-    if (facts.length === 0) return [];
-    const copy = read.file === null ? "the world's copy of the file could not be written" : `the whole file is in ${cellCode(read.file)}`;
-    return [`${head} ${facts.join("; ")}; ${copy}`];
-  });
   const browsers = new Map<string, string>();
   for (const scenario of document.scenarios) {
     if (scenario.browser !== undefined) {
@@ -267,24 +204,15 @@ function renderCondition(document: RunDocument): string[] {
     document.table.proof_runs === DEFAULT_PROOF_RUNS
       ? []
       : [`- proof runs: ${document.table.proof_runs} (\`--proof-runs\`: a control proves its row once it breaks the same claim at one Then line in ${document.table.proof_runs} runs)`];
-  // Only a skipped check is said: a run whose check ran is the default, and
-  // a finding of that check would have stopped it.
-  const check =
-    document.check === "skipped"
-      ? ["- check: skipped (`nuka run --no-check`), so no finding of `nuka check` held this run back"]
-      : [];
   const elapsed = Date.parse(document.finished_at) - Date.parse(document.started_at);
   return [
     "",
     commit,
     ...environments,
-    ...programLogs,
-    ...events,
     browser,
     selection,
     ...order,
     ...proofRuns,
-    ...check,
     `- nukadoko: ${document.nukadoko}`,
     `- run: ${document.run_id}`,
     `- started ${document.started_at}, finished ${document.finished_at} (${formatSummaryDuration(elapsed)})`,
@@ -404,9 +332,6 @@ function renderTable(document: RunDocument): string[] {
       });
       return `| ${[row.verdict, `${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags}`, ...change(row), ...cells, ...(seen === null ? [] : [seen(row)])].join(" | ")} |`;
     }),
-    // A criterion `--env` left out has no row, so the table says how many
-    // there were, or the run would read as covering the whole selection.
-    ...(document.table.left_out > 0 ? ["", leftOutText(document.table.left_out)] : []),
   ];
 }
 
@@ -930,13 +855,6 @@ function renderPaths(document: RunDocument): string[] {
   ];
 }
 
-// How many unmeasured actions one line names before it counts the rest.
-const UNMEASURED_SHOWN = 3;
-
-function countOf(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 /** The `--tag` flags of a run as one code span, quoted for a shell. */
 function tagFlagsOf(expressions: readonly string[]): string {
   return codeSpan(expressions.map((expression) => `--tag ${JSON.stringify(expression)}`).join(" "));
@@ -1088,127 +1006,6 @@ function renderRoutes(document: RunDocument): string[] {
     ...unread.map((world) => `- World ${codeSpan(programWord(world.name))} read no routes list (\`program-list-unread\` under Findings), so none of its routes stands here.`),
   ];
   return ["", "## Routes", "", ...(lines.at(-1) === "" ? lines.slice(0, -1) : lines)];
-}
-
-// The item that names what a step started after its record was written
-// (docs/spec.md "Records"): those lines are in the step's own files, but
-// its record was already final, so this line is the one place that says
-// they exist, and names the file that holds the requests, which the
-// record may not name.
-function afterStepEndItem(step: RunScenario["steps"][number]): string | undefined {
-  const late = step.after_step_end;
-  if (late === undefined) return undefined;
-  const parts = [
-    ...(late.requests > 0 ? [`${countOf(late.requests, "request", "requests")} in ${cellCode(late.http ?? "http.jsonl")}`] : []),
-    ...(late.processes > 0 ? [countOf(late.processes, "process", "processes")] : []),
-    ...((late.mcp ?? 0) > 0 ? [`${countOf(late.mcp!, "MCP call", "MCP calls")} in ${cellCode("mcp.jsonl")}`] : []),
-  ];
-  return parts.length === 0 ? undefined : `started after the step ended: ${parts.join(", ")}`;
-}
-
-// The item that names a step's lines of the program's log that arrived
-// after its record was written (docs/spec.md "Trace context and the
-// program's log"): the world's stop found them, and the record was
-// already final.
-function programLogLateItem(step: RunScenario["steps"][number]): string | undefined {
-  const late = step.program_log_late;
-  if (late === undefined) return undefined;
-  const lines = countOf(late.lines, "line", "lines");
-  return late.file === null
-    ? `${lines} of the program's log after the step ended, which could not be written`
-    : `${lines} of the program's log after the step ended, in ${cellCode(late.file)}`;
-}
-
-// The item that names a step's execution events that arrived after its
-// record was written, the same way.
-function eventsLateItem(step: RunScenario["steps"][number]): string | undefined {
-  const late = step.events_late;
-  if (late === undefined) return undefined;
-  const lines = countOf(late.lines, "line", "lines");
-  return late.file === null
-    ? `${lines} of the program's events after the step ended, which could not be written`
-    : `${lines} of the program's events after the step ended, in ${cellCode(late.file)}`;
-}
-
-// One line per step that did something nukadoko could not measure (the
-// step record's `observed.unmeasured`), or that started an action after
-// its record was written: a reader approving the run needs to know which
-// steps' evidence has a gap, and nothing else is added for a step without
-// one. A process started without `runCommand` names only its program and
-// argument count, so the line says how to get it recorded. Under
-// `--repeat` the same step with the same gap is one line, citing its
-// first record.
-function renderUnmeasured(document: RunDocument): string[] {
-  const named = document.environments.length > 1;
-  const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
-  let anyLateLog = false;
-  let anyLateEvents = false;
-  for (const scenario of headScenarios(document)) {
-    for (const step of scenario.steps) {
-      const unmeasured = step.observed?.unmeasured ?? [];
-      const late = afterStepEndItem(step);
-      const lateLog = programLogLateItem(step);
-      if (lateLog !== undefined) anyLateLog = true;
-      const lateEvents = eventsLateItem(step);
-      if (lateEvents !== undefined) anyLateEvents = true;
-      if (unmeasured.length === 0 && late === undefined && lateLog === undefined && lateEvents === undefined) continue;
-      const shown = unmeasured.slice(0, UNMEASURED_SHOWN).map((entry) => `${entry.kind.replace("_", " ")} ${cellCode(entry.detail)}`);
-      if (unmeasured.length > UNMEASURED_SHOWN) shown.push(`and ${unmeasured.length - UNMEASURED_SHOWN} more`);
-      if (late !== undefined) shown.push(late);
-      if (lateLog !== undefined) shown.push(lateLog);
-      if (lateEvents !== undefined) shown.push(lateEvents);
-      const where = `${scenario.feature}:${step.line ?? scenario.line}`;
-      const environment = named ? ` (${cellText(scenario.environment)})` : "";
-      const hint = unmeasured.some((entry) => entry.kind === "child_process") ? "; start a process with `runCommand` to record it" : "";
-      const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}: ${shown.join(", ")}${hint}`;
-      if (lines.has(head)) continue;
-      lines.set(head, {
-        sortKey: [scenario.feature, step.line ?? scenario.line],
-        text: step.record === null ? head : `${head}; record ${cellCode(step.record)}`,
-      });
-    }
-  }
-  if (lines.size === 0) return [];
-  const sorted = [...lines.values()].sort((a, b) => a.sortKey[0].localeCompare(b.sortKey[0]) || a.sortKey[1] - b.sortKey[1]);
-  return [
-    "",
-    "## Unmeasured actions",
-    "",
-    "Each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did.",
-    "An action a step started after its record was written is in that step's own files, marked `after_step_end`, and not in its record.",
-    ...(anyLateLog
-      ? ["A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record."]
-      : []),
-    ...(anyLateEvents
-      ? ["A line of the program's events that carries a step's trace id and arrived after its record was written is in that step's `events-late.jsonl`, and not in its record."]
-      : []),
-    "",
-    ...sorted.map((line) => line.text),
-  ];
-}
-
-// One line per scenario in which no claim on a Then line was judged
-// (run.json's `judged_by`): it passed or failed without a Then judging a
-// claim, which a reader approving the run has to see beside the green.
-// Under `--repeat` or several environments the scenario is one line.
-function renderUnjudged(document: RunDocument): string[] {
-  const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
-  for (const scenario of headScenarios(document)) {
-    if (scenario.judged_by === undefined) continue;
-    const key = scenarioKey(scenario.feature, scenario.line);
-    if (lines.has(key)) continue;
-    const why =
-      scenario.judged_by === "compat"
-        ? "no claim judged it, and a compat step in Then position may have, by throwing or not, where nukadoko cannot see what it checked"
-        : "no claim on a Then line was judged in it";
-    lines.set(key, {
-      sortKey: [scenario.feature, scenario.line],
-      text: `- ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}: ${why}`,
-    });
-  }
-  if (lines.size === 0) return [];
-  const sorted = [...lines.values()].sort((a, b) => a.sortKey[0].localeCompare(b.sortKey[0]) || a.sortKey[1] - b.sortKey[1]);
-  return ["", "## Scenarios with no claim", "", "In each scenario below, no claim on a Then line was judged (held, broken, or unjudged).", "", ...sorted.map((line) => line.text)];
 }
 
 function channelText(measured: MeasuredChannel | null | undefined, ownRecordId: string | null): string {
@@ -1370,6 +1167,78 @@ function renderRerun(document: RunDocument): string[] {
   return ["", `## Rerun a ${what} scenario`, "", "```sh", ...commands, "```"];
 }
 
+// Each kind of limit as a reader learns it once, at the head of its
+// group: a name, and the sentence its entries share, so each entry says
+// only where and what.
+const LIMIT_HEADINGS: Readonly<Record<RunLimitKind, { readonly name: string; readonly lead?: string }>> = {
+  "left-out": { name: "Criteria not run" },
+  "check-skipped": { name: "Static check skipped" },
+  "control-not-proving": {
+    name: "Held, and no control failed at a Then",
+    lead: "a control of each criterion below ran where its conditions do not hold, and none failed at a Then, so nothing shows its Then notices the behaviour is absent",
+  },
+  "no-claim": { name: "Scenarios with no claim", lead: "in each scenario below, no claim on a Then line was judged (held, broken, or unjudged)" },
+  unmeasured: {
+    name: "Unmeasured actions",
+    lead: "each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did",
+  },
+  "after-record": {
+    name: "After a step's record was written",
+    lead: "each step below started an action, or has lines of the program's log or events, after its record was written: they are in that step's own files, and not in its record",
+  },
+  "unrecorded-log": { name: "The program's log", lead: "what of it no step's record holds" },
+  "unrecorded-events": { name: "The program's execution events", lead: "what of them no step's record holds" },
+};
+
+function closerText(limit: RunLimit): string {
+  return [...(limit.do === undefined ? [] : [`do: ${codeSpan(limit.do)}`]), ...(limit.fix === undefined ? [] : [`fix: ${limit.fix}`])].join("; ");
+}
+
+// Where an entry is, as its line opens: the criterion or the step with its
+// text, the environment in a run of several, or the world.
+function limitPlace(limit: RunLimit, named: boolean): string {
+  if (limit.feature !== undefined) {
+    const environment = named && limit.environment !== undefined ? ` (${cellText(limit.environment)})` : "";
+    return `${codeSpan(`${limit.feature}:${limit.line ?? ""}`)}${limit.text === undefined ? "" : ` ${cellText(limit.text)}`}${environment}`;
+  }
+  if (limit.environment !== undefined) return `world ${cellText(worldName({ name: limit.environment, tree: limit.world ?? "head" }))}`;
+  return "";
+}
+
+// Right under the verdict table and its reasons, since it is what a green
+// table does not say: every gap of the run in one place, grouped by kind.
+// The list is computed again from run.json's other fields, never read from
+// its `limits`, which only restates them: a summary of a run.json an
+// earlier build wrote, or of one edited by hand, says the same, and a
+// damaged `limits` cannot break the render. A closer every entry of a
+// kind shares is said once, at the head of the group, when it has more
+// than one.
+function renderLimits(document: RunDocument): string[] {
+  const limits = limitsOf(document);
+  if (limits.length === 0) return [];
+  const named = document.environments.length > 1;
+  const lines = ["", "## What this run does not show", "", "Each item below is something the verdicts above do not cover, listed under its kind in run.json's `limits`.", ""];
+  for (const kind of LIMIT_KINDS) {
+    const entries = limits.filter((limit) => limit.kind === kind);
+    if (entries.length === 0) continue;
+    const { name, lead } = LIMIT_HEADINGS[kind];
+    const closers = new Set(entries.map(closerText));
+    const shared = entries.length > 1 && closers.size === 1 ? [...closers][0]! : "";
+    const tail = (text: string): string => (text === "" ? "" : `; ${text}`);
+    const only = entries[0]!;
+    if (entries.length === 1 && limitPlace(only, named) === "") {
+      lines.push(`- **${name}** (\`${kind}\`): ${only.detail}${tail(closerText(only))}`);
+      continue;
+    }
+    lines.push(`- **${name}** (\`${kind}\`, ${entries.length})${lead === undefined ? "" : `: ${lead}`}${tail(shared)}`);
+    for (const limit of entries) {
+      const record = limit.record === undefined ? "" : `; record ${codeSpan(limit.record)}`;
+      lines.push(`  - ${limitPlace(limit, named)}: ${limit.detail}${record}${shared === "" ? tail(closerText(limit)) : ""}`);
+    }
+  }
+  return lines;
+}
+
 /** The summary of the run `document` records. */
 export function renderRunSummary(document: RunDocument): string {
   const lines = [
@@ -1377,14 +1246,13 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderTitle(document),
     ...renderTable(document),
     ...renderReasons(document),
+    ...renderLimits(document),
     ...renderCondition(document),
     ...renderRemoved(document),
     ...renderPaths(document),
     ...renderFlags(document),
     ...renderRoutes(document),
     ...renderClaims(document),
-    ...renderUnjudged(document),
-    ...renderUnmeasured(document),
     ...renderFindings(document),
     ...renderRerun(document),
   ];
