@@ -966,6 +966,11 @@
       "en": ["limit (of a run)", "limits", "what this run does not show"],
       "ja": "示さないこと / `limits` の要素",
       "note": "run.json の `limits` が並べる、緑の断定が覆わないことの 1 つ。run.json の他のフィールドから言い直したもので、計測ではない。run サマリの節の見出し What this run does not show、フィールド `limits`、種類の値(`no-claim`、`control-not-proving` など)はコードスパンで英語のまま。kind は 種類 と書く。実行イベントの 欠け(gap)とは別の語"
+    },
+    {
+      "en": ["working tree (git)", "working tree id", "commit.working_tree"],
+      "ja": "作業ツリー / 作業ツリーの id",
+      "note": "git の作業ツリー。run.json の `commit.working_tree` は、それを 1 つの git のツリー id にしたもの(未追跡ファイルを含み、無視されるファイルと state ディレクトリを除く)。keep_english の tree(world が build するコードの置き場所、`head`、`base`、`old`)とは別の語なので、作業ツリーと書き、ツリー単独では書かない。フィールド名はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

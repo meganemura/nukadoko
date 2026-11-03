@@ -6005,7 +6005,7 @@ to act on the run without opening another file:
   "run_dir": ".nukadoko/runs/run-20260801-143022-a1b2",
   "started_at": "...",
   "finished_at": "...",
-  "commit": { "sha": "<40 hex characters>", "dirty": false },
+  "commit": { "sha": "<40 hex characters>", "dirty": false, "working_tree": "<40 hex characters>" },
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
@@ -6101,7 +6101,8 @@ to act on the run without opening another file:
 
 - `commit` is the commit `HEAD` named when the run started, and `dirty`
   says whether the working tree then had a change `git status --porcelain`
-  reports, an untracked file included. It is `null` outside a git
+  reports, an untracked file included, and `working_tree` is the working
+  tree then as one git tree id ("Records"). It is `null` outside a git
   repository or before the first commit. `environments` lists each
   environment the run targeted, in the order `--env` gave them (or the
   order a run without `--env` selected them), with `conditions` when the
@@ -8058,6 +8059,39 @@ its scenario record's id, so either record leads to the other.
   commit, and when the git call fails; the run itself never fails over it.
   The run summary reports it (below), so a reviewer sees which commit ran
   and whether the tree had uncommitted changes.
+- `commit.working_tree` is the working tree when the run started, as one
+  git tree id: every tracked file as it is on disk and every untracked file
+  `.gitignore` does not leave out, with the state directory left out, since
+  every run writes there. `dirty: true` is true for every uncommitted edit
+  alike; two runs with the same `working_tree` judged the same bytes at the
+  same paths. On a clean tree it is `HEAD^{tree}`, so a commit made after
+  the run does not move it. It is measured beside `sha`, through a copy of
+  the index in a temporary directory: the real index is never staged into
+  or locked, only the files that changed since the last `git add` are
+  hashed, and no file's contents are written to the object database (the
+  ids are recorded with `update-index --info-only`); `write-tree` stores
+  the tree objects of the directories that changed, which no ref reaches
+  and `git gc` removes. It costs about 20 ms on a repository of 2,000
+  tracked files, more for large untracked files, which are hashed on every
+  run. An untracked repository nested inside is left out, and a submodule
+  counts as the commit it has checked out. The key is absent where `sha`
+  is `null`, when a git call fails, and in a run.json an earlier release
+  wrote.
+- `nuka verdict` compares it with the working tree as it is now. It
+  reads the newest run that ended and never starts one, and it passes only
+  when that run recorded this exact tree, ran whole files (no `:line`,
+  `--tag`, or `--step`), and is green; the red findings it prints are the
+  run's own, as run.json holds them, and only for a run that judged this
+  tree. That is all a pass says. It does not say the change has a criterion
+  of its own: a change no scenario touches passes while the criteria that
+  were there still hold, so under `--base` the note `criteria-unchanged`
+  says when no criterion is new or changed, and `run-without-base` says
+  when the run had no base to prove a new one against. It does not say
+  which feature files the run named. Outside git, or before the first
+  commit, there is no tree to compare, and the note
+  `working-tree-unknown` leaves the verdict to the run's own table. A step
+  or a program that writes a file git counts moves the tree on every run,
+  and the verdict stays `run-stale` until `.gitignore` leaves the file out.
 - A run's step records are stored under `.nukadoko/runs/<run_id>/steps/<id>/`,
   beside its `run.json`, and a `nuka do` step record under
   `.nukadoko/do/<id>/` (see "Artifacts"). Both are
@@ -9308,6 +9342,22 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               directory on the way to --out is created;
                               anything else in the way is refused
                               (report-out-invalid)
+nuka verdict [--json]         whether the newest run that ended judged the
+                              working tree as it is now and left nothing
+                              red, from run.json and one git tree id; it
+                              never starts a run. Exit 1 with run-missing
+                              (no run ended), run-stale (the run recorded
+                              another commit.working_tree, or none),
+                              run-partial (a :line target, --tag, or a
+                              walk), or the newest run's own failed and
+                              error findings, relayed as it printed them
+                              (run-failed when it holds none); notes
+                              run-without-base, criteria-unchanged, and
+                              working-tree-unknown. A pass does not say
+                              the change has a criterion of its own (see
+                              "Records"). --json adds judged (missing,
+                              stale, judged, unknown), working_tree,
+                              run_id, run_dir, run_working_tree, and base
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               A claim step reads its values, judges every
@@ -9839,7 +9889,7 @@ reading either stream.
 | Exit | Meaning | Examples |
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported, a `nuka verdict` that found no run speaking for the working tree or a red one |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat`, `--concurrency`, or `--order`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code or a note code with targets, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
@@ -9850,6 +9900,7 @@ reading either stream.
 | `nuka check` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and the `fail-on` lines |
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |
 | `nuka clean` | one line per path, or with `--json` the envelope | nothing, except a refusal or a `walk-run-kept` note without `--json` |
+| `nuka verdict` | one line that says what the newest run speaks for, then its findings, or with `--json` the envelope | nothing, except a refusal without `--json` |
 
 A refusal under `--json` replaces the report: the envelope holds the
 refusal finding and none of the command's own fields. A step record's

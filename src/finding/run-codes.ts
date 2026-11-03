@@ -1,7 +1,7 @@
 // Responsibility: every finding code `nuka run` (and `nuka report`,
 // `nuka steps`, and `nuka describe`, which read what a run or a step file
-// holds, `nuka step`, which reads a walk, and `nuka clean`, which keeps a
-// walk's run) prints that `nuka check` does not, each with its severity, the description `nuka check --codes`
+// holds, `nuka step`, which reads a walk, `nuka clean`, which keeps a
+// walk's run, and `nuka verdict`, which reads the newest run) prints that `nuka check` does not, each with its severity, the description `nuka check --codes`
 // prints, and the edit that gets past it. Boundary: data only; the run
 // raises them, and a check code it reuses (a pattern that did not build)
 // stays in src/check/codes.ts.
@@ -117,6 +117,46 @@ const RUN_CODES = {
     severity: "warning",
     description: "The run finished, and removing old run directories under retention failed.",
     fix: "Correct what the message names, such as a directory's permissions; the next run tries again.",
+  },
+  "run-missing": {
+    severity: "failed",
+    description: "nuka verdict found no run that ended in this project, so nothing judged the working tree.",
+    fix: "Run the criteria the change touches with nuka run, under --base with the commit the change started from, and read the verdict table before nuka verdict.",
+  },
+  "run-partial": {
+    severity: "failed",
+    description:
+      "nuka verdict found that the newest run left out scenarios of the files it named, with a :line target or --tag, or was a walk (nuka run --step), whose world was open to anything between steps. Such a run is for debugging or exploring, and does not judge the criteria.",
+    fix: "Run the feature files again without :line, --tag, or --step.",
+  },
+  "run-stale": {
+    severity: "failed",
+    description:
+      "nuka verdict found that the newest run judged another working tree than the one there is now: a tracked file, or an untracked file .gitignore does not leave out, changed after it started, or it recorded no working tree id. Its verdicts say nothing about the change since.",
+    fix: "Run the criteria again on the tree as it is. When every run leaves the tree changed, a step or the program writes a file git counts: add that file to .gitignore.",
+  },
+  "run-failed": {
+    severity: "failed",
+    description: "nuka verdict found that the newest run failed, and its run.json holds no failed finding that says why.",
+    fix: "Read the run summary that the do line renders for why the run failed.",
+  },
+  "run-without-base": {
+    severity: "note",
+    description:
+      "nuka verdict found that the newest run had no --base, so no row of its table says which criteria are new or changed, and a new criterion that passes without the change was not caught as unproven.",
+    fix: "No change is necessary. Run with --base and the commit the change started from to have new and changed criteria proven against it.",
+  },
+  "criteria-unchanged": {
+    severity: "note",
+    description:
+      "nuka verdict found that, under --base, no criterion of the newest run is new or changed: the run shows the criteria that were there still hold, and says nothing of what the change was for.",
+    fix: "No change is necessary for a change that needs no criterion of its own, such as a refactor. A change of behaviour gets a scenario that says what it does.",
+  },
+  "working-tree-unknown": {
+    severity: "note",
+    description:
+      "nuka verdict could not get a git tree id for the working tree: outside a repository, before its first commit, or a git call failed. Whether the newest run judged this tree is unknown, so the verdict is that run's own table.",
+    fix: "No change is necessary. In a git repository with a commit, nuka verdict compares the tree with the one the run judged.",
   },
   "run-incomplete": {
     severity: "failed",

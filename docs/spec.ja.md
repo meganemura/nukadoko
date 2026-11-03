@@ -4647,7 +4647,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   "run_id": "run-20260801-143022-a1b2",
   "started_at": "...",
   "finished_at": "...",
-  "commit": { "sha": "<40 hex characters>", "dirty": false },
+  "commit": { "sha": "<40 hex characters>", "dirty": false, "working_tree": "<40 hex characters>" },
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
@@ -4743,6 +4743,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
 
 - `commit` は、run の開始時に `HEAD` が指していたコミットです。
   `dirty` は、そのとき作業ツリーに `git status --porcelain` が報告する変更(未追跡ファイルを含む)があったかどうかです。
+  `working_tree` は、そのときの作業ツリーを 1 つの git のツリー id にしたものです(「Records」を参照)。
   git リポジトリの外や最初のコミットの前では `null` です。
   `environments` は run が対象にした各 environment を、`--env` が与えた順(`--env` が無ければ run が選んだ順)に並べます。
   environment が `conditions` を宣言していれば、各要素はそれを持ちます。
@@ -6131,6 +6132,31 @@ scenario record は独立したファイルではなく、その run の `run.js
   git リポジトリの外、最初のコミットより前、git の呼び出しが失敗したときは `null` です。
   そのことで run 自体が失敗することはありません。
   run サマリがこれを報告するので(後述)、レビュアーはどのコミットが実行されたか、working tree に未コミットの変更があったかを見られます。
+- `commit.working_tree` は、run が始まったときの作業ツリーを 1 つの git のツリー id にしたものです。
+  追跡しているファイルはディスク上の内容で、未追跡のファイルは `.gitignore` が除かないものをすべて含みます。
+  state ディレクトリは、run のたびに書かれるので除きます。
+  `dirty: true` は未コミットの編集であれば何でも true ですが、`working_tree` が同じ 2 つの run は、同じパスにある同じバイトを判定しています。
+  クリーンな作業ツリーでは `HEAD^{tree}` と同じなので、run のあとのコミットでは変わりません。
+  `sha` と並べて、一時ディレクトリに置いた index のコピーを通して計測します。
+  本物の index にステージすることもロックすることもなく、最後の `git add` 以降に変わったファイルだけをハッシュします。
+  ファイルの中身はオブジェクトデータベースに書きません(id は `update-index --info-only` で記録します)。
+  `write-tree` は変わったディレクトリのツリーオブジェクトを保存しますが、どの ref からも辿れず、`git gc` が消します。
+  追跡ファイルが 2,000 のリポジトリで約 20 ms です。
+  大きな未追跡ファイルは run のたびにハッシュするので、そのぶん長くなります。
+  中に入れ子になった未追跡のリポジトリは含まず、submodule はチェックアウトしているコミットとして数えます。
+  `sha` が `null` のとき、git の呼び出しが失敗したとき、以前のリリースが書いた run.json では、このキーはありません。
+- `nuka verdict` は、これをいまの作業ツリーと比べます。
+  終わった run のうち最新のものを読み、run を始めることはありません。
+  その run がちょうどこの作業ツリーを記録していて、ファイル全体を走らせていて(`:line`、`--tag`、`--step` なし)、緑のときだけ通ります。
+  出力する red の所見はその run 自身のもので、run.json にあるとおりです。
+  それも、この作業ツリーを判定した run のものだけです。
+  通ったときに言えるのはそこまでです。
+  変更に自分の受け入れ基準があるとは言いません。
+  どの scenario も触れない変更は、もとからある受け入れ基準が成り立つ限り通ります。
+  そのため `--base` のもとでは、新しい受け入れ基準も変わった受け入れ基準も無いときに注記 `criteria-unchanged` がそう言い、run に新しい受け入れ基準を証明する基点が無かったときは `run-without-base` がそう言います。
+  run がどの feature ファイルを名指したかも言いません。
+  git の外や最初のコミットの前には比べる作業ツリーの id が無く、注記 `working-tree-unknown` を出して、断定はその run 自身の断定の表に任せます。
+  git が数えるファイルを step やプログラムが書くと、run のたびに作業ツリーが動き、`.gitignore` がそのファイルを除くまで断定は `run-stale` のままです。
 - run の step record は、その `run.json` の隣の `.nukadoko/runs/<run_id>/steps/<id>/` の下に、`nuka do` の step record は `.nukadoko/do/<id>/` の下に置かれます(「成果物」を参照)。
   どちらもローカルな作業上の計測であり、人が手元に残すのは pull request 上の run サマリです(後述)。
 
@@ -7269,6 +7295,22 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               directory on the way to --out is created;
                               anything else in the way is refused
                               (report-out-invalid)
+nuka verdict [--json]         whether the newest run that ended judged the
+                              working tree as it is now and left nothing
+                              red, from run.json and one git tree id; it
+                              never starts a run. Exit 1 with run-missing
+                              (no run ended), run-stale (the run recorded
+                              another commit.working_tree, or none),
+                              run-partial (a :line target, --tag, or a
+                              walk), or the newest run's own failed and
+                              error findings, relayed as it printed them
+                              (run-failed when it holds none); notes
+                              run-without-base, criteria-unchanged, and
+                              working-tree-unknown. A pass does not say
+                              the change has a criterion of its own (see
+                              "Records"). --json adds judged (missing,
+                              stale, judged, unknown), working_tree,
+                              run_id, run_dir, run_working_tree, and base
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               A claim step reads its values, judges every
@@ -7786,7 +7828,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code、作業ツリーを判定した run が無いか red の run を見つけた `nuka verdict` |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat`、`--concurrency`、`--order`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code や対象を指定したときの注記の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
@@ -7797,6 +7839,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | `nuka check` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`fail-on` の行を除く) |
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |
 | `nuka clean` | パスごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否と `walk-run-kept` の note を除く) |
+| `nuka verdict` | 最新の run が何を判定したかを言う 1 行とその所見、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
 
 `--json` のときの拒否は報告の代わりになります。
 envelope は拒否の所見を持ち、コマンド自身のフィールドは持ちません。

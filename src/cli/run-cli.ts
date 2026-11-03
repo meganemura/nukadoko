@@ -1025,6 +1025,21 @@ export async function runCli(
     },
   };
 
+  // The question an agent asks before it says a change is done, answered
+  // from records alone; it never starts a run (src/cli/verdict.ts).
+  const verdictCommand: CommandModule<Record<string, never>, { json?: boolean }> = {
+    command: "verdict",
+    describe:
+      "say whether the newest run judged the working tree as it is now and left nothing red; exits 1 when it did not, and never starts a run",
+    builder: (y: Argv) =>
+      y.option("json", { type: "boolean", default: false, describe: "machine-readable output" }) as Argv<{ json?: boolean }>,
+    handler: async (args: Arguments<{ json?: boolean }>) => {
+      if (argsFailed) return;
+      const { runVerdict } = await import("./verdict.js");
+      exitCode = await runVerdict({ rootDir, json: args.json ?? false, notices, stdout, stderr });
+    },
+  };
+
   const reportCommand: CommandModule<Record<string, never>, ReportArgs> = {
     command: "report [run]",
     describe: "render a finished run as Markdown, Allure results, or a cucumber-messages stream, from its run directory alone",
@@ -1169,6 +1184,7 @@ export async function runCli(
         namingMissingConfig(checkCommand),
         namingMissingConfig(runCommand),
         namingMissingConfig(reportCommand),
+        namingMissingConfig(verdictCommand),
         namingMissingConfig(stepsCommand),
         namingMissingConfig(describeCommand),
       ],
