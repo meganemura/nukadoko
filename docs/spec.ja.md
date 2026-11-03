@@ -5264,6 +5264,11 @@ old のセルの行は、old の world が走らせる基点の feature ファ�
   後者は `nuka check` が `condition-unmet` を報告するので、`--env` の無い `--no-check` の run でだけ起きます。
   そのような行は `criterion-without-required-cell` の finding を持ちます。
   その `do:` 行は、プログラムのファイルの中でその行を満たす environment で scenario を走らせ、そのような environment が無ければそのファイルに `nuka check` を走らせます。
+  必須の head のセルが `pass` でないとき、理由はそうした最初のセルを名指し、同じ結果になった他の必須の environment もあわせて名指し、最後に通った必須の environment を挙げます: `a claim broke at line 5 in tokyo, and passes in utc, where it is required too`。
+  そのセルはどれも必須なので、受け入れ基準はそのすべてで成り立つと宣言されています。
+  失敗の隣に通ったセルがあるのは、タイムゾーンや固定した時計のように environment に依存する欠陥が残す形です(「Out of scope」を参照)。
+  理由は原因を名乗りません。
+  environment は condition 以外の点でも違いうるので、計測したのはセルが違ったことだけだからです。
 - `unproven`: `new` か `changed` の行が head で通り、その振る舞いが無いところで Then が失敗したことを示すものが無いとき。
   base のセルが通った、`broke` になった、食い違った、`--proof-runs` 回より少なくしか失敗しなかった、または走らなかったときで、それを証明する対照も無いときです。
   base のセルが `pass` でない `@held` の行も、振る舞いが無いところのセルがそれを証明しない限り `unproven` です。

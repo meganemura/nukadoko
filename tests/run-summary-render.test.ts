@@ -352,7 +352,7 @@ describe("renderRunSummary", () => {
         "| failed | `features/flag.feature:4` the banner is shown | pass (2 runs) | flaky@4 (2 runs) |",
         "| held | `features/flag.feature:9` the page loads | pass (2 runs) | pass (2 runs) |",
         "",
-        "- `features/flag.feature:4` the banner is shown: its 2 runs in flag-off disagree, the first that did not pass at line 4",
+        "- `features/flag.feature:4` the banner is shown: its 2 runs in flag-off disagree, the first that did not pass at line 4, and passes in flag-on, where it is required too",
         '  - step "the banner is shown": `no banner`; record `steps/stp-9`',
         "",
         "- commit: `0123456`",

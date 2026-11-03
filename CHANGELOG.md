@@ -96,6 +96,22 @@ just until 0.1.
   rows no control or base could prove, the commit, the selection, a
   walk, "Routes", "Flags", and "Changed paths".
 
+- **A `failed` row's reason says where it passed, and names every
+  environment where it broke the same way.** It named only the first
+  required cell that did not pass, so a row red in `tokyo` and green in
+  `utc` read as if one environment fell short, and the contrast was left
+  to the columns. The reason now groups the required environments whose
+  cells came to the same thing, as base and old cells already were, and
+  ends with the required environments that passed: `a claim broke at
+  line 5 in tokyo-midmonth, tokyo-monthend, and passes in utc-midmonth,
+  utc-monthend, where it is required too`. That split is the shape a
+  defect of the time zone or the clock leaves when environments declare
+  them as `conditions`. The reason names no cause, since environments
+  can differ in more than their conditions. A row with one required
+  environment reads as before. No new verdict word: a split between required
+  cells is just as often a regression on one side of a switch, and
+  `failed` is right for both.
+
 ### Fixed
 
 - **A refactor gets its paths compared against the base.** `nuka run

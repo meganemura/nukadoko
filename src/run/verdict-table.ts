@@ -261,6 +261,28 @@ function failedReason(red: RunTableCell): string {
   return `its ${runsText(red.runs)} ${where} disagree, the first that did not pass at line ${red.line}`;
 }
 
+// Why a row with a required head cell that did not pass is red. The first
+// such cell's clause names every other required environment whose cell
+// came to the same thing, as the base and the old world's clauses do, and
+// the clause ends with the required environments that passed. Every one
+// of those cells was required, so the criterion was declared to hold in
+// each, and a pass beside a failure is the shape a defect that depends on
+// the environment leaves (a time zone, a pinned clock, a seed): without
+// the contrast, a reader has to find it in the columns. It names no
+// cause, since environments may differ in more than their conditions, and
+// nukadoko measured only that the cells differ.
+function failedRowReason(required: readonly RunTableCell[]): string {
+  const red = required.filter((cell) => cell.outcome !== "pass");
+  const placeholder = "\u0000";
+  const template = (cell: RunTableCell): string => failedReason({ ...cell, environment: placeholder });
+  const first = template(red[0]!);
+  const broke = red.filter((cell) => template(cell) === first).map((cell) => cell.environment);
+  // A function, for the reason worldCellsClause gives.
+  const clause = first.replace(placeholder, () => broke.join(", "));
+  const passed = required.filter((cell) => cell.outcome === "pass").map((cell) => cell.environment);
+  return passed.length === 0 ? clause : `${clause}, and passes in ${passed.join(", ")}, where it is required too`;
+}
+
 // What a base or an old cell came to, as the clause of a reason that
 // names it. An old cell's line is in the base's feature file, which the
 // old world runs, so it says so.
@@ -310,8 +332,7 @@ export function judgeRow(
   if (required.length === 0) {
     return { verdict: "failed", reason: "no environment of this run meets its conditions, so every cell is a control and nothing shows that it holds" };
   }
-  const red = required.find((cell) => cell.outcome !== "pass");
-  if (red !== undefined) return { verdict: "failed", reason: failedReason(red) };
+  if (required.some((cell) => cell.outcome !== "pass")) return { verdict: "failed", reason: failedRowReason(required) };
   const passedIn = required.map((cell) => cell.environment).join(", ");
   const controls = head.filter((cell) => cell.role === "control");
   const controlProof = controls.find((cell) => proves(cell, proofRuns));

@@ -6825,6 +6825,16 @@ Three are red:
   a `criterion-without-required-cell` finding, whose `do:` line runs the
   scenario in an environment of the program file that meets it, or runs
   `nuka check` on its file when none does.
+  When a required head cell is not `pass`, the reason names the first
+  such cell, with every other required environment whose cell came to the
+  same thing, and ends with the required environments that passed:
+  `a claim broke at line 5 in tokyo, and passes in utc, where it is
+  required too`. Each of those cells was required, so the criterion was
+  declared to hold in all of them, and a pass beside a failure is the
+  shape a defect that depends on the environment leaves, such as a time
+  zone or a pinned clock (see "Out of scope"). The reason names no cause:
+  environments can differ in more than their conditions, and what was
+  measured is only that the cells differ.
 - `unproven`: a `new` or `changed` row passes at head, and nothing shows
   a Then failing where its behaviour is absent: its base cells passed,
   broke, were flaky, failed in fewer than `--proof-runs` runs, or did not

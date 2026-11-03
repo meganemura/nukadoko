@@ -141,6 +141,52 @@ describe("judgeRow", () => {
       expect(judgeRow(replaced, runs).verdict === "failed").toBe(judgeRow(row, runs).verdict === "failed");
     }));
 
+  it("names, in a failed row's reason, every required environment that passed, and every one that came to what the first red cell did", () =>
+    hegel.test((tc) => {
+      const row = tc.draw(cells);
+      const { verdict, reason } = judgeRow(row, tc.draw(proofRuns));
+      const required = row.filter((entry) => entry.role === "required");
+      if (verdict !== "failed" || required.length === 0) return;
+      const passed = required.filter((entry) => entry.outcome === "pass").map((entry) => entry.environment);
+      const clause = passed.length === 0 ? "" : `, and passes in ${passed.join(", ")}, where it is required too`;
+      // Each red cell's own reason, alone in its row, reads as the first
+      // one's exactly when it came to the same thing, and those are the
+      // environments the reason groups.
+      const red = required.filter((entry) => entry.outcome !== "pass");
+      const alone = (entry: RunTableCell): string => judgeRow([{ ...entry, environment: "X" }], 1).reason;
+      const grouped = red.filter((entry) => alone(entry) === alone(red[0]!)).map((entry) => entry.environment);
+      expect(reason).toBe(alone(red[0]!).replace("X", () => grouped.join(", ")) + clause);
+      // A control is never named: only required cells say where it holds.
+      for (const entry of row.filter((other) => other.role === "control")) expect(reason).not.toContain(entry.environment);
+    }));
+
+  it("says where a failed row passed, and groups the environments where it broke alike", () => {
+    const cellIn = (environment: string, outcome: RunCellOutcome, at?: number): RunTableCell => ({
+      world: "head",
+      environment,
+      role: "required",
+      conditions: {},
+      outcome,
+      runs: 1,
+      ...(at === undefined ? {} : { line: at }),
+    });
+    expect(judgeRow([cellIn("utc", "pass"), cellIn("tokyo", "fail", 5)], 2)).toEqual({
+      verdict: "failed",
+      reason: "a claim broke at line 5 in tokyo, and passes in utc, where it is required too",
+    });
+    expect(
+      judgeRow([cellIn("utc-midmonth", "pass"), cellIn("utc-monthend", "pass"), cellIn("tokyo-midmonth", "fail", 5), cellIn("tokyo-monthend", "fail", 5)], 2),
+    ).toEqual({
+      verdict: "failed",
+      reason: "a claim broke at line 5 in tokyo-midmonth, tokyo-monthend, and passes in utc-midmonth, utc-monthend, where it is required too",
+    });
+    // A cell that broke another way is left for the table to show.
+    expect(judgeRow([cellIn("a", "fail", 5), cellIn("b", "fail", 6), cellIn("c", "fail", 5)], 2)).toEqual({
+      verdict: "failed",
+      reason: "a claim broke at line 5 in a, c",
+    });
+  });
+
   it("says why in one sentence for each word", () => {
     const pass = (environment: string, role: "required" | "control"): RunTableCell => ({ world: "head", environment, role, conditions: {}, outcome: "pass", runs: 1 });
     expect(judgeRow([pass("flag-on", "required"), { ...pass("flag-off", "control"), outcome: "fail", line: 7, runs: 2 }], 2)).toEqual({
