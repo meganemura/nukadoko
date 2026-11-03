@@ -1,7 +1,7 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { execFile } from "node:child_process";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -33,6 +33,24 @@ async function repository(): Promise<string> {
   return dir;
 }
 
+// One fixed second, well in the past, that a racy repository pins the
+// tracked files' and the index's modification times to.
+const RACY_SECOND = 1_700_000_000;
+const TRACKED = ["src/a.txt", "b.txt"] as const;
+
+/** The repository as git leaves it when a file is edited in the same second
+ * its index was written: every tracked file and the index carry one mtime,
+ * so git can trust no entry's stat data and must compare contents. Pinning
+ * the times makes that second happen on every run instead of by chance;
+ * `core.trustctime` off stands in for the ctime, which no call can set. */
+async function makeRacy(dir: string): Promise<void> {
+  await git(dir, "config", "core.trustctime", "false");
+  for (const file of TRACKED) await utimes(path.join(dir, file), RACY_SECOND, RACY_SECOND);
+  // Re-adding records the pinned mtimes in the index entries.
+  await git(dir, "add", "-A");
+  await utimes(path.join(dir, ".git", "index"), RACY_SECOND, RACY_SECOND);
+}
+
 /** Every loose object id in the repository. */
 async function objectIds(dir: string): Promise<Set<string>> {
   const objects = path.join(await git(dir, "rev-parse", "--absolute-git-dir"), "objects");
@@ -50,9 +68,12 @@ type Unseen = { kind: "ignored"; name: string; text: string } | { kind: "state";
 
 const NAME = gs.text({ minSize: 1, maxSize: 8, alphabet: "abcdefghij_-" });
 const TEXT = gs.text({ maxSize: 20 });
-const FILE = gs.sampledFrom(["src/a.txt", "b.txt"] as const);
+const FILE = gs.sampledFrom(TRACKED);
+// Half the tracked edits keep the file's two bytes, so only its contents,
+// not its size, tell git it changed.
+const TRACKED_TEXT = gs.oneOf(TEXT, gs.text({ minSize: 1, maxSize: 1, alphabet: "abcdefghij" }));
 const edit: gs.Generator<Edit> = gs.oneOf(
-  gs.tuples(FILE, TEXT).map(([file, text]): Edit => ({ kind: "tracked", file, text: `${text}!` })),
+  gs.tuples(FILE, TRACKED_TEXT).map(([file, text]): Edit => ({ kind: "tracked", file, text: `${text}!` })),
   FILE.map((file): Edit => ({ kind: "delete", file })),
   gs.tuples(NAME, TEXT).map(([name, text]): Edit => ({ kind: "untracked", name: `new-${name}.txt`, text })),
 );
@@ -61,11 +82,13 @@ const unseen: gs.Generator<Unseen> = gs.oneOf(
   gs.tuples(NAME, TEXT).map(([name, text]): Unseen => ({ kind: "state", name, text })),
 );
 
-async function apply(dir: string, change: Edit | Unseen): Promise<void> {
+async function apply(dir: string, change: Edit | Unseen, racy = false): Promise<void> {
   switch (change.kind) {
     case "tracked":
       // `!` after the drawn text: an edit always differs from "a\n" and "b\n".
-      return writeFile(path.join(dir, change.file), change.text);
+      await writeFile(path.join(dir, change.file), change.text);
+      if (racy) await utimes(path.join(dir, change.file), RACY_SECOND, RACY_SECOND);
+      return;
     case "delete":
       return rm(path.join(dir, change.file), { force: true });
     case "untracked":
@@ -110,9 +133,13 @@ describe("probeWorkingTree", () => {
       async (tc) => {
         const changes = tc.draw(gs.arrays(edit, { minSize: 1, maxSize: 3 }));
         const staged = tc.draw(gs.booleans());
+        // Racy: every edit lands in the second the index was written, which
+        // a test run otherwise reaches only now and then.
+        const racy = tc.draw(gs.booleans());
         const dir = await repository();
         try {
-          for (const change of changes) await apply(dir, change);
+          if (racy) await makeRacy(dir);
+          for (const change of changes) await apply(dir, change, racy);
           // A change already in the index and a change only on disk are
           // the same tree; the probe must not read the index's version.
           if (staged) await git(dir, "add", "-A");
@@ -123,8 +150,24 @@ describe("probeWorkingTree", () => {
           await removeTempDir(dir);
         }
       },
-      { testCases: 10 },
+      { testCases: 20 },
     );
+  });
+
+  it("sees a same-size edit made in the second the index was written", async () => {
+    const dir = await repository();
+    try {
+      await makeRacy(dir);
+      // "b\n" and "x\n": the same size, so only the contents tell them apart.
+      await writeFile(path.join(dir, "b.txt"), "x\n");
+      await utimes(path.join(dir, "b.txt"), RACY_SECOND, RACY_SECOND);
+      const probed = await probeWorkingTree(dir, STATE_DIR);
+      expect(probed).not.toBe(await git(dir, "rev-parse", "HEAD^{tree}"));
+      await git(dir, "add", "-A");
+      expect(probed).toBe(await git(dir, "write-tree"));
+    } finally {
+      await removeTempDir(dir);
+    }
   });
 
   it("leaves the index as it was, and writes no file's contents, only the trees", async () => {

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, open, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -89,6 +89,9 @@ export async function probeGitState(rootDir: string): Promise<GitState | undefin
 // scratch index is a copy of the real one in a temporary directory, so the
 // real index is never staged into or locked, and the copy keeps its stat
 // cache: only the files that changed since the last `git add` are hashed.
+// The copy also keeps the real index's modification time, rounded down to
+// the second (see `copyIndex`), or that cache would lie about a file
+// edited in the same second the real index was written.
 // `--info-only` records each changed file's id without writing its blob to
 // the object database, and `write-tree --missing-ok` accepts the ids it
 // has no blob for; `git add -A` on the copy would give the same id but
@@ -111,7 +114,7 @@ export async function probeWorkingTree(rootDir: string, stateDir: string): Promi
     scratch = await mkdtemp(path.join(tmpdir(), "nukadoko-working-tree-"));
     const scratchIndex = path.join(scratch, "index");
     const realIndex = path.resolve(rootDir, indexPath);
-    if (existsSync(realIndex)) await copyFile(realIndex, scratchIndex);
+    if (existsSync(realIndex)) await copyIndex(realIndex, scratchIndex);
     const env = { ...process.env, GIT_INDEX_FILE: scratchIndex };
     const changed = await gitOutput(
       ["-C", toplevel, "ls-files", "-z", "--modified", "--deleted", "--others", "--exclude-standard", "--", ".", ...stateDirExclusion(rootDir, prefix, stateDir)],
@@ -125,6 +128,39 @@ export async function probeWorkingTree(rootDir: string, stateDir: string): Promi
     return undefined;
   } finally {
     if (scratch !== undefined) await rm(scratch, { recursive: true, force: true });
+  }
+}
+
+// git trusts an entry's stat data (size, mtime, ctime, inode) only when the
+// file's mtime is older than the index file's own mtime. An entry whose
+// file has an mtime at or after the index's is "racily clean": the file may
+// have been rewritten after git looked at it, in the same timestamp tick,
+// at the same size, so git compares its contents instead. A plain copy gets
+// a new mtime, later than every entry, so a same-size edit made in the same
+// second the real index was written went unlisted by `ls-files --modified`
+// and the id was the old file's. git builds without nanosecond stat
+// comparison (the Linux git 2.43 measured here among them) match an entry
+// on the second alone, so this happened about once in three hundred
+// measured edits made right after a commit.
+//
+// Setting the copy's mtime back to the real one restores git's own check.
+// Whole seconds, rounded down, rather than the exact time: utimes takes a
+// double, which cannot hold a current time to the nanosecond, and rounding
+// up would trust an entry the real index did not. An earlier index mtime
+// only makes more entries racily clean, so the rounding can cost a content
+// comparison for a file touched in that second and never a missed edit. The
+// stat and the contents come from one open file, so a `git add` that
+// replaces the index meanwhile cannot pair one index's bytes with another's
+// mtime.
+async function copyIndex(realIndex: string, scratchIndex: string): Promise<void> {
+  const handle = await open(realIndex, "r");
+  try {
+    const { mtimeNs } = await handle.stat({ bigint: true });
+    await writeFile(scratchIndex, await handle.readFile());
+    const seconds = Number(mtimeNs / 1_000_000_000n);
+    await utimes(scratchIndex, seconds, seconds);
+  } finally {
+    await handle.close();
   }
 }
 
