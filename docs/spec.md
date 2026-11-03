@@ -9947,12 +9947,26 @@ would be running against glue it never actually read.
 - A green run summary is not a proof that the software is correct. It
   records that the agreed scenarios were green at one named commit, and
   says nothing about today. It does not even claim that same commit would
-  be green now. A defect that depends on when the run happened (a date
-  computed in one timezone and read in another, a boundary the clock
-  crosses) is missing from the summary exactly as it was missing from the
-  run, and nukadoko does not re-run a scenario to find out. The honesty is
-  that a summary only ever speaks about one execution. The limit is that a whole class of
-  defect is invisible to any single one.
+  be green now. A defect that depends on where or when the run happened
+  (a date computed in one time zone and read in another, a boundary the
+  clock crosses) is missing from the summary exactly as it was missing
+  from the run's worlds. A project brings it into reach by declaring the
+  worlds that would show it: environments whose `conditions` name a time
+  zone or a pinned clock, handed to the program through
+  `{condition.<name>}`, with the criterion untagged so that every cell is
+  required (the bundled skill's `references/perturbed-worlds.md`). A row
+  whose cells then disagree is `failed`, and its reason names where it
+  passed too (see "Verdicts"). Under `--base`, a fix for such a defect
+  reaches `proven` through the base cell of a world that shows it, where
+  a run in one zone leaves it `unproven`. What stays out of reach is
+  every value no environment declares: a moment no clock pins (a
+  daylight-saving change, a leap day), a zone none names, and any reading
+  of the clock that bypasses the program's own seam, since nukadoko
+  cannot move a program's clock. nukadoko
+  does not pick those values, and does not re-run a scenario at another
+  time to find one. The honesty is that a summary only ever speaks about
+  the worlds it ran. The limit is that a defect none of them shows is
+  invisible to all of them.
 - **This package ships ESM and only ESM, on purpose.** `package.json`'s
   `exports` carries an `import` condition and no `require` one. There is no
   CommonJS build beside the ESM one, and neither is planned. A project whose

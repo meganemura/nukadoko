@@ -110,7 +110,12 @@ just until 0.1.
   can differ in more than their conditions. A row with one required
   environment reads as before. No new verdict word: a split between required
   cells is just as often a regression on one side of a switch, and
-  `failed` is right for both.
+  `failed` is right for both. The skill gains
+  `skills/nukadoko/references/perturbed-worlds.md`, the recipe for
+  time-zone and pinned-clock environments read through
+  `{condition.<name>}`, with the clock seam the program has to offer and
+  the pitfalls a trial run found, and docs/spec.md's "Out of scope" now
+  points there and says what stays out of reach.
 
 ### Fixed
 

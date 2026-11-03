@@ -32,6 +32,7 @@ const DOCS = [
   "docs/migration.md",
   "docs/migration.ja.md",
   "skills/nukadoko/references/program.md",
+  "skills/nukadoko/references/perturbed-worlds.md",
 ];
 
 interface ProgramBlock {
