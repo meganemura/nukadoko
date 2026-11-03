@@ -95,8 +95,8 @@ If none is true, ask what this is supposed to do before writing anything.
    and `undeclared-write`.
 5. **Commit before the run you report**, push, and open the pull request;
    CI posts the summary of `nuka run --base <the base>` (`docs/ci.md`). Run
-   it first: `unproven` and `moved` rows are red (`references/verdicts.md`).
-   Before you say done, `nuka verdict` must pass (`references/done.md`).
+   it first: `unproven`, `moved`, and `intent-` findings are red
+   (`references/verdicts.md`, and `INTENT.md` in `references/done.md`).
 6. **Decide where the feature lives**, in the same pull request: the
    product's core path moves into `featuresDir`, which `nuka run` runs on
    every commit; a feature for one change stays outside it, named in

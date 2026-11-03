@@ -99,13 +99,14 @@ config's fixtures or parameter types, an environment's conditions.
   base with its head, step by step: "Changed paths" lists under
   `base → head` what the program does differently at head, the criteria
   that did not change included, a refactor's too: head's `{events}` alone
-  builds the base world. A changed criterion there has `explained_by`,
-  `criterion_change` when its sentences are new or changed and `null`
-  when not; the summary lists the `null` ones first, and says when every
-  unchanged criterion did the same. Tell the person; it is evidence, and
-  a `null` one is the first thing to read. A write to a table
-  `lists.tables` marks as bookkeeping or infrastructure is
-  listed after the rest (`holds`; `marked_only` when it is all that
+  builds the base world. A changed criterion there has `explained_by`:
+  `intent` when rows of the change's `INTENT.md` declare every difference
+  (`references/done.md`), `criterion_change` when its sentences are new
+  or changed, and `null` otherwise; the summary lists the `null` ones
+  first, and says when every unchanged criterion did the same. Tell the
+  person; it is evidence, and a `null` one is the first thing to read. A
+  write to a table `lists.tables` marks as bookkeeping or infrastructure
+  is listed after the rest (`holds`; `marked_only` when it is all that
   differs): no sentence is about it, but another reader of that table,
   such as a guard on telemetry, may be.
 

@@ -37,6 +37,28 @@ It does not say which feature files the run named either. Outside git, or
 before the first commit, there is no tree id: `working-tree-unknown` notes
 it, and the verdict is the newest run's own.
 
+## The change's intent
+
+A pass does not say the change did only what it meant to either. Declare
+that in `INTENT.md` at the repository's top, in the change's first commit,
+before the code: one row per thing the change means to do differently,
+`| Target | Observation | Before | After |`, where the observation is a
+kind of execution event, and a row with Before and After empty says it
+does not change (`docs/intent.md`). A refactor writes
+`| | x_decision x_result | | |`. The person approves the rows; the run
+compares them with what the program did.
+
+`nuka run --base` then reads the file when the base does not hold the same
+text, and `run.json`'s `intent` lists each row's result: `as_intended`,
+`not_happening`, or `not_reached` (no compared criterion is aimed at it).
+`intent-unintended` names a criterion that did something no row and no
+sentence declares, and `intent-not-happening` a row that did not happen
+where its target aims; both fail the run, as `intent-unread` does when a
+row or git cannot be read. Fix the code, or tell the person the intent
+was wrong: a commit that changes the file after the first is a
+change of intent, and the summary names it. Never widen a row to make a
+difference you did not mean pass.
+
 ## Asking for it from a Claude Code host
 
 `scripts/claude-code-verdict-hook.mjs` beside `SKILL.md` is an example
