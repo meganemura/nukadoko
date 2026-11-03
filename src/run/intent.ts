@@ -1,4 +1,4 @@
-import { isOwnKind, PATH_KINDS, valueAt, type OwnFields, type PathKind } from "../execution-events/path.js";
+import { isOwnKind, PATH_KINDS, pathOrigin, valueAt, type OwnFields, type PathKind } from "../execution-events/path.js";
 import { EXTENSION_PREFIX } from "../execution-events/format.js";
 
 // Responsibility: the intent file's format (docs/intent.md): what a change
@@ -181,6 +181,14 @@ function fieldProblem(kind: string, field: string): string | undefined {
   return fields.includes(field) ? undefined : `a path keeps a \`${kind}\` line by ${fields.map((name) => `\`${name}\``).join(", ")}, not by \`${field}\``;
 }
 
+/** A term as a path's key reads it: an `http` origin on loopback without
+ * its port, as path.ts keeps it, so a row written with the port one run
+ * happened to use aims at the call on every run. */
+function keyTerm(kind: string, term: IntentTerm): IntentTerm {
+  if (kind !== "http" || term.field !== "origin" || typeof term.value !== "string") return term;
+  return { ...term, value: pathOrigin(term.value) };
+}
+
 function countOf(text: string): number | undefined {
   return /^(?:0|[1-9][0-9]*)$/.test(text) ? Number(text) : undefined;
 }
@@ -203,7 +211,7 @@ function rowOf(row: number, line: number, cells: IntentRow["cells"]): IntentRow 
     const term = termOf(text);
     if ("problem" in term) return problem(term.problem);
     if ("bare" in term) return problem(`the target term \`${text}\` names a field with no value; a target is tags and \`field<op>value\` terms`);
-    conditions.push(term);
+    conditions.push(keyTerm(kind, term));
   }
   const filters: IntentTerm[] = [];
   const projections: string[] = [];
@@ -211,7 +219,7 @@ function rowOf(row: number, line: number, cells: IntentRow["cells"]): IntentRow 
     const term = termOf(text);
     if ("problem" in term) return problem(term.problem);
     if ("bare" in term) projections.push(term.bare);
-    else filters.push(term);
+    else filters.push(keyTerm(kind, term));
   }
   if (projections.length > 1) return problem(`the observation names ${projections.length} fields with no value (${projections.map((field) => `\`${field}\``).join(", ")}); it observes at most one`);
   for (const field of [...conditions.map((term) => term.field), ...filters.map((term) => term.field), ...projections]) {

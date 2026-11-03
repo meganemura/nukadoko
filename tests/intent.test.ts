@@ -1,7 +1,7 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import { intentTable, ownFieldsOf, parseIntent, sameValue, splitTerms, tableCells, termHolds, valueOf, valueText, type IntentRow } from "../src/run/intent.js";
+import { intentTable, ownFieldsOf, parseIntent, rowObserves, sameValue, splitTerms, tableCells, termHolds, valueOf, valueText, type IntentRow } from "../src/run/intent.js";
 
 // Responsibility: the intent file's format (src/run/intent.ts,
 // docs/intent.md): a table read back as written, a value read back as
@@ -147,6 +147,17 @@ describe("a cell", () => {
       const text = valueText(written);
       expect(sameValue(valueOf(text), written)).toBe(true);
       expect(splitTerms(`x_a=${text} x_b`)).toEqual([`x_a=${text}`, "x_b"]);
+    }));
+});
+
+describe("an http row's origin", () => {
+  it("aims at a loopback call whichever port the row and the run used, and at another origin only on its own port", () =>
+    hegel.test((tc) => {
+      const [written, used] = [tc.draw(gs.integers({ minValue: 1, maxValue: 65535 })), tc.draw(gs.integers({ minValue: 1, maxValue: 65535 }))];
+      const read = (host: string): IntentRow => parseIntent(intentTable([{ target: `origin=http://${host}:${written}`, observation: "http", before: "0", after: "1" }])).rows[0]!;
+      const key = (origin: string) => ({ kind: "http", method: "POST", origin, path: "/v1/send", status: 202 });
+      expect(rowObserves(read("127.0.0.1"), key("http://127.0.0.1"))).toBe(true);
+      expect(rowObserves(read("mail.example.test"), key(`http://mail.example.test:${used}`))).toBe(written === used);
     }));
 });
 

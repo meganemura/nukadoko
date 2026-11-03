@@ -993,6 +993,16 @@
       "note": "意図の行の列 `Before` と `After`。基点での観測と、変更のあとでの観測"
     },
     {
+      "en": ["inputs (of a decision)", "a decision's inputs"],
+      "ja": "決定の入力",
+      "note": "決定のイベントが持つ、決定のもとにした事実。対象が名指すフィールドで、`x_input` オブジェクトのように持つ。フィールド名はコードスパンで英語のまま"
+    },
+    {
+      "en": ["loopback (host)", "on a loopback host"],
+      "ja": "ループバックのホスト",
+      "note": "`localhost`、`127.0.0.1`、`[::1]`。実行経路はこのホストの `origin` をポートを除いて比べる"
+    },
+    {
       "en": ["as intended", "intended but not happening", "not reached", "unintended"],
       "ja": "意図どおり / 起きていない / 届いていない / 意図していない",
       "note": "意図の行の結果と、どの行も宣言しない違い。値 `as_intended`、`not_happening`、`not_reached` と finding のコード `intent-unintended` はコードスパンで英語のまま"

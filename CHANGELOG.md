@@ -146,6 +146,20 @@ just until 0.1.
   the pitfalls a trial run found, and docs/spec.md's "Out of scope" now
   points there and says what stays out of reach.
 
+- **A path compares an outgoing call to a loopback host without its
+  port.** A test run starts the services it calls on ports it picks as it
+  runs, so the same call to `http://localhost:41873` at the base and
+  `http://localhost:39211` at head read as one call gone and another
+  come. An `http` line's `origin` on `localhost`, `127.0.0.1`, or `[::1]`
+  is now kept without its port in every path key, and an `INTENT.md`
+  `origin` term is read the same way, so a row aims at the call whatever
+  port it was written with; any other origin keeps its port.
+  `docs/intent.md` also says that a `@tag` only narrows which scenarios a
+  row covers and that a tool with no scenarios reports a `@tag` row as
+  `not_reached`, recommends that a decision event carry its inputs
+  (`x_input`) so every tool evaluates a target on the same fields, and
+  says that a value change that also changes the count is two rows.
+
 ### Fixed
 
 - **A refactor gets its paths compared against the base.** `nuka run

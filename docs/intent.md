@@ -72,9 +72,12 @@ A target and an observation are terms separated by spaces.
   So a condition on a decision's subject is written on the decision's
   own line, such as `x_subject.plan=team` when the line carries its
   subject in `x_subject`.
-- A `@tag` term names a scenario tag.
-  A tool that has no scenarios cannot evaluate it, and reports the row
-  as not reached by its comparison.
+- A `@tag` term names a scenario tag, and only narrows which scenarios
+  the row covers.
+  The behavior the row is about is written as `field<op>value` terms
+  on the observed line, never as a tag.
+  A tool that has no scenarios cannot evaluate a `@tag` term, and
+  reports a row that has one as `not_reached`.
 - The kind is one of `request`, `db`, `http`, `job`, `flag`, `error`, or
   a writer's own kind that starts with `x_`.
   A field of the format's kind is one a coarse path keeps: `request`
@@ -82,17 +85,40 @@ A target and an observation are terms separated by spaces.
   `origin`, `path`, `status`; `job` `name`, `phase`; `flag` `name`,
   `side`; `error` `class`, `handled`.
   A database read is in no path, so `db op=read` matches nothing.
+  An `http` line's `origin` on a loopback host (`localhost`,
+  `127.0.0.1`, `[::1]`) is compared without its port, since a test run
+  picks its ports as it runs, and an `origin` term is read the same
+  way: `origin=http://localhost` and `origin=http://localhost:3000`
+  both aim at a call to `localhost` on any port.
+  An origin on any other host keeps its port.
   A field of a writer's own kind starts with `x_`.
 - With no field to observe, before and after are whole numbers: how many
   observed lines one step makes, such as `0` and `1` for a new call.
 - With a field to observe, before and after are values of that field.
   The row says that the lines that held before now hold after, as many
   as there were.
+  A change of value that also changes how many lines there are is two
+  rows: a row with no field to observe for the count, and a row with
+  the field for the value.
 - When before and after are both empty, the row says that the
   observation does not change, whatever it is.
   A refactor writes `| | x_decision x_result | | |` to say that no
   decision changes.
   Before and after are both filled, or both empty.
+
+## A decision's inputs
+
+A decision event should carry its inputs: the fields a target names,
+such as an `x_input` object.
+A target is read on the observed line, so a decision that carries its
+inputs lets every tool evaluate the same target on the same fields,
+whether the tool runs scenarios or compares every contract's decision.
+
+```markdown
+| Target | Observation | Before | After |
+| --- | --- | --- | --- |
+| x_input.plan=team x_input.status=active x_input.seats>=10 | x_decision x_result.features | ["projects","sso"] | ["projects","sso","audit_log"] |
+```
 
 ## What a row comes to
 

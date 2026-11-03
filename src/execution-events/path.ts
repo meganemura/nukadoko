@@ -44,6 +44,15 @@ import { markOf, NO_MARKED_TABLES, type MarkedHolds } from "./tables.js";
 // project names it, as an intent row does (src/run/intent.ts), and a kind
 // no one names is counted by its kind alone. A named value is redacted as
 // every value the run keeps is, since a writer's field may carry anything.
+//
+// An outgoing call's origin on loopback (`localhost`, `127.0.0.1`,
+// `[::1]`) is kept without its port (`pathOrigin`). A test run starts the
+// services it calls on free ports, so the same call reaches another port on
+// every run and in every world, and a key with the port would make two runs
+// of one criterion differ by nothing the program decided. Any other origin
+// keeps its port, since there a port names a different service. An intent
+// row's `origin` term reads the same way (src/run/intent.ts), so a row
+// aims at the call whichever port it was written with.
 
 /** What a path keeps of one kind. */
 interface PathKindSpec<K extends EventKindName> {
@@ -223,6 +232,18 @@ function ownKeyOf(kind: OwnKind, object: Readonly<Record<string, unknown>>, read
   return Object.fromEntries([["kind", kind], ...[...fields].sort(byText).map((field) => [field, reading.redact(valueAt(object, field) ?? null)])]) as OwnKey;
 }
 
+const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const ORIGIN = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)(\[[^\]]*\]|[^:/[\]]*)(?::[0-9]*)?$/;
+
+/** An `http` line's origin as a path keeps it: on a loopback host, without
+ * its port; any other origin, or a text that is not `scheme://host` with
+ * an optional port, as written (module header). */
+export function pathOrigin(origin: string): string {
+  const match = ORIGIN.exec(origin);
+  if (match === null || !LOOPBACK_HOSTS.has(match[2]!.toLowerCase())) return origin;
+  return `${match[1]}${match[2]}`;
+}
+
 /** The entry a line counts toward, or `undefined` for a line that is not
  * in a coarse path (module header). */
 export function pathKeyOf(line: ReadableLine): PathKey | undefined {
@@ -231,7 +252,8 @@ export function pathKeyOf(line: ReadableLine): PathKey | undefined {
   const spec: { readonly fields: readonly string[]; readonly writesOnly?: true } = PATH_KINDS[kind];
   if (spec.writesOnly === true && line.object.op === "read") return undefined;
   // The parser read every field a path keeps, since each is required.
-  return Object.fromEntries([["kind", kind], ...spec.fields.map((field) => [field, line.object[field]])]) as PathKey;
+  const key = Object.fromEntries([["kind", kind], ...spec.fields.map((field) => [field, line.object[field]])]) as PathKey;
+  return key.kind === "http" ? { ...key, origin: pathOrigin(key.origin) } : key;
 }
 
 /** The key alone of an entry, without its count and gates. */

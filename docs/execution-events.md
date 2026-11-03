@@ -240,6 +240,14 @@ persisted").
 | `path` | string | yes | The path, with no query and no fragment. A template when the client knows one. |
 | `status` | integer or `null` | yes | The status code received. `null` when no response came. |
 
+A reader that compares two runs compares an `origin` on a loopback host
+(`localhost`, `127.0.0.1`, `[::1]`) without its port.
+A test run starts the services it calls on ports it picks as it runs,
+so the same call reaches another port on every run.
+A writer still writes the port.
+An origin on any other host keeps its port, since there a port names a
+different service.
+
 ### `flag`: a feature flag evaluated
 
 | Field | Type | Required | Meaning |

@@ -46,7 +46,12 @@ before the code: one row per thing the change means to do differently,
 kind of execution event, and a row with Before and After empty says it
 does not change (`docs/intent.md`). A refactor writes
 `| | x_decision x_result | | |`. The person approves the rows; the run
-compares them with what the program did.
+compares them with what the program did. A `@tag` in the target only
+narrows which scenarios a row covers: write the behavior as
+`field<op>value` terms on the observed line (`x_input.plan=team`, with
+the decision carrying its inputs), since a tool with no scenarios reports
+a `@tag` row as `not_reached`. A value change that also changes the
+count is two rows, one for the count and one for the value.
 
 `nuka run --base` then reads the file when the base does not hold the same
 text, and `run.json`'s `intent` lists each row's result: `as_intended`,

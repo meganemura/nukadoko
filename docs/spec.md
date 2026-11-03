@@ -4943,6 +4943,8 @@ What this does not reach, in one list:
   request or in a job), or the order of requests beyond their counts.
   A writer's own kind (`x_decision`) is counted by its kind alone,
   unless the change's intent names its fields.
+  An outgoing call's `origin` on a loopback host is kept without its
+  port, which a test run picks as it runs.
   A comparison of paths reads a side from its cell's first execution,
   even when the executions of a side under `--repeat` disagree.
 - Against the base, a base whose program file names no `{events}` and

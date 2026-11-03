@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { collectWorldEvents, createEventsReader } from "../src/context/events-file.js";
 import { tallyInputsOfSlice } from "../src/context/events-read.js";
 import { parseEventLine } from "../src/execution-events/format.js";
-import { boundingGaps, createPathFold, rangeOn, type PathKey, type StepPath } from "../src/execution-events/path.js";
+import { boundingGaps, createPathFold, pathKeyOf, pathKeyText, pathOrigin, rangeOn, type PathKey, type StepPath } from "../src/execution-events/path.js";
 import { createTraceTally } from "../src/execution-events/tally.js";
 import { JOBS, op, PREFIX, render, SPANS, T, traceparent, U, type Op } from "./helpers/event-lines.js";
 import { repoRoot } from "./helpers/fixtures.js";
@@ -213,6 +213,34 @@ describe("a path of the format's own example", () => {
     const refused = fold([documentExample().refused], ["b7ad6b7169203331"]);
     expect(refused).toEqual({ requests: [{ method: "POST", route: "/rooms/:room_id/scores", status: 422 }], entries: [], maybe: 0, open: [] });
     expect(rangeOn(refused, scores)).toEqual({ at_least: 0, at_most: 0 });
+  });
+});
+
+describe("an outgoing call's origin", () => {
+  const scheme = gs.sampledFrom(["http://", "https://"] as const);
+  const port = gs.oneOf(gs.just(""), gs.integers({ minValue: 1, maxValue: 65535 }).map((value) => `:${value}`));
+  const loopback = gs.sampledFrom(["localhost", "LocalHost", "127.0.0.1", "[::1]"] as const);
+  const elsewhere = gs.sampledFrom(["mail.example.test", "localhost.example.test", "127.0.0.2", "[2001:db8::1]", "10.0.0.1"] as const);
+
+  function keyOf(origin: string): string {
+    const line = parseEventLine(JSON.stringify({ trace: traceparent(T, SPANS[0]!), kind: "http", method: "POST", origin, path: "/v1/send", status: 202 }));
+    if (line.state === "unreadable") throw new Error(line.why);
+    return pathKeyText(pathKeyOf(line)!);
+  }
+
+  it("keys two loopback origins that differ only in port as one, and two other origins that do not", () =>
+    hegel.test((tc) => {
+      const [front, a, b] = [tc.draw(scheme), tc.draw(port), tc.draw(port)];
+      const host = tc.draw(loopback);
+      expect(keyOf(`${front}${host}${a}`)).toBe(keyOf(`${front}${host}${b}`));
+      expect(pathOrigin(`${front}${host}${a}`)).toBe(`${front}${host}`);
+      const other = tc.draw(elsewhere);
+      expect(keyOf(`${front}${other}${a}`) === keyOf(`${front}${other}${b}`)).toBe(a === b);
+    }));
+
+  it("leaves a text that is not scheme and host as written", () => {
+    expect(pathOrigin("localhost:3000")).toBe("localhost:3000");
+    expect(pathOrigin("http://localhost:3000/path")).toBe("http://localhost:3000/path");
   });
 });
 
