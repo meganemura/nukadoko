@@ -3718,10 +3718,12 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
   その step がしたことは、その step 自身の `path` にあります。
   `steps` は違いのある step だけを持ち、`same` の受け入れ基準は持ちません。
 - 基点と比べるとき、`changed` の受け入れ基準は、その違いを説明するもの `explained_by` を持ちます。
+  `intent` は、変更の意図のいずれかの行が、その違いのすべてを宣言していることです。
+  そうした違いはそれぞれ、その行を `intent` に名指します(「変更の意図」を参照)。
   `criterion_change` は、受け入れ基準が `new` か `changed` であることです。
   人は変更とともにその新しい文を承認し、その文が、変更に何をさせるつもりかを言います。
-  `null` は、受け入れ基準が `unchanged` であることです。
-  そのため、それが違うことをした理由を feature ファイルのどこも求めていません。
+  `null` は、受け入れ基準が `unchanged` で、それが違うことをしたことを意図のどの行も宣言していないことです。
+  そのため、変更が宣言したもののどれも、それを求めていません。
   それは、文で言わずに作者が意図した変化か、回帰のどちらかです。
   受け入れ基準がすべて `unchanged` のままのリファクタには、1 つもあってはなりません。
   このフィールドを持つのは `changed` の受け入れ基準だけです。
@@ -3737,7 +3739,7 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
   基点との組では、`the base's program file names no {events}, so the base world wrote no execution events` もそうで、レビューする変更が `{events}` を加えるものなら、これが普通の理由です。
   どの行もそこで走らなかったので base の world が始まらなかった environment では、組の各受け入れ基準が `did not run at the base` になります。
   2 つの world がどちらも実行イベントを読まなかった組は要素にならず、比べた組が無いとき `paths` はありません。
-- 比較は証拠であって判定ではなく、どの finding もそれで止めません。
+- 比較は証拠であって判定ではなく、変更が意図を宣言するまでは(下を参照)、どの finding もそれで止めません。
   `run.json` 自身のフィールドだけを読むので、`run.json` だけからもう一度同じ比較ができます。
 
 run サマリは、「Removed criteria」のあとの「Changed paths」の下で、environment の各組に見出しを付け、基点との組にはまとめて 1 つの見出し `base → head` を付けます。
@@ -3749,11 +3751,12 @@ run サマリは、「Removed criteria」のあとの「Changed paths」の下�
 `base → head` の下では、2 つ目の行が、比べた `unchanged` の受け入れ基準を、いちばん多くを言うところでの結果として 1 回ずつ数えます。
 どれも `same` なら、その行は `Each of the 2 unchanged criteria compared did the same at the base and at head.` のようにそう言います。
 リファクタの読み手が探すのはこの文です。
-並べる受け入れ基準は 3 つの群に分かれ、それぞれ専用の 1 行の下に、次の順で並びます。
-変わった `unchanged` の受け入れ基準(`explained_by: null`)、変わった `new` か `changed` の受け入れ基準、違うかもしれないもの(`open` と今のところ同じもの)の順です。
+並べる受け入れ基準は 4 つの群に分かれ、それぞれ専用の 1 行の下に、次の順で並びます。
+変わった `unchanged` の受け入れ基準(`explained_by: null`)、違いを意図が宣言している受け入れ基準、変わった `new` か `changed` の受け入れ基準、違うかもしれないもの(`open` と今のところ同じもの)の順です。
+意図の行が宣言する違いは、`(intent row 1)` のようにその行で終わります。
 そのため、feature ファイルのどこも説明しないものを最初に読み、人が新しい文を承認するものはそれと分けて読みます。
 受け入れ基準の順は、変わった項目と、片側だけで走った step がしたことのうち、いちばん上の種類で決めます。
-種類の順は errors、writes、outgoing calls、jobs、requests、flags で、そのあとは表の順です。
+種類の順は errors、writes、outgoing calls、jobs、requests、flags、書き手自身の種類で、そのあとは表の順です。
 今のところ同じ受け入れ基準は最後に来て、両側に共通の欠けを示す語を名指す 1 行になります。
 読み手が最初にそこへ向かわないようにするためです。
 `holds` を持つ違いは、受け入れ基準の行に入らず、その順も決めません。
@@ -3803,9 +3806,82 @@ Bookkeeping and infrastructure writes that differ, which no sentence is about, t
   止めるときの読みはもうファイルを読み終えていて、ファイルは消されるからです。
 - 実行経路は、各行がしたことを数え、それより細かくはしません。
   読み取り、行の id、actor、書き込みが永続したか、書き込みがどこで走ったか(リクエストの中かジョブの中か)、数を超えたリクエストの順は数えません。
+  書き手自身の種類(`x_decision`)は、変更の意図がそのフィールドを名指さない限り、種類だけで数えます。
   実行経路の比較は、`--repeat` の下で a 側や b 側の実行どうしが食い違っても、それぞれをそのセルの最初の実行から読みます。
 - 基点と比べるとき、プログラムのファイルが `{events}` を名指さず、ある environment でどの行も走らせなかった基点は、それを言う記録を残しません。
   そのため、そこでの受け入れ基準は基点で走らなかったものとして読まれます。
+
+#### 変更の意図
+
+`unchanged` の受け入れ基準の違いは、文で言わずに作者が意図した変化か、回帰のどちらかで、比較だけではどちらかを言えません。
+そこで変更は、判定される作業より前に、何を違うようにするつもりかを、リポジトリの最上位の `INTENT.md` で宣言できます。
+これは対象 × 観測 × 前 → 後 の Markdown の表 1 つで、各セルは実行イベントの書式の言葉で書きます。
+書式は [docs/intent.ja.md](intent.ja.md) にあります。
+アプリケーション自身がすべての契約の決定を比べるツールのような、nukadoko ではないツールも、自分が作る行に対して同じファイルを読めるように書いてあります。
+
+```markdown
+| Target | Observation | Before | After |
+| --- | --- | --- | --- |
+| x_result.reason=plan:team x_result.seats>=10 | x_decision x_result.features | ["projects","sso"] | ["projects","sso","audit_log"] |
+| @overage | http method=POST path=/usage_records | 0 | 1 |
+| | x_decision x_result | | |
+```
+
+`nuka run --base <ref>` は、head の作業ツリーにあるファイルを、そのテキストが ref のものと違うときに読みます。
+基点が同じテキストで持つファイルは、前の変更の意図だからです。
+そのとき `run.json` の `intent` が、各行の結果を言います:
+
+```json
+"intent": {
+  "file": "INTENT.md",
+  "declared_in": { "commit": "dbb15c8abd7b1e0c4f2a9d6e8b3c5a7f0e1d2c3b", "subject": "Declare the intent: team with 10+ seats gets the audit log", "first": true },
+  "changed_after": [],
+  "uncommitted": false,
+  "problems": [],
+  "rows": [
+    { "row": 1, "line": 7, "target": "x_result.reason=plan:team x_result.seats>=10", "observation": "x_decision x_result.features",
+      "before": "[\"projects\",\"sso\"]", "after": "[\"projects\",\"sso\",\"audit_log\"]", "result": "not_happening",
+      "as_intended": [{ "feature": "features/entitlements.feature", "line": 11 }],
+      "not_happening": [{ "feature": "features/entitlements.feature", "line": 7 }] }
+  ]
+}
+```
+
+- `declared_in` は、ref のあとでそのファイルを書いた最初のコミットです。
+  `first` は、それが変更の最初のコミット、つまり判定される作業より前かを言います。
+  `changed_after` は、そのあとファイルを変えた各コミットを名指します。
+  意図の変化そのものも、レビューする人が承認するものだからです。
+  作業ツリーだけがファイルを持つとき `declared_in` は `null` で、`uncommitted` は作業ツリーのファイルが HEAD のものと違うことを言います。
+- 行は、対象が名指す tag をすべて持つ、比べた受け入れ基準に向きます。
+  対象か、値の無いフィールドが行の値を読むときは、どちらかの側の step がそうした行を持つ受け入れ基準に向きます。
+  基点との組の比較で、行は、そのとおりに動いた違いを宣言します。
+  数なら `before` から `after` へ動いたこと、値の無いフィールドなら、1 つの step の中で `before` を持っていた行が去り、`after` を持つ行が同じ数だけ来たことです。
+  前と後がどちらも空の行は、違いを宣言しません。
+  観測するものが変わらないと言う行です。
+- 行は、向いた各受け入れ基準が言うとおりにしたとき `as_intended`、しなかったものがあるとき `not_happening`、比べたどの受け入れ基準にも向かなかったとき `not_reached` です。
+  `not_reached` は、シナリオがその行を扱っていないことで、ほかの比較が扱うかもしれません。
+- step の実行経路は、書き手自身の種類を、行が読むすべてのフィールドで、基点でも head でも同じように数え、それ以外では種類だけで数えます(「実行イベント」を参照)。
+  各値は redact します。
+- 意図があるとき、run は、何も宣言しない違いを持つ受け入れ基準ごと(`intent-unintended`)、`not_happening` の行ごと(`intent-not-happening`)、ファイルを読むときの問題ごと(`intent-unread`)に、受け入れ基準か行を名指して失敗します。
+  `not_reached` の行は何も止めません。
+  そのため、リファクタは行の無い表か、変わらないと言う行を宣言し、どんな違いでも失敗します。
+- 行の判定は、各受け入れ基準の tag とファイルを読みます。
+  `run.json` はそれらを丸ごとは持たないので、判定をもう一度作れるのは run だけです。
+
+run サマリは、「Changed paths」の前に、意図の節「Intent」を置きます。
+いつ宣言されたか、そのあとの各変化、各行とその結果、何も宣言しないことをした受け入れ基準の数を言います:
+
+```text
+## Intent
+
+`INTENT.md` was declared in `dbb15c8abd7b` (Declare the intent: team with 10+ seats gets the audit log), the change's first commit.
+
+1 row: 1 intended but not happening.
+
+- row 1 `x_result.reason=plan:team x_result.seats>=10` `x_decision x_result.features`: `["projects","sso"]` → `["projects","sso","audit_log"]`; intended but not happening in `features/entitlements.feature:7`; as intended in `features/entitlements.feature:11`
+
+2 criteria compared with the base did something the change does not declare, listed first under "Changed paths".
+```
 
 #### 実行イベントの数についての claim
 

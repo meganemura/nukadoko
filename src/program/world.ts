@@ -10,7 +10,7 @@ import { collectLateLines, type LateSlice, type TracedStep } from "../context/pr
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
 import { parseList, type ListedPlaces, type ListKind } from "../execution-events/lists.js";
-import type { StepPath } from "../execution-events/path.js";
+import type { OwnFields, StepPath } from "../execution-events/path.js";
 import type { CountedGroup } from "../execution-events/counted.js";
 import { NO_MARKED_TABLES, tablesOf, type WorldTables } from "../execution-events/tables.js";
 import type { RunWorld, RunWorldCommand, RunWorldEvents, RunWorldList, RunWorldName } from "../record/run-result.js";
@@ -217,6 +217,10 @@ export interface WorldStarterOptions {
    * `nuka do` step that counts no execution events reads nothing a table's
    * holding changes. */
   readonly tables?: false;
+  /** The fields each writer's own kind is counted by in a step's path:
+   * those the change's intent reads (src/run/intent.ts). Head's and the
+   * base's worlds get the same, so their paths compare. */
+  readonly ownFields?: OwnFields;
 }
 
 export interface WorldStarter {
@@ -587,7 +591,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
                 const traced = (steps ?? []).flatMap(({ traceId, dir, events: slice }) =>
                   slice === undefined ? [] : [{ traceId, lines: slice.lines, dir, inputs: tallyInputsOfSlice(slice), replaced: slice.open.some((gap) => gap.gap === "file-replaced") }],
                 );
-                const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy, recounts, tables);
+                const found = collectWorldEvents(events.path, tracePrefix, traced, allSecrets, copy, recounts, tables, options.ownFields);
                 eventsLate = found.late;
                 paths = found.paths;
                 stateWrites = found.stateWrites;

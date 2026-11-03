@@ -48,6 +48,20 @@ This part does not change release to release.
 
 ## 0.25.0 to the next release
 
+- **A file named `INTENT.md` at the repository's top is read under
+  `nuka run --base`** when the base does not hold the same text
+  (docs/intent.md). A project that already keeps an unrelated file under
+  that name and changes it in a branch gets `intent-unread`, which fails
+  the run; rename the file.
+- **A writer's own kinds (`x_...`) take part in paths.** A program that
+  emits its own events sees them under "Changed paths" and in run.json's
+  `paths` when their count differs between the base and head, and a
+  path entry's `kind` can now be such a kind. A criterion that differs
+  only in them was `same` before and is `changed` now.
+- **`explained_by` in run.json's `paths` can be `"intent"`,** and a
+  difference can carry `intent`, the row that declares it. A job that
+  treated every value other than `"criterion_change"` as `null` reads
+  `"intent"` as declared.
 - **Each Then that reads a page takes 50 to 100 ms longer,** since it
   keeps a view of each open page right after its judged reading
   (`judged_view`, see "What the pages showed" in docs/spec.md). A step

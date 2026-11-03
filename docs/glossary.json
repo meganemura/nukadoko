@@ -971,6 +971,36 @@
       "en": ["working tree (git)", "working tree id", "commit.working_tree"],
       "ja": "作業ツリー / 作業ツリーの id",
       "note": "git の作業ツリー。run.json の `commit.working_tree` は、それを 1 つの git のツリー id にしたもの(未追跡ファイルを含み、無視されるファイルと state ディレクトリを除く)。keep_english の tree(world が build するコードの置き場所、`head`、`base`、`old`)とは別の語なので、作業ツリーと書き、ツリー単独では書かない。フィールド名はコードスパンで英語のまま"
+    },
+    {
+      "en": ["intent (of a change)", "the change's intent", "INTENT.md"],
+      "ja": "意図 / 変更の意図",
+      "note": "変更が、判定される作業より前に INTENT.md で宣言する、何を違うようにするつもりか(docs/intent.md)。ファイル名、フィールド `intent`、explained_by の値 `intent` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["target (of an intent row)"],
+      "ja": "対象",
+      "note": "意図の行の列 `Target`。行が扱う受け入れ基準か行を、`@tag` と `field<op>value` の項で名指す。列名はコードスパンか表の中で英語のまま"
+    },
+    {
+      "en": ["observation (of an intent row)", "observes"],
+      "ja": "観測 / 観測する",
+      "note": "意図の行の列 `Observation`。実行イベントの種類と、絞る項と、値を見るフィールド。claim の observe(keep_english)とは別の語"
+    },
+    {
+      "en": ["before", "after"],
+      "ja": "前 / 後",
+      "note": "意図の行の列 `Before` と `After`。基点での観測と、変更のあとでの観測"
+    },
+    {
+      "en": ["as intended", "intended but not happening", "not reached", "unintended"],
+      "ja": "意図どおり / 起きていない / 届いていない / 意図していない",
+      "note": "意図の行の結果と、どの行も宣言しない違い。値 `as_intended`、`not_happening`、`not_reached` と finding のコード `intent-unintended` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["a writer's own kind", "own kind"],
+      "ja": "書き手自身の種類",
+      "note": "`x_` で始まる実行イベントの種類(`x_decision`)。実行経路は、意図がそのフィールドを名指すときだけ、それで数える"
     }
   ],
   "keep_english": [

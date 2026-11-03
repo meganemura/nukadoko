@@ -40,6 +40,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.25.0 から次のリリースへ
 
+- **リポジトリの最上位にある `INTENT.md` という名前のファイルを、`nuka run --base` が読みます。**
+  基点が同じテキストを持たないときです(docs/intent.ja.md)。
+  関係の無いファイルをすでにその名前で持ち、ブランチでそれを変えるプロジェクトは `intent-unread` を受け、run は失敗します。
+  ファイルの名前を変えてください。
+- **書き手自身の種類(`x_...`)が実行経路に入ります。**
+  自分のイベントを出すプログラムは、その数が基点と head で違うとき、それを「Changed paths」と run.json の `paths` で見ます。
+  経路の項目の `kind` は、そのような種類にもなります。
+  それだけが違う受け入れ基準は、前は `same` で、今は `changed` です。
+- **run.json の `paths` の `explained_by` は `"intent"` にもなります。**
+  違いは、それを宣言する行 `intent` を持つことがあります。
+  `"criterion_change"` 以外のすべての値を `null` として扱っていたジョブは、`"intent"` を宣言されたものとして読みます。
 - **ページを読む Then は、1 つにつき 50 から 100 ms 長くかかります。**
   判定した読み取りの直後に、開いている各ページのビューを残すからです(`judged_view`、docs/spec.ja.md の「ページが見せていたもの」を参照)。
   その時間の余裕を残していない `timeout` の step や、timeout が step のものにそれほど近い `poll` は、`nukadoko.config.ts` の `judgedView: false` で余裕を取り戻せます。

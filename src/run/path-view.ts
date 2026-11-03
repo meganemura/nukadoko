@@ -1,5 +1,5 @@
 import type { CountRange } from "../execution-events/count.js";
-import { boundingGaps, holdsOn, keysOf, kindRule, rangeOn, type PathKind, type StepPath } from "../execution-events/path.js";
+import { boundingGaps, holdsOn, keysOf, kindRule, rangeOn, type StepPath } from "../execution-events/path.js";
 import type { TraceGap } from "../execution-events/tally.js";
 import type {
   RunDocument,
@@ -178,7 +178,7 @@ function sameSoFar(step: Extract<RunPathStep, { ran: "both" }>): boolean {
 
 /** What changed between two paths of one step, over the kinds `compared`
  * keeps. */
-function stepDifference(a: StepPath, b: StepPath, compared: (kind: PathKind) => boolean): Pick<Extract<RunPathStep, { ran: "both" }>, "changed" | "open"> {
+function stepDifference(a: StepPath, b: StepPath, compared: (kind: string) => boolean): Pick<Extract<RunPathStep, { ran: "both" }>, "changed" | "open"> {
   const keys = keysOf(a, b).filter((key) => compared(key.kind));
   const changed: RunPathDifference[] = [];
   const open: RunPathDifference[] = [];
@@ -201,7 +201,7 @@ function explanationOf(change: RunTableRow["change"]): NonNullable<RunPathCriter
 
 type Side = NonNullable<ReturnType<typeof sideOf>>;
 
-function compareCriterion(pair: Pair, row: RunTableRow, sides: readonly [Side, Side], compared: (kind: PathKind) => boolean): Compared {
+function compareCriterion(pair: Pair, row: RunTableRow, sides: readonly [Side, Side], compared: (kind: string) => boolean): Compared {
   const [stepsA, stepsB] = [sides[0].scenario.steps, sides[1].scenario.steps];
   if (stepsA.length !== stepsB.length || stepsA.some((step, index) => step.line !== stepsB[index]!.line)) {
     return { reason: "ran steps that differ between the two sides, which run one pickle, a bug in nukadoko" };
@@ -256,7 +256,7 @@ function comparePair(document: ComparedDocument, pair: Pair): RunPathComparison 
   const base = { between: pair.between, a: pair.a, b: pair.b };
   const why = readings.flatMap((reading) => (typeof reading === "object" ? [reading.unread] : []))[0];
   if (why !== undefined) return { ...base, unread: why, counts: empty, criteria: [], not_compared: [] };
-  const compared = (kind: PathKind): boolean => !(pair.between.kind === "condition" && kindRule(kind).conditionPremise === true);
+  const compared = (kind: string): boolean => !(pair.between.kind === "condition" && kindRule(kind).conditionPremise === true);
   const criteria: RunPathCriterion[] = [];
   const notCompared: RunPathComparison["not_compared"][number][] = [];
   for (const row of document.table.rows) {

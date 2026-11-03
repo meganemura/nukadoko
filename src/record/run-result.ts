@@ -496,6 +496,45 @@ export interface RunPathComparison {
   readonly not_compared: readonly { readonly feature: string; readonly line: number; readonly reason: string }[];
 }
 
+/** What the change declares it means to do differently (docs/intent.md),
+ * read from the intent file at the repository's top, and how each row
+ * came out against the base pairs of `paths` (src/run/intent-view.ts). */
+export interface RunIntent {
+  /** The file at the repository's top, relative to the project. */
+  readonly file: string;
+  /** The first commit since the base that wrote the file, and whether it
+   * is the change's first commit; `null` when only the working tree
+   * holds it. */
+  readonly declared_in: { readonly commit: string; readonly subject: string; readonly first: boolean } | null;
+  /** Each later commit since the base that changed the file, in order. */
+  readonly changed_after: readonly { readonly commit: string; readonly subject: string }[];
+  /** `true` when the working tree's file differs from the one at HEAD. */
+  readonly uncommitted: boolean;
+  /** What in the file could not be read, by the file's line. */
+  readonly problems: readonly { readonly line: number | null; readonly message: string }[];
+  readonly rows: readonly RunIntentRow[];
+}
+
+/** One row of the intent, as written, and what it came to. */
+export interface RunIntentRow {
+  /** Its number among the table's rows, from 1. */
+  readonly row: number;
+  /** Its line in the file. */
+  readonly line: number;
+  readonly target: string;
+  readonly observation: string;
+  readonly before: string;
+  readonly after: string;
+  /** `as_intended`: each criterion the row reached did what it says.
+   * `not_happening`: a criterion it reached did not. `not_reached`: no
+   * compared criterion is one its target names. */
+  readonly result: "as_intended" | "not_happening" | "not_reached";
+  /** The criteria where it happened, and where it was reached and did
+   * not, in the table's order. */
+  readonly as_intended: readonly { readonly feature: string; readonly line: number }[];
+  readonly not_happening: readonly { readonly feature: string; readonly line: number }[];
+}
+
 /** One side of a comparison: a world and an environment. */
 export interface RunPathSide {
   readonly world: RunWorldName;
@@ -516,11 +555,12 @@ export interface RunPathCriterion {
    * when there is none. */
   readonly result: "changed" | "open" | "same_so_far" | "marked_only" | "same";
   /** Only for a `changed` criterion of a base pair: what accounts for
-   * its difference. `criterion_change`: the criterion is new or changed,
-   * so a person approves new sentences for it with the change. `null`:
-   * it is unchanged, and nothing in the feature files asked for what it
-   * did differently. */
-  readonly explained_by?: "criterion_change" | null;
+   * its difference. `intent`: a row of the change's intent declares each
+   * of its differences (`RunIntent`). `criterion_change`: the criterion
+   * is new or changed, so a person approves new sentences for it with the
+   * change. `null`: neither, so nothing the change declares asked for
+   * what it did differently. */
+  readonly explained_by?: "intent" | "criterion_change" | null;
   /** The execution each side is read from, its cell's first, with the
    * cell's outcome. */
   readonly a: RunPathExecution;
@@ -557,8 +597,10 @@ export type RunPathStep =
   | { readonly line: number | null; readonly text: string; readonly ran: "a" | "b" };
 
 /** One entry of a step's path, with the range of its count on each side,
- * and what its table holds when either side's tables list marks it. */
-export type RunPathDifference = PathKey & { readonly holds?: MarkedHolds; readonly a: CountRange; readonly b: CountRange };
+ * and what its table holds when either side's tables list marks it.
+ * Against the base, `intent` is the number of the intent row that
+ * declares the difference (`RunIntent`). */
+export type RunPathDifference = PathKey & { readonly holds?: MarkedHolds; readonly intent?: number; readonly a: CountRange; readonly b: CountRange };
 
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
 export interface RunEnvironment {
@@ -746,6 +788,9 @@ export type RunFields = {
   /** Present only when the run compared the steps' paths of a pair of
    * sides (`RunPathComparison`). */
   readonly paths?: readonly RunPathComparison[];
+  /** Present only under `nuka run --base` when the change wrote the
+   * intent file (`RunIntent`). */
+  readonly intent?: RunIntent;
   /** Present only for a run started with `nuka run --step`: each pause,
    * and how it was answered. Between steps the world and the browser were
    * open to anything, so a reader or a gate tells such a run apart by

@@ -226,3 +226,21 @@ export async function removeStaleTreeRegistrations(rootDir: string, runsDir: str
   }
   return removed;
 }
+
+/** A file's text in `commit`, by its path relative to `top`, or `null`
+ * when the commit holds no such file. */
+export async function fileAtCommit(top: string, commit: string, file: string): Promise<string | null> {
+  const listed = (await git(top, ["ls-tree", "-z", "--name-only", commit, "--", file])).split("\0").filter((name) => name.length > 0);
+  if (!listed.includes(file)) return null;
+  return git(top, ["show", `${commit}:${file}`]);
+}
+
+/** The commits after `base` up to HEAD, oldest first, each with its
+ * subject: all of them, or with `file`, those that changed it. */
+export async function commitsSince(top: string, base: string, file?: string): Promise<{ readonly commit: string; readonly subject: string }[]> {
+  const out = await git(top, ["log", "-z", "--reverse", "--format=%H%x09%s", `${base}..HEAD`, ...(file === undefined ? [] : ["--", file])]);
+  return nulList(out).map((line) => {
+    const tab = line.indexOf("\t");
+    return { commit: line.slice(0, tab), subject: line.slice(tab + 1) };
+  });
+}

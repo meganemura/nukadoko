@@ -67,6 +67,24 @@ const RUN_CODES = {
     description: "A BeforeAll or AfterAll hook threw, so the run is red.",
     fix: "Correct the hook the message names.",
   },
+  "intent-not-happening": {
+    severity: "failed",
+    description:
+      "Under nuka run --base, a row of the change's INTENT.md aimed at a compared criterion, by its target, and that criterion did not do what the row says: a count did not go from before to after, a value did not, or what the row says does not change did. docs/intent.md is the format.",
+    fix: "Make the change do what the row says there, or narrow the row's target if the row means less.",
+  },
+  "intent-unintended": {
+    severity: "failed",
+    description:
+      "Under nuka run --base, the change declares its intent in INTENT.md, and an unchanged criterion did something at head that it did not do at the base, which no row of the intent declares. The summary's \"base → head\" lists the difference.",
+    fix: "Declare the difference with a row in INTENT.md if the change means it, or change the code back if it does not.",
+  },
+  "intent-unread": {
+    severity: "failed",
+    description:
+      "Under nuka run --base, the change's INTENT.md holds a row, or a table, that cannot be read as an intent, or git did not answer what the run asked of the file. A row that cannot be read declares nothing, so the run fails rather than judge less than the file says.",
+    fix: "Write the row as docs/intent.md describes, so each difference the change means is declared.",
+  },
   "nothing-selected": {
     severity: "failed",
     description:

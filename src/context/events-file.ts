@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ownerOf, parseEventLine, type ParsedLine } from "../execution-events/format.js";
 import type { CountedGroup } from "../execution-events/counted.js";
-import { createPathFold, type PathFold, type StepPath } from "../execution-events/path.js";
+import { createPathFold, NO_OWN_FIELDS, type OwnFields, type PathFold, type StepPath } from "../execution-events/path.js";
 import { PERSISTED_WRITES, type EventSelection } from "../execution-events/selection.js";
 import { NO_MARKED_TABLES, type WorldTables } from "../execution-events/tables.js";
 import { createKindsSeen, createTraceTally, readingGaps, type EventsGap, type KindsSeen, type SelectionCount, type TallyInputs, type TraceTally } from "../execution-events/tally.js";
@@ -266,7 +266,7 @@ export interface WorldEvents {
 /** Reads the whole events file of a stopped world: writes its redacted
  * copy to `copyPath`, each step's lines past its slice to its
  * EVENTS_LATE_FILE_NAME, counts what the file holds, folds each step's
- * path, and counts each of `recounts` again over every line of its
+ * path (a writer's own kinds by `ownFields`, redacted), and counts each of `recounts` again over every line of its
  * trace, leaving out what `tables`, the world's tables list, leaves out,
  * as the reading did. `steps` give `lines` as `observed.events.lines`. */
 export function collectWorldEvents(
@@ -277,12 +277,13 @@ export function collectWorldEvents(
   copyPath: string,
   recounts: readonly Recount[] = [],
   tables: WorldTables = NO_MARKED_TABLES,
+  ownFields: OwnFields = NO_OWN_FIELDS,
 ): WorldEvents {
   let lines = 0;
   let unowned = 0;
   let unreadable = 0;
   const undefinedKinds = new Map<string, number>();
-  const folds = new Map<string, PathFold>(steps.map((step) => [step.traceId, createPathFold({ ...step.inputs, tables })]));
+  const folds = new Map<string, PathFold>(steps.map((step) => [step.traceId, createPathFold({ ...step.inputs, tables }, { fields: ownFields, redact: (value) => redact(value, secrets) })]));
   const writes = new Map<string, TraceTally>(steps.map((step) => [step.traceId, createTraceTally({ ...step.inputs, selections: [PERSISTED_WRITES], tables })]));
   const kinds = createKindsSeen();
   const tallies = recounts.map((recount) => createTraceTally({ ...recount.inputs, selections: [recount.selection], tables }));

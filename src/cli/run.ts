@@ -56,6 +56,8 @@ import type { FlagEvaluation, ServedRequest } from "../execution-events/format.j
 import type { ListedPlaces } from "../execution-events/lists.js";
 import { flagRows } from "../run/flag-rows.js";
 import { comparePaths } from "../run/path-view.js";
+import { ownFieldsOf, readChangeIntent, type ChangeIntent } from "../run/intent-file.js";
+import { intentFindings, judgeIntent } from "../run/intent-view.js";
 import { routeRows } from "../run/route-rows.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
 import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.js";
@@ -545,6 +547,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
     baseRef = { ref: options.base, commit: resolved.commit };
   }
+  // The intent the change declares (docs/intent.md), read before any world
+  // starts, since a step's path counts a writer's own kinds by the fields
+  // it names, and the base's world and head's must count them alike.
+  let changeIntent: ChangeIntent | undefined;
+  let intentUnread: string | undefined;
+  if (baseRef !== undefined) {
+    try {
+      changeIntent = await readChangeIntent(rootDir, baseRef.commit);
+    } catch (error) {
+      intentUnread = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const ownFields = changeIntent === undefined ? undefined : ownFieldsOf(changeIntent.intent);
 
   // This whole invocation's own start — read
   // again just before the summary line is written, near this function's own
@@ -1078,6 +1093,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // every path nukadoko prints is relative to the project.
       progress: { write: (chunk: string) => progress.write(projectRelativeText(chunk, rootDir)) },
       lists: true,
+      ...(ownFields === undefined ? {} : { ownFields }),
     });
     const worlds: RunWorld[] = [];
     // The URL each of head's worlds reached, unredacted, so the base world
@@ -1585,7 +1601,31 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         base_url: worlds.find((world) => world.tree === "head" && world.name === pass.resolvedEnv.name)?.url ?? null,
         ...(pass.resolvedEnv.conditions === undefined ? {} : { conditions: pass.resolvedEnv.conditions }),
       }));
-      const paths = comparePaths({ scenarios: runScenarios, table, environments, worlds });
+      const compared = comparePaths({ scenarios: runScenarios, table, environments, worlds });
+      // Each criterion's tags as head's feature file has them: what an
+      // intent row's target names.
+      const tagsByPlace = new Map(flatPickles.map(({ feature, pickle }) => [criterionKey(feature.relativePath, pickle.location?.line ?? 0), pickle.tags.map((tag) => tag.name)]));
+      const judged =
+        changeIntent === undefined ? undefined : judgeIntent(changeIntent.intent, compared, runScenarios, table, (place) => tagsByPlace.get(criterionKey(place.feature, place.line)) ?? []);
+      const paths = judged?.paths ?? compared;
+      const intent =
+        changeIntent === undefined || judged === undefined
+          ? undefined
+          : {
+              ...changeIntent.record,
+              problems: changeIntent.intent.problems,
+              rows: changeIntent.intent.rows.map((row, index) => {
+                const came = judged.rows[index]!;
+                return { row: row.row, line: row.line, ...row.cells, result: came.result, as_intended: came.as_intended, not_happening: came.not_happening };
+              }),
+            };
+      if (intentUnread !== undefined) warn({ severity: "failed", code: "intent-unread", message: `the change's intent was not read: ${intentUnread}` });
+      // Printed at the end with the rows' findings, as theirs are.
+      if (intent !== undefined && base !== undefined) {
+        const found = intentFindings(intent, paths, (place) => ["nuka", "run", `${place.feature}:${place.line}`, "--base", base.commit, ...rerunFlags]);
+        rows.push(...found);
+        runFindings.push(...found);
+      }
       const facts: RunFields = {
         run_id: runId,
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
@@ -1605,6 +1645,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(flags.length === 0 ? {} : { flags }),
         ...(routes === undefined ? {} : { routes }),
         ...(paths.length === 0 ? {} : { paths }),
+        ...(intent === undefined ? {} : { intent }),
         ...(walk === undefined ? {} : { walk: walk.record() }),
       };
       // The limits restate the fields above, so they are read from them
@@ -1616,7 +1657,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // is red, which a run with no failed execution can still have: a
       // criterion no environment of the run meets, under `--no-check`, or,
       // under `--base`, one nothing proves or whose meaning moved.
-      let exitCode = verdict === "passed" && !table.rows.some((row) => RED_VERDICTS.has(row.verdict)) ? 0 : 1;
+      // A change that declares its intent opts into one more gate: a
+      // difference it does not declare, or a row that did not happen.
+      const intentFailed = runFindings.some((finding) => finding.severity === "failed" && finding.code.startsWith("intent-"));
+      let exitCode = verdict === "passed" && !intentFailed && !table.rows.some((row) => RED_VERDICTS.has(row.verdict)) ? 0 : 1;
       // sources.json first, before anything is serialized, so a failure to
       // write it is a finding in the summary, in run.json, and in the
       // `--json` document alike. It fails the run, as run.json does: without
@@ -1907,6 +1951,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           tree: world,
           programFromHead: world === "base" && base.base?.programFromHead === true,
           headUrls,
+          ...(ownFields === undefined ? {} : { ownFields }),
         });
         for (const { name: environment } of environments) {
           // A signal ends the run, so no tree world starts after it.

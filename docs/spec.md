@@ -4820,11 +4820,14 @@ exactly one condition, the two are a pair.
   criterion has none.
 - Against the base, a `changed` criterion has `explained_by`, what
   accounts for its difference.
+  `intent`: a row of the change's intent declares each of its
+  differences, and each such difference names the row in `intent` (see
+  "The change's intent").
   `criterion_change`: the criterion is `new` or `changed`, so a person
   approves new sentences for it with the change, and those sentences are
   what the change means it to do.
-  `null`: it is `unchanged`, so nothing in the feature files asked for
-  what it did differently.
+  `null`: it is `unchanged`, and no intent row declares what it did
+  differently, so nothing the change declares asked for it.
   That is either a change the author meant without a sentence that says
   so, or a regression, and a refactor, whose criteria all stay
   `unchanged`, must have none.
@@ -4850,7 +4853,8 @@ exactly one condition, the two are a pair.
   there, makes each criterion of the pair `did not run at the base`.
   A pair whose two worlds read no events gives no entry, and `paths` is
   absent when no pair was compared.
-- The comparison is evidence, not a verdict: no finding gates on it.
+- The comparison is evidence, not a verdict: no finding gates on it,
+  until the change declares its intent (below).
   It reads `run.json`'s own fields, so it can be made again from a
   `run.json` alone.
 
@@ -4868,15 +4872,18 @@ compared, each once, as what it came to where it says the most.
 When each is `same`, the line says so, `Each of the 2 unchanged
 criteria compared did the same at the base and at head.`, the sentence a
 refactor's reader looks for.
-The listed criteria fall in three groups, each under a line of its own,
+The listed criteria fall in four groups, each under a line of its own,
 in this order: the `unchanged` criteria that changed (`explained_by:
-null`), then the `new` or `changed` ones that changed, and then those
-that may differ (`open` and the same so far).
+null`), then those whose differences the intent declares, then the
+`new` or `changed` ones that changed, and then those that may differ
+(`open` and the same so far).
+A difference an intent row declares ends with the row, `(intent row 1)`.
 So what nothing in the feature files accounts for is read first, and
 what a person approves new sentences for is read apart from it.
 A criterion is ranked by the highest kind among its changed entries and
 what its one-side steps did, in the order errors, writes, outgoing
-calls, jobs, requests, flags, and then by the table's order.
+calls, jobs, requests, flags, a writer's own kinds, and then by the
+table's order.
 A criterion the same so far comes last, in one line that names the gap
 words both sides share, so a reader is not sent to it first.
 A difference with `holds` is never among a criterion's lines and never
@@ -4934,11 +4941,104 @@ What this does not reach, in one list:
 - A path counts what each line did and no finer: not a read, a row's
   ids, an actor, whether a write persisted, where a write ran (in the
   request or in a job), or the order of requests beyond their counts.
+  A writer's own kind (`x_decision`) is counted by its kind alone,
+  unless the change's intent names its fields.
   A comparison of paths reads a side from its cell's first execution,
   even when the executions of a side under `--repeat` disagree.
 - Against the base, a base whose program file names no `{events}` and
   ran no row in an environment leaves no record that says so, so its
   criteria there read as not run at the base.
+
+#### The change's intent
+
+A difference on an unchanged criterion is a change the author meant
+without a sentence that says so, or a regression, and the comparison
+alone cannot tell which.
+So a change can declare, before the work it judges, what it means to do
+differently, in `INTENT.md` at the repository's top: one Markdown table
+of target × observation × before → after, each cell in the words of
+the execution events format.
+[docs/intent.md](intent.md) is the format, written so a tool other than
+nukadoko, such as an application's own comparison of every contract's
+decision, reads the same file against the lines it makes.
+
+```markdown
+| Target | Observation | Before | After |
+| --- | --- | --- | --- |
+| x_result.reason=plan:team x_result.seats>=10 | x_decision x_result.features | ["projects","sso"] | ["projects","sso","audit_log"] |
+| @overage | http method=POST path=/usage_records | 0 | 1 |
+| | x_decision x_result | | |
+```
+
+`nuka run --base <ref>` reads the file as head's working tree holds
+it, when its text differs from the ref's: a file the base already holds
+unchanged is an earlier change's intent.
+`run.json`'s `intent` then says what each row came to:
+
+```json
+"intent": {
+  "file": "INTENT.md",
+  "declared_in": { "commit": "dbb15c8abd7b1e0c4f2a9d6e8b3c5a7f0e1d2c3b", "subject": "Declare the intent: team with 10+ seats gets the audit log", "first": true },
+  "changed_after": [],
+  "uncommitted": false,
+  "problems": [],
+  "rows": [
+    { "row": 1, "line": 7, "target": "x_result.reason=plan:team x_result.seats>=10", "observation": "x_decision x_result.features",
+      "before": "[\"projects\",\"sso\"]", "after": "[\"projects\",\"sso\",\"audit_log\"]", "result": "not_happening",
+      "as_intended": [{ "feature": "features/entitlements.feature", "line": 11 }],
+      "not_happening": [{ "feature": "features/entitlements.feature", "line": 7 }] }
+  ]
+}
+```
+
+- `declared_in` is the first commit since the ref that wrote the file,
+  and `first` says whether it is the change's first commit, before the
+  work it judges.
+  `changed_after` names each later commit that changed it, since a
+  change of intent is itself something the reviewer approves.
+  `declared_in` is `null` when only the working tree holds the file,
+  and `uncommitted` says the working tree's file is not HEAD's.
+- A row aims at a compared criterion that carries every tag its target
+  names, and, when its target or a field with no value reads a line's
+  values, whose steps on either side hold such a line.
+  A row of the base pairs' comparison declares a difference that goes as
+  it says: a count from `before` to `after`, or, for a field with no
+  value, the lines that held `before` going and as many that hold
+  `after` coming in one step.
+  A row whose before and after are both empty declares no difference:
+  it says that what it observes does not change.
+- A row is `as_intended` where each criterion it aimed at did what it
+  says, `not_happening` where one did not, and `not_reached` when it
+  aimed at no compared criterion: the scenarios do not cover it, which
+  another comparison may.
+- A step's path counts a writer's own kind by every field a row reads
+  on it, at the base and at head alike, and by its kind alone otherwise
+  (see "Execution events"); each value is redacted.
+- Under an intent, the run fails on each criterion with a difference
+  nothing declares (`intent-unintended`), each row `not_happening`
+  (`intent-not-happening`), and each problem reading the file
+  (`intent-unread`), each with the criterion or the line.
+  A row `not_reached` gates nothing.
+  So a refactor declares a table with no row, or rows of no change, and
+  any difference fails it.
+- Judging a row reads each criterion's tags and the file, which
+  `run.json` does not hold whole, so it is made again only by a run.
+
+The run summary gives the intent a section, "Intent", before "Changed
+paths": when it was declared, each later change of it, each row with
+what it came to, and how many criteria did what nothing declares:
+
+```text
+## Intent
+
+`INTENT.md` was declared in `dbb15c8abd7b` (Declare the intent: team with 10+ seats gets the audit log), the change's first commit.
+
+1 row: 1 intended but not happening.
+
+- row 1 `x_result.reason=plan:team x_result.seats>=10` `x_decision x_result.features`: `["projects","sso"]` → `["projects","sso","audit_log"]`; intended but not happening in `features/entitlements.feature:7`; as intended in `features/entitlements.feature:11`
+
+2 criteria compared with the base did something the change does not declare, listed first under "Changed paths".
+```
 
 #### A claim on a count of events
 

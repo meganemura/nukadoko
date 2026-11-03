@@ -96,7 +96,7 @@ describe("createPathFold", () => {
       expect(fold(texts, spans, file).open).toEqual(tally.reading(file).open);
     }));
 
-  it("counts each line once: a request in requests, a write, job, flag, error, or outgoing call in its entry, and a line that may be any line in maybe", () =>
+  it("counts each line once: a request in requests, a write, job, flag, error, outgoing call, or writer's own kind in its entry, and a line that may be any line in maybe", () =>
     hegel.test((tc) => {
       const ops = tc.draw(gs.arrays(pathOp, { maxSize: 12 }));
       const found = fold(ops.map(text), SPANS);
@@ -110,8 +110,11 @@ describe("createPathFold", () => {
       expect(entry({ kind: "flag", side: "on" }) + entry({ kind: "flag", side: "off" })).toBe(count("flag"));
       expect(entry({ kind: "error" })).toBe(count("error"));
       expect(entry({ kind: "http" })).toBe(count("http"));
+      // A writer's own kind no one names a field of counts by its kind
+      // alone, whatever its fields hold.
+      expect(found.entries.filter((candidate) => candidate.kind === "x_cache")).toEqual(count("extension") === 0 ? [] : [{ kind: "x_cache", count: count("extension") }]);
       expect(found.maybe).toBe(count("undefined-kind", "unknown-version", "damaged"));
-      expect(found.entries.reduce((total, candidate) => total + candidate.count, 0)).toBe(count("db", "write", "enqueue", "perform", "flag", "error", "http"));
+      expect(found.entries.reduce((total, candidate) => total + candidate.count, 0)).toBe(count("db", "write", "enqueue", "perform", "flag", "error", "http", "extension"));
     }));
 
   it("lists the requests the step stamped in the order it sent them, then the rest as they arrived", () => {
@@ -133,6 +136,46 @@ function documentExample(): { readonly placed: string[]; readonly refused: strin
   const blocks = [...readFileSync(path.join(repoRoot, "docs/execution-events.md"), "utf8").matchAll(/```jsonl\n([\s\S]*?)```/g)].map((match) => match[1]!.trim().split("\n"));
   return { placed: blocks[0]!, refused: blocks[1]![0]! };
 }
+
+describe("a writer's own kind", () => {
+  // A decision line as an application writes it: the named field, one it
+  // does not name (an id that differs on every line), and a nested value.
+  const decision = (features: readonly string[], plan: string, id: number): string =>
+    JSON.stringify({ trace: traceparent(T, SPANS[0]!), kind: "x_decision", x_id: `d${id}`, x_result: { features, reason: `plan:${plan}` } });
+  const own = (fields: readonly string[]) => ({ fields: new Map([["x_decision", fields]]), redact: (value: unknown) => value });
+  const foldOwn = (texts: readonly string[], fields: readonly string[]): StepPath => {
+    const paths = createPathFold({ spans: SPANS, spansNotKept: 0, processes: "none", processSpans: [] }, own(fields));
+    for (const line of texts.map(parseEventLine)) if (line.state !== "unreadable") paths.owned(line);
+    return paths.path({ truncated: false, replaced: false });
+  };
+  const featureSets = gs.sampledFrom([["projects"], ["projects", "sso"], ["projects", "sso", "audit_log"]] as const);
+
+  it("counts each line once, by the values of the fields named and of no other", () =>
+    hegel.test((tc) => {
+      const lines = tc.draw(gs.arrays(gs.tuples(featureSets, gs.sampledFrom(["team", "pro"] as const)), { maxSize: 10 }));
+      const texts = lines.map(([features, plan], index) => decision(features, plan, index));
+      const found = foldOwn(texts, ["x_result.features"]).entries;
+      const expected = new Map<string, number>();
+      for (const [features] of lines) expected.set(JSON.stringify(features), (expected.get(JSON.stringify(features)) ?? 0) + 1);
+      expect(found.map((entry) => [JSON.stringify((entry as Record<string, unknown>)["x_result.features"]), entry.count]).sort()).toEqual([...expected].sort());
+      expect(found.every((entry) => Object.keys(entry).sort().join() === "count,kind,x_result.features")).toBe(true);
+    }));
+
+  it("splits an entry by every field named, in any order the fields are named", () =>
+    hegel.test((tc) => {
+      const lines = tc.draw(gs.arrays(gs.tuples(featureSets, gs.sampledFrom(["team", "pro"] as const)), { maxSize: 10 }));
+      const texts = lines.map(([features, plan], index) => decision(features, plan, index));
+      const one = foldOwn(texts, ["x_result.features", "x_result.reason"]).entries;
+      expect(foldOwn(shuffled(tc, texts), ["x_result.reason", "x_result.features"]).entries).toEqual(one);
+      expect(one).toHaveLength(new Set(lines.map((line) => JSON.stringify(line))).size);
+    }));
+
+  it("keeps a field the line lacks as null, and redacts what it keeps", () => {
+    const paths = createPathFold({ spans: SPANS, spansNotKept: 0, processes: "none", processSpans: [] }, { fields: new Map([["x_decision", ["x_result.features", "x_subject"]]]), redact: (value) => (value === "secret" ? "[redacted]" : value) });
+    paths.owned(parseEventLine(JSON.stringify({ trace: traceparent(T, SPANS[0]!), kind: "x_decision", x_result: { features: "secret" } })) as never);
+    expect(paths.path({ truncated: false, replaced: false }).entries).toEqual([{ kind: "x_decision", "x_result.features": "[redacted]", x_subject: null, count: 1 }]);
+  });
+});
 
 describe("a path of the format's own example", () => {
   const spans = ["00f067aa0ba902b7"];

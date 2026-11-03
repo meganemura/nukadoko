@@ -1,5 +1,5 @@
 import type { CountRange } from "./count.js";
-import { EVENT_KINDS, flagOf, requestOf, type EventKindName, type ReadableLine, type ServedRequest } from "./format.js";
+import { EVENT_KINDS, EXTENSION_PREFIX, flagOf, requestOf, type EventKindName, type ReadableLine, type ServedRequest } from "./format.js";
 import { createTraceTally, type TallyInputs, type TraceGap } from "./tally.js";
 import { markOf, NO_MARKED_TABLES, type MarkedHolds } from "./tables.js";
 
@@ -34,6 +34,16 @@ import { markOf, NO_MARKED_TABLES, type MarkedHolds } from "./tables.js";
 // bounded. And a step that sent the world nothing and has no line has an
 // exact empty path, since no trace of a step carries work it did not
 // send.
+//
+// A writer's own kind (`x_decision`) is in a path too, after the format's
+// kinds, counted by its kind and by the fields the project names
+// (`OwnFields`), each read at a dotted path (`x_result.features`), and
+// by nothing else. The format says a reader decides nothing on a writer's
+// own field, and a writer may put an id or a time in one, which would
+// make every run differ from the last: so a field counts only once the
+// project names it, as an intent row does (src/run/intent.ts), and a kind
+// no one names is counted by its kind alone. A named value is redacted as
+// every value the run keeps is, since a writer's field may carry anything.
 
 /** What a path keeps of one kind. */
 interface PathKindSpec<K extends EventKindName> {
@@ -61,6 +71,53 @@ export const PATH_KINDS = {
 
 export type PathKind = keyof typeof PATH_KINDS;
 
+/** A writer's own kind: a name with the format's extension prefix. */
+export type OwnKind = `x_${string}`;
+
+/** Whether a kind is a writer's own. */
+export function isOwnKind(kind: string): kind is OwnKind {
+  return kind.startsWith(EXTENSION_PREFIX) && kind.length > EXTENSION_PREFIX.length;
+}
+
+/** For each writer's own kind, the fields a path counts it by, each a
+ * dotted path into the line, every segment of which starts with `x_` at
+ * the top. A kind absent is counted by its kind alone. */
+export type OwnFields = ReadonlyMap<string, readonly string[]>;
+
+export const NO_OWN_FIELDS: OwnFields = new Map();
+
+/** How a path reads a writer's own kinds: the fields it counts each by,
+ * and how a value is redacted before it is kept. */
+export interface OwnReading {
+  readonly fields: OwnFields;
+  readonly redact: (value: unknown) => unknown;
+}
+
+const NO_OWN_READING: OwnReading = { fields: NO_OWN_FIELDS, redact: (value) => value };
+
+/** One entry of a writer's own kind: the kind, and each counted field's
+ * value at its dotted path, `null` where the line has none. */
+export type OwnKey = { readonly kind: OwnKind } & { readonly [field: `x_${string}`]: unknown };
+
+/** The value at a dotted path of a JSON object, `undefined` where it has
+ * none. */
+export function valueAt(object: Readonly<Record<string, unknown>>, field: string): unknown {
+  let value: unknown = object;
+  for (const segment of field.split(".")) {
+    if (value === null || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, segment)) return undefined;
+    value = (value as Readonly<Record<string, unknown>>)[segment];
+  }
+  return value;
+}
+
+/** The fields of a key, the format's kinds' in PATH_KINDS order, a
+ * writer's own in its key's order: each starts with `x_`, so an entry's
+ * count, or a difference's ranges, is never one. */
+export function keyFields(key: PathKey): readonly string[] {
+  if (isOwnKind(key.kind)) return Object.keys(key).filter((field) => field.startsWith(EXTENSION_PREFIX));
+  return PATH_KINDS[key.kind as PathKind].fields;
+}
+
 /** PATH_KINDS in its order: the rank of a difference. */
 export const PATH_KIND_ORDER = Object.keys(PATH_KINDS) as readonly PathKind[];
 
@@ -74,8 +131,12 @@ type KeyOf<K extends PathKind> = { readonly kind: K } & {
 };
 
 /** One thing a step's lines reported, by the fields its kind keeps, such
- * as `{ kind: "db", table: "scores", op: "insert" }`. */
-export type PathKey = { [K in PathKind]: KeyOf<K> }[PathKind];
+ * as `{ kind: "db", table: "scores", op: "insert" }`, or a writer's own
+ * kind by the fields the project names. */
+export type PathKey = { [K in PathKind]: KeyOf<K> }[PathKind] | OwnKey;
+
+/** A key of one of the format's kinds. */
+export type FormatKey = Exclude<PathKey, OwnKey>;
 
 export type PathEntry = PathKey & {
   /** Lines that reported it. For a flag, the evaluations; a flag
@@ -136,15 +197,30 @@ export function byGate(a: string | null, b: string | null): number {
 }
 
 /** A key as one text, the same for equal keys: what two paths are joined
- * by. */
+ * by. A writer's own key names its fields, since they are the project's
+ * and not the format's. */
 export function pathKeyText(key: PathKey): string {
-  const fields: readonly string[] = PATH_KINDS[key.kind].fields;
-  return JSON.stringify([key.kind, ...fields.map((field) => (key as unknown as Readonly<Record<string, unknown>>)[field])]);
+  const record = key as unknown as Readonly<Record<string, unknown>>;
+  if (isOwnKind(key.kind)) return JSON.stringify([key.kind, ...keyFields(key).flatMap((field) => [field, record[field]])]);
+  return JSON.stringify([key.kind, ...keyFields(key).map((field) => record[field])]);
 }
 
-/** The order of entries in a path: PATH_KINDS order, then by key. */
+/** Where a kind ranks: PATH_KINDS order, then every writer's own kind. */
+export function kindRank(kind: string): number {
+  return isOwnKind(kind) ? PATH_KIND_ORDER.length : PATH_KIND_ORDER.indexOf(kind as PathKind);
+}
+
+/** The order of entries in a path: PATH_KINDS order, then a writer's own
+ * kinds, then by key. */
 export function byPathKey(a: PathKey, b: PathKey): number {
-  return PATH_KIND_ORDER.indexOf(a.kind) - PATH_KIND_ORDER.indexOf(b.kind) || byText(pathKeyText(a), pathKeyText(b));
+  return kindRank(a.kind) - kindRank(b.kind) || byText(pathKeyText(a), pathKeyText(b));
+}
+
+/** The key a writer's own line counts toward, by the fields `reading`
+ * names for its kind. */
+function ownKeyOf(kind: OwnKind, object: Readonly<Record<string, unknown>>, reading: OwnReading): OwnKey {
+  const fields = reading.fields.get(kind) ?? [];
+  return Object.fromEntries([["kind", kind], ...[...fields].sort(byText).map((field) => [field, reading.redact(valueAt(object, field) ?? null)])]) as OwnKey;
 }
 
 /** The entry a line counts toward, or `undefined` for a line that is not
@@ -160,8 +236,9 @@ export function pathKeyOf(line: ReadableLine): PathKey | undefined {
 
 /** The key alone of an entry, without its count and gates. */
 function keyOnly(entry: PathKey): PathKey {
-  const fields: readonly string[] = PATH_KINDS[entry.kind].fields;
-  return Object.fromEntries([["kind", entry.kind], ...fields.map((field) => [field, (entry as unknown as Readonly<Record<string, unknown>>)[field]])]) as PathKey;
+  const record = entry as unknown as Readonly<Record<string, unknown>>;
+  const fields = keyFields(entry);
+  return Object.fromEntries([["kind", entry.kind], ...fields.map((field) => [field, record[field]])]) as PathKey;
 }
 
 /** The key of a served request. */
@@ -169,7 +246,7 @@ export function requestKey(request: ServedRequest): PathKey {
   return { kind: "request", method: request.method, route: request.route, status: request.status };
 }
 
-export function createPathFold(inputs: Omit<TallyInputs, "selections">): PathFold {
+export function createPathFold(inputs: Omit<TallyInputs, "selections">, own: OwnReading = NO_OWN_READING): PathFold {
   const tally = createTraceTally(inputs);
   const tables = inputs.tables ?? NO_MARKED_TABLES;
   const sent = new Map(inputs.spans.map((span, index) => [span, index]));
@@ -186,7 +263,7 @@ export function createPathFold(inputs: Omit<TallyInputs, "selections">): PathFol
         requests.push({ order, arrived: requests.length, request });
         return;
       }
-      const key = pathKeyOf(line);
+      const key = line.state === "extension" && isOwnKind(line.kind) ? ownKeyOf(line.kind, line.object, own) : pathKeyOf(line);
       if (key === undefined) return;
       const text = pathKeyText(key);
       const entry = counted.get(text) ?? { key, count: 0, gates: new Set() };
@@ -203,6 +280,7 @@ export function createPathFold(inputs: Omit<TallyInputs, "selections">): PathFol
       const entries = [...counted.values()]
         .sort((a, b) => byPathKey(a.key, b.key))
         .map(({ key, count, gates }): PathEntry => {
+          if (isOwnKind(key.kind)) return { ...key, count } as PathEntry;
           if (key.kind === "flag") return { ...key, count, gates: [...gates].sort(byGate) };
           const holds = key.kind === "db" ? markOf(tables, key.table) : undefined;
           return holds === undefined ? { ...key, count } : { ...key, count, holds };
@@ -239,9 +317,10 @@ export function holdsOn(path: StepPath, key: PathKey): MarkedHolds | undefined {
   return path.entries.find((entry) => pathKeyText(entry) === text)?.holds;
 }
 
-/** What PATH_KINDS says of a kind, apart from its fields. */
-export function kindRule(kind: PathKind): Omit<PathKindSpec<EventKindName>, "fields"> {
-  return PATH_KINDS[kind];
+/** What PATH_KINDS says of a kind, apart from its fields. A writer's own
+ * kind compares as a count and is never a pair's premise. */
+export function kindRule(kind: string): Omit<PathKindSpec<EventKindName>, "fields"> {
+  return isOwnKind(kind) ? { compare: "count" } : PATH_KINDS[kind as PathKind];
 }
 
 /** The gaps that leave a count on `path` unbounded: the trace's, except
@@ -262,6 +341,6 @@ export function rangeOn(path: StepPath, key: PathKey): CountRange {
   const gaps = boundingGaps(path);
   const bounded = gaps.length === 0 || (key.kind === "request" && gaps.every(({ gap }) => gap === "jobs-pending"));
   const range = { at_least: count, at_most: bounded ? count + path.maybe : null };
-  if (PATH_KINDS[key.kind].compare === "count") return range;
+  if (kindRule(key.kind).compare === "count") return range;
   return { at_least: Math.min(1, range.at_least), at_most: Math.min(1, range.at_most ?? 1) };
 }

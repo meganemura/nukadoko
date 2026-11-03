@@ -156,7 +156,9 @@ trace.
 - Write `null` only where "Kinds" allows it.
   Leave an optional field out when there is nothing to say.
 - A writer's own fields start with `x_`.
-  A reader keeps them and decides nothing on them.
+  A reader keeps them and decides nothing on them, except a field a
+  project names in its intent ([docs/intent.md](intent.md)), which
+  `nuka run --base` compares between the base and the change.
   A field that is neither defined here nor starts with `x_` is a
   mistake; a reader may report it.
 - A writer's own kinds start with `x_` too, with the same rule.

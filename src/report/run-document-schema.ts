@@ -2,7 +2,7 @@ import { z } from "zod";
 import { GROUP_FIELDS } from "../execution-events/counted.js";
 import { MARKED_HOLDS, type MarkedHolds } from "../execution-events/tables.js";
 import type { EventKindName } from "../execution-events/format.js";
-import { PATH_KIND_ORDER, PATH_KINDS, type PathKind } from "../execution-events/path.js";
+import { isOwnKind, PATH_KIND_ORDER, PATH_KINDS, type PathKind } from "../execution-events/path.js";
 import { GAP_WORDS } from "../execution-events/tally.js";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { RunDocument } from "../record/run-result.js";
@@ -188,11 +188,14 @@ const eventsRead = z.looseObject({
 
 // A step's path (src/execution-events/path.ts): the summary counts by
 // kind what a step that ran on one side only did there.
-const pathKind = z.enum(PATH_KIND_ORDER as unknown as [PathKind, ...PathKind[]]);
+// A writer's own kind's fields hold any JSON value its line did.
+const pathKind = z.union([z.enum(PATH_KIND_ORDER as unknown as [PathKind, ...PathKind[]]), z.string().refine(isOwnKind)]);
 const pathValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
-const pathKey = z.looseObject({ kind: pathKind }).refine((key) => PATH_KINDS[key.kind].fields.every((field) => pathValue.safeParse((key as Record<string, unknown>)[field]).success), {
-  message: "an entry of a path holds each field its kind keeps",
-});
+const pathKey = z
+  .looseObject({ kind: pathKind })
+  .refine((key) => isOwnKind(key.kind) || PATH_KINDS[key.kind as PathKind].fields.every((field) => pathValue.safeParse((key as Record<string, unknown>)[field]).success), {
+    message: "an entry of a path holds each field its kind keeps",
+  });
 const stepPath = z.looseObject({
   requests: z.array(z.looseObject({ method: z.string(), route: z.string().nullable(), status: z.number().int() })),
   entries: z.array(z.intersection(pathKey, z.looseObject({ count: z.number().int().min(1) }))),
@@ -424,7 +427,7 @@ const pathSide = z.looseObject({ world: worldName, environment: z.string() });
 const pathExecution = z
   .looseObject({ scenario_record_id: z.string(), outcome: z.enum(["pass", "fail", "broke", "stopped", "flaky", "not-run"]), line: z.number().int().optional() })
   .refine((side) => side.outcome === "pass" || side.outcome === "not-run" || side.line !== undefined, { message: "a side that did not pass names the line it stopped at", path: ["line"] });
-const pathDifference = z.intersection(pathKey, z.looseObject({ a: countRange, b: countRange }));
+const pathDifference = z.intersection(pathKey, z.looseObject({ intent: z.number().int().min(1).optional(), a: countRange, b: countRange }));
 const pathStep = z.union([
   z.looseObject({
     line: z.number().int().nullable(),
@@ -453,7 +456,7 @@ const pathComparison = z.looseObject({
       name: z.string(),
       result: z.enum(["changed", "open", "same_so_far", "marked_only", "same"]),
       // A run.json an earlier build wrote has no `explained_by`.
-      explained_by: z.literal("criterion_change").nullable().optional(),
+      explained_by: z.enum(["intent", "criterion_change"]).nullable().optional(),
       a: pathExecution,
       b: pathExecution,
       steps: z.array(pathStep).optional(),
@@ -524,6 +527,30 @@ const document = z.looseObject({
   flags: z.array(flagRow).optional(),
   routes: z.array(route).optional(),
   paths: z.array(pathComparison).optional(),
+  // The change's intent (src/run/intent-file.ts): the summary reads how
+  // it was declared and what each row came to.
+  intent: z
+    .looseObject({
+      file: z.string(),
+      declared_in: z.looseObject({ commit: z.string(), subject: z.string(), first: z.boolean() }).nullable(),
+      changed_after: z.array(z.looseObject({ commit: z.string(), subject: z.string() })),
+      uncommitted: z.boolean(),
+      problems: z.array(z.looseObject({ line: z.number().int().nullable(), message: z.string() })),
+      rows: z.array(
+        z.looseObject({
+          row: z.number().int().min(1),
+          line: z.number().int().min(1),
+          target: z.string(),
+          observation: z.string(),
+          before: z.string(),
+          after: z.string(),
+          result: z.enum(["as_intended", "not_happening", "not_reached"]),
+          as_intended: z.array(z.looseObject({ feature: z.string(), line: z.number().int() })),
+          not_happening: z.array(z.looseObject({ feature: z.string(), line: z.number().int() })),
+        }),
+      ),
+    })
+    .optional(),
   walk: z
     .looseObject({
       pauses: z.array(

@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_PROOF_RUNS } from "../condition/condition.js";
 import type { CountRange } from "../execution-events/count.js";
-import { byGate, kindRule, PATH_KIND_ORDER, requestKey, type PathKey, type PathKind } from "../execution-events/path.js";
+import { byGate, isOwnKind, keyFields, kindRank, kindRule, PATH_KIND_ORDER, requestKey, type FormatKey, type PathKey, type PathKind } from "../execution-events/path.js";
 import type { TraceGap } from "../execution-events/tally.js";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
@@ -22,6 +22,7 @@ import {
   type RunTableCell,
   type RunTableRow,
   type RunWorld,
+  type RunIntentRow,
 } from "../record/run-result.js";
 import type { MeasuredChannel, PageRequestRecord } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
@@ -487,8 +488,26 @@ function programCode(value: string | number | boolean | null): string {
   return codeSpan(programWord(String(value)));
 }
 
-// What one entry of a path is, the program's own words in code spans.
+// A writer's own kind is named by itself, since the format has no word
+// for it.
+function kindWords(kind: string): string {
+  return isOwnKind(kind) ? programCode(kind) : PATH_KIND_WORDS[kind as PathKind][1];
+}
+
+// A field of a writer's own key with its value, as an intent row's
+// observation writes it (src/run/intent.ts): `x_result.features=["sso"]`.
+function ownFieldText(key: PathKey, field: string): string {
+  return programCode(`${field}=${JSON.stringify((key as unknown as Readonly<Record<string, unknown>>)[field])}`);
+}
+
+// What one entry of a path is, the program's own words in code spans. A
+// writer's own entry is its fields alone, since its kind names the group.
 function pathEntryText(key: PathKey): string {
+  if (isOwnKind(key.kind)) return keyFields(key).map((field) => ownFieldText(key, field)).join(" ");
+  return formatEntryText(key as FormatKey);
+}
+
+function formatEntryText(key: FormatKey): string {
   switch (key.kind) {
     case "error":
       return `${programCode(key.class)} ${key.handled ? "handled" : "unhandled"}`;
@@ -520,7 +539,33 @@ function seenWords(range: CountRange): string {
 function differenceText(difference: RunPathDifference): string {
   const words = kindRule(difference.kind).compare === "seen" ? seenWords : rangeWords;
   const holds = difference.holds === undefined ? "" : ` (${difference.holds})`;
-  return `${pathEntryText(difference)} ${words(difference.a)} → ${words(difference.b)}${holds}`;
+  const entry = pathEntryText(difference);
+  return `${entry === "" ? "" : `${entry} `}${words(difference.a)} → ${words(difference.b)}${holds}${intentText(difference)}`;
+}
+
+// Against the base, the intent row that declares a difference.
+function intentText(difference: RunPathDifference): string {
+  return difference.intent === undefined ? "" : ` (intent row ${difference.intent})`;
+}
+
+// A writer's own value that changed reads as one difference: the fields
+// that stayed, then the one that changed, old then new, when exactly one
+// entry went, one came, as many as went, and they differ in one field.
+function ownTexts(differences: readonly RunPathDifference[]): string[] {
+  const [one, other] = differences;
+  if (differences.length === 2 && one !== undefined && other !== undefined) {
+    const exact = (range: CountRange): boolean => range.at_most === range.at_least;
+    const [gone, came] = one.b.at_most === 0 ? [one, other] : [other, one];
+    const record = (difference: RunPathDifference): Readonly<Record<string, unknown>> => difference as unknown as Readonly<Record<string, unknown>>;
+    const differ = keyFields(gone).filter((field) => JSON.stringify(record(gone)[field]) !== JSON.stringify(record(came)[field]));
+    if (gone.b.at_most === 0 && came.a.at_most === 0 && exact(gone.a) && exact(came.b) && gone.a.at_least === came.b.at_least && differ.length === 1 && gone.intent === came.intent) {
+      const field = differ[0]!;
+      const stayed = keyFields(gone).filter((name) => name !== field).map((name) => `${ownFieldText(gone, name)} `).join("");
+      const value = (difference: RunPathDifference): string => programCode(JSON.stringify(record(difference)[field]));
+      return [`${stayed}${programCode(field)} ${value(gone)} → ${value(came)}${gone.a.at_least === 1 ? "" : ` ${gone.a.at_least} times`}${intentText(gone)}`];
+    }
+  }
+  return differences.map(differenceText);
 }
 
 // A difference on a table the program marks as bookkeeping or
@@ -548,6 +593,7 @@ function switchTexts<D extends RunPathDifference>(differences: readonly D[], gro
 }
 
 function kindTexts(differences: readonly RunPathDifference[]): string[] {
+  if (differences.some((difference) => isOwnKind(difference.kind))) return ownTexts(differences);
   const requests = differences.filter((difference): difference is DifferenceOf<"request"> => difference.kind === "request");
   const flags = differences.filter((difference): difference is DifferenceOf<"flag"> => difference.kind === "flag");
   return [
@@ -559,10 +605,13 @@ function kindTexts(differences: readonly RunPathDifference[]): string[] {
 
 // The differences of one step by kind, in rank order: `writes \`rooms\` update 0 → 1; requests ...`.
 function differencesText(differences: readonly RunPathDifference[]): string {
-  return PATH_KIND_ORDER.flatMap((kind) => {
-    const of = differences.filter((difference) => difference.kind === kind);
-    return of.length === 0 ? [] : [`${PATH_KIND_WORDS[kind][1]} ${kindTexts(of).join(", ")}`];
-  }).join("; ");
+  const kinds = [...new Set(differences.map((difference) => difference.kind))].sort((a, b) => kindRank(a) - kindRank(b) || (a < b ? -1 : a > b ? 1 : 0));
+  return kinds
+    .map((kind) => {
+      const texts = kindTexts(differences.filter((difference) => difference.kind === kind));
+      return `${kindWords(kind)} ${texts.join(", ")}`;
+    })
+    .join("; ");
 }
 
 function gapWords(gaps: readonly TraceGap[]): string {
@@ -601,7 +650,7 @@ interface PathReading {
   readonly sideWhere: (side: "a" | "b") => string;
   /** Whether a kind is compared in this pair: the premise of a pair of
    * environments is not. */
-  readonly compared: (kind: PathKind) => boolean;
+  readonly compared: (kind: string) => boolean;
 }
 
 function pathReading(comparison: RunPathComparison, scenarios: ReadonlyMap<string, RunScenario>): PathReading {
@@ -617,9 +666,9 @@ function pathReading(comparison: RunPathComparison, scenarios: ReadonlyMap<strin
 
 // What the steps that ran on one side only did there, counted by kind in
 // rank order: `2 writes, 1 request`. A step with no path adds nothing.
-function oneSideKinds(reading: PathReading, criterion: RunPathCriterion, steps: readonly RunPathStep[], side: "a" | "b"): Map<PathKind, number> {
+function oneSideKinds(reading: PathReading, criterion: RunPathCriterion, steps: readonly RunPathStep[], side: "a" | "b"): Map<string, number> {
   const scenario = reading.scenarios.get(criterion[side].scenario_record_id);
-  const counts = new Map<PathKind, number>();
+  const counts = new Map<string, number>();
   for (const step of steps) {
     const found = scenario?.steps.find((entry) => entry.line === step.line && entry.text === step.text)?.path;
     if (found === undefined) continue;
@@ -656,7 +705,9 @@ function criterionLines(reading: PathReading, criterion: RunPathCriterion): stri
     const stopped = criterion[other];
     const where = stopped.line === undefined ? `, since ${reading.sideName(other)} did not run ${oneSide.length === 1 ? "it" : "them"}` : `, since ${reading.sideName(other)} stopped at line ${stopped.line} (${codeSpan(cellWord(stopped))})`;
     const counts = oneSideKinds(reading, criterion, oneSide, ran);
-    const did = PATH_KIND_ORDER.flatMap((kind) => (counts.has(kind) ? [countOf(counts.get(kind)!, ...PATH_KIND_WORDS[kind])] : []));
+    const did = [...counts.keys()]
+      .sort((a, b) => kindRank(a) - kindRank(b) || (a < b ? -1 : 1))
+      .map((kind) => (isOwnKind(kind) ? `${counts.get(kind)!} ${programCode(kind)}` : countOf(counts.get(kind)!, ...PATH_KIND_WORDS[kind as PathKind])));
     lines.push(`  - ${lineWords(oneSide.map((step) => step.line))} ran only ${reading.sideWhere(ran)}${where}: ${did.length === 0 ? "no execution event" : did.join(", ")}`);
   }
   return lines;
@@ -679,7 +730,7 @@ function pathRank(reading: PathReading, criterion: RunPathCriterion): number {
     ...steps.flatMap((step) => (step.ran === "both" ? step.changed.filter((difference) => !isMarked(difference)).map((difference) => difference.kind) : [])),
     ...(oneSide.length === 0 ? [] : [...oneSideKinds(reading, criterion, oneSide, oneSide[0]!.ran as "a" | "b").keys()]),
   ];
-  return Math.min(PATH_KIND_ORDER.length, ...kinds.map((kind) => PATH_KIND_ORDER.indexOf(kind)));
+  return Math.min(PATH_KIND_ORDER.length + 1, ...kinds.map(kindRank));
 }
 
 function conditionValue(value: boolean | string | null): string {
@@ -711,15 +762,20 @@ function resultRank(result: RunPathCriterion["result"]): number {
 // they are listed: what nothing in the feature files accounts for first,
 // since a refactor must have none and a reader is sent there; then what a
 // person approves new sentences for; then what may still read the same.
+// With an intent, the rows it declares account for a difference before a
+// criterion's own sentences do, and what neither declares is read first.
 const BASE_GROUPS = [
   "Unchanged criteria that did something else at head, which nothing in the feature files asks for:",
+  "Criteria whose differences the intent declares:",
   "New or changed criteria, whose new sentences account for what they do differently:",
   "Criteria that may differ:",
 ] as const;
+const BASE_GROUP_UNDECLARED = "Unchanged criteria that did something else at head, which neither the intent nor the feature files ask for:";
 
 function baseGroup(criterion: RunPathCriterion): number {
-  if (criterion.result !== "changed") return 2;
-  return criterion.explained_by === null ? 0 : 1;
+  if (criterion.result !== "changed") return 3;
+  if (criterion.explained_by === null) return 0;
+  return criterion.explained_by === "intent" ? 1 : 2;
 }
 
 // Against the base, what the unchanged criteria came to, each once, as
@@ -815,7 +871,7 @@ function renderPathSection(document: RunDocument, comparisons: readonly RunPathC
     const { criterion, lines: said, environments } = item;
     if (base && group(item) !== shownGroup) {
       shownGroup = group(item);
-      lines.push("", BASE_GROUPS[shownGroup]!, "");
+      lines.push("", shownGroup === 0 && document.intent !== undefined ? BASE_GROUP_UNDECLARED : BASE_GROUPS[shownGroup]!, "");
     }
     const head = `- ${cellCode(place(criterion))} ${cellText(criterion.name)}${read.length > 1 ? `, in ${named(environments)}` : ""}`;
     lines.push(...(criterion.result === "same_so_far" ? [`${head}: ${said[0]}`] : [head, ...said]));
@@ -829,6 +885,67 @@ function renderPathSection(document: RunDocument, comparisons: readonly RunPathC
     }
     if (aside.length > PATHS_SHOWN) lines.push(`- and ${aside.length - PATHS_SHOWN} more in run.json's \`paths\``);
   }
+  return lines;
+}
+
+// The words of a row's result, as the intent's readers use them.
+const INTENT_RESULTS: Readonly<Record<RunIntentRow["result"], string>> = {
+  as_intended: "as intended",
+  not_happening: "intended but not happening",
+  not_reached: "not reached by the scenarios compared",
+};
+
+// What a row declares, its cells as written.
+function intentRowText(row: RunIntentRow): string {
+  const target = row.target === "" ? "every criterion" : codeSpan(row.target);
+  const change = row.before === "" ? "no change" : `${codeSpan(row.before)} → ${codeSpan(row.after)}`;
+  return `row ${row.row} ${target} ${codeSpan(row.observation)}: ${change}`;
+}
+
+// run.json's `intent`, for the person who approves the change: when it
+// was declared and whether it moved since, and what each row came to.
+// Each criterion with a difference no row declares is listed under
+// "Changed paths", so this section counts them and does not repeat them.
+function renderIntent(document: RunDocument): string[] {
+  const { intent } = document;
+  if (intent === undefined) return [];
+  const file = codeSpan(intent.file);
+  const commit = (entry: { readonly commit: string; readonly subject: string }): string => `${codeSpan(entry.commit.slice(0, 12))} (${cellText(entry.subject)})`;
+  const declared =
+    intent.declared_in === null
+      ? `${file} is declared in the working tree alone, in no commit since the base.`
+      : `${file} was declared in ${commit(intent.declared_in)}, ${intent.declared_in.first ? "the change's first commit" : "after the change's first commit, so the work it judges began before it"}.`;
+  const lines = ["", "## Intent", "", declared];
+  if (intent.changed_after.length > 0) lines.push(`It changed after that in ${intent.changed_after.map(commit).join(", ")}: the change of intent is part of what is approved.`);
+  if (intent.uncommitted) lines.push(`The working tree's ${file} differs from the one at HEAD, and the run read the working tree's.`);
+  const said = (["as_intended", "not_happening", "not_reached"] as const).flatMap((result) => {
+    const n = intent.rows.filter((row) => row.result === result).length;
+    return n === 0 ? [] : [`${n} ${INTENT_RESULTS[result]}`];
+  });
+  lines.push("", intent.rows.length === 0 ? "It declares no row: nothing the criteria do is meant to change." : `${countOf(intent.rows.length, "row", "rows")}: ${said.join(", ")}.`);
+  const places = (list: readonly { readonly feature: string; readonly line: number }[]): string => list.map((entry) => cellCode(`${entry.feature}:${entry.line}`)).join(", ");
+  if (intent.rows.length > 0) lines.push("");
+  for (const row of intent.rows) {
+    const parts = [
+      ...(row.not_happening.length > 0 ? [`${INTENT_RESULTS.not_happening} in ${places(row.not_happening)}`] : []),
+      ...(row.as_intended.length > 0 ? [`${INTENT_RESULTS.as_intended} in ${places(row.as_intended)}`] : []),
+      ...(row.result === "not_reached" ? [INTENT_RESULTS.not_reached] : []),
+    ];
+    lines.push(`- ${intentRowText(row)}; ${parts.join("; ")}`);
+  }
+  if (intent.problems.length > 0) {
+    lines.push("", `What ${file} holds that could not be read as a row:`, "");
+    for (const problem of intent.problems) lines.push(`- ${problem.line === null ? "the file" : `line ${problem.line}`}: ${problem.message}`);
+  }
+  const undeclared = new Set(
+    (document.paths ?? []).flatMap((comparison) => (comparison.between.kind === "base" ? comparison.criteria.filter((criterion) => criterion.explained_by === null).map((criterion) => `${criterion.feature}:${criterion.line}`) : [])),
+  );
+  lines.push(
+    "",
+    undeclared.size === 0
+      ? "No criterion compared with the base did anything the change does not declare."
+      : `${countOf(undeclared.size, "criterion", "criteria")} compared with the base did something the change does not declare, listed first under "Changed paths".`,
+  );
   return lines;
 }
 
@@ -1249,6 +1366,7 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderLimits(document),
     ...renderCondition(document),
     ...renderRemoved(document),
+    ...renderIntent(document),
     ...renderPaths(document),
     ...renderFlags(document),
     ...renderRoutes(document),

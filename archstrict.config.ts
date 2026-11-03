@@ -323,6 +323,8 @@ export default {
         "flag-rows.ts",
         "route-rows.ts",
         "path-view.ts",
+        "intent-file.ts",
+        "intent-view.ts",
         "match-step.ts",
         "probe-git.ts",
         "verdict-table.ts",

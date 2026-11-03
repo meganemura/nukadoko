@@ -9,6 +9,35 @@ just until 0.1.
 
 ### Added
 
+- **A change declares what it means to do differently, and `nuka run
+  --base` checks each path difference against it.** "Changed paths" said
+  what the program did differently at head, but only a criterion whose
+  sentences changed had an account (`explained_by: criterion_change`);
+  every other difference, including a refactor's and a planted side
+  effect's, was `null` and left to a person to read. `INTENT.md` at the
+  repository's top now holds one Markdown table, `| Target | Observation
+  | Before | After |`, written in the change's first commit and approved
+  as written: each row says that for the lines its target names (`@tag`
+  terms and `field<op>value` terms read on the observed line), the
+  observation (a kind of execution event, terms that narrow it, and at
+  most one field whose value is observed) goes from before to after, as
+  a count or as a value, and a row with both empty says it does not
+  change. The format is in `docs/intent.md`, written so another tool can
+  read the same file. A run under `--base` reads the file when the base
+  does not hold the same text. Each difference a row declares carries
+  `intent: <row>`, a criterion every one of whose differences is declared
+  has `explained_by: "intent"`, and run.json's new `intent` names the
+  commit that declared the file, whether it was the change's first, each
+  later commit that changed it, and each row's result (`as_intended`,
+  `not_happening`, or `not_reached` when no compared criterion is aimed at
+  it). The findings `intent-unintended`, `intent-not-happening`, and
+  `intent-unread` fail the run; a `not_reached` row fails nothing. The
+  summary gains an "Intent" section and lists the undeclared differences
+  first. A writer's own kinds (`x_...`) now take part in paths: counted
+  by kind alone, or by the `x_` fields an intent row names, with the
+  values redacted like every other recorded value, so a decision the
+  application logs as its own event can be what a row observes.
+
 - **`nuka verdict` says whether the newest run speaks for the working tree
   you have.** run.json's `commit` said whether the tree had uncommitted
   changes, and `dirty: true` is the same for every edit, so a later reader
