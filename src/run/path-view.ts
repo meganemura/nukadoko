@@ -56,6 +56,16 @@ import type {
 // reader is sent to what the criteria are about first, and a criterion
 // whose only differences are on marked tables is `marked_only`, never
 // `same`: something did differ.
+//
+// Against the base, a criterion that changed says what accounts for its
+// difference. On a new or changed criterion, a person approves new
+// sentences with the change, and those are the account. On an unchanged
+// one, nothing in the feature files asked for it: it is either a change
+// the author meant without saying so in a sentence, or the regression a
+// refactor must not have, and either way the one a reader is sent to
+// first. Only a `changed` criterion needs an account: an open one could
+// still read the same, and one whose differences are all on marked tables
+// is bookkeeping no sentence is about.
 
 type ComparedDocument = Pick<RunDocument, "scenarios" | "table" | "environments" | "worlds">;
 
@@ -183,6 +193,12 @@ function stepDifference(a: StepPath, b: StepPath, compared: (kind: PathKind) => 
 
 type Compared = { readonly criterion: RunPathCriterion } | { readonly reason: string };
 
+/** What accounts for a changed criterion's difference against the base,
+ * by how its row compares with the base (module header). */
+function explanationOf(change: RunTableRow["change"]): NonNullable<RunPathCriterion["explained_by"]> | null {
+  return change === "new" || change === "changed" ? "criterion_change" : null;
+}
+
 type Side = NonNullable<ReturnType<typeof sideOf>>;
 
 function compareCriterion(pair: Pair, row: RunTableRow, sides: readonly [Side, Side], compared: (kind: PathKind) => boolean): Compared {
@@ -223,6 +239,7 @@ function compareCriterion(pair: Pair, row: RunTableRow, sides: readonly [Side, S
       line: row.line,
       name: row.name,
       result,
+      ...(pair.between.kind === "base" && result === "changed" ? { explained_by: explanationOf(row.change) } : {}),
       a: sides[0].execution,
       b: sides[1].execution,
       ...(result === "same" ? {} : { steps }),

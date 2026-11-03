@@ -7,6 +7,22 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **Against the base, a changed path says what accounts for it.** Under
+  `nuka run --base`, each criterion of a base pair in run.json's `paths`
+  whose `result` is `changed` now has `explained_by`: `criterion_change`
+  when the criterion is new or changed, so a person approves new
+  sentences for it, and `null` when it is unchanged, so nothing in the
+  feature files asked for what it did differently. The summary's
+  `base → head` heading adds a line that counts the unchanged criteria
+  compared, `Each of the 2 unchanged criteria compared did the same at
+  the base and at head.` when each did, and lists the changed criteria in
+  groups, each under a line of its own: the unchanged ones first, then
+  the new or changed ones, then those that may differ. A refactor's
+  reader finds its evidence, or the criteria that break it, without
+  reading every difference.
+
 ## 0.25.0 — 2026-11-02
 
 ### Added

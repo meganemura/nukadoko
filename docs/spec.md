@@ -4642,7 +4642,7 @@ exactly one condition, the two are a pair.
     "counts": { "changed": 2, "open": 0, "same_so_far": 0, "marked_only": 0, "same": 0, "not_compared": 0 },
     "criteria": [
       {
-        "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed",
+        "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed", "explained_by": null,
         "a": { "scenario_record_id": "scn-20261029-225441-w8hc", "outcome": "pass" },
         "b": { "scenario_record_id": "scn-20261029-225435-t3mv", "outcome": "pass" },
         "steps": [
@@ -4651,7 +4651,7 @@ exactly one condition, the two are a pair.
         ]
       },
       {
-        "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed",
+        "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed", "explained_by": "criterion_change",
         "a": { "scenario_record_id": "scn-20261029-225440-n2kq", "outcome": "pass" },
         "b": { "scenario_record_id": "scn-20261029-225436-c7rd", "outcome": "pass" },
         "steps": [
@@ -4737,6 +4737,21 @@ exactly one condition, the two are a pair.
   own `path`.
   `steps` holds only the steps with a difference, and a `same`
   criterion has none.
+- Against the base, a `changed` criterion has `explained_by`, what
+  accounts for its difference.
+  `criterion_change`: the criterion is `new` or `changed`, so a person
+  approves new sentences for it with the change, and those sentences are
+  what the change means it to do.
+  `null`: it is `unchanged`, so nothing in the feature files asked for
+  what it did differently.
+  That is either a change the author meant without a sentence that says
+  so, or a regression, and a refactor, whose criteria all stay
+  `unchanged`, must have none.
+  Only a `changed` criterion has the field: an `open` one could still
+  read the same, and a `marked_only` one differs only where no sentence
+  is about.
+  A pair of environments has no such field, since no sentence changed
+  between its sides.
 - A flag's side is what a pair of environments switches, not a change,
   so no `flag` entry is compared there: the summary's heading names the
   condition.
@@ -4767,6 +4782,17 @@ changed or is open, at most 20 per heading.
 Under `base → head`, a criterion with the same lines in several
 environments is listed once, naming them, and a flag whose side changed
 reads as one difference, such as ``flags `quick_reorder` `off` → `on` ``.
+Under `base → head` too, a second line counts the `unchanged` criteria
+compared, each once, as what it came to where it says the most.
+When each is `same`, the line says so, `Each of the 2 unchanged
+criteria compared did the same at the base and at head.`, the sentence a
+refactor's reader looks for.
+The listed criteria fall in three groups, each under a line of its own,
+in this order: the `unchanged` criteria that changed (`explained_by:
+null`), then the `new` or `changed` ones that changed, and then those
+that may differ (`open` and the same so far).
+So what nothing in the feature files accounts for is read first, and
+what a person approves new sentences for is read apart from it.
 A criterion is ranked by the highest kind among its changed entries and
 what its one-side steps did, in the order errors, writes, outgoing
 calls, jobs, requests, flags, and then by the table's order.
@@ -4784,9 +4810,15 @@ infrastructure writes`:
 ### base → head
 
 2 criteria compared: 2 changed.
+Of the 1 unchanged criterion compared, 1 changed.
+
+Unchanged criteria that did something else at head, which nothing in the feature files asks for:
 
 - `features/orders.feature:3` a room page reads the room, in `reorder-off`, `reorder-on`
   - line 4 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1
+
+New or changed criteria, whose new sentences account for what they do differently:
+
 - `features/orders.feature:6` a score is placed, in `reorder-off`, `reorder-on`
   - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1
 

@@ -434,6 +434,8 @@ const pathComparison = z.looseObject({
       line: z.number().int(),
       name: z.string(),
       result: z.enum(["changed", "open", "same_so_far", "marked_only", "same"]),
+      // A run.json an earlier build wrote has no `explained_by`.
+      explained_by: z.literal("criterion_change").nullable().optional(),
       a: pathExecution,
       b: pathExecution,
       steps: z.array(pathStep).optional(),

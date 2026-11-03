@@ -97,8 +97,12 @@ config's fixtures or parameter types, an environment's conditions.
   on stderr; no cell, no proof runs), and `paths` pairs each environment's
   base with its head, step by step: "Changed paths" lists under
   `base → head` what the program does differently at head, the criteria
-  that did not change included. Tell the person; it is evidence. A write
-  to a table `lists.tables` marks as bookkeeping or infrastructure is
+  that did not change included. A changed criterion there has
+  `explained_by`, `criterion_change` when its sentences are new or
+  changed and `null` when not; the summary lists the `null` ones first, and says when every
+  unchanged criterion did the same. Tell the person; it is evidence, and
+  a `null` one is the first thing to read. A write to a table
+  `lists.tables` marks as bookkeeping or infrastructure is
   listed after the rest (`holds`; `marked_only` when it is all that
   differs): no sentence is about it, but another reader of that table,
   such as a guard on telemetry, may be.

@@ -401,6 +401,7 @@ describe("comparePaths against the base", () => {
           line: 3,
           name: "a reorder goes through",
           result: "changed",
+          explained_by: "criterion_change",
           a: { scenario_record_id: "scn-base-reorder-off-3", outcome: "broke", line: 4 },
           b: { scenario_record_id: "scn-reorder-off-3", outcome: "pass" },
           steps: [
@@ -466,6 +467,7 @@ describe("comparePaths against the base", () => {
         line: 7,
         name: "an order is opened",
         result: "changed",
+        explained_by: null,
         a: { scenario_record_id: "scn-base-reorder-off-7", outcome: "broke", line: 8 },
         b: { scenario_record_id: "scn-reorder-off-7", outcome: "pass" },
         steps: [{ line: 9, text: "step 2", ran: "b" }],
@@ -473,6 +475,34 @@ describe("comparePaths against the base", () => {
     ]);
     expect(on).toMatchObject({ counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 1, not_compared: 0 }, criteria: [{ line: 7, result: "same", a: { outcome: "pass" } }] });
   });
+
+  it("says what accounts for a changed criterion's difference only against the base: its new sentences when it is new or changed, and nothing when it is unchanged", () =>
+    hegel.test((tc) => {
+      const changes = ["unchanged", "changed", "new"] as const;
+      const count = tc.draw(gs.integers({ minValue: 1, maxValue: 3 }));
+      const criteria = Array.from({ length: count }, (_, index): BaseCriterion => {
+        const head = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 2 }));
+        const atBase = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 2 }));
+        return {
+          line: 3 + index * 4,
+          name: `criterion ${index}`,
+          steps: Math.max(head.length, atBase.length),
+          change: changes[tc.draw(gs.integers({ minValue: 0, maxValue: 2 }))]!,
+          sides: { "reorder-off": { paths: head }, "reorder-on": { paths: head } },
+          base: { "reorder-off": { paths: atBase }, "reorder-on": { paths: atBase } },
+        };
+      });
+      for (const comparison of comparePaths(baseDocumentOf(criteria))) {
+        for (const criterion of comparison.criteria) {
+          if (comparison.between.kind === "condition" || criterion.result !== "changed") {
+            expect(criterion).not.toHaveProperty("explained_by");
+            continue;
+          }
+          const change = criteria.find((entry) => entry.line === criterion.line)!.change;
+          expect(criterion.explained_by).toBe(change === "unchanged" ? null : "criterion_change");
+        }
+      }
+    }));
 
   it("reads a base world that did not start in an environment as each of its criteria not run at the base", () => {
     const [off] = comparePaths(baseDocumentOf([opened()], [OFF, ON], [world("reorder-off"), world("reorder-on")]));
@@ -596,6 +626,8 @@ describe("the Changed paths section of the summary", () => {
       "",
       "2 criteria compared: 2 changed. 1 criterion did not run at the base, so its path was not compared.",
       "",
+      "New or changed criteria, whose new sentences account for what they do differently:",
+      "",
       "- `features/orders.feature:10` a receipt goes out, in `reorder-on`",
       "  - line 11 `step 1`: errors `Timeout` handled 0 → 1",
       "- `features/orders.feature:3` a reorder goes through, in `reorder-off`, `reorder-on`",
@@ -662,6 +694,81 @@ describe("the Changed paths section of the summary", () => {
       "",
     ]);
   });
+
+  it("lists against the base an unchanged criterion that changed first, under its own line, apart from a new or changed one, and counts the unchanged criteria", () => {
+    const room: BaseCriterion = {
+      ...opened(),
+      sides: { "reorder-off": { paths: [whole({ entries: [{ kind: "db", table: "rooms", op: "update", count: 2 }] })] }, "reorder-on": { paths: [whole({ entries: [{ kind: "db", table: "rooms", op: "update", count: 2 }] })] } },
+      base: { "reorder-off": { paths: [whole({ entries: [{ kind: "db", table: "rooms", op: "update", count: 1 }] })] }, "reorder-on": { paths: [whole({ entries: [{ kind: "db", table: "rooms", op: "update", count: 1 }] })] } },
+    };
+    const same: BaseCriterion = { ...opened(), line: 12, name: "a receipt is read", base: { "reorder-off": { paths: [whole()] }, "reorder-on": { paths: [whole()] } } };
+    const lines = section(baseDocumentOf([placed(), room, same]));
+    expect(lines[2]).toMatch(/ Against the base, an unchanged criterion that changed comes first, apart from a new or changed one, whose new sentences account for its difference\.$/);
+    expect(lines.slice(4, lines.indexOf("### `reorder-off` → `reorder-on` (`quick_reorder` false → true)"))).toEqual([
+      "### base → head",
+      "",
+      "3 criteria compared: 2 changed, 1 the same.",
+      "Of the 2 unchanged criteria compared, 1 changed, 1 the same.",
+      "",
+      "Unchanged criteria that did something else at head, which nothing in the feature files asks for:",
+      "",
+      "- `features/orders.feature:7` an order is opened, in `reorder-off`, `reorder-on`",
+      "  - line 8 `step 1`: writes `rooms` update 1 → 2",
+      "",
+      "New or changed criteria, whose new sentences account for what they do differently:",
+      "",
+      "- `features/orders.feature:3` a reorder goes through, in `reorder-off`, `reorder-on`",
+      "  - line 4 `step 1`: flags `quick_reorder` `off` → `on`",
+      "  - line 5 ran only at head, since the base stopped at line 4 (`broke@4`): 1 write",
+      "",
+    ]);
+  });
+
+  it("says against the base when every unchanged criterion compared did the same, and lists none of them", () => {
+    const same = (line: number): BaseCriterion => ({ ...opened(), line, name: `criterion at ${line}`, base: { "reorder-off": { paths: [whole()] }, "reorder-on": { paths: [whole()] } } });
+    expect(section(baseDocumentOf([same(3), same(7)])).slice(4, 9)).toEqual([
+      "### base → head",
+      "",
+      "2 criteria compared: 2 the same.",
+      "Each of the 2 unchanged criteria compared did the same at the base and at head.",
+      "",
+    ]);
+    expect(section(baseDocumentOf([same(3)]))[7]).toBe("The 1 unchanged criterion compared did the same at the base and at head.");
+  });
+
+  it("never lists against the base a new or changed criterion before an unchanged one that changed", () =>
+    hegel.test((tc) => {
+      const changes = ["unchanged", "changed", "new"] as const;
+      const count = tc.draw(gs.integers({ minValue: 1, maxValue: 4 }));
+      const criteria = Array.from({ length: count }, (_, index): BaseCriterion => {
+        const head = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 2 }));
+        const atBase = tc.draw(gs.arrays(stepPath, { minSize: 1, maxSize: 2 }));
+        return {
+          line: 3 + index * 4,
+          name: `criterion ${index}`,
+          steps: Math.max(head.length, atBase.length),
+          change: changes[tc.draw(gs.integers({ minValue: 0, maxValue: 2 }))]!,
+          sides: { "reorder-off": { paths: head }, "reorder-on": { paths: head } },
+          base: { "reorder-off": { paths: atBase }, "reorder-on": { paths: atBase } },
+        };
+      });
+      const document = baseDocumentOf(criteria);
+      const lines = section(document);
+      const start = lines.indexOf("### base → head");
+      const end = lines.findIndex((line, index) => index > start && line.startsWith("### "));
+      const listed = lines
+        .slice(start, end === -1 ? undefined : end)
+        .flatMap((line) => /^- `features\/orders\.feature:(\d+)`/.exec(line)?.[1] ?? [])
+        .map((line) => criteria.find((criterion) => criterion.line === Number(line))!);
+      const unexplained = comparePaths(document)
+        .filter((comparison) => comparison.between.kind === "base")
+        .flatMap((comparison) => comparison.criteria)
+        .filter((criterion) => criterion.explained_by === null)
+        .map((criterion) => criterion.line);
+      const firstExplained = listed.findIndex((criterion) => criterion.change !== "unchanged");
+      const lastUnexplained = listed.findLastIndex((criterion) => unexplained.includes(criterion.line));
+      if (firstExplained !== -1 && lastUnexplained !== -1) expect(lastUnexplained).toBeLessThan(firstExplained);
+    }));
 
   it("says once that the base's program file names no {events}", () => {
     const unnamed = [OFF, ON].flatMap((environment) => [world(environment.name), world(environment.name, "unnamed", "base")]);

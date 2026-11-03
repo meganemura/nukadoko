@@ -951,6 +951,11 @@
       "en": ["what the pages had received"],
       "ja": "ページが受け取っていたもの",
       "note": "docs/spec.md の見出し \"What the pages had received\"(spec.ja.md では ページが受け取っていたもの)。claim step の record の `pages` と `page_requests` が述べること"
+    },
+    {
+      "en": ["explained_by", "what accounts for a difference (of a path, against the base)"],
+      "ja": "違いを説明するもの",
+      "note": "基点との組で `changed` の受け入れ基準が持つフィールド。`criterion_change` は受け入れ基準が新しいか変わったので人が新しい文を承認すること、`null` は変わっていないのに feature ファイルのどこもその違いを求めていないこと。フィールド名と値はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

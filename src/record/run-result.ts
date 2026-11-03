@@ -512,6 +512,12 @@ export interface RunPathCriterion {
    * `marked_only` when every difference is on a marked table, and `same`
    * when there is none. */
   readonly result: "changed" | "open" | "same_so_far" | "marked_only" | "same";
+  /** Only for a `changed` criterion of a base pair: what accounts for
+   * its difference. `criterion_change`: the criterion is new or changed,
+   * so a person approves new sentences for it with the change. `null`:
+   * it is unchanged, and nothing in the feature files asked for what it
+   * did differently. */
+  readonly explained_by?: "criterion_change" | null;
   /** The execution each side is read from, its cell's first, with the
    * cell's outcome. */
   readonly a: RunPathExecution;

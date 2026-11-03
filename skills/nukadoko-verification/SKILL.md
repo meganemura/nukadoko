@@ -172,7 +172,9 @@ has run.
    code too, and its row is `proven` when its Then fails there in each of
    `--proof-runs` runs. When the program writes execution events, the
    summary's "Changed paths" says under `base → head` what the program
-   did differently at head, step by step.
+   did differently at head, step by step, and lists first each unchanged
+   criterion that did something else, which no sentence asks for: read
+   those before calling the fix contained.
 5. Link the scenario from the map's sub-feature.
 
 When the scenario and the program file live in the product's repository,

@@ -71,7 +71,7 @@ interface Comparison {
   readonly between: { readonly kind: string };
   readonly a: { readonly world: string; readonly environment: string };
   readonly unread: string | null;
-  readonly criteria: readonly { readonly line: number; readonly result: string; readonly a: unknown; readonly steps?: unknown }[];
+  readonly criteria: readonly { readonly line: number; readonly result: string; readonly explained_by?: string | null; readonly a: unknown; readonly steps?: unknown }[];
   readonly not_compared: readonly { readonly line: number; readonly reason: string }[];
 }
 
@@ -143,11 +143,11 @@ describe("the paths of each environment's base world against its head world", ()
       [{ world: "base", environment: "reorder-on" }, null],
     ]);
     for (const comparison of base) {
-      expect(comparison.criteria.map((criterion) => [criterion.line, criterion.result])).toEqual([
-        [3, "changed"],
-        [6, "changed"],
-        [10, "changed"],
-        [15, "changed"],
+      expect(comparison.criteria.map((criterion) => [criterion.line, criterion.result, criterion.explained_by])).toEqual([
+        [3, "changed", null],
+        [6, "changed", null],
+        [10, "changed", null],
+        [15, "changed", "criterion_change"],
       ]);
       expect(comparison.criteria[0]!.steps).toEqual([
         {
@@ -166,13 +166,16 @@ describe("the paths of each environment's base world against its head world", ()
     }
   });
 
-  it("lists what changed against the base once, under one heading, before the pair of environments", () => {
+  it("lists what changed against the base once, under one heading, the unchanged criteria first, before the pair of environments", () => {
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     const start = summary.indexOf("### base → head");
     expect(summary.slice(start, summary.indexOf("### `reorder-off` → `reorder-on` (`quick_reorder` false → true)"))).toEqual([
       "### base → head",
       "",
       "4 criteria compared: 4 changed.",
+      "Of the 3 unchanged criteria compared, 3 changed.",
+      "",
+      "Unchanged criteria that did something else at head, which nothing in the feature files asks for:",
       "",
       "- `features/events.feature:3` a room page reads the room, in `reorder-off`, `reorder-on`",
       '  - line 4 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1',
@@ -180,6 +183,9 @@ describe("the paths of each environment's base world against its head world", ()
       '  - line 11 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1',
       "- `features/events.feature:6` a score is audited, in `reorder-off`, `reorder-on`",
       '  - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1',
+      "",
+      "New or changed criteria, whose new sentences account for what they do differently:",
+      "",
       "- `features/events.feature:15` a score is placed, in `reorder-off`, `reorder-on`",
       '  - line 16 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1',
       "",

@@ -3580,7 +3580,7 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
     "counts": { "changed": 2, "open": 0, "same_so_far": 0, "marked_only": 0, "same": 0, "not_compared": 0 },
     "criteria": [
       {
-        "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed",
+        "feature": "features/orders.feature", "line": 3, "name": "a room page reads the room", "result": "changed", "explained_by": null,
         "a": { "scenario_record_id": "scn-20261029-225441-w8hc", "outcome": "pass" },
         "b": { "scenario_record_id": "scn-20261029-225435-t3mv", "outcome": "pass" },
         "steps": [
@@ -3589,7 +3589,7 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
         ]
       },
       {
-        "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed",
+        "feature": "features/orders.feature", "line": 6, "name": "a score is placed", "result": "changed", "explained_by": "criterion_change",
         "a": { "scenario_record_id": "scn-20261029-225440-n2kq", "outcome": "pass" },
         "b": { "scenario_record_id": "scn-20261029-225436-c7rd", "outcome": "pass" },
         "steps": [
@@ -3657,6 +3657,16 @@ run は、各受け入れ基準の 2 つの側の step の実行経路を比べ�
   `ran: "a"` の step は、b 側の実行がその前に止まったので、a 側だけで走りました(`"b"` はその逆です)。
   その step がしたことは、その step 自身の `path` にあります。
   `steps` は違いのある step だけを持ち、`same` の受け入れ基準は持ちません。
+- 基点と比べるとき、`changed` の受け入れ基準は、その違いを説明するもの `explained_by` を持ちます。
+  `criterion_change` は、受け入れ基準が `new` か `changed` であることです。
+  人は変更とともにその新しい文を承認し、その文が、変更に何をさせるつもりかを言います。
+  `null` は、受け入れ基準が `unchanged` であることです。
+  そのため、それが違うことをした理由を feature ファイルのどこも求めていません。
+  それは、文で言わずに作者が意図した変化か、回帰のどちらかです。
+  受け入れ基準がすべて `unchanged` のままのリファクタには、1 つもあってはなりません。
+  このフィールドを持つのは `changed` の受け入れ基準だけです。
+  `open` のものはまだ同じと読めるかもしれず、`marked_only` のものはどの文も扱わないところだけが違うからです。
+  environment の組は、2 つの側のあいだでどの文も変わっていないので、このフィールドを持ちません。
 - flag の側は、environment の組が切り替えるもので、変化ではありません。
   そのため、そこでは `flag` の項目を比べず、サマリの見出しが condition を名指します。
   基点と比べるときは、flag の側はプログラムがしたことなので、側が変わった flag はほかと同じ違いです。
@@ -3676,6 +3686,12 @@ run サマリは、「Removed criteria」のあとの「Changed paths」の下�
 そして、実行経路が変わったか `open` の受け入れ基準を、見出しごとに 20 まで並べます。
 `base → head` の下では、いくつかの environment で同じ行を持つ受け入れ基準は、それらを名指して 1 回だけ並べます。
 側が変わった flag は、``flags `quick_reorder` `off` → `on` ``のように 1 つの違いとして読みます。
+`base → head` の下では、2 つ目の行が、比べた `unchanged` の受け入れ基準を、いちばん多くを言うところでの結果として 1 回ずつ数えます。
+どれも `same` なら、その行は `Each of the 2 unchanged criteria compared did the same at the base and at head.` のようにそう言います。
+リファクタの読み手が探すのはこの文です。
+並べる受け入れ基準は 3 つの群に分かれ、それぞれ専用の 1 行の下に、次の順で並びます。
+変わった `unchanged` の受け入れ基準(`explained_by: null`)、変わった `new` か `changed` の受け入れ基準、違うかもしれないもの(`open` と今のところ同じもの)の順です。
+そのため、feature ファイルのどこも説明しないものを最初に読み、人が新しい文を承認するものはそれと分けて読みます。
 受け入れ基準の順は、変わった項目と、片側だけで走った step がしたことのうち、いちばん上の種類で決めます。
 種類の順は errors、writes、outgoing calls、jobs、requests、flags で、そのあとは表の順です。
 今のところ同じ受け入れ基準は最後に来て、両側に共通の欠けを示す語を名指す 1 行になります。
@@ -3688,9 +3704,15 @@ run サマリは、「Removed criteria」のあとの「Changed paths」の下�
 ### base → head
 
 2 criteria compared: 2 changed.
+Of the 1 unchanged criterion compared, 1 changed.
+
+Unchanged criteria that did something else at head, which nothing in the feature files asks for:
 
 - `features/orders.feature:3` a room page reads the room, in `reorder-off`, `reorder-on`
   - line 4 `the client gets "/rooms/7"`: errors `CacheMiss` handled 0 → 1
+
+New or changed criteria, whose new sentences account for what they do differently:
+
 - `features/orders.feature:6` a score is placed, in `reorder-off`, `reorder-on`
   - line 7 `the client posts to "/scores"`: writes `audit_log` insert 0 → 1
 

@@ -734,6 +734,44 @@ function resultRank(result: RunPathCriterion["result"]): number {
   return PATH_RESULTS.findIndex(([entry]) => entry === result);
 }
 
+// Against the base, the groups a listed criterion falls in, in the order
+// they are listed: what nothing in the feature files accounts for first,
+// since a refactor must have none and a reader is sent there; then what a
+// person approves new sentences for; then what may still read the same.
+const BASE_GROUPS = [
+  "Unchanged criteria that did something else at head, which nothing in the feature files asks for:",
+  "New or changed criteria, whose new sentences account for what they do differently:",
+  "Criteria that may differ:",
+] as const;
+
+function baseGroup(criterion: RunPathCriterion): number {
+  if (criterion.result !== "changed") return 2;
+  return criterion.explained_by === null ? 0 : 1;
+}
+
+// Against the base, what the unchanged criteria came to, each once, as
+// what it came to where it says most: the one sentence a refactor's
+// reader looks for, "each did the same", or how many did not.
+function unchangedLine(read: readonly RunPathComparison[], changeOf: ReadonlyMap<string, RunTableRow["change"]>): string[] {
+  const results = new Map<string, RunPathCriterion["result"]>();
+  for (const criterion of read.flatMap((comparison) => comparison.criteria)) {
+    const place = `${criterion.feature}:${criterion.line}`;
+    if (changeOf.get(place) !== "unchanged") continue;
+    const was = results.get(place);
+    if (was === undefined || resultRank(criterion.result) < resultRank(was)) results.set(place, criterion.result);
+  }
+  if (results.size === 0) return [];
+  const all = [...results.values()];
+  if (all.every((result) => result === "same")) {
+    return [all.length === 1 ? "The 1 unchanged criterion compared did the same at the base and at head." : `Each of the ${all.length} unchanged criteria compared did the same at the base and at head.`];
+  }
+  const said = PATH_RESULTS.flatMap(([result, word]) => {
+    const n = all.filter((entry) => entry === result).length;
+    return n === 0 ? [] : [`${n} ${word}`];
+  });
+  return [`Of the ${countOf(all.length, "unchanged criterion", "unchanged criteria")} compared, ${said.join(", ")}.`];
+}
+
 // The comparisons under one heading: a pair of environments alone, or
 // every environment's base pair. Each criterion counts once, as what it
 // came to where it says most, and one listed with the same lines in
@@ -791,10 +829,21 @@ function renderPathSection(document: RunDocument, comparisons: readonly RunPathC
     }
   }
   const sameSoFar = (item: { readonly criterion: RunPathCriterion }): number => Number(item.criterion.result === "same_so_far");
-  const listed = [...items.values()].sort((x, y) => sameSoFar(x) - sameSoFar(y) || x.rank - y.rank || (rowOrder.get(place(x.criterion)) ?? 0) - (rowOrder.get(place(y.criterion)) ?? 0));
+  const base = comparisons[0]!.between.kind === "base";
+  const group = (item: { readonly criterion: RunPathCriterion }): number => (base ? baseGroup(item.criterion) : 0);
+  const listed = [...items.values()].sort(
+    (x, y) => group(x) - group(y) || sameSoFar(x) - sameSoFar(y) || x.rank - y.rank || (rowOrder.get(place(x.criterion)) ?? 0) - (rowOrder.get(place(y.criterion)) ?? 0),
+  );
   const lines = ["", heading, "", [`${compared}${notCompared.join("")}`, ...unreadText].join(" ")];
-  if (listed.length > 0) lines.push("");
-  for (const { criterion, lines: said, environments } of listed.slice(0, PATHS_SHOWN)) {
+  if (base) lines.push(...unchangedLine(read, new Map(document.table.rows.map((row) => [place(row), row.change]))));
+  if (listed.length > 0 && !base) lines.push("");
+  let shownGroup: number | undefined;
+  for (const item of listed.slice(0, PATHS_SHOWN)) {
+    const { criterion, lines: said, environments } = item;
+    if (base && group(item) !== shownGroup) {
+      shownGroup = group(item);
+      lines.push("", BASE_GROUPS[shownGroup]!, "");
+    }
     const head = `- ${cellCode(place(criterion))} ${cellText(criterion.name)}${read.length > 1 ? `, in ${named(environments)}` : ""}`;
     lines.push(...(criterion.result === "same_so_far" ? [`${head}: ${said[0]}`] : [head, ...said]));
   }
@@ -823,7 +872,10 @@ function renderPaths(document: RunDocument): string[] {
     "Each criterion below did something else on one side than on the other, or may have, step by step, as the program's execution events report it. " +
       "A count that a side's missing lines could still reach is listed as open, never as a change. " +
       "A criterion whose open counts read the same on both sides, under the same gaps, is the same so far, and comes last. " +
-      "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes.",
+      "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes." +
+      (comparisons.some((comparison) => comparison.between.kind === "base")
+        ? " Against the base, an unchanged criterion that changed comes first, apart from a new or changed one, whose new sentences account for its difference."
+        : ""),
     ...[comparisons.filter((comparison) => comparison.between.kind === "base"), ...comparisons.filter((comparison) => comparison.between.kind === "condition").map((comparison) => [comparison])]
       .filter((section) => section.length > 0)
       .flatMap((section) => renderPathSection(document, section)),
