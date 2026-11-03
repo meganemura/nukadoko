@@ -9,6 +9,28 @@ just until 0.1.
 
 ### Added
 
+- **A Then that reads a page keeps what the page showed when its claims
+  were judged.** `final.png` is taken when the scenario ends, and a page
+  that changes on a timer can show another state by then: in a measured
+  run a Then held on a badge reading "Saving..." while `final.png` showed
+  "Saved". A claim step whose `observe` reaches `page`, `context`, or
+  `pageAs` now takes a screenshot of each open page, then an ARIA
+  snapshot of each, right after the reading its claims were judged on and
+  before they are judged, under `judged/` in its record's directory. The
+  step record and run.json carry it as `judged_view`, each file with
+  `after_reading_ms`; a claim that compared an ARIA snapshot already holds
+  one, so the view takes none (`aria_in_claims`). The view's calls run in
+  a trace group of their own and stay out of `actions`. The run summary
+  links it as `seen`: a column in the verdict table, the end of each
+  Claims entry, and a red row's failure line; a Then that read no page
+  links its step's `http.jsonl` instead. The links are relative to the run
+  directory, so they open from `summary.md` and a copy of the run
+  directory, not on a GitHub job summary page (docs/ci.md). Allure attaches
+  the files to the step as `judged view` and `judged view ARIA`, the
+  cucumber-messages `claims.json` names them, and `nuka do` records the
+  same. It costs 50 to 100 ms and about 10 KB for each such Then;
+  `judgedView: false` in the config turns it off.
+
 - **Against the base, a changed path says what accounts for it.** Under
   `nuka run --base`, each criterion of a base pair in run.json's `paths`
   whose `result` is `changed` now has `explained_by`: `criterion_change`

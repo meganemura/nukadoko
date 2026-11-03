@@ -147,11 +147,11 @@ If an absence claim turns up on that timeline, check whether its own moment
 sits before whatever readiness evidence the step returned alongside it.
 Earlier means the read landed before the page was ready to be read,
 premature, not a state problem to go chase in the app. Don't trust
-`final.png` to show the moment of failure either: it's taken once the step
-has already returned or thrown, during teardown, so compare its `at`
-against `finished_at` rather than the screenshot's contents alone (a gap of
-several seconds between them reads, at a glance, like state that was
-flickering, and it has been misdiagnosed as exactly that). Reach for the
+`final.png` to show the moment of failure either: it is taken at teardown,
+the scenario's end (the step's under `nuka do`). A Then that read a page has
+`judged_view` (`judged/page.png`, `judged/page.aria.yml`), taken right after
+the reading its claims were judged on, each file with `after_reading_ms`
+(the summary's `seen` links it): open that first. Reach for the
 trace only when the DOM itself is what's in question: `npx playwright
 show-trace <evidence.dir>/trace.zip`. That trace is this one step's own
 window now, not the whole scenario's recording, so what it shows is exactly

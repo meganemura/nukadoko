@@ -102,9 +102,9 @@ The other fields:
   docstring, the table, an earlier step's result, the command line, or
   the schema), which names the input to fix when an argument is wrong.
 - `used` names the earlier step records read through `from`, and their values.
-- `evidence` points at the screenshots, the trace, `http.jsonl` (each
-  request the step or its page sent), and any attachment the step made.
-  Name the file the person can open.
+- `evidence` points at the trace, `http.jsonl`, and attachments: name the file to open.
+- `judged_view` (a Then that read a page): each open page right after the judged reading,
+  in `judged/`, each file with `after_reading_ms`; the pause's view and `final.png` are later.
 - `pages`, when `observe` reached a page: per open page, the latest response
   it finished receiving before the reading (`last_response`) and the requests
   in flight during it (`in_flight`), indexes into `page_requests` with
@@ -157,8 +157,8 @@ Tell the person, in their language and in plain words:
    When `used` is present, say what the step took from which earlier step:
    "it ran in the `project` that installing solarsql returned".
 3. The verdict from step 3 and the field it rests on.
-4. What to open to confirm it: the pause's `page.png`, a line of
-   `http.jsonl`, a file the process wrote.
+4. What to open to confirm it: a Then's `judged/page.png`, else the pause's
+   `page.png`, a line of `http.jsonl`, a file the process wrote.
 
 Then stop and wait for the person. Never answer a pause they have not
 answered: the run waits exactly so that they judge each step while its

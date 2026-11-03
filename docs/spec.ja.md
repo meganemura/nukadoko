@@ -574,6 +574,7 @@ fixture の名前:
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
   `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl`、`mcp.jsonl` と等しい `name` も拒否されます。
+  claim step の `judged_view` が入るディレクトリの名前 `judged` も拒否されます。
   `nuka do` では、record の隣にある world の directory の名前 `world` も拒否されます。
   `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も拒否されます。
   大文字小文字だけが違う綴りも同じです。
@@ -2152,6 +2153,63 @@ world のない run には `pages` はありません。
 `nuka check` はこれについて何も報告しません。
 step が読むときにリクエストがレスポンス待ちかどうかは、その run でのプログラムのタイミングで決まるので、step ファイルについてのどの事実も 1 通りには終わらないからです。
 
+#### ページが見せていたもの
+
+claim は `observe` が返した値で成り立つか成り立たないかが決まり、record はその値を残します。
+断定をレビューする人は、その値の周りのページも見たくなります。
+画面の残りの部分、バナー、スピナー、数えた項目の隣の項目です。
+これまで scenario にあったスクリーンショットは、scenario が終わるときに撮る `final.png` だけでした。
+自分から変わるページは、そのときには別の状態を見せていることがあります。
+測った run では、ある Then はバッジが "Saving..." と読めることで成り立ちましたが、`final.png` には 400 ms 後に "Saved" に変わった同じバッジが写っていました。
+画像が、隣に並ぶ断定と食い違ったのです。
+
+そのため、`observe` が `page`、`context`、`pageAs` に届く claim step は、claim を判定した読み取り(`poll` では最後の読み取り)の直後、claim を判定する前に、開いている各ページのビューを取り、`judged_view` として残します。
+
+```json
+"judged_view": {
+  "pages": [
+    { "as": null, "page": 1, "url": "http://localhost:44935/", "title": "Cart",
+      "screenshot": { "file": "judged/page.png", "after_reading_ms": 39 },
+      "aria": { "file": "judged/page.aria.yml", "after_reading_ms": 44 } }
+  ]
+}
+```
+
+- `pages` は、ブラウザーコンテキストが開いているすべてのページを、`pages` と同じ順に並べます(「ページが受け取っていたもの」を参照)。
+  各要素は `as`、`page`、`url`、`title`(ページが時間内に返さなかったときは `null`)を持ちます。
+  URL、title、ARIA スナップショットは redact し、スクリーンショットは secret を表示している部分を覆います。
+  walk の一時停止のビューと同じです(「人と一緒の walk」を参照)。
+- `screenshot` はビューポートのスクリーンショット、`aria` はページの ARIA スナップショットです。
+  どちらも step record のディレクトリの `judged/` にあるファイルで、名前は `page.png`、`page.aria.yml`、`page-2.png`、`pageAs` のコンテキストでは `page.<name>.png` です。
+  取得が失敗したとき、または 5 秒以内に終わらなかったときは `null` です。
+  secret を表示している部分が時間内に見つからなかったときも、スクリーンショットは `null` です。
+- `after_reading_ms` は、読み取りが終わってから、ブラウザーがそのファイルを返すまでのミリ秒です。
+  ビューは読み取りのあとに取り、読み取りの最中には取りません。
+  そのため、変わり続けるページはもっとあとの状態を見せることがあり、各ファイルはそれがどれだけあとかを述べます。
+  どのページの ARIA スナップショットよりも先に、すべてのページのスクリーンショットを取ります。
+  人が最初に開くのはスクリーンショットで、取得を 1 つ重ねるごとに次の取得は読み取りから遠くなるからです。
+  測った run では、スクリーンショットは読み取りの 39 から 59 ms あと、ARIA スナップショットはその 4 から 9 ms あとでした。
+- `aria_in_claims: true` は、step の claim が ARIA スナップショットを比べた(`fits-aria-snapshot`)ことを述べます。
+  その claim は、読み取りの中で取った、判定した ARIA スナップショットをすでに持っています。
+  そのためビューは 2 つ目を取らず、各ページの `aria` は `null` です。
+
+ビューは claim の隣に並ぶ証拠で、claim が判定したものではありません。
+claim はこれまでどおり読み取りで判定し、ビューが取れなかったときは `judged_view` が無くなるだけで、結果は変わりません。
+ビューの呼び出しは step の trace のチャンクの中で、`nukadoko: view of the judged reading` という名前の trace のグループの中で走ります。
+そのため trace viewer はそれを分けて見せ、step record の `actions` はそのグループを除きます。
+それは nukadoko の呼び出しで、step の呼び出しではないからです。
+ページを読まない Then と、読み取りが終わらなかった Then にはビューはありません。
+ページを読まない Then には、`observe` が読んだレスポンスを持つ、その step の `http.jsonl` があり、run サマリは代わりにそれにリンクします。
+`nuka do` も同じようにビューを残します。
+
+ビューには時間と容量がかかります。
+ページを読む Then 1 つにつき 50 から 100 ms、単純なページの 1280x720 のスクリーンショットで約 10 KB です。
+config の `judgedView: false` でビューを取らなくなります(「Environment、secret」を参照)。
+
+`final.png`(「Records」を参照)は scenario の終わりで、ブラウザーコンテキストを閉じるときに撮ります。
+Then が判定した瞬間ではありません。
+レビューする人は、断定を `judged_view` と突き合わせます。
+
 #### 自分自身との比較
 
 `nuka check` は、結び付いた claim の両辺がどこから来るか(文のキー、値を返した行とパス、`observe` のパス)を解決します。
@@ -2216,6 +2274,7 @@ claim step の record には、次の固有のフィールドがあります(「
   すべては残さなかったときは `readings_left_out` もあります。
 - `settled`: `settled` を宣言する `poll` のときだけあり、その `conditions` と、読み取りが落ち着いたので poll が止まったときの `stop` です(「poll」を参照)。
 - `pages` と `page_requests`: world のある run で、`observe` が `page`、`context`、`pageAs` に届く step にあり、claim を判定した読み取りで、開いていた各ページが world から受け取っていたものです(「ページが受け取っていたもの」を参照)。
+- `judged_view`: `observe` が `page`、`context`、`pageAs` に届く step にあり、その読み取りの直後に開いていた各ページが見せていたもの(スクリーンショットと ARIA スナップショット)と、各ファイルを読み取りのどれだけあとに取ったかです(「ページが見せていたもの」を参照)。
 - `events_read`: `events` を持つ step にだけあり、各キーの、前の step の実行イベントの読みです(「実行イベントの数についての claim」を参照)。
 
 `measured` は、生の実際の値と内容が等しい、記録されたチャネルを名指しします。
@@ -5568,6 +5627,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   `at`(ISO 8601。
   `started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
+  `nuka run` では、スクリーンショットは scenario のもの(scenario record の `evidence.screenshots`)で、scenario が終わるときに撮り、step record の一覧は空です。
+  `final.png` は scenario の終わりで、どの Then が判定した瞬間でもありません。
+  ページを読んだ claim step には、その瞬間のための `judged_view` があります(「ページが見せていたもの」を参照)。
 - `observed` は、その実行が届いたものとしてツールが見たものを、チャネルごとに 1 つのキーで持ちます。
   キーは `processes`、`http`、`files`、`unmeasured` で、step が `measureMcp` を通して MCP の呼び出しを送ったときは `mcp` もあり、run に world の URL があるときは `program_log` もあります。
   world のプログラムのファイルが `{events}` を名指すとき、または world が `url` にあるときは `events` もあります。
@@ -5869,7 +5931,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl`、`mcp.jsonl` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt`、`events.jsonl`、`events-late.jsonl`、`events-read.jsonl`、`mcp.jsonl`、`judged`(claim step の `judged_view` が入るディレクトリ)と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。
@@ -6052,9 +6114,12 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   `--base` のもとでは `change` の列があり、名前が変わった行には `renamed from` と基点での場所が付きます。
   world と environment ごとに 1 列で、列名は `head <environment>`、`base <environment>`、`old <environment>` です。
   セルは `pass`、`fail@<line>`、`broke@<line>`、`stopped@<line>`、`flaky@<line>`、`·` と読め、対照には `(control)` が、2 回以上走ったときは実行の数が付きます。
+  どれかの行に見せるものがあるときは `seen` の列があります。
+  その列は、受け入れ基準の head の実行(通らなかった最初のもの、無ければ最初のもの)の各 Then の行番号を、それを見られる最初の場所へのリンクにします。
+  その場所は `judged_view` の最初のスクリーンショット(「ページが見せていたもの」を参照)で、ページを読まず step がリクエストを送った Then ではその `http.jsonl` です。
 - 赤い行ごとに 1 行。
   その場所、名前、行の理由を載せます。
-  その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せ、base か old の world のセルではその前に `base:` か `old:` を付けます。
+  その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、record のパス、Then ではそれを見られる各場所を載せた `seen` を載せ、base か old の world のセルではその前に `base:` か `old:` を付けます。
 - 条件。
   短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、実行イベントを読まなかった world、1 行も受け取らなかった world、どの step record も持たない行を持つ world ごとの 1 行(「実行イベント」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--order shuffled` のときの `order: shuffled, seed <n>`(ファイル順では何もなし)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--base` のもとでは「Removed criteria」。
@@ -6073,7 +6138,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   一覧のルートのうち head の step がリクエストした数、一度もリクエストしなかったルート(ハンドラに別のルートからリクエストが届いたものは分けます)、world の一覧が名指さないルートへのリクエストと、プログラムがどのルートにも一致させなかったリクエスト(それぞれの数とともに)、ルートの一覧を読まなかった各 world を載せます(「一覧」を参照)。
   1 行が名指すルートは 20 までで、残りは数だけを書きます。
 - 「Claims」。
-  claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数、`settled` を宣言して失敗した step なら落ち着いた読み取り(`settled on reading 4 (screen equal "scoring")`)か `not settled`、claim を判定した読み取りでレスポンス待ちだった各リクエスト(`read with a request in flight (GET <url> on page 1, sent during the step at line 9)`、「ページが受け取っていたもの」を参照)を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
+  claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数、`settled` を宣言して失敗した step なら落ち着いた読み取り(`settled on reading 4 (screen equal "scoring")`)か `not settled`、claim を判定した読み取りでレスポンス待ちだった各リクエスト(`read with a request in flight (GET <url> on page 1, sent during the step at line 9)`、「ページが受け取っていたもの」を参照)、`judged_view` の各ファイルへのリンクを載せた `seen:`(読み取りの 100 ms 以上あとに取ったものには `(taken <n> ms after the reading)` が続きます)、またはページを読まず step がリクエストを送った Then ではその step の `http.jsonl` へのリンクを載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
   要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、どの claim も判定しなかったこと(判定したかもしれない compat step が Then の位置にあればそのこと)を載せます。
 - 「Unmeasured actions」。
@@ -6088,6 +6153,9 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 
 サマリは毎回 `.nukadoko/runs/<run_id>/summary.md` に書かれます。
 `$GITHUB_STEP_SUMMARY` が設定されていれば、それが指すファイルに追記されます(GitHub Actions はすべての step にこれを設定するので、設定なしでジョブのサマリページに run が載ります)。
+サマリのリンク(`seen`)は、`summary.md` がある run のディレクトリからの相対パスです。
+そのため、`summary.md` そのもの、run のディレクトリのコピー、そこに書いた `nuka report --format markdown --out` からは開けます。
+ジョブのサマリページと pull request のコメントでは、どこにもつながりません(docs/ci.md を参照)。
 終わった run であれば `nuka report --format markdown` が同じ本文を出し、`--out <path>` はそれをファイルに書きます。
 書く先は、たとえば CI の step が pull request のコメントとして投稿するファイルです。
 サマリの中のエラー文は `run.json` のものなので、secret はすでに伏せてあります。
@@ -6208,6 +6276,7 @@ default export が無いファイル、または default export が Promise で�
 | `browserContext` | Playwright 自身の `BrowserContextOptions`。`browser.newContext()` に渡される(下記) |
 | `requestContext` | `request` fixture に対応する `newContext` のオプション(下記) |
 | `showRequests` | 実験的。step が自分のプロセスから送るリクエストを、trace されるページに描く(デフォルトは `false`。下記) |
+| `judgedView` | ページを読む Then が、判定した読み取りの直後に開いている各ページのビューを残すか(デフォルトは `true`。「ページが見せていたもの」を参照) |
 | `secrets` | `public`/`redact` のリスト。キーごとの redact の扱いを調整する(上記) |
 | `parameterTypes` | カスタムの cucumber-expressions parameter type(下記) |
 | `worldParameters` | compat の World が `parameters` として受け取るオブジェクト(デフォルトは `{}`。下記) |
@@ -6643,6 +6712,9 @@ Data table は `Data table` という名前の CSV attachment になります。
 Doc string は text attachment になり、allure-cucumberjs が省く内容も保持します。
 Examples table は `Examples` という名前の scenario attachment になります。
 `final.png` などの scenario evidence は scenario result に直接付きます。
+claim step の `judged_view`(「ページが見せていたもの」を参照)は、その step のエントリに付きます。
+各スクリーンショットは `judged view`、各 ARIA スナップショットは `judged view ARIA`(`text/plain`)という名前で付き、複数のページが開いていたときは `judged view (page 1 of aki)` のように丸括弧でページを名指します。
+そのため、読み手が開く step は claim を判定したときのページを見せ、scenario result は scenario が終わったときのページを見せます。
 
 step record を持つ各 step entry は、合否を問わず、完全な record を `record.json` として含みます。
 これはディスクに書き込まれたのと同じオブジェクトです。
@@ -6791,7 +6863,8 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   そのためスキーマが開いていたとしても、part がここで取る形はありません(「Parts」を参照)。
   Allure がそれを入れ子にできるのは、Allure 自身のモデルがそうしているからです。
 - Attachment は step が自分自身について宣言したものだけを含みます: `declared` の attachment、ログの行、claim step の claim です。
-  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` と、poll する step では `readings`、`readings_left_out`、`settled` を、ページを読んだ step では `pages` と `page_requests` を持ちます(「Claims」を参照)。
+  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` と、poll する step では `readings`、`readings_left_out`、`settled` を、ページを読んだ step では `pages`、`page_requests`、`judged_view` を持ちます(「Claims」を参照)。
+  `judged_view` はファイルを名指すだけで、埋め込みません。
   claim は、step ファイルが確かめると宣言したものであり、比べた値を伴い、読み取りは各読み取りが読んだものを示します。
   ログの行は cucumber-js の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)を使います。
   trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。

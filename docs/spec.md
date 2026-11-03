@@ -669,7 +669,8 @@ The fixture names:
   `..`, or the empty string is also refused. A `name` of `record.json`,
   `final.png`, `trace.zip`, `http.jsonl`, `program-log.txt`,
   `program-log-late.txt`, `events.jsonl`, `events-late.jsonl`,
-  `events-read.jsonl`, or `mcp.jsonl`, under `nuka do` a `name` of `world` (the world's
+  `events-read.jsonl`, `mcp.jsonl`, or `judged` (the directory a claim step's
+  `judged_view` goes in), under `nuka do` a `name` of `world` (the world's
   directory beside the record), or a `name` of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused too,
   including a spelling that differs only by case (`ReservedEvidenceNameError`). Those
@@ -2771,6 +2772,76 @@ world has no `pages`.
 when a step reads depends on the program's timing in the run, so no fact
 about a step file ends only one way.
 
+#### What the pages showed
+
+A claim holds or breaks on the values `observe` returned, and the record
+keeps them. A person who reviews the verdict also wants the page around
+those values: the rest of the screen, a banner, a spinner, the item next
+to the one counted. The only screenshot a scenario had was `final.png`,
+taken when the scenario ends, and a page that changes on its own can show
+another state by then. In a measured run, a Then held on a badge that read
+"Saving..." while `final.png` showed the same badge reading "Saved" 400 ms
+later, so the picture contradicted the verdict it sat beside.
+
+So a claim step whose `observe` reaches `page`, `context`, or `pageAs`
+takes a view of each open page right after the reading its claims were
+judged on (the last reading, under `poll`), before the claims are judged,
+and records it as `judged_view`:
+
+```json
+"judged_view": {
+  "pages": [
+    { "as": null, "page": 1, "url": "http://localhost:44935/", "title": "Cart",
+      "screenshot": { "file": "judged/page.png", "after_reading_ms": 39 },
+      "aria": { "file": "judged/page.aria.yml", "after_reading_ms": 44 } }
+  ]
+}
+```
+
+- `pages` lists every page a browser context has open, in the order
+  `pages` uses (see "What the pages had received"), with `as`, `page`,
+  `url`, and `title` (`null` when the page did not give it in time).
+  The URL, the title, and the ARIA snapshot are redacted, and the
+  screenshot covers what shows a secret, as at a pause of a walk (see "A
+  walk with a person").
+- `screenshot` is a viewport screenshot and `aria` the page's ARIA
+  snapshot, files in `judged/` in the step record's directory, named
+  `page.png`, `page.aria.yml`, `page-2.png`, and `page.<name>.png` for
+  a `pageAs` context. Each is `null` when the capture failed or did not
+  finish within 5 seconds, and a screenshot is `null` too when what shows
+  a secret was not found in time.
+- `after_reading_ms` is how long after the reading ended the browser
+  gave that file. The view is taken after the reading, never during it,
+  so a page that keeps changing can show a later state; each file says
+  how much later. Every page's screenshot is taken before any ARIA
+  snapshot, since the screenshot is what a person opens first and each
+  capture moves the next one further from the reading. In the measured
+  run a screenshot came 39 to 59 ms after its reading and the ARIA
+  snapshot 4 to 9 ms after that.
+- `aria_in_claims: true` says a claim of the step compared an ARIA
+  snapshot (`fits-aria-snapshot`): that claim already holds the tree it
+  judged, read within the reading, so the view takes no second one and
+  each page's `aria` is `null`.
+
+The view is evidence beside the claims, never what they judged: the
+claims are judged on the reading as before, and a view that cannot be
+taken leaves `judged_view` out without changing an outcome. Its calls run
+inside the step's trace chunk, in a trace group named `nukadoko: view of
+the judged reading`, so the trace viewer shows them apart, and the step
+record's `actions` leave that group out: they are nukadoko's calls, not
+the step's. A Then that reads no page, or whose reading did not end, has
+no view; a Then that read no page has its step's `http.jsonl`, which holds
+the responses `observe` read, and the run summary links that instead.
+`nuka do` records the view the same way.
+
+A view costs time and space: 50 to 100 ms for each Then that reads a page,
+and about 10 KB for a screenshot of a simple page at 1280x720. `judgedView:
+false` in the config turns it off (see "Environments and secrets").
+
+`final.png` (see "Records") is the scenario's end, taken when its browser
+contexts close, and never the moment a Then judged. A reviewer checks a
+verdict against `judged_view`.
+
 #### Self-comparison
 
 `nuka check` resolves where each side of a bound claim comes from: the
@@ -2878,6 +2949,10 @@ A claim step's record has these fields of its own (see "Records"):
   `page`, `context`, or `pageAs`, in a run with a world: what each
   open page had received from the world on the reading the claims were
   judged on (see "What the pages had received").
+- `judged_view`, for a step whose `observe` reaches `page`, `context`, or
+  `pageAs`: what each open page showed right after that reading, a
+  screenshot and an ARIA snapshot, and how long after the reading each
+  was taken (see "What the pages showed").
 - `events_read`, for a step with `events`: each key's reading of an
   earlier step's execution events (see "A claim on a count of events").
 
@@ -7214,7 +7289,12 @@ its scenario record's id, so either record leads to the other.
   the failure it was named for. `at` (ISO 8601, the same format
   `started_at`/`finished_at` use) is what the second file was standing in
   for without ever stating it, and it says the real thing: how long after
-  this execution's own timeline the screenshot was actually taken.
+  this execution's own timeline the screenshot was actually taken. Under
+  `nuka run` the screenshots are the scenario's (its scenario record's
+  `evidence.screenshots`), taken when the scenario ends, and a step
+  record's list is empty: `final.png` is the scenario's end, not the moment
+  any Then judged. A claim step that read a page has `judged_view` for that
+  moment (see "What the pages showed").
 - `observed` holds what the tool saw the execution reach, one key per
   channel: `processes`, `http`, `files`, and `unmeasured`, `mcp` when
   the step sent an MCP call through `measureMcp`, and, when the
@@ -7671,7 +7751,7 @@ its scenario record's id, so either record leads to the other.
   empty string, is refused before anything is written, never silently
   rewritten into something safe. A `name` of `record.json`, `final.png`,
   `trace.zip`, `http.jsonl`, `program-log.txt`, `program-log-late.txt`,
-  `events.jsonl`, `events-late.jsonl`, `events-read.jsonl`, or `mcp.jsonl`, under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
+  `events.jsonl`, `events-late.jsonl`, `events-read.jsonl`, `mcp.jsonl`, or `judged` (the directory a claim step's `judged_view` goes in), under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
   `final.<name>.png` for a valid `pageAs` name, or of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by
@@ -7949,7 +8029,12 @@ holds:
   environment, named `head <environment>`, `base <environment>`, or `old
   <environment>`, whose cell reads `pass`, `fail@<line>`,
   `broke@<line>`, `stopped@<line>`, `flaky@<line>`, or `·`, with `(control)` for a
-  control and the number of runs when there is more than one;
+  control and the number of runs when there is more than one, and, when
+  any row has one, a `seen` column: the line of each Then of the
+  criterion's head execution (the first that did not pass, else the
+  first) linked to the first place it can be seen, its first screenshot
+  in `judged_view` (see "What the pages showed"), or, for a Then that read
+  no page and whose step sent requests, its `http.jsonl`;
 - one line for each red row: its location, its name, and the row's
   reason, and under it, for a cell that ran, where its first execution
   that did not pass stopped (the first step that did not pass or skip,
@@ -7957,8 +8042,8 @@ holds:
   `used` step whose process exited nonzero with its exit code and the
   first line of its stderr, or of its stdout when stderr is empty (as on
   stderr), the last command the step ran through `runCommand` that did
-  not exit 0, and the record's path, after `base:` or `old:` for a cell of
-  that world;
+  not exit 0, the record's path, and for a Then `seen` with each place it
+  can be seen, after `base:` or `old:` for a cell of that world;
 - the condition: the short commit sha and whether the tree had uncommitted
   changes (from `commit`, or "unknown" without one), each environment and its
   target version, a line for each world whose program log was not read,
@@ -8002,7 +8087,10 @@ holds:
   on reading 4 (screen equal "scoring")`) or `not settled`, each request
   that was in flight on the reading the claims were judged on (`read with
   a request in flight (GET <url> on page 1, sent during the step at line
-  9)`, see "What the pages had received"), and under
+  9)`, see "What the pages had received"), `seen:` with a link to each
+  file of its `judged_view`, `(taken <n> ms after the reading)` after one
+  taken 100 ms or more after it, or a link to its step's `http.jsonl` for
+  a Then that read no page and whose step sent requests, and under
   it one line per claim, in the words of its failure message with the
   outcome after them and `measured: <channel>` or `measured: none`, then
   `expected measured` for an expected value from `from` or `observe`
@@ -8036,7 +8124,11 @@ holds:
 It is written to `.nukadoko/runs/<run_id>/summary.md` every time,
 appended to the file `$GITHUB_STEP_SUMMARY` names when that is set (GitHub
 Actions sets it for every step, so the job's summary page shows the run with
-no configuration). `nuka report --format markdown` prints the same text for
+no configuration). Its links (`seen`) are relative to the run directory,
+where `summary.md` is, so they open from `summary.md` itself, from a copy
+of the run directory, and from `nuka report --format markdown --out` written
+into it; on the job's summary page and in a pull request comment they lead
+nowhere (see docs/ci.md). `nuka report --format markdown` prints the same text for
 any finished run, and `--out <path>` writes it to a file, such as one a CI
 step posts as a pull request comment. Error text in it is `run.json`'s, so secrets are
 already redacted. A summary that cannot be written is a warning
@@ -8181,6 +8273,7 @@ missing file.
 | `browserContext` | Playwright's own `BrowserContextOptions`, passed to `browser.newContext()` (below) |
 | `requestContext` | the matching `newContext` options for the `request` fixture (below) |
 | `showRequests` | experimental: draw each request a step sends from its own process on a traced page (default `false`, below) |
+| `judgedView` | whether a Then that reads a page keeps a view of each open page right after its judged reading (default `true`, see "What the pages showed") |
 | `secrets` | `public`/`redact` lists that adjust a key's redaction handling (above) |
 | `parameterTypes` | custom cucumber-expressions parameter types (below) |
 | `worldParameters` | object a compat World receives as `parameters` (default `{}`, below) |
@@ -8624,6 +8717,8 @@ Data tables become CSV attachments named `Data table`.
 Doc strings become text attachments, which preserves content that allure-cucumberjs omits.
 An Examples table becomes a scenario attachment named `Examples`.
 Scenario evidence, such as `final.png`, attaches directly to the scenario result.
+A claim step's `judged_view` (see "What the pages showed") attaches to its step entry: each screenshot as `judged view` and each ARIA snapshot as `judged view ARIA` (`text/plain`), with the page named in parentheses when several were open, such as `judged view (page 1 of aki)`.
+So the step a reader opens shows the page as its claims were judged, and the scenario result shows it as the scenario ended.
 
 Every step entry with a step record includes the complete record as `record.json`, whether the step passed or failed.
 It is the same object that reached disk, already redacted there, so nothing here redacts it a second time.
@@ -8761,8 +8856,10 @@ manifest, so retention and `nuka clean` remove it with the run.
   `claims.json` attachment of media type
   `application/vnd.nukadoko.claims+json`, holding `claims`,
   `observation`, and `attempts`, a polled step's `readings`,
-  `readings_left_out`, and `settled`, and the `pages` and `page_requests`
-  of a step that read a page, as the step record has them (see "Claims"): a
+  `readings_left_out`, and `settled`, and the `pages`, `page_requests`,
+  and `judged_view` of a step that read a page, as the step record has
+  them (see "Claims"), `judged_view` naming its files without embedding
+  them: a
   claim is what the step file declared it checks, with the values it
   compared, and the readings show what each reading read. Log lines use cucumber-js's
   `text/x.cucumber.log+plain` media type (the one `this.log()` produces).

@@ -143,6 +143,10 @@ npx nuka report "$(npx nuka run --json | jq -r .run_dir)" --format markdown --ou
 
 `run_dir` in run.json is the run directory; `environments[].base_url`
 names the instance the run judged, so the evidence says which one it was.
+The summary's `seen` links (such as `steps/<id>/judged/page.png`, a Then's
+page right after the reading it judged) are relative to the run directory:
+copy each file they name into the evidence directory at the same path, or
+they lead nowhere there.
 
 or reaches the pull request through CI's run summary (`docs/ci.md` in the
 package). The control CLI's own evidence goes beside it: screenshots and

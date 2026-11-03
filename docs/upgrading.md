@@ -46,6 +46,22 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
+## 0.25.0 to the next release
+
+- **Each Then that reads a page takes 50 to 100 ms longer,** since it
+  keeps a view of each open page right after its judged reading
+  (`judged_view`, see "What the pages showed" in docs/spec.md). A step
+  whose `timeout` left no room for that, or a `poll` whose timeout is that
+  close to the step's, gets the room back with `judgedView: false` in
+  `nukadoko.config.ts`, which also saves the files.
+- **The run summary's verdict table gains a `seen` column** when a Then
+  of the run can be seen, and Claims entries and red rows' failure lines
+  end in `seen` links. A job that parses `summary.md` by column reads the
+  last column as `seen`, or reads `run.json`'s `table` instead.
+- **`judged` is a reserved evidence name.** `evidence.attach("judged", ...)`
+  and `evidence.path("judged")` throw `ReservedEvidenceNameError`, since
+  the view goes in that directory. Pick another name.
+
 ## 0.24.0 to 0.25.0
 
 - **A claim that a key an earlier step's `returns` dropped could change

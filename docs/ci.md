@@ -277,6 +277,14 @@ Five things the workflow above leaves to the team, each small.
   environment), the commit, the environment, the browser, the first line
   of a failed step's error (secrets already redacted), and the command
   that reruns it (see "Records" in [docs/spec.md](spec.md#records)).
+  Its `seen` links (the screenshot of each page a Then read, taken right
+  after the reading its claims were judged on, or the requests a Then
+  that read no page sent) are relative to the run directory, so on the
+  job's summary page and in this comment they lead nowhere: GitHub
+  resolves them against its own URL, not the run directory. Each link's
+  target still ends in the file's path in the run directory, such as
+  `steps/<id>/judged/page.png`, which a reviewer opens in the uploaded run
+  directory (the next item).
   The `pull-requests: write` permission is the cost: the job that runs the
   suite can then write to the pull request. A pull request from a fork gets
   a read-only token, so the step fails there; a team that takes fork pull
@@ -306,7 +314,9 @@ Five things the workflow above leaves to the team, each small.
   `if: always()` is there for the same reason as in the comment step: a
   red run is the one somebody downloads. On a GitHub-hosted runner the
   directory holds only this job's run; on a persistent runner it holds
-  every run retention kept. `nuka do` records sit in `.nukadoko/do/`,
+  every run retention kept. Unpacked, its `summary.md` is the one whose
+  `seen` links open: each one points at a file beside it. `nuka do`
+  records sit in `.nukadoko/do/`,
   outside it, since no CI job runs `nuka do`. A trace holds the browser's
   cookies and a screenshot holds what the page showed, so decide who may
   open the artifact before the first upload (see "What this page does not

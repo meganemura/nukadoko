@@ -38,6 +38,20 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   たとえば 0.13.0、0.13.1、0.14.0 のプロジェクトは、「0.14.0 から 0.14.1 へ」から読み始めます。
   0.18.0、0.19.0、0.20.0 のプロジェクトは、「0.20.0 から 0.21.0 へ」から読み始めます。
 
+## 0.25.0 から次のリリースへ
+
+- **ページを読む Then は、1 つにつき 50 から 100 ms 長くかかります。**
+  判定した読み取りの直後に、開いている各ページのビューを残すからです(`judged_view`、docs/spec.ja.md の「ページが見せていたもの」を参照)。
+  その時間の余裕を残していない `timeout` の step や、timeout が step のものにそれほど近い `poll` は、`nukadoko.config.ts` の `judgedView: false` で余裕を取り戻せます。
+  ファイルも書かなくなります。
+- **run サマリの断定の表に `seen` の列が増えます。**
+  run のどれかの Then に見せるものがあるときです。
+  Claims の各項目と、赤い行の失敗の行の終わりにも `seen` のリンクが付きます。
+  `summary.md` を列で読むジョブは、最後の列を `seen` として読むか、代わりに `run.json` の `table` を読みます。
+- **`judged` は予約された evidence の名前になります。**
+  ビューがその名前のディレクトリに入るので、`evidence.attach("judged", ...)` と `evidence.path("judged")` は `ReservedEvidenceNameError` を投げます。
+  別の名前を選んでください。
+
 ## 0.24.0 から 0.25.0 へ
 
 - **前の step の `returns` が落としたキーで結果が変わりうる claim は、成り立っていたところで `unjudged` になり、scenario はそこで失敗します。**
