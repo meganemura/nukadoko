@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -380,6 +380,32 @@ describe("nuka run: the guard refuses what state-missing reports", () => {
       expect(refused.steps[2]!.error!.message).toBe(
         'Step "open-settings" requires "signed-in" for person "aki", and line 10 "aki signs out" (step "sign-out") ends it, with no line between them giving it again; line 12 requires it too. nuka run refuses this scenario before any of its steps runs',
       );
+    } finally {
+      await removeTempDir(dir);
+    }
+  });
+});
+
+describe("red, then green: the line the fix names is the whole fix", () => {
+  it("reports the missing sign-in, and after the line the fix names goes in, nuka check finds nothing", async () => {
+    const dir = await copyFixtureToTempDir("state-order-demo-project");
+    try {
+      const red = await check([], dir);
+      expect(red).toEqual({
+        exitCode: 1,
+        text: [
+          'error\tstate-missing\tfeatures/settings.feature:4\tStep "open-settings" requires "signed-in" for person "aki", and no earlier line gives it: line 4 is the scenario\'s first line; line 5 requires it too. nuka run refuses this scenario before any of its steps runs',
+          '  fix: Put a line that runs step "sign-in" ("aki signs in") before line 4. If the scenario means to show what happens without "signed-in", the line needs a step that does not require it.',
+          "note\tpattern-unbound\tfeatures/steps/sign-in.ts\tStep \"sign-in\" declares a pattern, but no feature line under the scanned directories (features) binds it. It has no place in any scenario right now.",
+          "  fix: Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
+          "",
+        ].join("\n"),
+      });
+      const featurePath = path.join(dir, "features", "settings.feature");
+      const lines = (await readFile(featurePath, "utf8")).split("\n");
+      lines.splice(3, 0, "    Given aki signs in");
+      await writeFile(featurePath, lines.join("\n"));
+      expect(await check([], dir)).toEqual({ exitCode: 0, text: "ok: no issues found\n" });
     } finally {
       await removeTempDir(dir);
     }
