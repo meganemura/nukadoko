@@ -245,6 +245,12 @@ describe("expects-unseen", () => {
   it("stays silent on a kind the run could not see whole, and on a cell that did not pass", () => {
     const unwatched = clean({ steps: [stepOf(0, { statuses: [], pageErrors: [], errors: [], missed: { http_lines: null, page_errors: 2 } })] });
     expect(unseenExpectationNotes([unwatched], conditions)).toEqual([]);
+    // A job that never performed may have failed where no line says so; a
+    // step that sent no request has no trace an error could be missing from.
+    const gap = clean({ steps: [{ ...stepOf(0, { statuses: [], pageErrors: [], errors: [], missed: undefined }), path: { ...pathOf([]), open: [{ gap: "jobs-pending", job_ids: ["j1"] }] } }] });
+    const quiet = clean({ steps: [{ ...stepOf(0, { statuses: [], pageErrors: [], errors: [], missed: undefined }), path: { ...pathOf([]), open: [{ gap: "no-requests" }] } }] });
+    expect(unseenExpectationNotes([quiet], conditions).map((note) => note.message)).toContainEqual(expect.stringContaining("@expects:error="));
+    expect(unseenExpectationNotes([gap], conditions).map((note) => note.message)).not.toContainEqual(expect.stringContaining("@expects:error="));
     const { browser: _browser, ...noBrowser } = clean();
     expect(unseenExpectationNotes([noBrowser], conditions).map((note) => note.message)).not.toContainEqual(expect.stringContaining("page-error"));
     expect(unseenExpectationNotes([clean(), clean({ scenario_record_id: "scn-2", status: "failed" })], conditions)).toEqual([]);

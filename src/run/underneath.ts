@@ -229,10 +229,14 @@ export function unexpectedFailureFindings(scenarios: readonly RunScenario[], con
 // Whether an execution was watched for a kind whole, so a tag of that kind
 // that matched nothing there matched nothing that happened: every line of
 // http.jsonl read, the page errors of a browser kept by name, or the
-// program's events read with no line that may be any line.
+// program's events read with no line that may be any line and no gap
+// where an error could still be, such as a job that never performed. A
+// step that sent no request has a gap too (`no-requests`), and no
+// error of its trace can be missing, so it does not count.
 const WATCHED: { readonly [K in ExpectedKind]: (execution: RunScenario) => boolean } = {
   status: (execution) => execution.steps.every((step) => step.record_unreadable !== true && step.underneath?.unseen?.http_lines === undefined),
-  error: (execution) => execution.steps.some((step) => step.path !== undefined) && execution.steps.every((step) => (step.path?.maybe ?? 0) === 0),
+  error: (execution) =>
+    execution.steps.some((step) => step.path !== undefined) && execution.steps.every((step) => (step.path?.maybe ?? 0) === 0 && (step.path?.open ?? []).every((open) => open.gap === "no-requests")),
   "page-error": (execution) => execution.browser !== undefined && execution.steps.every((step) => step.record_unreadable !== true && step.underneath?.unseen?.page_errors === undefined),
 };
 
