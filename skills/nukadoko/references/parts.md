@@ -56,6 +56,12 @@ After a failure, what should be knowable about it?
 A part is a step, not a new kind of thing. That is what makes the split
 below cost the feature file nothing.
 
+A part's `gives` and `ends` say nothing about the scenario on their own:
+the line runs the composite. When a part signs someone in, put the state
+in the composite's own `gives` too. A composite that names no state its
+parts give or end leaves that state unknown, and `nuka check` judges no
+line that requires it after this one (`states.md`).
+
 ## Splitting a step a second scenario needs half of
 
 The original step keeps its pattern, its `args`, and its `returns`. Only

@@ -26,6 +26,29 @@ just until 0.1.
   be seen) and each scenario and row its `expects`, and a page error on
   a step record carries its `name`.
 
+- **A step declares the states it requires, gives, and ends, and `nuka
+  check` reports a line that can only run without one.** Some steps
+  depend on what an earlier line did rather than on a value it returned:
+  a person signed in, a book open on the page. `requires`, `gives`, and
+  `ends` on `defineStep` take a state's name (`"book-open"`) or its name
+  and the args key that tells holders apart (`["signed-in", "person"]`),
+  the shape `from` uses, so `tsc` checks the key. `nuka check` walks each
+  scenario and reports `state-missing` at a line whose step requires a
+  state that no step gives, that no earlier line gave to the holder the
+  line names, or that an earlier line ended; the fix names the giving
+  step as a line to paste, with the holder filled in. A later line that
+  needs the same state for the same holder folds into the first finding.
+  A compat step, an unmatched line, an applicable compat Before or
+  AfterStep hook, a custom World, and a composite whose parts touch the
+  state while it says nothing make the state unknown, and unknown is
+  never reported. `state-shape-mismatch` names a state some steps key
+  and others write bare. `nuka run` refuses such a scenario before any
+  step runs, under `--no-check` too, as it does for `from`. `nuka steps`
+  and `nuka describe` show the three lists, each required state with
+  `given_by`, the steps that give it. A step file that already passed
+  one of these names as an option got a `step-option-ignored` warning
+  before; `defineStep` now reads it, and refuses an entry it cannot read.
+
 - **A Then can ask for a judgment, and a run checks that the judgment
   cites the value it read.** Some criteria no compare can decide: whether
   a greeting is friendly to a first-time visitor, whether a page reads as

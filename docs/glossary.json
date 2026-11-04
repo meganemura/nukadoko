@@ -1046,6 +1046,21 @@
       "en": ["accept (a failure, by an @expects: tag)", "accepts"],
       "ja": "認める",
       "note": "`@expects:` の tag が下で起きた失敗を名指して、それでセルを `broke` にしないこと。受け入れ基準 の 受け入れ と取り違えないよう、受け入れる とは訳さない"
+    },
+    {
+      "en": ["holder (of a state)", "holds it"],
+      "ja": "持ち主 / 持っている",
+      "note": "state を持つ相手。`[\"signed-in\", \"person\"]` の key が line で取る値(aki)。state が持ち主を持たないときは step 全体で 1 つ。claim が holds(成り立つ)のとは別の語"
+    },
+    {
+      "en": ["give (a state)", "end (a state)", "require (a state)"],
+      "ja": "与える / 終わらせる / 必要とする",
+      "note": "`gives`、`ends`、`requires` の動詞としての訳。フィールド名はコードスパンで英語のまま"
+    },
+    {
+      "en": ["fold (a line into a finding)", "folded"],
+      "ja": "まとめる / まとめられた",
+      "note": "同じ持ち主に同じ state を必要とする後の line を、最初の state-missing にまとめること。1 つの fix がどちらも片づける"
     }
   ],
   "keep_english": [
@@ -1206,6 +1221,10 @@
     {
       "term": "walk",
       "why": "nuka run --step が 1 つの scenario を step ごとに一時停止しながら、人の答えを待って進める実行。run.json の `walk`、state ディレクトリの `walk.json` と `walk.lock`、finding の `walk-stopped` と `walk-gone` と直接対応する。小文字の walk と書く。ファイルを歩く discovery の 歩く とは別の語"
+    },
+    {
+      "term": "state",
+      "why": "step の `requires`、`gives`、`ends` が名指すもの(サインインしている、本が開いている)。finding の `state-missing`、`state-shape-mismatch` と、nuka steps --json の `state` と直接対応する。小文字の state と書き、見出しは States のまま。テーブルの一覧の holds の 状態 とも、state ディレクトリの state とも別の語"
     }
   ],
   "identifiers": {

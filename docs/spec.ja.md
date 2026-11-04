@@ -384,6 +384,8 @@ export default defineStep({
   claim step には `returns`、`mutates`、`parts` がなく、claim step に結び付くのは Then の行だけです。
 - `parts`(デフォルトは `[]`)は、この step 自身の `run` が `call` fixture を通じて呼び出すことがある step を列挙します(「Parts」を参照)。
   どれも呼ばない step はこれを省略でき、`from` と同じ慣習です。
+- `requires`、`gives`、`ends`(デフォルトは `[]`)は、値が運ばないときに step が依存し変える state を宣言します。
+  サインインしている人がその例です(「States」を参照)。
 - `returns` は省略できます。
   省略すると空のオブジェクトの schema がデフォルトになり、何も返さない `run` は `{}` として記録されます。
   これは、後の step が引用するものも、失敗の診断に使うものも持たない step に向いています。
@@ -1130,6 +1132,9 @@ step record の `used` フィールドは宣言をチェックしません(「Re
 宣言は、書き手がファイルを書く時点で供給元 step を特定します。
 `used` は、実行時に供給元の具体的な実行を特定します。
 
+`from` は値を運びます。
+人をサインインさせるように、前の line が何かをしたことだけが step に必要なときは、代わりに `requires` で state を宣言し、それをする step が `gives` を宣言します(「States」を参照)。
+
 ### Parts
 
 step は、読み手が scenario を理解する粒度で書きます。
@@ -1282,6 +1287,122 @@ step ファイルは、named export を使って複数の step を export でき
 しかし、型付き step の名前は、そのファイルの basename です。
 CLI は、named export があるファイルを import しなければ、その export を認識できません。
 part ごとにファイルを分けると、step の名前とファイル名が一致したままになり、ファイルが 1 つ増えます。
+
+### States
+
+step の中には、前の line が返した値ではなく、前の line がしたことに依存するものがあります。
+設定ページを開く前に、その人はサインインしている必要があります。
+読み方を選ぶ前に、本が開いている必要があります。
+`from` は値を運ぶため、これを言えません。
+state には値がなく、後の line が終わらせることができ、複数の step が与えることができ、ある人には成り立ち別の人には成り立たないことがあります。
+宣言がなければ、サインインを忘れた scenario は、ブラウザが違うページを見せるまで正しく見えます。
+
+step は、依存する state と変える state を宣言します。
+
+```ts
+import { defineStep, z } from "nukadoko";
+
+export default defineStep({
+  pattern: "{person:word} signs out",
+  description: "Sign out from the account menu",
+  args: z.object({ person: z.string() }),
+  requires: [["signed-in", "person"]],
+  ends: [["signed-in", "person"]],
+  async run({ pageAs }, { person }) {
+    const page = await pageAs(person);
+    await page.getByRole("button", { name: "Sign out" }).click();
+  },
+});
+```
+
+- `requires` は、step が実行される前に成り立っている必要がある state を列挙します。
+  claim step も宣言できます。
+- `gives` は、step が通ったあとに成り立つ state を列挙します。
+  step が part を通じてすることと、step が組み立てる fixture も数えます。
+  `mutates` と同じ範囲です。
+- `ends` は、step が通ったあとにもう成り立たない state を列挙します。
+
+エントリは `"book-open"` のような state の名前か、`["signed-in", "person"]` のような名前と、持ち主を区別する値を持つ `args` のキーの組です。
+組は `from` のエントリと同じ形なので、`tsc` がキーを `args` と照合します。
+state の名前はただのテキストで、同じテキストを書く step は同じ state を名指します。
+`defineStep` は、どちらの形でもないエントリ、空の名前や両端に空白のある名前、`args` が宣言しないキー、2 回書かれたエントリ、`gives` と `ends` の両方にある 1 つの state を拒否します。
+claim step の `gives` と `ends` も拒否します。
+claim step には何かを変える action がないからです。
+`nuka check` は、他の不正な定義と同じく、それぞれの拒否を `step-file-import-failed` として報告します。
+
+何を宣言するかは、次の 3 つの規則で決まります。
+
+- `requires` は、プログラムが何をしても、それがなければ step 自身の `run` や `observe` が仕事をできない state を名指します。
+  クリックする要素がない、タブが存在しない、という場合です。
+  scenario がプログラムの拒否を見るためにわざと破る業務規則は、決して `requires` にしません。
+  その scenario は、"aki tries to open the settings page" のように、その state を必要としない step を使います。
+- `from` か `requires` か。
+  `run` が前の step の返した値を読むなら `from` を使います。
+  前の line が何かをしたことだけが必要なら `requires` を使います。
+- シードされたアカウントや、サインイン済みの storage state を読み込む context fixture のように、すべての scenario が最初から持っている state は、step が必要とするものではありません。
+  どの line もそれを与えないからです。
+
+`nuka check` は各 scenario を Background から順に辿り、各 state について持ち主ごとに、成り立つ、成り立たない、わからない、のどれかを覚えます。
+line の `requires` は、その line 自身の `ends` と `gives` が効く前に判定されます。
+持ち主は、キーの schema がそのテキストを変えずに step に渡すとき、line がそのキーに取るテキストです。
+`z.coerce`、transform、その他の書き換えが変えるキーは、run だけが知る持ち主を名指します。
+どのリストでも state を名指さない型付き step は、その state をそのままにします。
+走査は、line がそもそも実行される唯一の経路を辿ります。
+その前の line がすべて通った経路です。
+失敗した line は、scenario の残りをスキップするからです。
+
+`state-missing` は、前の line をどう通っても state なしで到達する、state を必要とする line でのエラーです。
+
+- どの step もその state を与えないので、どの line も与えられない。
+- line が名指す持ち主に、前のどの line も与えていない。
+- 前の line が終わらせ、その間のどの line も再び与えていない。
+- line が持ち主を名指さず、前の line が宣言することによれば、どの持ち主も持っていない。
+
+```text
+error	state-missing	features/settings.feature:11	Step "open-settings" requires "signed-in" for person "aki", and line 10 "aki signs out" (step "sign-out") ends it, with no line between them giving it again; line 12 requires it too. nuka run refuses this scenario before any of its steps runs
+  fix: Put a line that runs step "sign-in" ("aki signs in") between line 10 and line 11, or move line 10 below line 12. If the scenario means to show what happens without "signed-in", the line needs a step that does not require it.
+```
+
+同じ持ち主に同じ state を必要とし、同じ事実がその後ろにある後の line は、"line 12 requires it too" として最初の finding にまとめられます。
+1 つの fix がどちらも片づけるからです。
+すべての scenario が同じように到達する Background の line は、すべての scenario のまとめられた line を持つ 1 つの finding になります。
+fix は、state を与える各 step を、持ち主を埋めた貼り付けられる line として名指します。
+前の line が、どこでもその state を名指さない型付き step を実行するとき、fix はその step の `gives` に state を足すことも勧めます。
+その step は言わずに state を与えているかもしれず、finding が scenario ではなく宣言の穴である唯一の場合だからです。
+どの step も与えない必要な名前はよく typo なので、その fix は step が与える名前を列挙します。
+
+わからないことは決して報告されません。
+nukadoko が読める宣言のないところで、state はわからなくなります。
+
+- compat step のあと、およびどの step にも一致しない line や複数の step に一致する line のあと。
+  後の 2 つには独自のエラーがあります。
+- compat の Before hook のタグが当てはまるとき、または step ファイルが `setWorldConstructor` を呼んだとき、scenario の始めから。
+- compat の AfterStep hook のタグが当てはまるとき、各 line のあと。
+- part が与えるか終わらせる state を、step 自身が名指さない複合 step のあと。
+
+check は state が成り立つとは決して言わず、成り立ち得ないことだけを言います。
+state について run の時点で計測するものはないので、誤った `gives` は、そのあとに失敗する line を通じてだけ見えます。
+
+`state-shape-mismatch` は、ある step が state をキー付きで書き、別の step がキーなしで書くときのエラーです。
+その state を必要とする line はどれも判定されないので、check は黙らずにそう言います。
+
+`nuka run` は、`state-missing` の finding がある scenario を、その step のどれかが実行される前に拒否します。
+デフォルトでは `check-errors` を通じて拒否し、`--no-check` では `from` の順序違反を拒否するのと同じ実行前のガードを通じて拒否します。
+state を必要とする line は上のメッセージで失敗し、他の line はすべてスキップされ、どの line も step record を持ちません。
+`nuka do` は scenario を持たないので、state を判定しません。
+
+`nuka steps`、`nuka steps --json`、`nuka describe` は 3 つのリストを示します。
+必要な state にはそれぞれ `given_by` が付きます。
+pattern を持ち、その `gives` が state を名指す step で、scenario を組み立てるエージェントは最初に置く line がわかります。
+step が宣言しないリストは、`from` や `parts` と同じく現れません。
+
+```json
+{
+  "name": "sign-out",
+  "requires": [{ "state": "signed-in", "key": "person", "given_by": ["sign-in"] }],
+  "ends": [{ "state": "signed-in", "key": "person" }]
+}
+```
 
 ### Claims
 
@@ -7295,7 +7416,7 @@ nukadoko はすべての段階を記録します。
 所見はそれぞれ、次の 3 つの severity のどれかを持ちます。
 
 - **エラー**(`error`)は、プロジェクトと green な run の間に立ちはだかるものです。
-  スキーマに合わない pattern、どの step にも一致しない feature の行、config の誤りがそうです。
+  スキーマに合わない pattern、どの step にも一致しない feature の行、前のどの line も成り立たせていない state を step が必要とする line、config の誤りがそうです。
   `nuka run` は、選んだ scenario のエラーがあれば実行を拒否します。
 - **警告**(`warning`)は、人が見るべき緊張関係ですが、run を止めません。
   compat step に結び付いた Then、Then のない scenario、どの envFile も定義していないキーを名指す `secrets` のエントリがそうです。
@@ -7665,9 +7786,11 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               naming the selection and its steps), which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
-                              can't read), and where each chained args key
+                              can't read), where each chained args key
                               comes from (from, or from_errors naming the
-                              key and why for the one it can't read);
+                              key and why for the one it can't read), and
+                              the states it requires (each with given_by,
+                              the steps that give it), gives, and ends;
                               --json prints the envelope with steps beside
                               findings; a step file that failed to import
                               is a step-file-import-failed finding, exiting
@@ -7682,7 +7805,8 @@ nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
                               one, a claim step's claims, poll, and
-                              events, plus
+                              events, the states it requires, gives, and
+                              ends, plus
                               the envelope's findings beside it (the same
                               findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null
@@ -7912,6 +8036,10 @@ nuka check [feature..] [--json] [--fail-on <code>] [--env <name>]...
                               an earlier line matches no step), or
                               ambiguous between two producers, a `from`
                               naming a step discovery never registered, a
+                              line whose step requires a state that no
+                              earlier line can have left holding, a state
+                              some steps write with a key and others
+                              without, a
                               fixture
                               dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page

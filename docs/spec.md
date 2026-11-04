@@ -467,6 +467,9 @@ export default defineStep({
 - `parts` (default `[]`) lists the steps this step's own `run` may call
   through the `call` fixture (see "Parts"). A step that calls none of
   them omits it, the same convention `from` follows.
+- `requires`, `gives`, and `ends` (default `[]`) declare the states a
+  step depends on and changes when no value carries them, such as a person
+  signed in (see "States").
 - `returns` may be omitted. It then defaults to an empty object schema,
   and a `run` that returns nothing is recorded as `{}`. This fits a step
   with nothing a later step cites and nothing a failure would be diagnosed
@@ -1384,6 +1387,9 @@ The `used` field in the step record does not check the declaration (see "Records
 The declaration identifies the source step when the author writes the file.
 `used` identifies the specific source execution at runtime.
 
+`from` carries a value.
+When a step needs only that an earlier line did something, such as signing a person in, it declares the state with `requires` instead, and the step that does it declares `gives` (see "States").
+
 ### Parts
 
 A step uses the granularity at which a reader understands the scenario.
@@ -1535,6 +1541,104 @@ several steps. This design would keep split operations beside the
 composite step. However, a typed step's name is its file's basename. The CLI
 cannot see a named export without importing its file. A separate file for each part keeps the step name equal to the file name
 and adds one file.
+
+### States
+
+Some steps depend on what an earlier line did rather than on a value it returned.
+A person must be signed in before their settings page opens, and a book must be open before a reader chooses how to read it.
+`from` carries a value, so it cannot say this.
+A state has no value, a later line can remove it, several steps can give it, and it can hold for one person and not for another.
+Without a declaration, a scenario that forgets the sign-in looks valid until the browser shows the wrong page.
+
+A step declares the states it depends on and the states it changes:
+
+```ts
+import { defineStep, z } from "nukadoko";
+
+export default defineStep({
+  pattern: "{person:word} signs out",
+  description: "Sign out from the account menu",
+  args: z.object({ person: z.string() }),
+  requires: [["signed-in", "person"]],
+  ends: [["signed-in", "person"]],
+  async run({ pageAs }, { person }) {
+    const page = await pageAs(person);
+    await page.getByRole("button", { name: "Sign out" }).click();
+  },
+});
+```
+
+- `requires` lists the states that must hold before the step runs. A claim step may declare it.
+- `gives` lists the states that hold once the step has passed. What the step does through its parts and the fixtures it builds counts, the same reach `mutates` has.
+- `ends` lists the states that no longer hold once the step has passed.
+
+An entry is a state's name, such as `"book-open"`, or a name and the `args` key whose value tells the holders apart, such as `["signed-in", "person"]`.
+The pair has the shape of a `from` entry, so `tsc` checks the key against `args`.
+A state name is plain text, and steps that write the same text name the same state.
+`defineStep` refuses an entry of neither form, a name that is empty or has a space at either end, a key that `args` does not declare, an entry listed twice, and one state in both `gives` and `ends`.
+It refuses `gives` and `ends` on a claim step, which has no action to change anything.
+`nuka check` reports each refusal as `step-file-import-failed`, as for every other malformed definition.
+
+Three rules decide what to declare:
+
+- `requires` names a state without which the step's own `run` or `observe` cannot do its work, whatever the program does: the element it clicks is not there, the tab does not exist. It is never a business rule that a scenario breaks on purpose to see the program refuse. That scenario uses a step that does not require the state, such as "aki tries to open the settings page".
+- `from` or `requires`: when `run` reads a value an earlier step returned, use `from`. When it needs only that an earlier line did something, use `requires`.
+- A state that every scenario starts with, such as a seeded account or a context fixture that loads a signed-in storage state, is not one a step requires, because no line gives it.
+
+`nuka check` walks each scenario in order, the Background first, and keeps what it knows about each state for each holder: held, not held, or unknown.
+A line's `requires` is judged before its own `ends` and `gives` apply.
+The holder is the text the line captures for the key, when the key's schema hands that text to the step unchanged.
+A key that `z.coerce`, a transform, or another rewrite changes names a holder that only the run knows.
+A typed step whose lists do not name a state leaves that state as it was.
+The walk follows the one path on which a line runs at all: every line before it passed, because a failed line skips the rest of its scenario.
+
+`state-missing` is an error at a requiring line that every way through the earlier lines reaches without the state:
+
+- no step gives the state, so no line can;
+- no earlier line gives it to the holder the line names;
+- an earlier line ends it, and no line between them gives it again;
+- the line names no holder, and by what the earlier lines declare, no holder holds it.
+
+```text
+error	state-missing	features/settings.feature:11	Step "open-settings" requires "signed-in" for person "aki", and line 10 "aki signs out" (step "sign-out") ends it, with no line between them giving it again; line 12 requires it too. nuka run refuses this scenario before any of its steps runs
+  fix: Put a line that runs step "sign-in" ("aki signs in") between line 10 and line 11, or move line 10 below line 12. If the scenario means to show what happens without "signed-in", the line needs a step that does not require it.
+```
+
+A later line that requires the same state for the same holder, with the same fact behind it, folds into the first finding as "line 12 requires it too", because one fix settles both.
+A Background line that every scenario reaches the same way is one finding, with the folded lines of all of them.
+The fix names each step that gives the state as a line to paste, with the holder filled in.
+When an earlier line runs a typed step that names the state nowhere, the fix also says to add the state to that step's `gives`: the step may give it without saying so, and that is the one way the finding is a gap in the declarations rather than in the scenario.
+A required name that no step gives is often a typo, so that fix lists the names steps give.
+
+Unknown is never reported.
+A state becomes unknown where nukadoko has no declaration to read:
+
+- after a compat step, and after a line that matches no step or several steps, which have errors of their own;
+- from the scenario's start, when a compat Before hook's tags apply or a step file called `setWorldConstructor`;
+- after each line, when a compat AfterStep hook's tags apply;
+- after a composite step whose parts give or end a state that the step itself does not name.
+
+The check never says that a state holds, only that it cannot.
+Nothing about a state is measured at run time, so a wrong `gives` stays visible only through the line that fails after it.
+
+`state-shape-mismatch` is an error when some steps write a state with a key and others write it bare.
+No line that requires that state is judged, so the check says so instead of staying silent.
+
+`nuka run` refuses a scenario with a `state-missing` finding before any of its steps runs: by default through `check-errors`, and under `--no-check` through the same pre-run guard that refuses a `from` order violation.
+The requiring line fails with the message above, every other line is skipped, and no line gets a step record.
+`nuka do` judges no state, because it has no scenario.
+
+`nuka steps`, `nuka steps --json`, and `nuka describe` show the three lists.
+Each required state carries `given_by`, the steps with a pattern whose `gives` names it, so an agent that composes a scenario sees which line to put first.
+A list the step does not declare is absent, as `from` and `parts` are:
+
+```json
+{
+  "name": "sign-out",
+  "requires": [{ "state": "signed-in", "key": "person", "given_by": ["sign-in"] }],
+  "ends": [{ "state": "signed-in", "key": "person" }]
+}
+```
 
 ### Claims
 
@@ -9417,7 +9521,8 @@ deviation record prevents that loss from staying hidden.
 running it, and each finding carries one of three severities:
 
 - An **error** stands between the project and a green run: a pattern that
-  does not match its schema, a feature line no step matches, a config
+  does not match its schema, a feature line no step matches, a line whose
+  step requires a state no earlier line leaves holding, a config
   mistake. `nuka run` refuses over the errors of the scenarios it selected.
 - A **warning** is a tension a person should look at that does not stop a
   run: a Then bound to a compat step, a scenario with no Then, a `secrets`
@@ -9800,9 +9905,11 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               naming the selection and its steps), which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
-                              can't read), and where each chained args key
+                              can't read), where each chained args key
                               comes from (from, or from_errors naming the
-                              key and why for the one it can't read);
+                              key and why for the one it can't read), and
+                              the states it requires (each with given_by,
+                              the steps that give it), gives, and ends;
                               --json prints the envelope with steps beside
                               findings; a step file that failed to import
                               is a step-file-import-failed finding, exiting
@@ -9817,7 +9924,8 @@ nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
                               one, a claim step's claims, poll, and
-                              events, plus
+                              events, the states it requires, gives, and
+                              ends, plus
                               the envelope's findings beside it (the same
                               findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null
@@ -10047,6 +10155,10 @@ nuka check [feature..] [--json] [--fail-on <code>] [--env <name>]...
                               an earlier line matches no step), or
                               ambiguous between two producers, a `from`
                               naming a step discovery never registered, a
+                              line whose step requires a state that no
+                              earlier line can have left holding, a state
+                              some steps write with a key and others
+                              without, a
                               fixture
                               dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page

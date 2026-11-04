@@ -229,7 +229,8 @@ the program did differently, step by step, on the side with the fix.
 
 ## 8. Keeping the map honest
 
-- `nuka check`: a step or a binding broke, and, with no target, notes on
+- `nuka check`: a step or a binding broke, a line needs a state no
+  earlier line leaves (`state-missing`), and, with no target, notes on
   steps and fixtures that are rotting.
 - `nuka run`: a sub-feature with a scenario no longer does what the map
   says. Red is map drift or a product regression; decide which before

@@ -2,8 +2,8 @@
 
 Finding a step, scaffolding it, running it alone, and chaining it. The
 file's shape and its pattern: `step-files.md`. A Then, which claims:
-`checking-steps.md`. Helpers, parts, and splitting: `parts.md`.
-Fixtures, `scratch`, and `poll`: `fixtures.md`.
+`checking-steps.md`. Helpers, parts, and splitting: `parts.md`. Fixtures,
+`scratch`, and `poll`: `fixtures.md`. States: `states.md`.
 
 ## Reading the vocabulary
 
@@ -157,7 +157,7 @@ its own, not that it works in the scenario's own order; only `run` checks
 that. Nothing carries across `do` calls or into a scenario, login state
 included, so shared state needs fixing in the feature: give it its own
 step, named for what it establishes, and call it once. A scenario that
-needs to be signed in gets it from a fixture or a Given step its feature names.
+needs to be signed in gets it from a fixture or a Given (`states.md`).
 
 A step that declares `from` (see "Chaining a value from an earlier step"
 below) still runs alone: pass the key in `--args` like any other, or add

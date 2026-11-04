@@ -37,6 +37,9 @@ A step reaches it the same way it reaches `page` or `request`, by
 destructuring the name: `async ({ tenant }, args) => {...}`. Setup runs the
 first time a step names it; teardown runs after that step's scenario
 finishes, in reverse build order, whether the scenario passed or failed.
+What a fixture leaves (a signed-in context) belongs to the `gives` of the
+step that builds it; a state every scenario starts with is required by no
+step (`states.md`).
 A setup that exceeds its timeout still fails the scenario, and the report
 names the fixture and the phase. The fixture keeps running. If it calls
 `use()` after that, the call resolves as `"failed"` and the teardown

@@ -71,18 +71,18 @@ If none is true, ask what this is supposed to do before writing anything.
    `Feature:` (`references/writing-the-feature.md`). Every expected value
    is one the criteria state; a value they do not state is a question for
    a person, not a guess and not a value read off the program.
-2. **Steps.** `nuka steps` lists the vocabulary, `nuka describe <step>`
-   one contract; reuse before scaffolding. `nuka scaffold --feature <file>`
-   stubs each undefined line, with no `returns` and no `from`, and prints
-   each stub's own `nuka scaffold ... --replace` line (it refuses a file
-   anyone edited). Redo the When that runs a program or sends a request,
-   and the Thens that read it, from those lines with `--description`,
-   `--command <entry point>` (`--cwd`, `--argv`) or `--request "<METHOD>
-   <path>"`, and `--from <step>.<key>` per value an earlier step returns
-   (its producer has to return that key already). A Then declares
-   `claims`, never `run` (`references/checking-steps.md`). Run each
-   alone with `nuka do <step> --args '<json>'` (`references/writing-steps.md`
-   and its references). Finished projects: `references/examples/`.
+2. **Steps.** `nuka steps` lists the vocabulary, `nuka describe <step>` one
+   contract; reuse before scaffolding. `nuka scaffold --feature <file>` stubs
+   each undefined line and prints each stub's own `nuka scaffold ...
+   --replace` line. Redo the When that runs a program or sends a request, and
+   the Thens that read it, from those lines with `--description`, `--command
+   <entry point>` (`--cwd`, `--argv`) or `--request "<METHOD> <path>"`, and
+   `--from <step>.<key>` per value an earlier step returns (its producer has
+   to return that key already). A step that needs only what an earlier line
+   did `requires` the state that line's step `gives` (`references/states.md`).
+   A Then declares `claims`, never `run` (`references/checking-steps.md`). Run
+   each alone with `nuka do <step> --args '<json>'`
+   (`references/writing-steps.md`). Finished projects: `references/examples/`.
 3. **`nuka check <feature>`.** Fix every error and read every warning: a
    warning is a question about intent, not noise. Each finding names its
    file, a `fix:` (an edit) or `do:` (a command) line; apply or run it.

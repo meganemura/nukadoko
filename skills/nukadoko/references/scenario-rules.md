@@ -87,9 +87,11 @@ and claims on what the scenario created (the body the Given returned),
 never on everything the server holds. A fixture that holds state is
 scoped per scenario; `scope: "process"` is for a resource no scenario
 writes to, or one each scenario resets.
-Checked by: review. `repeated-scenario-prefix` names a process-scope
-fixture only when every shared step declares `mutates: false`; for any
-other opening it names the step that may write.
+Checked by: `state-missing` when a line's step requires a state no
+earlier line of the scenario gives (`states.md`), and review.
+`repeated-scenario-prefix` names a process-scope fixture only when every
+shared step declares `mutates: false`; for any other opening it names the
+step that may write.
 
 ## S9. One action per scenario, one claim per Then line
 
@@ -105,6 +107,9 @@ Good: `Given an empty directory`, `When I run tally with "missing.csv"`.
 The same step can be the When of one scenario and a Given of another: a
 registration is the action in "a short password" and the setup in "sign
 in before confirming". The keyword says which it is in this scenario.
+A scenario that breaks a rule on purpose, such as signing in before
+confirming, uses a step that does not require what the rule demands
+(`states.md`).
 Checked by: `from-order-violation` when the action written as a Given has
 no Given before it to read from (`examples/cli.md`),
 `claims-outside-then` for a claim step in Given or When position, and
