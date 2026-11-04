@@ -4,11 +4,15 @@ import * as gs from "@hegeldev/hegel/generators";
 import {
   booleanValueTag,
   conditionTagText,
+  expectsTagsOf,
+  expectsTagText,
   meets,
   readConditionTag,
   readCriterionTags,
+  readExpectsTag,
   roleIn,
   type ConditionTag,
+  type ExpectedFailure,
   type Conditions,
 } from "../src/condition/condition.js";
 import { defaultEnvironmentNames } from "../src/environment/resolve-environment.js";
@@ -88,7 +92,52 @@ describe("condition tags", () => {
       ],
       held: true,
       malformed: ["@without:"],
+      expects: [],
     });
+  });
+});
+
+const failure = gs.oneOf(
+  gs.integers({ minValue: 500, maxValue: 599 }).map((status): ExpectedFailure => ({ kind: "status", value: String(status) })),
+  value.map((v): ExpectedFailure => ({ kind: "error", value: v })),
+  value.map((v): ExpectedFailure => ({ kind: "page-error", value: v })),
+);
+
+// The @expects grammar the spec states, written once more as the oracle.
+const EXPECTS_GRAMMAR = /^@expects:(?:status=5[0-9]{2}|(?:error|page-error)=[^\s@]+)$/;
+
+describe("@expects tags", () => {
+  it("read back to the failure they were written from", () =>
+    hegel.test((tc) => {
+      const expected = tc.draw(failure);
+      expect(readExpectsTag(expectsTagText(expected))).toEqual(expected);
+    }));
+
+  it("read only text in the grammar, and that text exactly", () =>
+    hegel.test((tc) => {
+      const body = tc.draw(
+        gs.oneOf(
+          gs.text({ alphabet: "statuserorpag-=0459x @é", maxSize: 12 }),
+          gs.sampledFrom(["status=503", "status=404", "status=5xx", "status=", "error=", "page-error", "page-error=Type Error", "kind=x", "status=0503"]),
+        ),
+      );
+      const text = `@expects:${body}`;
+      const read = readExpectsTag(text);
+      expect(read !== undefined, text).toBe(EXPECTS_GRAMMAR.test(text));
+      if (read !== undefined) expect(expectsTagText(read)).toBe(text);
+    }));
+
+  it("are read beside the condition tags, each once, without making a condition malformed", () => {
+    expect(readCriterionTags(["@expects:status=503", "@with:a", "@expects:status=503", "@expects:status=404", "@expects:page-error=TypeError"])).toEqual({
+      conditions: [{ kind: "with", name: "a" }],
+      held: false,
+      malformed: [],
+      expects: [
+        { kind: "status", value: "503" },
+        { kind: "page-error", value: "TypeError" },
+      ],
+    });
+    expect(expectsTagsOf(["@smoke", "@expects:error=Stripe::CardError", "@expects:error="])).toEqual(["@expects:error=Stripe::CardError"]);
   });
 });
 

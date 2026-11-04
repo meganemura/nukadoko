@@ -1,5 +1,5 @@
 import type { Background, GherkinDocument, Pickle, Rule, Scenario, Step, TableRow } from "@cucumber/messages";
-import { HELD_TAG, isConditionShaped } from "../condition/condition.js";
+import { HELD_TAG, isConditionShaped, isExpectsShaped } from "../condition/condition.js";
 
 // Responsibility: what one criterion is, and how `nuka run --base <ref>`
 // finds the same criterion at the ref (docs/spec.md "Verdicts"). A
@@ -45,7 +45,8 @@ export interface Criterion {
   readonly name: string;
   /** What is compared, as JSON. */
   readonly content: string;
-  /** Its condition tags and `@held`, the tags that are content. */
+  /** Its condition tags, its `@expects:` tags, and `@held`, the tags
+   * that are content. */
   readonly tags: readonly string[];
   /** Every tag it carries, each once, sorted: what a retag compares. */
   readonly allTags: readonly string[];
@@ -122,11 +123,13 @@ function placesById(document: GherkinDocument): Map<string, ScenarioPlace> {
   return places;
 }
 
-/** The tags that are content: condition tags, as written, and `@held`,
- * each once and in a fixed order, since the order tags stand in on a line
- * means nothing. Pure. */
+/** The tags that are content: condition tags and `@expects:` tags, as
+ * written, and `@held`, each once and in a fixed order, since the order
+ * tags stand in on a line means nothing. An `@expects:` tag is content
+ * because it changes what the criterion accepts: one added under
+ * `--base` makes the criterion changed, so it is proven again. Pure. */
 export function contentTags(tags: readonly string[]): string[] {
-  return [...new Set(tags.filter((tag) => tag === HELD_TAG || isConditionShaped(tag)))].sort();
+  return [...new Set(tags.filter((tag) => tag === HELD_TAG || isConditionShaped(tag) || isExpectsShaped(tag)))].sort();
 }
 
 /** One criterion per pickle of one feature file, in pickle order. Pure. */

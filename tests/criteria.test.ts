@@ -42,7 +42,7 @@ const spec = gs
     gs.sampledFrom(["an empty cart", "three items", "the total"]),
     gs.integers({ minValue: 0, maxValue: 3 }),
     gs.arrays(gs.sampledFrom(["@smoke", "@slow", "@wip"]), { maxSize: 2 }),
-    gs.arrays(gs.sampledFrom(["@with:banner", "@without:cache", "@with:mode=dark", "@held"]), { maxSize: 2 }),
+    gs.arrays(gs.sampledFrom(["@with:banner", "@without:cache", "@with:mode=dark", "@held", "@expects:status=503"]), { maxSize: 2 }),
     step(firstKeyword),
     gs.arrays(step(anyKeyword), { maxSize: 3 }),
     gs.optional(gs.sampledFrom(["1", "2", "many"])),
@@ -157,7 +157,7 @@ describe("criterion identity", () => {
       after = { ...before, steps };
       if (edit === "example") after = before.example === null ? { ...before, example: "1", steps: steps.map((entry) => ({ ...entry, text: `${entry.text} <n>` })) } : { ...before, example: `${before.example}0` };
       if (edit === "condition") {
-        const tag = tc.draw(gs.sampledFrom(["@with:banner", "@without:cache", "@with:mode=dark", "@held"]));
+        const tag = tc.draw(gs.sampledFrom(["@with:banner", "@without:cache", "@with:mode=dark", "@held", "@expects:status=503"]));
         after = { ...before, conditionTags: before.conditionTags.includes(tag) ? before.conditionTags.filter((entry) => entry !== tag) : [...before.conditionTags, tag] };
       }
       const base = only(before);

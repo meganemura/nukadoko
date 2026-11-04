@@ -209,6 +209,18 @@ const CHECK_CODES = {
     severity: "warning",
     fix: "Run those scenarios in a world nukadoko serves, with {events} in env, or select one with --env.",
   },
+  "expects-tag-malformed": {
+    description:
+      "A tag starts with @expects: but does not read as @expects:status=<500-599>, @expects:error=<class>, or @expects:page-error=<name>: an unknown kind, no value, a status outside 500 to 599, or a value with whitespace or \"@\". It accepts nothing, so under nuka run --no-check the failure it meant stays unexpected and its cell is broke.",
+    severity: "error",
+    fix: "Rewrite the tag as @expects:status=<500-599>, @expects:error=<class>, or @expects:page-error=<name>, one status, class, or name per tag; the unexpected-failure finding of a run spells the tag for what it saw.",
+  },
+  "expects-unread": {
+    description:
+      "An @expects:error= tag accepts an unhandled error the program reports in its execution events, and no world the run would start reads them (the program file names no {events}, the world runs at a url, or there is no program file), so the tag can never match.",
+    severity: "warning",
+    fix: "Name {events} in env of nukadoko.program.ts for a world the run starts, such as env: { EXECUTION_EVENTS: \"{events}\" }, and have the program append its execution events there, or remove the tag.",
+  },
   "feature-parse-error": {
     description: "A .feature file could not be parsed, so nothing in it was checked.",
     severity: "error",

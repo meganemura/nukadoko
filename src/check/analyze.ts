@@ -11,6 +11,7 @@ import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.
 import {
   attachStepLines,
   findConditionTags,
+  findExpectsTags,
   findOutlinesThatDoNotRun,
   findScenarioShapeFindings,
   findSerialTagOnScenario,
@@ -29,6 +30,7 @@ import { hookDisplayTitle } from "../record/scenario-record.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
 import { checkConditions } from "./condition-check.js";
+import { checkExpects } from "./expects-check.js";
 import { defaultEnvironmentNames, resolveEnvironment } from "../environment/resolve-environment.js";
 import {
   declaresDoneCallback,
@@ -232,6 +234,7 @@ function runSelectionFeatures(
       findScenarioShapeFindings(feature.gherkinDocument, feature.relativePath),
     ),
     conditionTags: selected.flatMap((feature) => findConditionTags(feature.gherkinDocument, feature.relativePath)),
+    expectsTags: selected.flatMap((feature) => findExpectsTags(feature.gherkinDocument, feature.relativePath)),
   });
 }
 
@@ -571,7 +574,7 @@ async function reportFor(
     errors.push({ code: issue.code, message: issue.message, file: configFileName });
   }
 
-  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun, scenarioShapeFindings, conditionTags } =
+  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun, scenarioShapeFindings, conditionTags, expectsTags } =
     loadFeatures(config);
   for (const parseError of parseErrors) {
     errors.push({
@@ -620,6 +623,9 @@ async function reportFor(
       explicit: selectedNames === envs,
     }),
   );
+  const expectsFindings = checkExpects({ expectsTags, program, envs, programFile: program?.fileName ?? PROGRAM_FILE_NAME });
+  errors.push(...expectsFindings.errors);
+  warnings.push(...expectsFindings.warnings);
   // Warnings, not errors: a scenario with no Then can be a deliberate smoke
   // test, and rows that share a name can be what the author wants to read.
   for (const finding of scenarioShapeFindings) {

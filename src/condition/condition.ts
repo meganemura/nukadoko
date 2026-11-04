@@ -18,7 +18,11 @@
 // that never heard of the flag.
 //
 // `@held` is read here too: it is part of a criterion's content beside the
-// condition tags, so the two are read together.
+// condition tags, so the two are read together. So is `@expects:`, which
+// names a failure underneath a criterion's executions that the criterion
+// accepts (docs/spec.md "Failures underneath"): one status, one error
+// class, or one page error name, never a range or a bare kind, so a tag
+// accepts exactly what it says and a person approving reads all of it.
 
 /** A condition's name: what `conditions` declares and a tag names. No `=`
  * or `:`, which the tag grammar uses, and nothing a Gherkin tag cannot
@@ -97,6 +101,71 @@ export function conditionTagText(tag: ConditionTag): string {
   return `${WITH_PREFIX}${tag.name}=${tag.value}`;
 }
 
+/** The prefix of a tag that names a failure underneath the criterion's
+ * executions that the criterion accepts. */
+export const EXPECTS_PREFIX = "@expects:";
+
+/** What an `@expects:` tag can name, by kind, in the order a failure is
+ * looked for under one step: the server's answer, the program's own report,
+ * then the page. `value` is what the tag's value has to be, `placeholder`
+ * stands for it in the grammar, and `words` says what it names. A new kind
+ * is a row: the grammar, the check's messages, and the order follow it. */
+export const EXPECTED_KINDS = {
+  status: { value: /^5[0-9]{2}$/, placeholder: "<500-599>", words: "a status from 500 to 599" },
+  error: { value: CONDITION_VALUE_PATTERN, placeholder: "<class>", words: "the class of an error the program reports with handled: false" },
+  "page-error": { value: CONDITION_VALUE_PATTERN, placeholder: "<name>", words: "the name of an error the page threw, such as TypeError" },
+} as const satisfies Readonly<Record<string, { readonly value: RegExp; readonly placeholder: string; readonly words: string }>>;
+
+export type ExpectedKind = keyof typeof EXPECTED_KINDS;
+
+/** The kinds in `EXPECTED_KINDS` order. */
+export const EXPECTED_KIND_ORDER = Object.keys(EXPECTED_KINDS) as readonly ExpectedKind[];
+
+/** One failure underneath an execution, by what an `@expects:` tag names
+ * of it: a tag and a failure it accepts are the same value, so accepting
+ * is equality. A status is its digits. */
+export interface ExpectedFailure {
+  readonly kind: ExpectedKind;
+  readonly value: string;
+}
+
+/** Whether `tag` starts with `@expects:`, well formed or not. */
+export function isExpectsShaped(tag: string): boolean {
+  return tag.startsWith(EXPECTS_PREFIX);
+}
+
+/** Whether `kind` is one `EXPECTED_KINDS` holds. */
+export function isExpectedKind(kind: string): kind is ExpectedKind {
+  return Object.hasOwn(EXPECTED_KINDS, kind);
+}
+
+/** The failure `tag` names, or `undefined` when it does not read as
+ * `@expects:<kind>=<value>` with a kind and a value `EXPECTED_KINDS`
+ * holds. Pure. */
+export function readExpectsTag(tag: string): ExpectedFailure | undefined {
+  if (!isExpectsShaped(tag)) return undefined;
+  const body = tag.slice(EXPECTS_PREFIX.length);
+  const equals = body.indexOf("=");
+  if (equals === -1) return undefined;
+  const kind = body.slice(0, equals);
+  const value = body.slice(equals + 1);
+  if (!isExpectedKind(kind) || !EXPECTED_KINDS[kind].value.test(value)) return undefined;
+  return { kind, value };
+}
+
+/** The tag that names `failure`: `readExpectsTag` reads it back as
+ * `failure`. Pure. */
+export function expectsTagText(failure: ExpectedFailure): string {
+  return `${EXPECTS_PREFIX}${failure.kind}=${failure.value}`;
+}
+
+/** The `@expects:` tags among a criterion's tags that read, as
+ * `expectsTagText` writes them, each once, in the order the tags first
+ * name them. Pure. */
+export function expectsTagsOf(tags: readonly string[]): string[] {
+  return readCriterionTags(tags).expects.map(expectsTagText);
+}
+
 /** A criterion's tags as this module reads them. */
 export interface CriterionTags {
   /** Each condition tag once, in the order the tags first name it: a tag
@@ -105,6 +174,10 @@ export interface CriterionTags {
   readonly held: boolean;
   /** Condition-shaped tags that do not read, each once. */
   readonly malformed: readonly string[];
+  /** Each `@expects:` tag that reads, once, in the order the tags first
+   * name it. One that does not read accepts nothing, so the failure it
+   * meant stays unexpected: a typo fails toward red. */
+  readonly expects: readonly ExpectedFailure[];
 }
 
 /** Reads every tag a scenario carries, its Feature's, Rule's, and
@@ -112,6 +185,7 @@ export interface CriterionTags {
 export function readCriterionTags(tags: readonly string[]): CriterionTags {
   const conditions: ConditionTag[] = [];
   const malformed: string[] = [];
+  const expects: ExpectedFailure[] = [];
   const seen = new Set<string>();
   let held = false;
   for (const tag of tags) {
@@ -119,13 +193,19 @@ export function readCriterionTags(tags: readonly string[]): CriterionTags {
       held = true;
       continue;
     }
-    if (!isConditionShaped(tag) || seen.has(tag)) continue;
+    if (seen.has(tag)) continue;
     seen.add(tag);
+    if (isExpectsShaped(tag)) {
+      const expected = readExpectsTag(tag);
+      if (expected !== undefined) expects.push(expected);
+      continue;
+    }
+    if (!isConditionShaped(tag)) continue;
     const read = readConditionTag(tag);
     if (read === undefined) malformed.push(tag);
     else conditions.push(read);
   }
-  return { conditions, held, malformed };
+  return { conditions, held, malformed, expects };
 }
 
 /** Whether an environment that declares `conditions` meets `tag`. A
