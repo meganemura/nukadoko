@@ -142,6 +142,7 @@ export default {
         "capture.ts",
         "errors.ts",
         "escape-hint.ts",
+        "example-line.ts",
         "expression.ts",
         "parameter-type-config.ts",
         "parameter-type-errors.ts",

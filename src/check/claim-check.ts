@@ -718,7 +718,7 @@ function lackedField(entry: ItemClaim, captured: ReadonlyMap<string, string>, sh
  * anonymous `{key:}`, and `{string}` without its quotes, unescaped the way
  * the run's transformer does. A custom type's transformer is never run by
  * `nuka check`, and a number type gives no name, so neither is here. */
-function capturedTexts(matched: CheckedPattern | undefined, text: string): ReadonlyMap<string, string> {
+export function capturedTexts(matched: CheckedPattern | undefined, text: string): ReadonlyMap<string, string> {
   const texts = new Map<string, string>();
   if (matched?.matcherKind !== "expression") return texts;
   const args = matched.expression.match(text);
