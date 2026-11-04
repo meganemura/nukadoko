@@ -456,6 +456,12 @@ Facts a migration runs into:
   every control out, so JUnit reads a green run as green; Allure keeps
   each one, named `<scenario> (control)`, and shows one that failed as a
   failed result by design. Gate CI on `nuka run`'s exit code.
+- A scenario cucumber-js reported green can be red here with
+  `unexpected-failure`: its steps passed while a request got a 5xx, its
+  page threw an error nothing caught, or the program reported an error
+  with `handled: false`. Fix the program, or, when the criteria say the
+  scenario causes that failure, tag it as the finding's `fix:` line spells
+  (docs/spec.md "Failures underneath").
 - The walk for `.feature` files skips `node_modules` and every directory
   whose name starts with `.`, at any depth, and says nothing about it.
 - A glue loop that slept and tried again becomes `poll` on the fixture

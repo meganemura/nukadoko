@@ -6258,7 +6258,18 @@ to act on the run without opening another file:
   record holds (see "Claims"), so a broken claim is read without opening
   the step record, and its `events_read`, and `after_world_stop` on a
   claim the world's stop judged otherwise (see "A claim on a count of
-  events"). A step with lines of the program's log that arrived
+  events"). A step that saw the program fail, or could not see all of
+  it, has `underneath` (see "Failures underneath"): `statuses`, one entry
+  per status from 500 to 599 its http.jsonl lines hold, ascending, each
+  with its `count` and its `first` request (`method`, `url`, `via`, and
+  `http_line`, its index in http.jsonl); `page_errors`, one entry per
+  `name` its page threw (`null` for none), in the order the first of
+  each arrived, with its `count` and the `first` message's first line;
+  and `unseen`, what could not be judged: `http_lines`, the requests
+  with no readable line (`null` when http.jsonl could not be read), and
+  `page_errors`, the ones past the record's cap. An unhandled error is
+  read from the step's `path` and is not copied. An execution that ran
+  under `@expects:` tags has them as `expects`. A step with lines of the program's log that arrived
   after its record was written has `program_log_late`, and one with
   lines of the program's execution events that did has `events_late`
   (see "Program"). A result whose JSON is
@@ -6315,7 +6326,8 @@ to act on the run without opening another file:
   `removed` under it), `renamed_from` (`{ feature, name }` at the ref)
   for an unchanged row the ref holds under another identity, `retagged`
   (`true`) for an unchanged row whose tags differ from the ref's, the
-  condition tags and `@held` it carries as `conditions`, one cell per
+  condition tags and `@held` it carries as `conditions`, its `@expects:`
+  tags as `expects` when it has any, one cell per
   world and environment it ran in, its `verdict` (`held`, `proven`,
   `removed`, `failed`, `unproven`, or `moved`), and the `reason`, one
   sentence. A removed row has no cells, its `line` is the ref's, and
@@ -6684,8 +6696,9 @@ pull request. A criterion's identity is its feature file and its name. Its
 content is what a person approved: its steps in order, Background steps
 first, each with its effective keyword (an `And` or `But` takes the
 keyword it continues), its text, its docstring, and its table; its
-Examples row; and its condition tags and `@held`, which decide where it
-has to hold. Other tags, the name, and where it stands in the file are
+Examples row; its condition tags and `@held`, which decide where it
+has to hold; and its `@expects:` tags, which decide what failure
+underneath it accepts (see "Failures underneath"). Other tags, the name, and where it stands in the file are
 not content, so a scenario renamed, moved to another file, or tagged
 `@smoke` still says what it said. A tag can still change what runs (a
 hook selected by a tag, a World that reads the tags), so an `unchanged`
@@ -6860,7 +6873,7 @@ and runs nothing in it.
 | --- | --- |
 | `pass` | every one passed |
 | `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
-| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, or a claim nukadoko could not judge; or, at the scenario's line, the same hook failed in every one, and `reason` names it and when it ran, since an After hook fails after the claims were judged; or every one, whatever it came to, has a claim on a count of execution events at that line that the world's stop judged otherwise, with the `reason` `a claim at line <n> was judged before every execution event it counts had arrived` (see "A claim on a count of events") |
+| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, or a claim nukadoko could not judge; or, at the scenario's line, the same hook failed in every one, and `reason` names it and when it ran, since an After hook fails after the claims were judged; or every one, whatever it came to, has a claim on a count of execution events at that line that the world's stop judged otherwise, with the `reason` `a claim at line <n> was judged before every execution event it counts had arrived` (see "A claim on a count of events"); or every one passed, and the program failed underneath the step at that line in a way no `@expects:` tag of the scenario names, and `reason` names the failure (see "Failures underneath") |
 | `stopped@<line>` | a person stopped the walk (`nuka run --step`) at that line, so the steps after it did not run; the row is `failed`, since nothing shows the criterion holds |
 | `flaky@<line>` | they disagree (two that broke two claims of one line disagree too, as do two that two hooks failed); the line is the first one's that did not pass |
 | `·` | none ran, and `reason` says why: the program did not start for its world, a BeforeAll failed, a tree's files did not load, or `--base` did not build the world (below) |
@@ -7006,7 +7019,8 @@ alone: their executions, and the cells that did not run. A run with a
 control adds `<n> control runs, <k> not run` after it, which counts the
 controls the same way, and `criteria: <held> held, <proven> proven,
 <failed> failed`, a line every run under `--base` has too, with the
-`unproven`, `moved`, and `removed` counts after them. A run with a
+`unproven`, `moved`, and `removed` counts after them, and so does a run
+in which a failure underneath turned a passed execution's cell `broke`. A run with a
 limit adds `limits: <n> <kind>, ... (run.json limits)` after the findings
 that follow those lines, counting `run.json`'s `limits` by kind in the
 summary's order.
@@ -7045,6 +7059,111 @@ name is fetched from `origin` under its own name, and a full `refs/` name
 under the same name. A server fetches a commit only by its full hash, so
 an abbreviated hash, or a revision expression such as `main~2`, gets
 `git fetch --unshallow origin`, which fetches the whole history.
+
+### Failures underneath
+
+A step can pass while the program fails beneath it: claims that held
+over a page that answered 500 say nothing about the criterion. So an
+execution that passed is `broke@<line>` in its cell (see "Verdicts")
+when one of its steps saw the program fail in a way no `@expects:` tag
+of its scenario names, at that step's line, and the cell's `reason`
+names the failure. A failure is one of three things,
+each the failing party's own statement, which nukadoko copies and never
+infers:
+
+- a response with a status from 500 to 599 on a line of the step's
+  http.jsonl, from any origin: the server chose that status to say it
+  failed. A 4xx is the program answering a client as designed, and is
+  not judged.
+- an error the page threw that nothing caught (`page_events.page_errors`,
+  see "Records"), named by its `name`, such as `TypeError`. A caught
+  error, a `console.error`, and a request that failed are not one.
+- an `error` the program reported in its execution events with
+  `handled: false`, an entry of the step's `path` (see "Execution
+  events"). An error with `handled: true` is the program going on.
+
+A scenario that causes such a failure on purpose names it with a tag on
+its `Feature:`, `Rule:`, `Scenario:`, or `Examples:` line, which add up
+the way Gherkin tags do:
+
+- `@expects:status=<500-599>` accepts one status, such as
+  `@expects:status=503`. There is no range and no class such as `5xx`:
+  a run judges no other status, and one tag names one status.
+- `@expects:page-error=<name>` accepts an error the page threw by its
+  name, such as `@expects:page-error=TypeError`. A thrown value that is
+  not an `Error`, or one whose name is empty, has no name, and no tag
+  accepts it.
+- `@expects:error=<class>` accepts an error the program reported with
+  `handled: false` by its class, such as
+  `@expects:error=Payments::CardDeclined`.
+
+A value has no whitespace and no `@`, as a condition's. The tags are
+content: under `--base`, adding, removing, or changing one makes the
+criterion `changed`, since a criterion that starts accepting a failure
+is one a person approves again. A row keeps the tags that read in
+`expects`, and the summary shows them beside its condition tags.
+
+```gherkin
+@expects:status=503
+Scenario: the maintenance page
+  When the visitor opens the home page during maintenance
+  Then the page reads "Back soon"
+```
+
+Only a pass moves. A `fail` is already the first failure that counts,
+and where the behaviour is absent it is the proof: a control or a base
+cell that failed at a Then still proves, whatever was underneath it. A
+`broke` or `stopped` execution stays what it was. The rule is the same
+in every world: a head control that passed over an unnamed failure is
+`broke`, which proves nothing, as its pass did not; a base cell of a
+`@held` row no longer passes, so the row is `unproven`; an old
+execution runs under the ref's tags, so an old cell that is `broke`
+makes its row `moved`. A claim judged too early (see "A claim on a count
+of events") is judged first, and its cell is `broke` at that claim's
+line.
+
+The step's status does not change, and neither does the scenario's: the
+step record holds what the step measured, and the stderr scenario line
+and `counts.passed` count the execution as passed. The table is where
+the run says it. The cell's `reason` names the step's line and the
+failure by what a tag would name, and for a status the request's method
+and path, as in `the step at line 4 got a 500 response to GET /broken,
+which no @expects tag of the scenario names`; never a count, a host, or
+a port, so two runs that failed the same way agree. The run raises one
+`unexpected-failure` per scenario and environment: it names every
+failure no tag names under the first step that has one (the first
+request's whole URL and its line of http.jsonl, the first line of the
+page error's message, the count of the program's lines), the step
+record, and a `fix:` line that spells the tags that would accept them.
+In such a run the `criteria:` line follows the count line, since the
+count of passed executions cannot tell it, and the summary's line under
+the red row names the same failures. Each step's failures are its
+`underneath` in `run.json` (see "Scenarios (the scripted path)").
+
+What could not be seen is never a failure. A line of http.jsonl that
+was not written or does not parse, an http.jsonl that could not be
+read, and page errors past a record's cap of 100 are counted in the
+step's `underneath.unseen` and listed as its `unmeasured` limit; a line
+of the trace that may be any line (`maybe`) counts as no error. A tag
+that matched nothing, in every execution of a cell that passed, where
+the run saw everything of its kind (every line of http.jsonl, a browser
+whose page errors were all kept, the program's events with no `maybe`
+line), gets an `expects-unseen` note: a tag left in place after its
+failure stopped happening accepts that failure in every later run.
+`nuka check` reports a tag that does not read as
+`expects-tag-malformed`, an error, and an `@expects:error=` tag where no
+world the run would start reads execution events as `expects-unread`, a
+warning, since the tag can never match there.
+
+Not judged, in this version: a page error between one step's end and the
+next step's start, and one while a hook runs, since the browser's errors
+are collected per step; an error in a hook's trace, which no step's
+`path` holds; a 5xx on a request a Before or After hook sends with
+`ctx.request()`, whose line lands in the scenario's own http.jsonl,
+which no step's `underneath` reads; and a 5xx on a request http.jsonl
+does not record, such as a script, a stylesheet, an image, or a font a
+page loads (only a page's `document`, XHR, and `fetch` requests are
+recorded; see "Running"). A failure there leaves the cell as it was.
 
 ### Judgments
 
@@ -8193,8 +8312,10 @@ its scenario record's id, so either record leads to the other.
   it recorded at least one entry, and is always a bare array, never
   something whose own type depends on how many entries it holds:
   `console_errors`, each entry `{ "text", "location": { "url", "lineNumber",
-  "columnNumber" }, "at" }`; `page_errors`, each entry `{ "message", "at" }`
-  (never the error's own stack: trace.zip already carries it, and a stack
+  "columnNumber" }, "at" }`; `page_errors`, each entry `{ "name", "message", "at" }`,
+  where `name` is the thrown `Error`'s name, such as `TypeError`, absent
+  for a thrown value that is not an `Error` or whose name is empty (never
+  the error's own stack: trace.zip already carries it, and a stack
   widens what redaction has to reach for little gain); `failed_requests`,
   each entry `{ "method", "url", "failure", "at" }`. `at` (ISO 8601) is
   taken by the collector itself, the same measured, never declared
@@ -8214,8 +8335,13 @@ its scenario record's id, so either record leads to the other.
   once, in one place. Redacted the same way every other field is: a secret
   can land in console text or a failed request's URL as easily as it can
   anywhere else, so no separate redaction path exists for this field.
-  Present on both a successful and a failed step's record alike: a page
-  error is evidence about the page, not a verdict on the step.
+  Present on both a successful and a failed step's record alike. A page
+  error does not change the step's status: the step record holds what
+  the step measured. The verdict table reads an uncaught page error as a
+  failure underneath the execution, which turns a pass `broke` unless an
+  `@expects:page-error=<name>` tag of the scenario names it (see
+  "Failures underneath"); a console error and a failed request stay
+  evidence about the page.
 - `actions` (included only when it has entries) comes from this step's
   trace chunk (`evidence.trace`, above): every Playwright call the step made
   through the `page` fixture, `expect` waits included, in the order the

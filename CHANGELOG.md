@@ -9,6 +9,23 @@ just until 0.1.
 
 ### Added
 
+- **`@expects:` tags name a failure a scenario causes on purpose.**
+  `@expects:status=<500-599>`, `@expects:page-error=<name>`, and
+  `@expects:error=<class>`, on a Feature, Rule, Scenario, or Examples
+  line, accept one 5xx status, one name of an error the page threw, or
+  one class of an error the program reported with `handled: false`, so
+  a maintenance page or a declined card stays green. They are content, as
+  condition tags are: under `--base`, a criterion whose `@expects:`
+  tags changed is `changed`. `nuka check` reports a tag that does not
+  read as `expects-tag-malformed`, and an `@expects:error=` tag where no
+  world the run starts reads execution events as `expects-unread`. A run
+  notes `expects-unseen` for a tag that matched nothing where every
+  response, page error, or event of its kind was seen. run.json gives
+  each step its `underneath` (its 5xx responses by status and its page
+  errors by name, each with a count and the first one, and what could not
+  be seen) and each scenario and row its `expects`, and a page error on
+  a step record carries its `name`.
+
 - **A Then can ask for a judgment, and a run checks that the judgment
   cites the value it read.** Some criteria no compare can decide: whether
   a greeting is friendly to a first-time visitor, whether a page reads as
@@ -126,6 +143,22 @@ just until 0.1.
   reading every difference.
 
 ### Changed
+
+- **A scenario whose claims held over a failing program is no longer
+  green.** Claims that held over a page that answered 500 said nothing
+  about the criterion, and the row read `held`. A passed execution whose
+  steps got a response with a status from 500 to 599, whose page threw an
+  error nothing caught, or whose trace holds an `error` the program
+  reported with `handled: false`, is `broke` in its cell at that step
+  when no `@expects:` tag of its scenario names the failure: its row is
+  `failed`, and `unexpected-failure` names each failure, the step, and
+  the tag that would accept it. Only a pass moves, so a control or base
+  cell that failed at a Then still proves. The step's status is
+  unchanged. What could not be seen (a line of http.jsonl that was not
+  written, page errors past the cap) is a limit, never a failure. Not
+  judged yet: a page error between steps or during a hook, a 5xx on a
+  request a Before or After hook sends, and a 5xx on a script,
+  stylesheet, image, or font, which http.jsonl does not record.
 
 - **The run summary says in one place what the run does not show.** A
   green table read as covering more than it did, because each gap was

@@ -48,6 +48,36 @@ This part does not change release to release.
 
 ## 0.25.0 to the next release
 
+- **A scenario whose claims held is `broke` when the program failed
+  underneath it.** A cell whose steps all passed reads `broke@<line>`
+  when one of them got a response with a status from 500 to 599, its
+  page threw an error nothing caught, or (where the program writes
+  execution events) the program reported an `error` with `handled:
+  false`, and no `@expects:` tag of the scenario names that failure. Its
+  row is `failed`, the run exits 1, and an `unexpected-failure` finding
+  names the step, the status and its URL, the page error's name, or the
+  class. Fix the program. A scenario that causes the failure on purpose
+  (a maintenance page, an error boundary, a declined card) names it on
+  its Scenario line, `@expects:status=503`, `@expects:page-error=TypeError`,
+  or `@expects:error=<class>`; the finding's `fix:` line spells the tag
+  (see "Failures underneath" in docs/spec.md). `nuka check` reports a tag
+  that does not read as `expects-tag-malformed`, which stops a run.
+- **Under `--base`, an `@expects:` tag is part of the criterion.** Adding
+  one makes the criterion `changed`, so it needs proof at the base. A
+  scenario tagged only to move across this release did not change its
+  behaviour: tag it `@held` too, so its base cell passes under the same
+  tag, or land the tags in a change of their own before the change a
+  reviewer reads.
+- **A test that asserted a run exits 0 while its page throws** now sees
+  exit 1; tag the scenario with the name the step record's
+  `page_events.page_errors` shows, or stop the throw.
+- **run.json gains fields a strict reader may not know:** a step's
+  `underneath`, a scenario's and a table row's `expects`, a cell
+  `reason` that names a failure underneath, and the finding codes
+  `unexpected-failure` and `expects-unseen`. A step record's page error
+  gains `name`. A run in which a failure underneath turned a passed
+  cell `broke` prints the `criteria:` line after the count line, as a
+  run with a control does.
 - **A file named `INTENT.md` at the repository's top is read under
   `nuka run --base`** when the base does not hold the same text
   (docs/intent.md). A project that already keeps an unrelated file under

@@ -351,6 +351,9 @@ pattern の無い step も完全な語彙であり、`nuka do` で実行でき�
   messages ストリームは対照をすべて外すので、JUnit は green の run を green と読みます。
   Allure は各対照を `<scenario> (control)` という名前で残し、失敗したものを設計どおり失敗した result として示します。
   CI は `nuka run` の終了コードでゲートしてください。
+- cucumber-js が green と報告した scenario が、ここでは `unexpected-failure` で赤になることがあります。
+  リクエストが 5xx を受けた、page が何も捕まえなかったエラーを投げた、またはプログラムが `handled: false` のエラーを報告したのに、その step が通ったものです。
+  プログラムを直すか、その scenario がその失敗を起こすと受け入れ基準が言うときは、所見の `fix:` の行が綴るとおりに tag を付けてください(docs/spec.ja.md の「下で起きた失敗」)。
 - `.feature` ファイルを探す走査は、どの深さでも `node_modules` と `.` で始まる名前のディレクトリを飛ばし、そのことを何も言いません。
 - 待ってからやり直していた glue のループは、fixture の束の `poll` になります。
   その `timeout` は呼び出し全体の予算です(docs/spec.ja.md の「Context API」)。

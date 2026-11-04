@@ -40,6 +40,23 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.25.0 から次のリリースへ
 
+- **claim が成り立った scenario も、その下でプログラムが失敗したときは `broke` です。**
+  step がすべて通ったセルも、そのどれかが 500 から 599 の status のレスポンスを受けたとき、その page が何も捕まえなかったエラーを投げたとき、または(プログラムが実行イベントを書くところで)プログラムが `handled: false` の `error` を報告したときに、scenario のどの `@expects:` の tag もその失敗を名指さなければ、`broke@<line>` になります。
+  その行は `failed` で、run は 1 で終わり、`unexpected-failure` の所見が step、status とその URL、page のエラーの名前、またはクラスを名指します。
+  プログラムを直してください。
+  失敗をわざと起こす scenario(メンテナンスのページ、error boundary、拒否されたカード)は、その Scenario の行で `@expects:status=503`、`@expects:page-error=TypeError`、`@expects:error=<class>` のようにそれを名指します。
+  所見の `fix:` の行がその tag を綴ります(docs/spec.md の「下で起きた失敗」を参照)。
+  `nuka check` は、読めない tag を `expects-tag-malformed` として報告し、それは run を止めます。
+- **`--base` のもとでは、`@expects:` の tag は受け入れ基準の一部です。**
+  1 つ加えると受け入れ基準は `changed` になるので、基点での証明が要ります。
+  このリリースを越えるためだけに tag を付けた scenario は、振る舞いを変えていません。
+  `@held` も付けて、同じ tag のもとで基点のセルが通るようにするか、レビュアーが読む変更より前に、tag だけの変更を先に入れてください。
+- **page が throw するのに run が 0 で終わることを確かめていたテスト**は、いまは 1 を見ます。
+  step record の `page_events.page_errors` が示す名前でその scenario に tag を付けるか、throw をやめてください。
+- **run.json は、厳密な読み手が知らないかもしれないフィールドを得ます:**
+  step の `underneath`、scenario と表の行の `expects`、下で起きた失敗を名指すセルの `reason`、所見のコード `unexpected-failure` と `expects-unseen` です。
+  step record の page のエラーは `name` を得ます。
+  下で起きた失敗が通ったセルを `broke` にした run は、対照のある run と同じく、件数の行の後ろに `criteria:` の行を出します。
 - **リポジトリの最上位にある `INTENT.md` という名前のファイルを、`nuka run --base` が読みます。**
   基点が同じテキストを持たないときです(docs/intent.ja.md)。
   関係の無いファイルをすでにその名前で持ち、ブランチでそれを変えるプロジェクトは `intent-unread` を受け、run は失敗します。

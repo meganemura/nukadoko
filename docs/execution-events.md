@@ -269,6 +269,10 @@ A difference between two sides' paths needs both.
 There is no message field: messages carry values.
 `at` should name where the error was raised.
 
+Write `handled: false` only for an error that ended the operation.
+nukadoko reads such a line in a step's trace as a failure of the program.
+A scenario that passed over one is `broke` in its cell, unless its tag `@expects:error=<class>` names the line's `class`.
+
 ## Whether a statement's change persisted
 
 A reader decides the commit state of a `db` line from the lines of its

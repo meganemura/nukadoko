@@ -1036,6 +1036,16 @@
       "en": ["digest (of a value)", "value_digest"],
       "ja": "ダイジェスト",
       "note": "値を正規化した JSON の sha256。判断はこれで値を引く。フィールド `value_digest` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["failure underneath", "failures underneath", "fail underneath"],
+      "ja": "下で起きた失敗",
+      "note": "step が通ったのにその下でプログラムが失敗したもの: 500 から 599 の status のレスポンス、page が投げて何も捕まえなかったエラー、`handled: false` の `error`。docs/spec.md の段落 \"Failures underneath\" の名前。run.json の `underneath` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["accept (a failure, by an @expects: tag)", "accepts"],
+      "ja": "認める",
+      "note": "`@expects:` の tag が下で起きた失敗を名指して、それでセルを `broke` にしないこと。受け入れ基準 の 受け入れ と取り違えないよう、受け入れる とは訳さない"
     }
   ],
   "keep_english": [

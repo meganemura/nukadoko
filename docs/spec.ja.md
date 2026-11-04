@@ -4853,6 +4853,13 @@ run が終わったとき、最後の step record と run サマリの後に、�
   claim step は、その step record と同じ `claims`、`observation`、`attempts` を持ち、poll する step は `settled` も持ちます(「Claims」を参照)。
   そのため、成り立たない claim は step record を開かずに読めます。
   `events_read` も持ち、world が止まったときの数え直しが違う判定をした claim は `after_world_stop` を持ちます(「実行イベントの数についての claim」を参照)。
+  プログラムが失敗するのを見た step と、そのすべては見られなかった step は、`underneath` を持ちます(「下で起きた失敗」を参照)。
+  `statuses` は、http.jsonl の行が持つ 500 から 599 の status ごとに 1 つ、昇順のエントリで、それぞれ `count` と最初のリクエストの `first`(`method`、`url`、`via`、http.jsonl での位置の `http_line`)を持ちます。
+  `page_errors` は、page が投げた `name` ごとに 1 つ(名前が無いものは `null`)、それぞれの最初のものが届いた順のエントリで、`count` と最初のメッセージの最初の行の `first` を持ちます。
+  `unseen` は判定できなかったものです。
+  `http_lines` は読める行の無いリクエストの数(http.jsonl を読めなかったときは `null`)、`page_errors` は record の上限を超えた数です。
+  処理されなかったエラーは step の `path` から読み、写しはしません。
+  `@expects:` の tag のもとで走った実行は、それを `expects` に持ちます。
   record を書いたあとに届いたプログラムのログの行を持つ step は `program_log_late` を、実行イベントの行を持つ step は `events_late` を持ちます(「テスト対象のプログラム」を参照)。
   JSON が 4096 バイトを超える結果は、代わりにプレビューになり、`truncated: true` と、値全体の大きさである `result_bytes` を持ちます。
   object のプレビューは、収まるかぎり、最上位の数、真偽値、null と、最上位の各文字列の先頭 1024 文字を残すので、process の `exitCode` と `stderr` の始まりは残ります。
@@ -4886,7 +4893,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `worlds` はその列 `{ world, environment }` を並べます。
   run の各 environment の `head` を run の順に、そのあとに、ある行がセルを持つ各 environment の `base` と `old` です。
   `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並び、そのあとに消えた受け入れ基準ごとに 1 行が続きます。
-  行は `feature`、`line`、`name`、`change`(`--base` が無ければ `null`、あれば `unchanged`、`changed`、`new`、`removed`)、基点が別の同一性のもとで持つ変わっていない行の `renamed_from`(基点での `{ feature, name }`)、tag が基点と違う変わっていない行の `retagged`(`true`)、持っている condition の tag と `@held` を並べた `conditions`、走った world と environment ごとに 1 つのセル、`verdict`(`held`、`proven`、`removed`、`failed`、`unproven`、`moved`)、1 文の `reason` を持ちます。
+  行は `feature`、`line`、`name`、`change`(`--base` が無ければ `null`、あれば `unchanged`、`changed`、`new`、`removed`)、基点が別の同一性のもとで持つ変わっていない行の `renamed_from`(基点での `{ feature, name }`)、tag が基点と違う変わっていない行の `retagged`(`true`)、持っている condition の tag と `@held` を並べた `conditions`、`@expects:` の tag があればそれを並べた `expects`、走った world と environment ごとに 1 つのセル、`verdict`(`held`、`proven`、`removed`、`failed`、`unproven`、`moved`)、1 文の `reason` を持ちます。
   消えた行はセルを持たず、その `line` は基点のもので、`lines` が基点での文を持ちます。
   セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、head の environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`stopped`、`flaky`、`not-run`)、`pass` と `not-run` 以外が名指す `line`、持っている実行の数 `runs`、`fail` のときはすべての実行が成り立たなかった `claim`(step の claim の中の位置で、0 から数えます)と、各実行で見た実際の値を実行の順に並べた `actuals`(`{ value }`、run.json が切り詰めた値には `{ json_start, json_bytes }`、値が無ければ `{ reason }`)、そして `not-run` のときと、証明の回が終わらなかったために `broke` になった対照のときは `reason` を持ちます。
   `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
@@ -5155,7 +5162,7 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
 `nuka run --base <ref>` は、選んだ各受け入れ基準を、pull request の向かう先など、ref が名指すコミットと比べます。
 受け入れ基準の同一性は、その feature ファイルと名前です。
 その中身は、人が承認したものです。
-step の並び(Background の step が先で、各 step は実効の keyword、本文、docstring、表を持ち、`And` と `But` は続けている keyword を取ります)、Examples の行、そしてどこで成り立たなければならないかを決める condition の tag と `@held` です。
+step の並び(Background の step が先で、各 step は実効の keyword、本文、docstring、表を持ち、`And` と `But` は続けている keyword を取ります)、Examples の行、どこで成り立たなければならないかを決める condition の tag と `@held`、そして下で起きたどの失敗を認めるかを決める `@expects:` の tag です(「下で起きた失敗」を参照)。
 ほかの tag、名前、ファイルの中の位置は中身に入りません。
 そのため、名前を変えた scenario、別のファイルへ移した scenario、`@smoke` を付けた scenario は、言っていたことをそのまま言っています。
 それでも tag は走るものを変えることがあります(tag で選ばれる hook、tag を読む World)。
@@ -5285,7 +5292,7 @@ base の tree も、このためだけに作ります。
 | --- | --- |
 | `pass` | すべて通った |
 | `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
-| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim。または scenario の行で、すべての実行で同じ hook が失敗した。その hook と走った時を `reason` が言います。After hook は claim が判定された後で失敗するからです。または、すべての実行が、何に終わったかにかかわらず、その行に、world が止まったときの数え直しが違う判定をした実行イベントの数についての claim を持つ。`reason` は `a claim at line <n> was judged before every execution event it counts had arrived` です(「実行イベントの数についての claim」を参照) |
+| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim。または scenario の行で、すべての実行で同じ hook が失敗した。その hook と走った時を `reason` が言います。After hook は claim が判定された後で失敗するからです。または、すべての実行が、何に終わったかにかかわらず、その行に、world が止まったときの数え直しが違う判定をした実行イベントの数についての claim を持つ。`reason` は `a claim at line <n> was judged before every execution event it counts had arrived` です(「実行イベントの数についての claim」を参照)。または、すべての実行が通り、その行の step の下で、scenario のどの `@expects:` の tag も名指さない形でプログラムが失敗した。`reason` がその失敗を名指します(「下で起きた失敗」を参照) |
 | `stopped@<line>` | 人がその行で walk(`nuka run --step`)を中止したので、その後の step は走らなかった。受け入れ基準が成り立つことを示すものが何もないので、行は `failed` |
 | `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も、2 つの hook が失敗した 2 回も食い違いです)。行は通らなかった最初の実行のもの |
 | `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、BeforeAll が失敗した、tree のファイルが読み込めなかった、または `--base` がその world を作らなかった(後述)) |
@@ -5391,6 +5398,7 @@ stderr の件数の行は必須の head のセルだけを数えます。
 その実行と、走らなかったセルです。
 対照のある run は、その後ろに、対照を同じように数える `<n> control runs, <k> not run` の行と、`criteria: <held> held, <proven> proven, <failed> failed` の行を加えます。
 `--base` のもとではどの run もこの `criteria:` の行を持ち、そのあとに `unproven`、`moved`、`removed` の数が続きます。
+下で起きた失敗が、通った実行のセルを `broke` にした run も、この行を持ちます。
 示さないことのある run は、それらの行に続く所見の後ろに `limits: <n> <kind>, ... (run.json limits)` の行を加えます。
 この行は `run.json` の `limits` を、サマリの順に種類ごとに数えます。
 
@@ -5417,6 +5425,91 @@ CI のジョブは終了コードでゲートし、このストリームから�
 `origin/main` は `main` を `refs/remotes/origin/main` へ取ってきます。
 ブランチの名前は `origin` から同じ名前で取ってきて、完全な `refs/` の名前も同じ名前で取ってきます。
 サーバーがコミットを取らせるのは完全なハッシュのときだけなので、短くしたハッシュや `main~2` のようなリビジョンの式には `git fetch --unshallow origin` を出し、これは履歴全体を取ってきます。
+
+### 下で起きた失敗
+
+step は、その下でプログラムが失敗していても通ることがあります。
+500 を返した page の上で成り立った claim は、受け入れ基準について何も言いません。
+そのため、通った実行は、その step のどれかが、scenario のどの `@expects:` の tag も名指さない形でプログラムが失敗するのを見たとき、そのセル(「断定」を参照)で、その step の行の `broke@<line>` になります。
+セルの `reason` がその失敗を名指します。
+失敗は次の 3 つのどれかです。
+どれも失敗した側自身の言明で、nukadoko はそれを写すだけで、推し量りはしません:
+
+- step の http.jsonl の行にある、500 から 599 の status のレスポンス。
+  オリジンは問いません。
+  サーバは、失敗したと言うためにその status を選んだからです。
+  4xx は、プログラムが設計どおりにクライアントへ答えたものなので、判定しません。
+- page が投げて、何も捕まえなかったエラー(`page_events.page_errors`、「Records」を参照)。
+  `TypeError` のように、その `name` で名指します。
+  捕まえたエラー、`console.error`、失敗したリクエストは、これに当たりません。
+- プログラムが実行イベントで `handled: false` と報告した `error`。
+  step の `path` のエントリです(「実行イベント」を参照)。
+  `handled: true` のエラーは、プログラムが続けたということです。
+
+そのような失敗をわざと起こす scenario は、その `Feature:`、`Rule:`、`Scenario:`、`Examples:` の行の tag でそれを名指します。
+tag は Gherkin の tag と同じように足し合わさります:
+
+- `@expects:status=<500-599>` は、`@expects:status=503` のように、1 つの status を認めます。
+  範囲も、`5xx` のような分類もありません。
+  run はほかの status を判定せず、1 つの tag は 1 つの status を名指すからです。
+- `@expects:page-error=<name>` は、`@expects:page-error=TypeError` のように、page が投げたエラーをその名前で認めます。
+  `Error` でない投げられた値や、名前が空のものには名前がなく、どの tag もそれを認めません。
+- `@expects:error=<class>` は、`@expects:error=Payments::CardDeclined` のように、プログラムが `handled: false` で報告したエラーをそのクラスで認めます。
+
+値は、condition の値と同じく、空白も `@` も含みません。
+この tag は中身です。
+`--base` のもとでは、1 つ加えても、消しても、変えても、受け入れ基準は `changed` になります。
+失敗を認め始めた受け入れ基準は、人がもう一度承認するものだからです。
+行は、読める tag を `expects` に持ち、サマリは condition の tag の横にそれを示します。
+
+```gherkin
+@expects:status=503
+Scenario: the maintenance page
+  When the visitor opens the home page during maintenance
+  Then the page reads "Back soon"
+```
+
+動くのは pass だけです。
+`fail` はすでに数えるべき最初の失敗で、振る舞いが無いところではそれが証明です。
+Then で失敗した対照や base のセルは、その下に何があっても証明のままです。
+`broke` や `stopped` の実行はそのままです。
+規則はどの world でも同じです。
+名指されない失敗の上で通った head の対照は `broke` になり、その pass と同じく何も証明しません。
+`@held` の行の base のセルはもう通らないので、その行は `unproven` になります。
+old の実行は基点の tag のもとで走るので、`broke` になった old のセルはその行を `moved` にします。
+早すぎる時点で判定された claim(「実行イベントの数についての claim」を参照)が先に判定され、そのセルはその claim の行で `broke` になります。
+
+step の status は変わらず、scenario の status も変わりません。
+step record は step が計測したものを持ち、stderr の scenario の行と `counts.passed` は、その実行を通ったものとして数えます。
+それを言うのは表です。
+セルの `reason` は、step の行と、tag が名指すものによる失敗を名指し、status ならリクエストのメソッドとパスも名指します。
+`the step at line 4 got a 500 response to GET /broken, which no @expects tag of the scenario names` のようにです。
+件数、ホスト、ポートは決して入れないので、同じように失敗した 2 つの実行は一致します。
+run は、scenario と environment ごとに 1 つの `unexpected-failure` を出します。
+それは、失敗を持つ最初の step の下にある、tag が名指さないすべての失敗を名指します(最初のリクエストの URL 全体と http.jsonl のその行、page のエラーのメッセージの最初の行、プログラムの行の数)。
+加えて step record と、それらを認める tag を綴る `fix:` の行を持ちます。
+そのような run では、通った実行の数ではそれが分からないので、件数の行の後ろに `criteria:` の行が続き、赤い行の下のサマリの行も同じ失敗を名指します。
+各 step の失敗は、`run.json` のその `underneath` です(「Scenario(スクリプト化された経路)」を参照)。
+
+見えなかったものは、決して失敗になりません。
+書かれなかったか読み取れない http.jsonl の行、読めなかった http.jsonl、record の上限の 100 件を超えた page のエラーは、step の `underneath.unseen` に数えられ、その step の `unmeasured` の示さないこととして挙がります。
+どの行でもありうる trace の行(`maybe`)は、エラーとして数えません。
+通ったセルのすべての実行で、その種類のすべてを run が見たところで(http.jsonl のすべての行、page のエラーをすべて残した browser、`maybe` の行が無いプログラムのイベント)、何にも一致しなかった tag は、`expects-unseen` の注記を受けます。
+失敗が起きなくなった後も残された tag は、それ以降のどの run でもその失敗を認めてしまうからです。
+`nuka check` は、読めない tag を error の `expects-tag-malformed` として報告します。
+また、run が起動するどの world も実行イベントを読まないところの `@expects:error=` の tag を、warning の `expects-unread` として報告します。
+そこではその tag は決して一致しないからです。
+
+この版で判定しないもの:
+ある step の終わりから次の step の始まりまでの間の page のエラーと、hook の間のそれ。
+browser のエラーは step ごとに集めるからです。
+hook の trace の中のエラー。
+どの step の `path` もそれを持たないからです。
+Before や After の hook が `ctx.request()` で送ったリクエストの 5xx。
+その行は scenario 自身の http.jsonl に入り、どの step の `underneath` もそれを読まないからです。
+http.jsonl が記録しないリクエストの 5xx。
+page が読み込む script、stylesheet、画像、フォントなどです(記録されるのは page の `document`、XHR、`fetch` のリクエストだけです。「実行」を参照)。
+そこでの失敗は、セルをそのままにします。
 
 ### 判断
 
@@ -6246,7 +6339,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   step は(`status: "passed"` のまま)裏で page がずっとエラーを投げていても pass することがあり、このフィールドが無かった頃は record にはそれを言うものが何もありませんでした。
   各種類は、少なくとも 1 件記録されたときだけ現れます。
   常に素の配列であり、件数によって種類自身の型が変わることはありません。
-  `console_errors` は各エントリが `{ "text", "location": { "url", "lineNumber", "columnNumber" }, "at" }`、`page_errors` は各エントリが `{ "message", "at" }`(エラー自身の stack は決して含みません。
+  `console_errors` は各エントリが `{ "text", "location": { "url", "lineNumber", "columnNumber" }, "at" }`、`page_errors` は各エントリが `{ "name", "message", "at" }` です。
+  `name` は投げられた `Error` の名前で、`TypeError` などです。
+  投げられた値が `Error` でないときや、名前が空のときは現れません(エラー自身の stack は決して含みません。
   trace.zip がすでに全体を運んでおり、stack を足しても redact が届くべき範囲を広げる割に得るものが少ないからです)、`failed_requests` は各エントリが `{ "method", "url", "failure", "at" }` です。
   `at`(ISO 8601)はコレクタ自身が取得します。
   `sections`/`polls` がすでに従っている、宣言ではなく計測という同じ規則です。
@@ -6261,7 +6356,11 @@ scenario record は独立したファイルではなく、その run の `run.js
   他のどのフィールドとも同じように redact されます。
   secret はコンソールのテキストにも、失敗したリクエストの URL にも、他のどこにと同じくらい容易に載りうるため、このフィールド専用の別の redact 経路は存在しません。
   成功した step の record にも失敗した step の record にも、同じように現れます。
-  page のエラーは page についての証跡であり、step についての判定ではないからです。
+  page のエラーは step の status を変えません。
+  step record は step が計測したものを持ちます。
+  断定の表は、捕捉されない page のエラーを、その実行の下で起きた失敗として読みます。
+  scenario の `@expects:page-error=<name>` の tag がそれを名指さない限り、通った実行は `broke` になります(「下で起きた失敗」を参照)。
+  console error と失敗したリクエストは、page についての証跡のままです。
 - `actions`(空でないときだけ現れます)は、この step 自身の trace chunk(上の `evidence.trace`)から読み出されます。
   この step が `page` fixture を通して行った Playwright の呼び出しすべてで、`expect` の待ちも含み、trace が完了を記録した順に並びます。
   ただし例外が 1 つあります。

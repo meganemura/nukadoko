@@ -88,11 +88,11 @@ If none is true, ask what this is supposed to do before writing anything.
    file, a `fix:` (an edit) or `do:` (a command) line; apply or run it.
 4. **`nuka run <feature>`** until no table row is `failed`, reading the step
    record a failure names first (`references/diagnosing.md`), then once more
-   with `--order shuffled` (`references/running.md`). A red Then, or a
-   `held` row whose control passed (`references/verdicts.md`), is fixed in
-   the code or by asking the person, never by weakening it. Read "What this
-   run does not show" and `measured: none` (`references/reviewing.md`),
-   `undeclared-write`, and each `judgment-` finding (`references/judgments.md`).
+   with `--order shuffled` (`references/running.md`). A red Then, an
+   `unexpected-failure`, or a `held` row whose control passed
+   (`references/verdicts.md`) is fixed in the code or by asking the person,
+   never by weakening it or tagging it away. Read "What this run does not show",
+   `measured: none` (`references/reviewing.md`), `undeclared-write`, and each `judgment-` finding (`references/judgments.md`).
 5. **Commit before the run you report**, push, and open the pull request;
    CI posts the summary of `nuka run --base <the base>` (`docs/ci.md`). Run
    it first: `unproven`, `moved`, and `intent-` findings are red

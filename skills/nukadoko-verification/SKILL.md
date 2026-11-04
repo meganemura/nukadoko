@@ -42,6 +42,13 @@ implementation against itself.
   value came from (`sentence:`, `from:`, `literal:`, or `observe:`).
   Every `sentence:` and `literal:` value traces to one of the sources
   above.
+- A failure the program shows underneath a step is judged too: a 5xx
+  response, an uncaught page error, or an `error` it reports with
+  `handled: false` turns a passed scenario's cell `broke`
+  (`unexpected-failure`). A scenario of an error path a source promises
+  (a maintenance page, a declined card) names the failure it causes with
+  `@expects:status=<500-599>`, `@expects:page-error=<name>`, or
+  `@expects:error=<class>`, from that source, never from what the run saw.
 - One exception: when the requirement is "behave exactly as before" (a
   migration that must keep every behavior, bugs included), the earlier
   behavior is the source. Say so in the `Feature:` description, so a
@@ -168,7 +175,9 @@ has run.
    (`skills/nukadoko/references/from-prose.md`). An unstated slot is a
    question back to the reporter, not a guess.
 2. Write the scenario from those requirements, before any fix.
-3. Run it on the base branch. Red reproduces the report. Green means the
+3. Run it on the base branch. Red reproduces the report; for a report of
+   a server error or a page that throws, red can be an
+   `unexpected-failure` over claims that all held. Green means the
    scenario does not say what the report says, or the report is about
    something else: ask. Do not edit the Then until it goes red.
 4. Fix, run again, and open the pull request with

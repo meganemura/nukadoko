@@ -214,6 +214,11 @@ nukadoko がこの行をどう読むかは、[docs/spec.ja.md](spec.ja.md) の�
 メッセージは値を運ぶからです。
 `at` は、エラーを投げた場所を名指すべきです。
 
+`handled: false` は、操作を終わらせたエラーにだけ書いてください。
+nukadoko は、step の trace にあるそのような行を、プログラムの失敗として読みます。
+それがあっても通った scenario は、そのセルで `broke` になります。
+ただし、scenario の tag `@expects:error=<class>` がその行の `class` を名指すときは別です。
+
 ## 文の変更が永続したか
 
 読み手は `db` の行のコミットの状態を、その trace の行だけから決めます:
