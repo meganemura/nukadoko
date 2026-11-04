@@ -7044,7 +7044,8 @@ control, so a control that failed is a failed result there by design;
 the messages stream leaves the controls out (see "Allure results" and
 "Messages stream"). Both carry head's executions alone, so they show
 scenario outcomes, not the verdict table: an `unproven` or `moved`
-row is red while every execution at head passed. A CI job gates on the
+row is red while every execution at head passed, and so is a `failed`
+row whose execution passed over a failure underneath. A CI job gates on the
 exit code, never on a JUnit report built from the stream.
 
 `--base` names a commit-ish git resolves in the project's repository:
@@ -7148,7 +7149,7 @@ of the trace that may be any line (`maybe`) counts as no error. A tag
 that matched nothing, in every execution of a cell that passed, where
 the run saw everything of its kind (every line of http.jsonl, a browser
 whose page errors were all kept, the program's events with no `maybe`
-line), gets an `expects-unseen` note: a tag left in place after its
+line and no trace left open, such as by a job that never performed), gets an `expects-unseen` note: a tag left in place after its
 failure stopped happening accepts that failure in every later run.
 `nuka check` reports a tag that does not read as
 `expects-tag-malformed`, an error, and an `@expects:error=` tag where no

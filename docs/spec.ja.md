@@ -5415,6 +5415,7 @@ Allure の result は各対照を走った結果のままの状態で、対照�
 messages ストリームは、対照を外します(「Allure results」と「Messages stream」を参照)。
 どちらも head の実行だけを持つので、示すのは scenario の結果であり、断定の表ではありません。
 `unproven` や `moved` の行は、head での実行がすべて通っていても赤です。
+下で起きた失敗の上で実行が通った `failed` の行も同じです。
 CI のジョブは終了コードでゲートし、このストリームから作った JUnit のレポートではゲートしません。
 
 `--base` は、プロジェクトのリポジトリで git が解決するコミットを名指すものを取ります。
@@ -5494,7 +5495,7 @@ run は、scenario と environment ごとに 1 つの `unexpected-failure` を�
 見えなかったものは、決して失敗になりません。
 書かれなかったか読み取れない http.jsonl の行、読めなかった http.jsonl、record の上限の 100 件を超えた page のエラーは、step の `underneath.unseen` に数えられ、その step の `unmeasured` の示さないこととして挙がります。
 どの行でもありうる trace の行(`maybe`)は、エラーとして数えません。
-通ったセルのすべての実行で、その種類のすべてを run が見たところで(http.jsonl のすべての行、page のエラーをすべて残した browser、`maybe` の行が無いプログラムのイベント)、何にも一致しなかった tag は、`expects-unseen` の注記を受けます。
+通ったセルのすべての実行で、その種類のすべてを run が見たところで(http.jsonl のすべての行、page のエラーをすべて残した browser、`maybe` の行も、実行されなかった job のように開いたままの trace も無いプログラムのイベント)、何にも一致しなかった tag は、`expects-unseen` の注記を受けます。
 失敗が起きなくなった後も残された tag は、それ以降のどの run でもその失敗を認めてしまうからです。
 `nuka check` は、読めない tag を error の `expects-tag-malformed` として報告します。
 また、run が起動するどの world も実行イベントを読まないところの `@expects:error=` の tag を、warning の `expects-unread` として報告します。
@@ -5508,7 +5509,8 @@ hook の trace の中のエラー。
 Before や After の hook が `ctx.request()` で送ったリクエストの 5xx。
 その行は scenario 自身の http.jsonl に入り、どの step の `underneath` もそれを読まないからです。
 http.jsonl が記録しないリクエストの 5xx。
-page が読み込む script、stylesheet、画像、フォントなどです(記録されるのは page の `document`、XHR、`fetch` のリクエストだけです。「実行」を参照)。
+page が読み込む script、stylesheet、画像、フォントなどです。
+記録されるのは page の `document`、XHR、`fetch` のリクエストだけです(「実行」を参照)。
 そこでの失敗は、セルをそのままにします。
 
 ### 判断
