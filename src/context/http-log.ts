@@ -1,6 +1,6 @@
 import { appendFile } from "node:fs/promises";
 import type { APIRequestContext, APIResponse } from "playwright";
-import type { KeptText } from "../record/types.js";
+import type { HttpVia, KeptText } from "../record/types.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { type ChannelHttpLine, channelRecorder, noResponse, recordRequest, withoutChannelRecording } from "./channels.js";
@@ -105,7 +105,7 @@ export interface HttpLogEntry {
   url: string;
   status: number;
   duration_ms: number;
-  via: "request" | "page" | "fetch" | "node:http" | "node:https";
+  via: HttpVia;
   /** `via: "request"` only: the URL the step passed, when it differs from
    * `url` (a relative path, a `params` option, a redirect). */
   declared_url?: string;

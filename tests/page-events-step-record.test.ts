@@ -5,6 +5,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  latestRunJson,
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
@@ -124,6 +125,14 @@ describe("page_events on the step record", () => {
     expect((pageEvents.console_errors ?? []).length).toBeGreaterThanOrEqual(1);
     expect(pageEvents.page_errors).toHaveLength(1);
     expect(pageEvents.failed_requests).toHaveLength(1);
+    expect((pageEvents.page_errors as Array<{ name?: string }>)[0]!.name).toBe("Error");
+
+    // run.json carries the page error by the name an @expects tag names,
+    // with its message cut to the first line and redacted as the record is.
+    const step = latestRunJson(rootDir).scenarios[0].steps[0];
+    expect(step.underneath).toEqual({
+      page_errors: [{ name: "Error", count: 1, first: { message: "uncaught says {{secret.PAGE_TOKEN}}" } }],
+    });
   });
 
   it("a step whose page never errors carries no page_events key at all", async () => {

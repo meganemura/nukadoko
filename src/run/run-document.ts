@@ -1,4 +1,5 @@
 import type { GherkinDocument, Pickle, Step as GherkinStep } from "@cucumber/messages";
+import type { HttpLogEntry } from "../context/http-log-read.js";
 import {
   CLAIM_VALUE_MAX_BYTES,
   type RunClaim,
@@ -10,6 +11,7 @@ import {
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import type { ClaimRecord, JudgedView, JudgedViewFile, ObservedCounts, StepRecord } from "../record/types.js";
 import { valueDigest } from "./judgments.js";
+import { underneathOfRecord } from "./underneath.js";
 
 // Responsibility: one scenario's entry in run.json, built from the scenario
 // as it ran and the step records it wrote. Pure: the caller reads the step
@@ -52,6 +54,9 @@ export interface RunScenarioInput {
   /** What a step name is: a claim step, a step that runs, or a compat
    * step; `null` for a name the vocabulary does not hold. */
   readonly stepKind: (name: string) => "claim" | "run" | "compat" | null;
+  /** The lines of a step record's http.jsonl, parsed; empty when the
+   * record names none, `null` when the file could not be read. */
+  readonly httpLog: (stepRecord: StepRecord) => readonly (HttpLogEntry | null)[] | null;
 }
 
 /** Whether the scenario wrote a file into its own evidence directory: the
@@ -219,6 +224,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     const stepRecord = entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null);
     const used = stepRecord === null ? undefined : usedOf(stepRecord, input.recordPath);
     const kind = stepRecord?.status === "failed" ? stepRecord.error.kind : null;
+    const underneath = stepRecord === null ? undefined : underneathOfRecord(stepRecord.page_events, input.httpLog(stepRecord), stepRecord.http_log_failed);
     return {
       line: input.stepLine(index),
       text: entry.text,
@@ -248,6 +254,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
               : { judged_view: judgedViewForRun(stepRecord.judged_view, input.recordPath(entry.step_record_id)) }),
           }),
       ...(stepRecord?.events_read === undefined ? {} : { events_read: stepRecord.events_read }),
+      ...(underneath === undefined ? {} : { underneath }),
     };
   });
   const stepRecords = record.steps.map((entry) => (entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null)));

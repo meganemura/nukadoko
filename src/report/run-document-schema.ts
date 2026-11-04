@@ -240,6 +240,30 @@ const judgedView = z.looseObject({
   aria_in_claims: z.literal(true).optional(),
 });
 
+// What the summary and the judgment read of a step's failures underneath
+// (src/run/underneath.ts): the summary judges a cell from run.json alone.
+const underneath = z.looseObject({
+  statuses: z
+    .array(
+      z.looseObject({
+        status: z.number().int(),
+        count: z.number().int().min(1),
+        first: z.looseObject({
+          method: z.string(),
+          url: z.string(),
+          via: z.enum(["request", "page", "fetch", "node:http", "node:https"]),
+          http_line: z.number().int().min(0),
+          as: z.string().optional(),
+        }),
+      }),
+    )
+    .optional(),
+  page_errors: z
+    .array(z.looseObject({ name: z.string().nullable(), count: z.number().int().min(1), first: z.looseObject({ message: z.string(), as: z.string().optional() }) }))
+    .optional(),
+  unseen: z.looseObject({ http_lines: z.number().int().min(0).nullable().optional(), page_errors: z.number().int().min(1).optional() }).optional(),
+});
+
 const step = z.looseObject({
   line: z.number().int().nullable(),
   text: z.string(),
@@ -266,6 +290,7 @@ const step = z.looseObject({
   judged_view: judgedView.optional(),
   events_read: z.record(z.string(), eventsRead).optional(),
   path: stepPath.optional(),
+  underneath: underneath.optional(),
 }).refine(
   (entry) => (entry.pages ?? []).every((page) => [page.last_response, ...page.in_flight].every((index) => index === null || index < (entry.page_requests?.length ?? 0))),
   { message: "each request a page names is one of page_requests" },

@@ -24,8 +24,9 @@ import type { ConsoleErrorEntry, FailedRequestEntry, PageErrorEntry, PageEventsS
 // broken page" signal it exists to carry. `weberror`'s own `Error#stack` is
 // deliberately never recorded: it is long, widens what redaction has to
 // reach, and trace.zip already carries the full picture for a reader who
-// needs it — `message` alone is what answers "did the page throw", the
-// question this field exists for.
+// needs it. `message` answers "did the page throw", the question this
+// field exists for, and the error's `name` is what an
+// `@expects:page-error=<name>` tag accepts (src/run/underneath.ts).
 //
 // `at` (ISO 8601) is taken here, by this collector, at record time, never
 // supplied by a caller — the same measured-not-declared rule every other
@@ -69,9 +70,9 @@ export interface PageEventsCollector {
   /** Records one `console.error` call. `at` is stamped here, not supplied by
    * the caller — see this file's header. */
   recordConsoleError(entry: Omit<ConsoleErrorEntry, "at">): void;
-  /** Records one uncaught page error by its message, and the `pageAs(name)`
-   * context it came from when it is not the default one. */
-  recordPageError(message: string, as?: string): void;
+  /** Records one uncaught page error: its name and message, and the
+   * `pageAs(name)` context it came from when it is not the default one. */
+  recordPageError(entry: Omit<PageErrorEntry, "at">): void;
   /** Records one network-level request failure. */
   recordFailedRequest(entry: Omit<FailedRequestEntry, "at">): void;
   /** What this boundary accumulated since the last `reset()` (or since
@@ -123,8 +124,8 @@ export function createPageEventsCollector(): PageEventsCollector {
     recordConsoleError(entry: Omit<ConsoleErrorEntry, "at">): void {
       record(consoleErrors, { ...entry, at: new Date().toISOString() });
     },
-    recordPageError(message: string, as?: string): void {
-      record(pageErrors, { message, at: new Date().toISOString(), ...(as !== undefined ? { as } : {}) });
+    recordPageError(entry: Omit<PageErrorEntry, "at">): void {
+      record(pageErrors, { ...entry, at: new Date().toISOString() });
     },
     recordFailedRequest(entry: Omit<FailedRequestEntry, "at">): void {
       record(failedRequests, { ...entry, at: new Date().toISOString() });

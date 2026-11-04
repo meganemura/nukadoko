@@ -9,7 +9,7 @@ import type { CountRange } from "../execution-events/count.js";
 import type { PathKey, StepPath } from "../execution-events/path.js";
 import type { MarkedHolds } from "../execution-events/tables.js";
 import type { TraceGap } from "../execution-events/tally.js";
-import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, JudgedView, ObservedCounts, PageReadingRecord, PageRequestRecord, SettledRecord } from "./types.js";
+import type { ClaimReadingValue, ClaimRecord, ErrorKind, EventsReadRecord, HttpVia, JudgedView, ObservedCounts, PageReadingRecord, PageRequestRecord, SettledRecord } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
 // own directory, `<stateDir>/runs/<run_id>/`, and what `nuka run --json`
@@ -114,6 +114,46 @@ export interface RunStep {
   /** A claim step's readings of execution events, copied from its step
    * record. */
   readonly events_read?: Readonly<Record<string, EventsReadRecord>>;
+  /** What the step saw of the program failing underneath it, from its
+   * record's page errors and its http.jsonl (docs/spec.md "Failures
+   * underneath"). Present only when it holds something. */
+  readonly underneath?: RunUnderneath;
+}
+
+/** A step's failures underneath, grouped by what an `@expects:` tag
+ * names. An unhandled error the program reports is not copied here: it is
+ * already an entry of the step's `path` (`kind: "error"`, `handled:
+ * false`), and is read there. */
+export interface RunUnderneath {
+  /** The step's http.jsonl lines with a status from 500 to 599, by
+   * status, ascending. */
+  readonly statuses?: readonly RunStatusGroup[];
+  /** The uncaught page errors on the step's record, by name, in the order
+   * the first of each arrived. `name` is `null` for an error with no
+   * name, which no tag can name. */
+  readonly page_errors?: readonly RunPageErrorGroup[];
+  /** What nukadoko could not see under the step, so cannot rule out:
+   * http.jsonl lines that were not written (the record's
+   * `http_log_failed`) or do not parse, `null` when the file could not
+   * be read at all, and page errors past the record's cap of 100, whose
+   * names were not kept. Never a reason to turn a cell broke. */
+  readonly unseen?: { readonly http_lines?: number | null; readonly page_errors?: number };
+}
+
+export interface RunStatusGroup {
+  readonly status: number;
+  readonly count: number;
+  /** The first such line, where a reader starts. `http_line` is its index
+   * in the step's http.jsonl, counted from 0. */
+  readonly first: { readonly method: string; readonly url: string; readonly via: HttpVia; readonly http_line: number; readonly as?: string };
+}
+
+export interface RunPageErrorGroup {
+  readonly name: string | null;
+  readonly count: number;
+  /** The first such error: its message's first line, and the `pageAs`
+   * context it came from when it is not the default one. */
+  readonly first: { readonly message: string; readonly as?: string };
 }
 
 /** A step's late lines of the program's log. */

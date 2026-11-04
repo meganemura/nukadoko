@@ -248,6 +248,11 @@ export interface HttpOmittedCounts {
   [resourceType: string]: number;
 }
 
+/** The path an http.jsonl line came through (src/context/http-log.ts),
+ * here so the log's lines and run.json's groups of them name it from one
+ * list. */
+export type HttpVia = "request" | "page" | "fetch" | "node:http" | "node:https";
+
 /** What one step boundary reached (`nuka do`'s whole execution, or one
  * `nuka run` pickle step). Mirrors the step record's own `observed` shape
  * (docs/spec.md "Records"). The name is older than the shape: it holds
@@ -624,6 +629,10 @@ export interface ConsoleErrorEntry {
  * `weberror`, the context-level counterpart to `Page`'s `pageerror`). Never
  * carries `Error#stack` — see src/context/page-events.ts's own header for why. */
 export interface PageErrorEntry {
+  /** The `name` of the error the page threw (`TypeError`, `Error`).
+   * Absent when the page threw a value that is not an Error, or one whose
+   * name is empty. An `@expects:page-error=<name>` tag accepts it. */
+  readonly name?: string;
   readonly message: string;
   readonly at: string;
   /** The `pageAs(name)` context this came from (docs/spec.md "Context

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parseHttpLog } from "../context/http-log-read.js";
 import type { ClaimItemDeclaration, ClaimRecord, KeptText, MeasuredChannel, ObservedCounts, StepRecord } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -87,20 +88,16 @@ export function recordedChannels(source: ChannelSource): readonly ChannelText[] 
     if (typeof entry.exit_code === "number") channels.push({ channel: `observed.processes[${index}].exit_code`, number: entry.exit_code });
   });
   if (source.http !== undefined) {
-    const lines = (readText(path.join(source.dir, source.http)) ?? "").split("\n").filter((line) => line.length > 0);
-    lines.forEach((line, index) => {
-      try {
-        const parsed = JSON.parse(line) as { status?: unknown; response_body?: KeptText };
-        // Status 0 is a request that got no response, not a status the
-        // server answered with.
-        if (typeof parsed.status === "number" && parsed.status !== 0) channels.push({ channel: `http.jsonl[${index}].status`, number: parsed.status });
-        if (parsed.response_body !== undefined) {
-          const text = keptText(parsed.response_body);
-          const channel = `http.jsonl[${index}].response_body`;
-          channels.push(text === null ? { channel, unknown: true } : { channel, text });
-        }
-      } catch {
-        // A line that does not parse holds no body to compare.
+    parseHttpLog(readText(path.join(source.dir, source.http)) ?? "").forEach((entry, index) => {
+      // A line that does not parse holds no body to compare.
+      if (entry === null) return;
+      // Status 0 is a request that got no response, not a status the
+      // server answered with.
+      if (entry.status !== 0) channels.push({ channel: `http.jsonl[${index}].status`, number: entry.status });
+      if (entry.response_body !== undefined) {
+        const text = keptText(entry.response_body);
+        const channel = `http.jsonl[${index}].response_body`;
+        channels.push(text === null ? { channel, unknown: true } : { channel, text });
       }
     });
   }

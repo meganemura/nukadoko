@@ -396,7 +396,15 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       });
     });
     context.on("weberror", (webError) => {
-      options.pageEvents.recordPageError(webError.error().message, as);
+      // Playwright hands back the thrown value itself when it is not an
+      // Error, so a thrown string has no name and its text is the message.
+      const thrown: unknown = webError.error();
+      const error = thrown instanceof Error ? thrown : undefined;
+      options.pageEvents.recordPageError({
+        ...(error !== undefined && error.name !== "" ? { name: error.name } : {}),
+        message: error === undefined ? String(thrown) : error.message,
+        ...(as !== undefined ? { as } : {}),
+      });
     });
     context.on("requestfailed", (request) => {
       const failure = request.failure();

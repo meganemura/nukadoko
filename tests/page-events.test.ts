@@ -45,7 +45,7 @@ describe("PageEventsCollector", () => {
 
   it("records an uncaught page error by its message alone", () => {
     const collector = createPageEventsCollector();
-    collector.recordPageError("ReferenceError: x is not defined");
+    collector.recordPageError({ message: "ReferenceError: x is not defined" });
 
     const snapshot = collector.snapshot();
     expect(snapshot?.console_errors).toBeUndefined();
@@ -81,7 +81,7 @@ describe("PageEventsCollector", () => {
   it("reset() clears every category back to undefined", () => {
     const collector = createPageEventsCollector();
     collector.recordConsoleError({ text: "a", location: { url: "", lineNumber: 0, columnNumber: 0 } });
-    collector.recordPageError("b");
+    collector.recordPageError({ message: "b" });
     collector.recordFailedRequest({ method: "GET", url: "http://127.0.0.1:1/" });
     expect(collector.snapshot()).not.toBeUndefined();
 
@@ -93,7 +93,7 @@ describe("PageEventsCollector", () => {
   it("keeps a bare array of all entries up to the 100-entry cap, with no total/truncated", () => {
     const collector = createPageEventsCollector();
     for (let i = 0; i < 100; i += 1) {
-      collector.recordPageError(`error ${i}`);
+      collector.recordPageError({ message: `error ${i}` });
     }
 
     const snapshot = collector.snapshot();
@@ -107,7 +107,7 @@ describe("PageEventsCollector", () => {
   it("truncates at 100 entries per category, stays a bare array, and reports the true total on the sibling truncated field", () => {
     const collector = createPageEventsCollector();
     for (let i = 0; i < 101; i += 1) {
-      collector.recordPageError(`error ${i}`);
+      collector.recordPageError({ message: `error ${i}` });
     }
 
     const snapshot = collector.snapshot();
@@ -124,7 +124,7 @@ describe("PageEventsCollector", () => {
   it("caps each category independently: one truncated category leaves another's bare array alone, and truncated names only the one that hit the cap", () => {
     const collector = createPageEventsCollector();
     for (let i = 0; i < 101; i += 1) {
-      collector.recordPageError(`error ${i}`);
+      collector.recordPageError({ message: `error ${i}` });
     }
     collector.recordConsoleError({ text: "one", location: { url: "", lineNumber: 0, columnNumber: 0 } });
 
@@ -141,7 +141,7 @@ describe("PageEventsCollector", () => {
   it("truncated is absent entirely when no category was ever truncated", () => {
     const collector = createPageEventsCollector();
     collector.recordConsoleError({ text: "one", location: { url: "", lineNumber: 0, columnNumber: 0 } });
-    collector.recordPageError("b");
+    collector.recordPageError({ message: "b" });
     collector.recordFailedRequest({ method: "GET", url: "http://127.0.0.1:1/" });
 
     const snapshot = collector.snapshot();
@@ -152,7 +152,7 @@ describe("PageEventsCollector", () => {
   it("truncated lists every truncated category when more than one hits the cap", () => {
     const collector = createPageEventsCollector();
     for (let i = 0; i < 101; i += 1) {
-      collector.recordPageError(`error ${i}`);
+      collector.recordPageError({ message: `error ${i}` });
       collector.recordFailedRequest({ method: "GET", url: `http://127.0.0.1:1/${i}` });
     }
 

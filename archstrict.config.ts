@@ -207,6 +207,7 @@ export default {
         "trace-actions.ts",
         "events-file.ts",
         "events-read.ts",
+        "http-log-read.ts",
         "program-log-slice.ts",
         "trace-context.ts",
         "used.ts",

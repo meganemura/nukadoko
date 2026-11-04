@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { readdirSync, rmdirSync } from "node:fs";
+import { readdirSync, readFileSync, rmdirSync } from "node:fs";
 import path from "node:path";
 import { type Pickle, PickleStepType } from "@cucumber/messages";
 import { analyzeRunSelectionKeepingSteps } from "../check/analyze.js";
@@ -15,6 +15,7 @@ import { namesPlaceholder, placeholderRefusal } from "../program/placeholders.js
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
+import { parseHttpLog } from "../context/http-log-read.js";
 import { createRequestScreenWarner, createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
@@ -1414,6 +1415,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         rerun: conditionsOf.rerun(record),
         inThen,
         stepKind,
+        httpLog: (stepRecord) => {
+          if (stepRecord.evidence.http === undefined) return [];
+          try {
+            return parseHttpLog(readFileSync(path.join(rootDir, stepRecord.evidence.dir, stepRecord.evidence.http), "utf8"));
+          } catch {
+            return null;
+          }
+        },
       });
       // A control's failure is what the table reads as proof, so it gets no
       // rerun line: the reruns a reader is offered are of failures.

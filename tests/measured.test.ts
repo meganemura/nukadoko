@@ -46,7 +46,7 @@ describe("a record with a channel whose content is unknown", () => {
   it("names no channel for a value read out of a body the record cut, though the status holds the same number", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-measured-"));
     try {
-      const line = { status: 200, response_body: { text: '{"code":200,"pad":"ppp', bytes: 60020, truncated: true } };
+      const line = { method: "GET", url: "http://a.test/", status: 200, duration_ms: 1, via: "request", response_body: { text: '{"code":200,"pad":"ppp', bytes: 60020, truncated: true } };
       writeFileSync(path.join(dir, "http.jsonl"), `${JSON.stringify(line)}\n`);
       const recorded = recordedChannels({ observed: {} as never, dir, http: "http.jsonl" });
       expect(recorded).toEqual([

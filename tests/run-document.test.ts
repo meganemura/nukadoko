@@ -93,6 +93,7 @@ describe("buildRunScenario", () => {
         rerun: "nuka run features/a.feature:3",
         inThen: () => false,
         stepKind: () => "run",
+        httpLog: () => [],
       });
 
       expect(entry.steps).toHaveLength(steps.length);
