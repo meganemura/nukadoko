@@ -12,7 +12,9 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir }
 // the run exits 1, with an `unexpected-failure` finding that spells the
 // tag; a scenario that names the failure with an @expects: tag stays held;
 // an error the program handled is no failure; a tag that matched nothing
-// gets an `expects-unseen` note; and `--concurrency` judges the same.
+// gets an `expects-unseen` note, and none where a page's script was left
+// out of http.jsonl, whose status the run never kept; and `--concurrency`
+// judges the same.
 
 interface Finding {
   readonly severity: string;
@@ -118,5 +120,20 @@ describe("nuka run: failures underneath", () => {
         message: "a request the program rescued: @expects:error=Ledger::Stale accepts a failure that did not happen: the program reported no unhandled Ledger::Stale in its execution",
       },
     ]);
+  });
+
+  it("notes no status tag where a page's request was left out of http.jsonl, since its status was not kept", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "underneath.feature"),
+      ["Feature: tags", "", "  @expects:status=503", "  Scenario: a page whose script is down", '    When the visitor opens "/page"', ""].join("\n"),
+    );
+    const { exitCode, findings } = await run(rootDir);
+    expect(exitCode).toBe(0);
+    // The document answered 200 and is on http.jsonl; the script answered
+    // 503 and is only counted as left out.
+    const [step] = latestRunJson(rootDir).scenarios[0].steps;
+    expect(step.status).toBe("passed");
+    expect(step.underneath).toEqual({ unseen: { http_omitted: 1 } });
+    expect(findings.filter((finding) => finding.code === "expects-unseen")).toEqual([]);
   });
 });

@@ -8,7 +8,7 @@ import { underneathOfRecord } from "../src/run/underneath.js";
 // Responsibility: what run.json's `steps[].underneath` holds of one step
 // record: every http.jsonl line with a status from 500 to 599, grouped by
 // status and none lost, every page error grouped by name, and what could
-// not be seen counted apart; and the one http.jsonl parser reads back each
+// not be seen counted apart, a page's request left out of http.jsonl too; and the one http.jsonl parser reads back each
 // line a writer wrote, at the index a reader names it by.
 
 const via = gs.sampledFrom(["request", "page", "fetch", "node:http", "node:https"] as const);
@@ -29,7 +29,7 @@ describe("underneath of a step record", () => {
   it("groups every line with a status from 500 to 599 by status, ascending, and counts each one", () =>
     hegel.test((tc) => {
       const lines = tc.draw(gs.arrays(line, { maxSize: 12 }));
-      const groups = underneathOfRecord(undefined, lines, undefined)?.statuses ?? [];
+      const groups = underneathOfRecord(undefined, lines, undefined, undefined)?.statuses ?? [];
       const expected = [...new Set(lines.flatMap((entry) => (entry !== null && failed(entry.status) ? [entry.status] : [])))].sort((a, b) => a - b);
       expect(groups.map((group) => group.status)).toEqual(expected);
       for (const group of groups) {
@@ -44,7 +44,7 @@ describe("underneath of a step record", () => {
       const lines = tc.draw(gs.arrays(line, { maxSize: 10 }));
       const shuffled = [...lines].reverse();
       const counts = (groups: ReturnType<typeof underneathOfRecord>) => (groups?.statuses ?? []).map((group) => [group.status, group.count]);
-      expect(counts(underneathOfRecord(undefined, shuffled, undefined))).toEqual(counts(underneathOfRecord(undefined, lines, undefined)));
+      expect(counts(underneathOfRecord(undefined, shuffled, undefined, undefined))).toEqual(counts(underneathOfRecord(undefined, lines, undefined, undefined)));
     }));
 
   it("counts lines that do not parse and appends that failed as unseen, never as a failure", () =>
@@ -52,15 +52,15 @@ describe("underneath of a step record", () => {
       const lines = tc.draw(gs.arrays(line, { maxSize: 10 }));
       const appendsFailed = tc.draw(gs.optional(gs.integers({ minValue: 0, maxValue: 3 }))) ?? undefined;
       const unseen = lines.filter((entry) => entry === null).length + (appendsFailed ?? 0);
-      const underneath = underneathOfRecord(undefined, lines, appendsFailed);
+      const underneath = underneathOfRecord(undefined, lines, appendsFailed, undefined);
       expect(underneath?.unseen?.http_lines).toBe(unseen === 0 ? undefined : unseen);
-      expect(underneathOfRecord(undefined, null, appendsFailed)?.unseen).toEqual({ http_lines: null });
+      expect(underneathOfRecord(undefined, null, appendsFailed, undefined)?.unseen).toEqual({ http_lines: null });
     }));
 
   it("groups page errors by name in the order the first of each arrived, with a nameless one under null", () =>
     hegel.test((tc) => {
       const errors = tc.draw(gs.arrays(pageError, { minSize: 1, maxSize: 8 }));
-      const groups = underneathOfRecord({ page_errors: errors }, [], undefined)?.page_errors ?? [];
+      const groups = underneathOfRecord({ page_errors: errors }, [], undefined, undefined)?.page_errors ?? [];
       const names = [...new Set(errors.map((error) => error.name ?? null))];
       expect(groups.map((group) => group.name)).toEqual(names);
       expect(groups.reduce((total, group) => total + group.count, 0)).toBe(errors.length);
@@ -73,15 +73,23 @@ describe("underneath of a step record", () => {
   it("counts the page errors past the record's cap as unseen", () => {
     const kept: PageErrorEntry[] = Array.from({ length: 100 }, () => ({ name: "Error", message: "x", at: "2026-11-04T00:00:00.000Z" }));
     const snapshot: PageEventsSnapshot = { page_errors: kept, truncated: { page_errors: 130 } };
-    expect(underneathOfRecord(snapshot, [], undefined)).toEqual({
+    expect(underneathOfRecord(snapshot, [], undefined, undefined)).toEqual({
       page_errors: [{ name: "Error", count: 100, first: { message: "x" } }],
       unseen: { page_errors: 30 },
     });
   });
 
   it("is absent for a step that saw no failure and missed nothing", () => {
-    expect(underneathOfRecord({ console_errors: [] }, [{ method: "GET", url: "http://a.test/", status: 200, duration_ms: 1, via: "page" }], 0)).toBeUndefined();
+    expect(underneathOfRecord({ console_errors: [] }, [{ method: "GET", url: "http://a.test/", status: 200, duration_ms: 1, via: "page" }], 0, undefined)).toBeUndefined();
   });
+
+  it("counts the page's requests left out of http.jsonl as unseen, since their status was not kept", () =>
+    hegel.test((tc) => {
+      const omitted = Object.fromEntries(tc.draw(gs.arrays(gs.tuples(gs.sampledFrom(["script", "stylesheet", "image", "font"]), gs.integers({ minValue: 1, maxValue: 40 })), { maxSize: 4 })));
+      const total = Object.values(omitted).reduce((sum, count) => sum + count, 0);
+      const underneath = underneathOfRecord(undefined, [{ method: "GET", url: "http://a.test/", status: 200, duration_ms: 1, via: "page" }], undefined, omitted);
+      expect(underneath).toEqual(total === 0 ? undefined : { unseen: { http_omitted: total } });
+    }));
 });
 
 describe("parseHttpLog", () => {

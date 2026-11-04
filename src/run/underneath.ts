@@ -2,7 +2,7 @@ import { EXPECTED_KIND_ORDER, expectsTagText, readExpectsTag, type ExpectedKind 
 import type { HttpLogEntry } from "../context/http-log-read.js";
 import type { Finding } from "../finding/finding.js";
 import type { RunPageErrorGroup, RunScenario, RunStatusGroup, RunStep, RunUnderneath } from "../record/run-result.js";
-import type { PageEventsSnapshot } from "../record/types.js";
+import type { HttpOmittedCounts, PageEventsSnapshot } from "../record/types.js";
 import { stepJudgedTooEarly } from "./events-after-stop.js";
 import { firstErrorLine, scenarioLabel, type RunConditions } from "./progress-log.js";
 import { countOf } from "./summary-markdown.js";
@@ -22,7 +22,8 @@ import { countOf } from "./summary-markdown.js";
 // party's own statement, never a reading of something else: the server
 // chose the status, and the browser found no handler for what the page
 // threw. What could not be seen (a line that was not written or does not
-// parse, a page error past the record's cap) is kept apart as `unseen`,
+// parse, a page error past the record's cap, a page's request left out
+// of http.jsonl, whose status was never kept) is kept apart as `unseen`,
 // and is never counted as a failure.
 
 /** The lowest and highest status a server answers with when it failed. */
@@ -30,12 +31,13 @@ const FAILED_STATUS = { from: 500, to: 599 } as const;
 
 /** A step's `underneath`, from its record's `page_events`, its http.jsonl
  * lines (`null` when the file could not be read, empty when the record
- * names none), and its `http_log_failed`. `undefined` when the step saw
- * no failure and missed nothing. Pure. */
+ * names none), its `http_log_failed`, and its `http_omitted`.
+ * `undefined` when the step saw no failure and missed nothing. Pure. */
 export function underneathOfRecord(
   pageEvents: PageEventsSnapshot | undefined,
   http: readonly (HttpLogEntry | null)[] | null,
   httpLogFailed: number | undefined,
+  httpOmitted: HttpOmittedCounts | undefined,
 ): RunUnderneath | undefined {
   const statuses = statusGroups(http ?? []);
   const pageErrors = pageErrorGroups(pageEvents);
@@ -43,8 +45,10 @@ export function underneathOfRecord(
   const pastCap = pageEvents?.truncated?.page_errors === undefined ? 0 : pageEvents.truncated.page_errors - kept;
   const unparsed = (http ?? []).filter((entry) => entry === null).length;
   const httpLines = http === null ? null : unparsed + (httpLogFailed ?? 0);
+  const omitted = Object.values(httpOmitted ?? {}).reduce((sum, count) => sum + count, 0);
   const unseen = {
     ...(httpLines === null || httpLines > 0 ? { http_lines: httpLines } : {}),
+    ...(omitted > 0 ? { http_omitted: omitted } : {}),
     ...(pastCap > 0 ? { page_errors: pastCap } : {}),
   };
   const underneath: RunUnderneath = {
@@ -228,13 +232,15 @@ export function unexpectedFailureFindings(scenarios: readonly RunScenario[], con
 
 // Whether an execution was watched for a kind whole, so a tag of that kind
 // that matched nothing there matched nothing that happened: every line of
-// http.jsonl read, the page errors of a browser kept by name, or the
+// http.jsonl read and no page request left out of it (a script's 503 is
+// never kept), the page errors of a browser kept by name, or the
 // program's events read with no line that may be any line and no gap
 // where an error could still be, such as a job that never performed. A
 // step that sent no request has a gap too (`no-requests`), and no
 // error of its trace can be missing, so it does not count.
 const WATCHED: { readonly [K in ExpectedKind]: (execution: RunScenario) => boolean } = {
-  status: (execution) => execution.steps.every((step) => step.record_unreadable !== true && step.underneath?.unseen?.http_lines === undefined),
+  status: (execution) =>
+    execution.steps.every((step) => step.record_unreadable !== true && step.underneath?.unseen?.http_lines === undefined && step.underneath?.unseen?.http_omitted === undefined),
   error: (execution) =>
     execution.steps.some((step) => step.path !== undefined) && execution.steps.every((step) => (step.path?.maybe ?? 0) === 0 && (step.path?.open ?? []).every((open) => open.gap === "no-requests")),
   "page-error": (execution) => execution.browser !== undefined && execution.steps.every((step) => step.record_unreadable !== true && step.underneath?.unseen?.page_errors === undefined),

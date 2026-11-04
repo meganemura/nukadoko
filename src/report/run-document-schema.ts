@@ -261,7 +261,9 @@ const underneath = z.looseObject({
   page_errors: z
     .array(z.looseObject({ name: z.string().nullable(), count: z.number().int().min(1), first: z.looseObject({ message: z.string(), as: z.string().optional() }) }))
     .optional(),
-  unseen: z.looseObject({ http_lines: z.number().int().min(0).nullable().optional(), page_errors: z.number().int().min(1).optional() }).optional(),
+  unseen: z
+    .looseObject({ http_lines: z.number().int().min(0).nullable().optional(), http_omitted: z.number().int().min(1).optional(), page_errors: z.number().int().min(1).optional() })
+    .optional(),
 });
 
 const step = z.looseObject({

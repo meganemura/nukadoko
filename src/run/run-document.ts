@@ -227,7 +227,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     const stepRecord = entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null);
     const used = stepRecord === null ? undefined : usedOf(stepRecord, input.recordPath);
     const kind = stepRecord?.status === "failed" ? stepRecord.error.kind : null;
-    const underneath = stepRecord === null ? undefined : underneathOfRecord(stepRecord.page_events, input.httpLog(stepRecord), stepRecord.http_log_failed);
+    const underneath = stepRecord === null ? undefined : underneathOfRecord(stepRecord.page_events, input.httpLog(stepRecord), stepRecord.http_log_failed, stepRecord.http_omitted);
     return {
       line: input.stepLine(index),
       text: entry.text,

@@ -6,7 +6,8 @@ import { createServer } from "node:http";
 // handled: false. `/down` answers 503 and reports nothing. `/stale`
 // answers 200 and reports an error with handled: false, as a request
 // that failed after its answer went out does. `/rescued` answers 200 and
-// reports an error it caught, with handled: true. Every request's line
+// reports an error it caught, with handled: true. `/page` answers 200
+// with a document whose script is `/down`. Every request's line
 // goes out after the lines of what happened inside it.
 const EVENTS = process.env.EXECUTION_EVENTS;
 const newId = () => randomBytes(8).toString("hex");
@@ -30,6 +31,11 @@ createServer((req, res) => {
     emit({ trace, kind: "error", id: newId(), parent: id, class: "Ledger::Stale", handled: true });
   }
   emit({ trace, kind: "request", id, method: req.method, route, status });
+  if (route === "/page") {
+    res.writeHead(status, { "content-type": "text/html" });
+    res.end('<!doctype html><title>page</title><script src="/down"></script>');
+    return;
+  }
   res.writeHead(status, { "content-type": "text/plain" });
   res.end(String(status));
 }).listen(Number(process.env.PORT));

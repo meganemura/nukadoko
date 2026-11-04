@@ -6266,8 +6266,10 @@ to act on the run without opening another file:
   `name` its page threw (`null` for none), in the order the first of
   each arrived, with its `count` and the `first` message's first line;
   and `unseen`, what could not be judged: `http_lines`, the requests
-  with no readable line (`null` when http.jsonl could not be read), and
-  `page_errors`, the ones past the record's cap. An unhandled error is
+  with no readable line (`null` when http.jsonl could not be read),
+  `http_omitted`, the page's requests left out of http.jsonl (the sum of
+  the record's `http_omitted`), and `page_errors`, the ones past the
+  record's cap. An unhandled error is
   read from the step's `path` and is not copied. An execution that ran
   under `@expects:` tags has them as `expects`. A step with lines of the program's log that arrived
   after its record was written has `program_log_late`, and one with
@@ -7145,9 +7147,13 @@ What could not be seen is never a failure. A line of http.jsonl that
 was not written or does not parse, an http.jsonl that could not be
 read, and page errors past a record's cap of 100 are counted in the
 step's `underneath.unseen` and listed as its `unmeasured` limit; a line
-of the trace that may be any line (`maybe`) counts as no error. A tag
+of the trace that may be any line (`maybe`) counts as no error. A
+page's request that http.jsonl leaves out, such as a script or an
+image, is counted there as `http_omitted`, with no status, and is not
+listed as a limit, since nearly every page loads one. A tag
 that matched nothing, in every execution of a cell that passed, where
-the run saw everything of its kind (every line of http.jsonl, a browser
+the run saw everything of its kind (every line of http.jsonl, with no
+page request left out of it, a browser
 whose page errors were all kept, the program's events with no `maybe`
 line and no trace left open, such as by a job that never performed), gets an `expects-unseen` note: a tag left in place after its
 failure stopped happening accepts that failure in every later run.

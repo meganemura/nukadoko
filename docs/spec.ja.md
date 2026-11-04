@@ -4857,7 +4857,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `statuses` は、http.jsonl の行が持つ 500 から 599 の status ごとに 1 つ、昇順のエントリで、それぞれ `count` と最初のリクエストの `first`(`method`、`url`、`via`、http.jsonl での位置の `http_line`)を持ちます。
   `page_errors` は、page が投げた `name` ごとに 1 つ(名前が無いものは `null`)、それぞれの最初のものが届いた順のエントリで、`count` と最初のメッセージの最初の行の `first` を持ちます。
   `unseen` は判定できなかったものです。
-  `http_lines` は読める行の無いリクエストの数(http.jsonl を読めなかったときは `null`)、`page_errors` は record の上限を超えた数です。
+  `http_lines` は読める行の無いリクエストの数(http.jsonl を読めなかったときは `null`)、`http_omitted` は http.jsonl から省かれた page のリクエストの数(record の `http_omitted` の合計)、`page_errors` は record の上限を超えた数です。
   処理されなかったエラーは step の `path` から読み、写しはしません。
   `@expects:` の tag のもとで走った実行は、それを `expects` に持ちます。
   record を書いたあとに届いたプログラムのログの行を持つ step は `program_log_late` を、実行イベントの行を持つ step は `events_late` を持ちます(「テスト対象のプログラム」を参照)。
@@ -5495,7 +5495,9 @@ run は、scenario と environment ごとに 1 つの `unexpected-failure` を�
 見えなかったものは、決して失敗になりません。
 書かれなかったか読み取れない http.jsonl の行、読めなかった http.jsonl、record の上限の 100 件を超えた page のエラーは、step の `underneath.unseen` に数えられ、その step の `unmeasured` の示さないこととして挙がります。
 どの行でもありうる trace の行(`maybe`)は、エラーとして数えません。
-通ったセルのすべての実行で、その種類のすべてを run が見たところで(http.jsonl のすべての行、page のエラーをすべて残した browser、`maybe` の行も、実行されなかった job のように開いたままの trace も無いプログラムのイベント)、何にも一致しなかった tag は、`expects-unseen` の注記を受けます。
+script や画像のように http.jsonl が省く page のリクエストは、status の無いまま `http_omitted` としてそこに数えられ、示さないこととしては挙がりません。
+ほとんどどの page もそれを読み込むからです。
+通ったセルのすべての実行で、その種類のすべてを run が見たところで(page のリクエストが 1 件も省かれていない http.jsonl のすべての行、page のエラーをすべて残した browser、`maybe` の行も、実行されなかった job のように開いたままの trace も無いプログラムのイベント)、何にも一致しなかった tag は、`expects-unseen` の注記を受けます。
 失敗が起きなくなった後も残された tag は、それ以降のどの run でもその失敗を認めてしまうからです。
 `nuka check` は、読めない tag を error の `expects-tag-malformed` として報告します。
 また、run が起動するどの world も実行イベントを読まないところの `@expects:error=` の tag を、warning の `expects-unread` として報告します。

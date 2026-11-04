@@ -36,7 +36,7 @@ type ErrorEntry = PathEntry & { readonly kind: "error"; readonly class: string; 
 const errorEntry = gs.tuples(gs.sampledFrom(CLASSES), gs.booleans(), gs.integers({ minValue: 1, maxValue: 3 })).map(
   ([name, handled, count]): ErrorEntry => ({ kind: "error", class: name, handled, count }),
 );
-const unseen = gs.sampledFrom<RunUnderneath["unseen"] | undefined>([undefined, { http_lines: null }, { http_lines: 2 }, { page_errors: 1 }, { http_lines: 1, page_errors: 3 }]);
+const unseen = gs.sampledFrom<RunUnderneath["unseen"] | undefined>([undefined, { http_lines: null }, { http_lines: 2 }, { http_omitted: 3 }, { page_errors: 1 }, { http_lines: 1, page_errors: 3 }]);
 
 function underneathOf(statuses: RunUnderneath["statuses"], pageErrors: RunUnderneath["page_errors"], missed: RunUnderneath["unseen"] | null | undefined): RunUnderneath | undefined {
   const underneath: RunUnderneath = {
@@ -245,6 +245,10 @@ describe("expects-unseen", () => {
   it("stays silent on a kind the run could not see whole, and on a cell that did not pass", () => {
     const unwatched = clean({ steps: [stepOf(0, { statuses: [], pageErrors: [], errors: [], missed: { http_lines: null, page_errors: 2 } })] });
     expect(unseenExpectationNotes([unwatched], conditions)).toEqual([]);
+    // A script that answered 503 is left out of http.jsonl with no status.
+    const omitted = clean({}, { http_omitted: 1 });
+    expect(unseenExpectationNotes([omitted], conditions).map((note) => note.message)).not.toContainEqual(expect.stringContaining("@expects:status="));
+    expect(unseenExpectationNotes([omitted], conditions)).toHaveLength(2);
     // A job that never performed may have failed where no line says so; a
     // step that sent no request has no trace an error could be missing from.
     const gap = clean({ steps: [{ ...stepOf(0, { statuses: [], pageErrors: [], errors: [], missed: undefined }), path: { ...pathOf([]), open: [{ gap: "jobs-pending", job_ids: ["j1"] }] } }] });

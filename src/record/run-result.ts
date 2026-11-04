@@ -135,9 +135,11 @@ export interface RunUnderneath {
   /** What nukadoko could not see under the step, so cannot rule out:
    * http.jsonl lines that were not written (the record's
    * `http_log_failed`) or do not parse, `null` when the file could not
-   * be read at all, and page errors past the record's cap of 100, whose
-   * names were not kept. Never a reason to turn a cell broke. */
-  readonly unseen?: { readonly http_lines?: number | null; readonly page_errors?: number };
+   * be read at all; the page's requests left out of http.jsonl, such as a
+   * script or an image (the sum of the record's `http_omitted`), whose
+   * status was not kept; and page errors past the record's cap of 100,
+   * whose names were not kept. Never a reason to turn a cell broke. */
+  readonly unseen?: { readonly http_lines?: number | null; readonly http_omitted?: number; readonly page_errors?: number };
 }
 
 export interface RunStatusGroup {
