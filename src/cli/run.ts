@@ -746,7 +746,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         return refused(error);
       }
     }
-    const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
+    const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, customWorld, compatRunHooks, defaultTimeoutMs } =
       discovery;
 
     // Every registered hook's own tag expression is validated here — a
@@ -2368,6 +2368,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               warnings("world-setup-failed").write(`${message}\n`);
             },
             compatHooks,
+            customWorld,
             defaultTimeoutMs,
             onUnknownTraceVersion,
             onRequestScreenFailed,

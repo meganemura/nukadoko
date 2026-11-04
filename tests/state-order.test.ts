@@ -7,7 +7,7 @@ import { buildExpression } from "../src/binding/expression.js";
 import { createParameterTypeRegistry } from "../src/binding/registry.js";
 import { checkBindings } from "../src/check/binding-check.js";
 import { createStepTextMatcher } from "../src/check/feature-check.js";
-import { checkStateOrder, stateShapeIssues, type StateIssue } from "../src/check/state-order.js";
+import { checkFeatureStateOrder, checkStateOrder, stateShapeIssues, type StateIssue } from "../src/check/state-order.js";
 import type { HookRegistration, HookType } from "../src/compat/hooks.js";
 import type { Vocabulary, VocabularyEntry } from "../src/discover/discover-steps.js";
 import { attachStepLines, parseFeatureSource } from "../src/feature/load-features.js";
@@ -165,7 +165,14 @@ function walk(model: Model, vocabulary: Vocabulary, lines: readonly LineModel[] 
   const pickle = attachStepLines(pickles, gherkinDocument)[0]!;
   const hooks: HookRegistration[] = model.hooks.map((hook, order) => ({ type: hook.type, tags: hook.tags, fn: () => undefined, registrationOrder: order }));
   const match = createStepTextMatcher(checkBindings(vocabulary).patterns);
-  return checkStateOrder(pickle, vocabulary, match, { hooks, customWorld: model.customWorld }, (stepIndex) => pickle.steps[stepIndex]?.line);
+  const compat = { hooks, customWorld: model.customWorld };
+  const lineOf = (stepIndex: number): number | undefined => pickle.steps[stepIndex]?.line;
+  const issues = checkStateOrder(pickle, vocabulary, match, compat, lineOf);
+  // A feature of one pickle has nothing to merge: nuka check and the run
+  // guard say the same thing.
+  const findings = checkFeatureStateOrder([{ pickle, lineOf }], vocabulary, match, compat);
+  expect(findings).toEqual(issues.map((issue) => ({ line: lineOf(issue.stepIndex), stepName: issue.stepName, message: issue.message, fix: issue.fix })));
+  return issues;
 }
 
 /** One entry per requiring line the walk reports, folded lines included:

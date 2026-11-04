@@ -286,6 +286,7 @@ export default {
         "feature-check.ts",
         "from-order.ts",
         "playwright-check.ts",
+        "state-order.ts",
         "types.ts",
         "unbound-patterned.ts",
         "unfillable-key.ts",

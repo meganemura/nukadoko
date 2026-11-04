@@ -143,6 +143,10 @@ export interface DiscoveryResult {
    * attributed to a file (see src/compat/hooks.ts's header), read once here
    * after every file's import has finished. */
   readonly compatHooks: readonly HookRegistration[];
+  /** Whether a step file called `setWorldConstructor`: its constructor
+   * runs before the first line of every scenario, so what it leaves is
+   * unknown to the state-order check (src/check/state-order.ts). */
+  readonly customWorld: boolean;
   /** Every BeforeAll/AfterAll hook any step file registered during this run
    * — same "not attributed to a file, read once at the end" contract as
    * `compatHooks`, via src/compat/run-hooks.ts instead. src/cli/run.ts is
@@ -498,6 +502,7 @@ export async function discoverSteps(
       parameters: Readonly<Record<string, unknown>>,
     ) => compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector, parameters),
     compatHooks: compatHooksModule.getRegisteredHooks(),
+    customWorld: compatWorld.hasCustomWorldConstructor(),
     compatRunHooks: compatRunHooksModule.getRegisteredRunHooks(),
     // Read through `compatRegistry` — already loaded above for the step
     // buffer, and `setDefaultTimeout`'s own buffer lives in that same

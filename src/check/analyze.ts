@@ -51,6 +51,7 @@ import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { findUnusedParameterTypes } from "./unused-parameter-type.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
+import { stateShapeIssues } from "./state-order.js";
 import { findEventsWorldGaps } from "./events-check.js";
 import { findPlaywrightMissing, playwrightImportMissing } from "./playwright-check.js";
 import { checkCodeFix } from "./codes.js";
@@ -305,6 +306,7 @@ async function reportFor(
     compatParameterTypes,
     compatHooks,
     compatRunHooks,
+    customWorld,
     importFailures,
     unsupportedExtensionFiles,
     walkedFiles,
@@ -526,6 +528,18 @@ async function reportFor(
       step: issue.step,
     });
   }
+  // Pointed at a step of the shape fewer steps use: the likelier slip.
+  for (const issue of stateShapeIssues(vocabulary)) {
+    const step = (issue.unkeyed.length <= issue.keyed.length ? issue.unkeyed : issue.keyed)[0]!;
+    const entry = vocabulary.get(step);
+    errors.push({
+      code: "state-shape-mismatch",
+      message: issue.message,
+      ...(entry === undefined ? {} : { file: path.relative(rootDir, entry.filePath) }),
+      step,
+      fix: issue.fix,
+    });
+  }
 
   const fixtureGraph = buildFixtureGraph(config);
   // The fixture-bag counterpart to the `from` structural check just above:
@@ -637,6 +651,7 @@ async function reportFor(
     bindingResult.patterns,
     [...config.parameterTypes, ...compatParameterTypes],
     bindingResult.standIns,
+    { hooks: compatHooks, customWorld },
   );
   warnings.push(...featureResult.warnings);
   // One finding per cause: while every checked line is an undefined-step

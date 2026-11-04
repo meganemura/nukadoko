@@ -221,7 +221,7 @@ async function main(): Promise<void> {
           return analysis.discovery;
         })()
       : await inTree("the step files did not load", () => discoverSteps(rootDir, config.featuresDir));
-  const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } = discovery;
+  const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, customWorld, compatRunHooks, defaultTimeoutMs } = discovery;
   // After the step files load, as at `--concurrency 1`, where the parent
   // imports them before it starts the world: a module reads the same
   // environment at import in both modes, and the world's env at step time.
@@ -416,6 +416,7 @@ async function main(): Promise<void> {
             notes("world-setup-failed").write(`${message}\n`);
           },
           compatHooks,
+          customWorld,
           defaultTimeoutMs,
           onUnknownTraceVersion,
           onRequestScreenFailed,

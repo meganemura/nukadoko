@@ -13,6 +13,7 @@ import { declaresDoneCallback, doneCallbackMessage, passedArgCountForStep } from
 import { shellWord } from "../shell/shell-word.js";
 import { checkProducerOrder } from "./events-check.js";
 import { checkFromOrder, fromOrderFix, fromOrderHold, isHeldBackByUndefinedLine } from "./from-order.js";
+import { checkFeatureStateOrder, type StateCompat } from "./state-order.js";
 import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
 import { checkClaimSources } from "./claim-check.js";
@@ -233,6 +234,7 @@ export function checkFeatures(
   patterns: readonly CheckedPattern[],
   customTypes: readonly ParameterTypeConfig[] = [],
   standIns: readonly CheckedPattern[] = [],
+  compat: StateCompat = { hooks: [], customWorld: false },
 ): FeatureCheckResult {
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
@@ -521,6 +523,20 @@ export function checkFeatures(
           step: issue.stepName,
         });
       }
+    }
+
+    // Per feature rather than per pickle, so a Background line every
+    // scenario reaches the same way is one finding.
+    const statePickles = feature.pickles.map((pickle) => ({ pickle, lineOf: (index: number) => pickle.steps[index]?.line }));
+    for (const finding of checkFeatureStateOrder(statePickles, vocabulary, match, compat)) {
+      errors.push({
+        code: "state-missing",
+        message: finding.message,
+        file: feature.relativePath,
+        line: finding.line,
+        step: finding.stepName,
+        fix: finding.fix,
+      });
     }
   }
 

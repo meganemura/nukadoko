@@ -13,7 +13,8 @@ import type { StepTextMatcher } from "./feature-check.js";
 // line whose step requires a state can only be reached with that state not
 // held, by what the steps of the lines before it declare. One judgment,
 // two callers, the shape from-order.ts set: nuka check (feature-check.ts,
-// every pickle) and nuka run's pre-run guard (run-scenario.ts, the pickle
+// every pickle of a feature file, a finding several reach the same way
+// reported once) and nuka run's pre-run guard (run-scenario.ts, the pickle
 // about to run), so a scenario never passes one and fails the other.
 // Boundary: reads declarations and the feature text, never a step record.
 // It never says a state holds, only that it cannot. Whatever it has no
@@ -253,6 +254,80 @@ export function checkStateOrder(
   lineOf: (stepIndex: number) => number | undefined,
 ): readonly StateIssue[] {
   const index = indexOf(vocabulary);
+  const at = labelOf(lineOf);
+  return walkStates(pickle, vocabulary, index, match, compat).map((draft) => ({
+    stepIndex: draft.stepIndex,
+    stepName: draft.stepName,
+    state: draft.use.state,
+    key: draft.use.key,
+    holder: draft.holder,
+    cause: draft.cause,
+    alsoRequiredAt: draft.alsoRequiredAt,
+    ...render(draft, at, pickle, index, draft.alsoRequiredAt.map(at), at(Math.max(draft.stepIndex, ...draft.alsoRequiredAt))),
+  }));
+}
+
+/** One state-missing finding of nuka check: a requiring line of a feature file. */
+export interface StateFinding {
+  readonly line: number | undefined;
+  readonly stepName: string;
+  readonly message: string;
+  readonly fix: string;
+}
+
+/**
+ * checkStateOrder over every pickle of one feature file, for nuka check. A
+ * Background line reaches the same finding in every scenario, each with
+ * its own later lines folded into it, so the finding is reported once with
+ * the folded lines of all of them: one giving line before it settles every
+ * one. Pure.
+ */
+export function checkFeatureStateOrder(
+  pickles: readonly { readonly pickle: Pickle; readonly lineOf: (stepIndex: number) => number | undefined }[],
+  vocabulary: Vocabulary,
+  match: StepTextMatcher,
+  compat: StateCompat,
+): readonly StateFinding[] {
+  const index = indexOf(vocabulary);
+  interface Merged {
+    readonly draft: Draft;
+    readonly pickle: Pickle;
+    readonly at: (stepIndex: number) => string;
+    readonly line: number | undefined;
+    /** By label, the line it sorts by. */
+    readonly folded: Map<string, number>;
+    /** The scenarios the folded lines come from. */
+    readonly scenarios: Set<string>;
+  }
+  const merged = new Map<string, Merged>();
+  for (const { pickle, lineOf } of pickles) {
+    const at = labelOf(lineOf);
+    for (const draft of walkStates(pickle, vocabulary, index, match, compat)) {
+      const alone = render(draft, at, pickle, index, [], at(draft.stepIndex));
+      const key = JSON.stringify([lineOf(draft.stepIndex) ?? null, alone.message, alone.fix]);
+      const found = merged.get(key) ?? { draft, pickle, at, line: lineOf(draft.stepIndex), folded: new Map<string, number>(), scenarios: new Set<string>() };
+      merged.set(key, found);
+      for (const stepIndex of draft.alsoRequiredAt) found.folded.set(at(stepIndex), lineOf(stepIndex) ?? Number.POSITIVE_INFINITY);
+      if (draft.alsoRequiredAt.length > 0) found.scenarios.add(pickle.astNodeIds[0] ?? pickle.id);
+    }
+  }
+  return [...merged.values()].map(({ draft, pickle, at, line, folded, scenarios }) => {
+    const labels = [...folded].sort(([, a], [, b]) => a - b).map(([label]) => label);
+    // No one line is below every folded line when they lie in different scenarios.
+    const last = scenarios.size > 1 ? undefined : (labels.at(-1) ?? at(draft.stepIndex));
+    return { line, stepName: draft.stepName, ...render(draft, at, pickle, index, labels, last) };
+  });
+}
+
+/** "line 12", or the step's place in the scenario when it has no line. */
+function labelOf(lineOf: (stepIndex: number) => number | undefined): (stepIndex: number) => string {
+  return (stepIndex) => {
+    const line = lineOf(stepIndex);
+    return line === undefined ? `step ${stepIndex + 1} of the scenario` : `line ${line}`;
+  };
+}
+
+function walkStates(pickle: Pickle, vocabulary: Vocabulary, index: StateIndex, match: StepTextMatcher, compat: StateCompat): readonly Draft[] {
   if (index.states.size === 0) return [];
   const tags = pickle.tags.map((tag) => tag.name);
   const hooked = (type: HookType): boolean => compat.hooks.some((hook) => hook.type === type && applies(hook, tags));
@@ -330,22 +405,21 @@ export function checkStateOrder(
     }
     if (afterEachLine) facts = new Map([...facts.keys()].map((state) => [state, ALL_UNKNOWN]));
   });
+  return drafts;
+}
 
-  const at = (stepIndex: number): string => {
-    const line = lineOf(stepIndex);
-    return line === undefined ? `step ${stepIndex + 1} of the scenario` : `line ${line}`;
-  };
-  return drafts.map((draft) => ({
-    stepIndex: draft.stepIndex,
-    stepName: draft.stepName,
-    state: draft.use.state,
-    key: draft.use.key,
-    holder: draft.holder,
-    cause: draft.cause,
-    alsoRequiredAt: draft.alsoRequiredAt,
-    message: stateMissingMessage(draft, at, pickle),
-    fix: stateMissingFix(draft, at, index),
-  }));
+/** `also` labels the lines folded into the finding, and `last` the last of
+ * them, or the requiring line when none is, or nothing when they lie in
+ * more than one scenario. */
+function render(
+  draft: Draft,
+  at: (stepIndex: number) => string,
+  pickle: Pickle,
+  index: StateIndex,
+  also: readonly string[],
+  last: string | undefined,
+): { readonly message: string; readonly fix: string } {
+  return { message: stateMissingMessage(draft, at, pickle, also), fix: stateMissingFix(draft, at, index, last) };
 }
 
 function listed(items: readonly string[]): string {
@@ -357,7 +431,7 @@ function quoted(names: readonly string[]): string {
   return names.map((name) => `"${name}"`).join(", ");
 }
 
-function stateMissingMessage(draft: Draft, at: (stepIndex: number) => string, pickle: Pickle): string {
+function stateMissingMessage(draft: Draft, at: (stepIndex: number) => string, pickle: Pickle, also: readonly string[]): string {
   const { use, holder, cause, stepIndex } = draft;
   const subject =
     use.key === undefined
@@ -377,25 +451,27 @@ function stateMissingMessage(draft: Draft, at: (stepIndex: number) => string, pi
       reason = `by what the earlier lines declare, no ${use.key ?? "holder"} holds it here`;
       break;
     case "never-given": {
+      if (stepIndex === 0) {
+        reason = `no earlier line gives it: ${at(0)} is the scenario's first line`;
+        break;
+      }
       const others = cause.givenToOthers.map((given) => `${at(given.stepIndex)} gives it to ${given.holder}`);
-      const detail = others.length > 0 ? `: ${others.join(", ")}` : stepIndex === 0 ? `: ${at(0)} is the scenario's first line` : "";
-      reason = `no earlier line gives it${holder === undefined ? "" : ` to ${holder}`}${detail}`;
+      reason = `no earlier line gives it${holder === undefined ? "" : ` to ${holder}`}${others.length > 0 ? `: ${listed(others)}` : ""}`;
       break;
     }
   }
-  return `${subject}, and ${reason}${alsoRequired(draft.alsoRequiredAt, at)}. nuka run refuses this scenario before any of its steps runs`;
+  return `${subject}, and ${reason}${alsoRequired(also)}. nuka run refuses this scenario before any of its steps runs`;
 }
 
 /** "; line 12 requires it too", "; lines 12 and 17 require it too". */
-function alsoRequired(stepIndexes: readonly number[], at: (stepIndex: number) => string): string {
-  if (stepIndexes.length === 0) return "";
-  if (stepIndexes.length === 1) return `; ${at(stepIndexes[0]!)} requires it too`;
-  const labels = stepIndexes.map(at);
+function alsoRequired(labels: readonly string[]): string {
+  if (labels.length === 0) return "";
+  if (labels.length === 1) return `; ${labels[0]} requires it too`;
   const numbers = labels.every((label) => label.startsWith("line ")) ? labels.map((label) => label.slice("line ".length)) : undefined;
   return `; ${numbers === undefined ? listed(labels) : `lines ${listed(numbers)}`} require it too`;
 }
 
-function stateMissingFix(draft: Draft, at: (stepIndex: number) => string, index: StateIndex): string {
+function stateMissingFix(draft: Draft, at: (stepIndex: number) => string, index: StateIndex, last: string | undefined): string {
   const { use, holder, cause, stepIndex } = draft;
   const ref = use.key === undefined ? `"${use.state}"` : `["${use.state}", "<key>"]`;
   if (cause.kind === "no-giver") {
@@ -408,10 +484,9 @@ function stateMissingFix(draft: Draft, at: (stepIndex: number) => string, index:
     return `"${giver.name}" ("${exampleLine(giver.pattern, filled)}")`;
   });
   const runs = givers.length === 1 ? `step ${givers[0]}` : `one of steps ${givers.join(", ")}`;
-  const last = Math.max(stepIndex, ...draft.alsoRequiredAt);
   const put =
     cause.kind === "ended"
-      ? `Put a line that runs ${runs} between ${at(cause.stepIndex)} and ${at(stepIndex)}, or move ${at(cause.stepIndex)} below ${at(last)}.`
+      ? `Put a line that runs ${runs} between ${at(cause.stepIndex)} and ${at(stepIndex)}${last === undefined ? "" : `, or move ${at(cause.stepIndex)} below ${last}`}.`
       : `Put a line that runs ${runs} before ${at(stepIndex)}.`;
   const undeclared =
     cause.undeclared.length === 0

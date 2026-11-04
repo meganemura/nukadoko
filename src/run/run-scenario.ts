@@ -22,6 +22,7 @@ import {
 } from "../check/done-callback.js";
 import { createStepTextMatcher } from "../check/feature-check.js";
 import { checkFromOrder, isHeldBackByUndefinedLine } from "../check/from-order.js";
+import { checkStateOrder } from "../check/state-order.js";
 import { checkUnfillableKeys } from "../check/unfillable-key.js";
 import { DataTable } from "../compat/data-table.js";
 import {
@@ -341,6 +342,9 @@ export interface RunScenarioOptions {
    * support by the caller (cli/run.ts's setup phase); this file only
    * filters by this pickle's own tags. */
   readonly compatHooks: readonly HookRegistration[];
+  /** Whether a step file called `setWorldConstructor`
+   * (`DiscoveryResult.customWorld`), for the state-order guard. */
+  readonly customWorld: boolean;
   /** This run's own `setDefaultTimeout` value (src/discover/discover-
    * steps.ts's `DiscoveryResult.defaultTimeoutMs`), or `undefined` if it was
    * never called — applied as the
@@ -750,6 +754,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     instantiateCompatWorld,
     onWorldSetupFailure,
     compatHooks,
+    customWorld,
     defaultTimeoutMs,
     onUnknownTraceVersion,
     onRequestScreenFailed,
@@ -811,7 +816,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // undefined, which names the cause instead of a consequence of it.
   const orderIssues = checkFromOrder(pickle, vocabulary, match).filter((issue) => !isHeldBackByUndefinedLine(issue));
   const unfillableKeyIssues = checkUnfillableKeys(pickle, vocabulary, match);
-  if (orderIssues.length > 0 || unfillableKeyIssues.length > 0) {
+  const stateIssues = checkStateOrder(pickle, vocabulary, match, { hooks: compatHooks, customWorld }, (index) => lineOfStep(index) ?? undefined);
+  if (orderIssues.length > 0 || unfillableKeyIssues.length > 0 || stateIssues.length > 0) {
     // Mirrors the existing undefined-step shape (docs/spec.md "an execution
     // that never began must not be citable"): every pickle step still gets
     // its own `steps` entry, `step_record_id: null` throughout since nothing ever
@@ -824,7 +830,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // after, since none of them ran either — is `"skipped"`, the same status
     // a step already gets when an earlier one in its own pickle failed.
     const issuesByStepIndex = new Map<number, string[]>();
-    for (const issue of [...orderIssues, ...unfillableKeyIssues]) {
+    for (const issue of [...orderIssues, ...unfillableKeyIssues, ...stateIssues]) {
       const messages = issuesByStepIndex.get(issue.stepIndex) ?? [];
       messages.push(issue.message);
       issuesByStepIndex.set(issue.stepIndex, messages);

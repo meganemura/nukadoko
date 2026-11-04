@@ -225,6 +225,11 @@ export function setWorldConstructor(ctor: WorldConstructor): void {
   registeredConstructor = ctor;
 }
 
+/** Whether a step file of this run called `setWorldConstructor`. */
+export function hasCustomWorldConstructor(): boolean {
+  return registeredConstructor !== undefined;
+}
+
 /** What `instantiateWorldForPickle` hands back: the constructed World a
  * compat step/hook runs against, plus the instrumentation handle
  * src/run/run-scenario.ts calls at each step boundary (`beginStep()`) and

@@ -418,6 +418,18 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Move @nukadoko:serial to the Feature line.",
   },
+  "state-missing": {
+    description:
+      "A step requires a state, and by what the steps of the earlier lines declare, the line can only be reached with that state not held: no step gives it, no earlier line gives it to that holder, or the last line that touched it ends it. nuka run refuses the scenario before any of its steps runs, --no-check included.",
+    severity: "error",
+    fix: "Put a line that runs a step whose gives names the state before the line that requires it, or move the line that ends it below that line. When the step of an earlier line gives the state without saying so, add the state to that step's gives.",
+  },
+  "state-shape-mismatch": {
+    description:
+      "Steps name one state in two shapes, some with the args key that tells its holders apart ([state, key]) and some with the name alone, so no line that requires it is judged.",
+    severity: "error",
+    fix: "Write the state the same way in every step: with a key in each requires, gives, and ends entry, or with the name alone in all of them.",
+  },
   "step-description-todo": {
     description: "A typed step's description is still the placeholder nuka scaffold wrote.",
     severity: "note",
