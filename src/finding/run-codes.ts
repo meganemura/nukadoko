@@ -57,6 +57,12 @@ const RUN_CODES = {
       "nuka do found lines of the program's execution events that carry the step's trace id and arrived after the step ended, when the world stopped. They are in events-late.jsonl beside the step record, and are not in its observed.events.",
     fix: "No change is necessary. A job the step enqueued that performed after the step ended writes its lines then; observed.events.open names a job that had not performed.",
   },
+  "expects-unseen": {
+    severity: "note",
+    description:
+      "A scenario whose every execution passed carries an @expects: tag that matched nothing: the run saw every response, page error, or execution event of that kind in each execution, and none was the failure the tag accepts. A tag left in place accepts that failure in every later run.",
+    fix: "Remove the tag when the failure it accepts no longer happens. When the failure is meant to happen, make the scenario cause it, so the tag names what the scenario does.",
+  },
   "fixture-teardown-failed": {
     severity: "warning",
     description: "A fixture's teardown threw after its scenario or the run finished.",
@@ -254,6 +260,12 @@ const RUN_CODES = {
     severity: "warning",
     description: "A Playwright trace has a version nukadoko cannot read, so its actions are not in the step record.",
     fix: "Install the Playwright version nukadoko is tested against.",
+  },
+  "unexpected-failure": {
+    severity: "failed",
+    description:
+      "A scenario's steps passed and the program failed underneath one of them in a way no @expects: tag of the scenario names: a response with a status from 500 to 599, an error the page threw that nothing caught, or an error the program reported in its execution events with handled: false. Its cell is broke, so the claims that held prove nothing about the criterion.",
+    fix: "Fix what failed in the program. A scenario that causes the failure on purpose names it with a tag on its Scenario line, such as @expects:status=503, @expects:error=<class>, or @expects:page-error=<name>; the finding's fix: line spells the tag.",
   },
   "undeclared-write": {
     severity: "note",

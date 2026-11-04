@@ -216,11 +216,29 @@ function stepLimits(head: readonly RunScenario[]): RunLimit[] {
           ...(unmeasured.some((entry) => entry.kind === "child_process") ? { fix: "start a process with `runCommand` to record it" } : {}),
         });
       }
+      const unjudged = unjudgedFailures(step);
+      if (unjudged.length > 0) add({ kind: "unmeasured", ...at, detail: unjudged.join(", ") });
       const late = lateItems(step);
       if (late.length > 0) add({ kind: "after-record", ...at, detail: late.join(", ") });
     }
   }
   return [...limits.values()];
+}
+
+// What of a step's failures underneath could not be seen
+// (`underneath.unseen`): its cell was judged without them, so a failure
+// among them neither turned it broke nor matched an @expects: tag.
+function unjudgedFailures(step: RunStep): string[] {
+  const unseen = step.underneath?.unseen;
+  if (unseen === undefined) return [];
+  return [
+    ...(unseen.http_lines === null
+      ? [`${codeSpan("http.jsonl")} could not be read, so no response status of the step was judged`]
+      : unseen.http_lines !== undefined
+        ? [`${countOf(unseen.http_lines, "request", "requests")} with no readable line in ${codeSpan("http.jsonl")}, whose status was not judged`]
+        : []),
+    ...(unseen.page_errors === undefined ? [] : [`${countOf(unseen.page_errors, "page error", "page errors")} past the record's cap, not judged`]),
+  ];
 }
 
 // What reached a step's own files after its record was written: those

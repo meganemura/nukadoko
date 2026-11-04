@@ -356,6 +356,7 @@ const scenario = z.looseObject({
     .optional(),
   judged_by: z.enum(["compat", "nothing", "judgment"]).optional(),
   role: z.enum(["required", "control"]).optional(),
+  expects: z.array(z.string()).optional(),
 }).refine((entry) => entry.status !== "stopped" || entry.stopped !== undefined, {
   message: "a stopped scenario names the step it was stopped after",
   path: ["stopped"],
@@ -433,6 +434,7 @@ const table = z.looseObject({
       renamed_from: z.looseObject({ feature: z.string(), name: z.string() }).optional(),
       retagged: z.literal(true).optional(),
       conditions: z.array(z.string()),
+      expects: z.array(z.string()).optional(),
       cells: z.array(tableCell),
       verdict: z.enum(["held", "proven", "removed", "failed", "unproven", "moved"]),
       reason: z.string(),

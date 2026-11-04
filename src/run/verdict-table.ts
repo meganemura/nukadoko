@@ -1,9 +1,10 @@
-import { conditionTagText, describeConditions, HELD_TAG, readCriterionTags, roleIn, type CellRole, type Conditions } from "../condition/condition.js";
+import { conditionTagText, describeConditions, expectsTagsOf, HELD_TAG, readCriterionTags, roleIn, type CellRole, type Conditions } from "../condition/condition.js";
 import type { Finding } from "../finding/finding.js";
 import type { RunClaim, RunMappingChanges, RunRowChange, RunRowVerdict, RunScenario, RunTable, RunTableCell, RunTableRow, RunWorldName } from "../record/run-result.js";
 import type { ClaimReadingValue } from "../record/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { stepJudgedTooEarly } from "./events-after-stop.js";
+import { firstUnexpected, unexpectedReason } from "./underneath.js";
 
 // Responsibility: the verdict table (docs/spec.md "Verdicts"): from a run's
 // executions, one cell per criterion, world, and environment, and from the
@@ -66,7 +67,7 @@ export type ExecutionOutcome =
   | { readonly kind: "broke"; readonly line: number; readonly reason?: string }
   | { readonly kind: "stopped"; readonly line: number };
 
-type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks" | "judged_by" | "stopped">;
+type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks" | "judged_by" | "stopped" | "expects">;
 
 /** What one execution came to. `inThen` says whether the step at an index
  * stands in Then position. Pure. */
@@ -78,7 +79,13 @@ export function executionOutcome(execution: Execution, inThen: (index: number) =
     const line = execution.steps[tooEarly]!.line ?? execution.line;
     return { kind: "broke", line, reason: `a claim at line ${line} was judged before every execution event it counts had arrived` };
   }
-  if (execution.status === "passed") return execution.judged_by === undefined ? { kind: "pass" } : { kind: "pass", judgedBy: execution.judged_by };
+  if (execution.status === "passed") {
+    // Claims that held over a program that failed underneath them, in a
+    // way the criterion does not name, prove nothing about it.
+    const failure = firstUnexpected(execution);
+    if (failure !== undefined) return { kind: "broke", line: failure.line, reason: unexpectedReason(failure) };
+    return execution.judged_by === undefined ? { kind: "pass" } : { kind: "pass", judgedBy: execution.judged_by };
+  }
   if (execution.status === "stopped") return { kind: "stopped", line: execution.stopped?.line ?? execution.line };
   const index = execution.steps.findIndex((step) => step.status !== "passed" && step.status !== "skipped");
   if (index === -1) {
@@ -647,6 +654,7 @@ export function buildTable(input: TableInput): RunTable {
       ...oldEnvironments.filter((environment) => planned.old.includes(environment.name)).map((environment) => cellOf(criterion, environment, "required", "old")),
     ];
     const change: RunRowChange | null = compared?.change ?? null;
+    const expects = expectsTagsOf(criterion.tags);
     return {
       feature: criterion.feature,
       line: criterion.line,
@@ -655,6 +663,7 @@ export function buildTable(input: TableInput): RunTable {
       ...(compared?.renamedFrom === undefined ? {} : { renamed_from: compared.renamedFrom }),
       ...(compared?.retagged === true ? { retagged: true as const } : {}),
       conditions: conditionTagsOf(criterion.tags),
+      ...(expects.length === 0 ? {} : { expects }),
       cells,
       ...judgeRow(cells, input.proofRuns, context),
     };

@@ -57,6 +57,9 @@ export interface RunScenarioInput {
   /** The lines of a step record's http.jsonl, parsed; empty when the
    * record names none, `null` when the file could not be read. */
   readonly httpLog: (stepRecord: StepRecord) => readonly (HttpLogEntry | null)[] | null;
+  /** The `@expects:` tags the scenario ran under that read, as
+   * `expectsTagsOf` writes them. */
+  readonly expects: readonly string[];
 }
 
 /** Whether the scenario wrote a file into its own evidence directory: the
@@ -281,6 +284,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     ...(wroteScenarioEvidence(record) ? { evidence: { ...record.evidence, dir: input.evidenceDir } } : {}),
     ...(record.teardown_errors === undefined ? {} : { teardown_errors: record.teardown_errors }),
     ...(record.status !== "passed" ? { do: input.rerun } : {}),
+    ...(input.expects.length === 0 ? {} : { expects: input.expects }),
     claims,
     ...(judged === undefined ? {} : { judged_by: judged }),
   };

@@ -246,6 +246,11 @@ export interface RunScenario {
    * tags name, `control` where it does not. Absent in a run.json an
    * earlier build wrote. */
   readonly role?: "required" | "control";
+  /** The `@expects:` tags the execution ran under, as written, each once:
+   * the failures underneath it (`steps[].underneath`, an unhandled error
+   * on a step's `path`) its cell accepts. Absent when it ran under
+   * none. */
+  readonly expects?: readonly string[];
   /** The world this execution ran in, for an execution of the base or the
    * old world of `nuka run --base`; absent for head's. */
   readonly world?: "base" | "old";
@@ -409,6 +414,9 @@ export interface RunTableRow {
   readonly retagged?: true;
   /** The criterion's condition tags and `@held`, as written, each once. */
   readonly conditions: readonly string[];
+  /** The criterion's `@expects:` tags that read, as written, each once.
+   * Absent when it has none. */
+  readonly expects?: readonly string[];
   /** One cell per world and environment the criterion runs in, in the
    * order of `worlds`. A `removed` criterion has none. */
   readonly cells: readonly RunTableCell[];

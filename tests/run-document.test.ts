@@ -94,6 +94,7 @@ describe("buildRunScenario", () => {
         inThen: () => false,
         stepKind: () => "run",
         httpLog: () => [],
+        expects: [],
       });
 
       expect(entry.steps).toHaveLength(steps.length);

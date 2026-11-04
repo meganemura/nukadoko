@@ -34,6 +34,7 @@ import { LIMIT_KINDS, limitsOf } from "./run-limits.js";
 // it reaches limitsOf through the summary rather than past it.
 export { limitsOf } from "./run-limits.js";
 import { cellCode, cellText, codeSpan, countOf } from "./summary-markdown.js";
+import { demotingFailure, failuresUnderneath, failureText } from "./underneath.js";
 import { cellText as cellWord } from "./verdict-table.js";
 
 // Responsibility: the Markdown run summary one `nuka run` invocation leaves
@@ -271,6 +272,12 @@ function describeFailure(scenario: RunScenario): SummaryFailure | undefined {
   if (hook !== undefined) {
     return { where: hookLabel(hook), errorLine: firstErrorLine(hook.error?.message ?? ""), recordPath: scenario.evidence?.dir ?? null };
   }
+  const underneath = demotingFailure(scenario);
+  if (underneath !== undefined) {
+    const at = scenario.steps[underneath.step]!;
+    const unexpected = failuresUnderneath(scenario).filter((failure) => failure.step === underneath.step && failure.expectedBy === null);
+    return { where: `step "${at.text}"`, errorLine: unexpected.map(failureText).join("; "), recordPath: at.record };
+  }
   return undefined;
 }
 
@@ -337,7 +344,8 @@ function renderTable(document: RunDocument): string[] {
     `| verdict | ${judged ? "judgment | " : ""}criterion | ${base === null ? "" : "change | "}${worlds.map((column) => cellText(heading(column))).join(" | ")}${seen === null ? "" : " | seen"} |`,
     `| --- | ${judged ? "--- | " : ""}--- | ${base === null ? "" : "--- | "}${worlds.map(() => "---").join(" | ")}${seen === null ? "" : " | ---"} |`,
     ...rows.map((row) => {
-      const tags = row.conditions.length === 0 ? "" : ` ${row.conditions.map((tag) => cellCode(tag)).join(" ")}`;
+      const written = [...row.conditions, ...(row.expects ?? [])];
+      const tags = written.length === 0 ? "" : ` ${written.map((tag) => cellCode(tag)).join(" ")}`;
       const cells = worlds.map((column) => {
         const cell = row.cells.find((entry) => entry.world === column.world && entry.environment === column.environment);
         return cell === undefined ? "" : tableCell(cell);
@@ -471,7 +479,7 @@ function renderReasons(document: RunDocument): string[] {
               at.line === row.line &&
               (scenario.world ?? "head") === world &&
               scenario.environment === cell.environment &&
-              scenario.status !== "passed"
+              (scenario.status !== "passed" || demotingFailure(scenario) !== undefined)
             );
           });
     const failure = execution === undefined ? undefined : describeFailure(execution);

@@ -6,7 +6,9 @@ Feature: a browser-driven scenario, so its trace/hook/action/page-event evidence
   # browser. Nothing else in this project may join it here -- doing so
   # would make selftest-suite's stage 1 through stage 3 scenarios launch a
   # browser too, slowing those down even by a
-  # second, which they must not.
-  @browser-evidence
+  # second, which they must not. The page throws an Error on purpose, so
+  # the scenario names it: an uncaught one it did not name would make its
+  # cell broke.
+  @browser-evidence @expects:page-error=Error
   Scenario: a step and its own Before hook both touch the browser
     Given the browser visits a data url that logs, throws, and fails a request

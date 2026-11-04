@@ -51,7 +51,7 @@ import {
   type RunConditions,
 } from "../run/progress-log.js";
 import { buildTable, executionOutcome, foldCell, foldHeadCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
-import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
+import { expectsTagsOf, readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
 import type { CountedGroup } from "../execution-events/counted.js";
 import type { FlagEvaluation, ServedRequest } from "../execution-events/format.js";
 import type { ListedPlaces } from "../execution-events/lists.js";
@@ -74,6 +74,7 @@ import { judgmentFindings, judgmentsOpen, withJudgments, type JudgmentEntry } fr
 import { changedJudgmentFiles, judgmentFileOf, readJudgmentFile } from "../run/judgment-file.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { judgedEarlyFindings, readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
+import { demotingFailure, unexpectedFailureFindings, unseenExpectationNotes } from "../run/underneath.js";
 import { undeclaredWriteFindings } from "../run/undeclared-writes.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
@@ -1211,23 +1212,23 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           };
         }
       }
-      if (recounted.length > 0) {
-        const placeKey = (scenario: number, step: number, key: string): string => `${scenario}\u0000${step}\u0000${key}`;
-        const recountedAt = new Map(places.flatMap((place, index) => (recounted[index] === undefined ? [] : [[placeKey(place.scenario, place.step, place.key), recounted[index]!] as const])));
-        passIndexes.forEach((index, position) => {
-          const judged = withAfterWorldStop(runScenarios[index]!, (step, key) => recountedAt.get(placeKey(position, step, key)));
-          if (judged === runScenarios[index]) return;
-          const cell = cellOf[index]!;
-          if (cell.key === null) {
-            runScenarios[index] = { ...judged, for_paths: forPathsOf(judged, cell.inThen) };
-            return;
-          }
-          runScenarios[index] = judged;
-          const outcomes = [...(cellOutcomes.get(cell.key) ?? [])];
-          outcomes[cell.at] = executionOutcome(judged, cell.inThen);
-          cellOutcomes.set(cell.key, outcomes);
-        });
-      }
+      // Every execution of the pass is judged again, not only one whose
+      // claim was recounted: an unhandled error on a step's `path`, which
+      // the stop just attached, can turn a pass broke (src/run/underneath.ts).
+      const placeKey = (scenario: number, step: number, key: string): string => `${scenario}\u0000${step}\u0000${key}`;
+      const recountedAt = new Map(places.flatMap((place, index) => (recounted[index] === undefined ? [] : [[placeKey(place.scenario, place.step, place.key), recounted[index]!] as const])));
+      passIndexes.forEach((index, position) => {
+        const judged = recounted.length === 0 ? runScenarios[index]! : withAfterWorldStop(runScenarios[index]!, (step, key) => recountedAt.get(placeKey(position, step, key)));
+        const cell = cellOf[index]!;
+        if (cell.key === null) {
+          runScenarios[index] = { ...judged, for_paths: forPathsOf(judged, cell.inThen) };
+          return;
+        }
+        runScenarios[index] = judged;
+        const outcomes = [...(cellOutcomes.get(cell.key) ?? [])];
+        outcomes[cell.at] = executionOutcome(judged, cell.inThen);
+        cellOutcomes.set(cell.key, outcomes);
+      });
       if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${tree === "head" ? name : `${name} (${tree})`}: ${exitedEarly}` });
     };
     const [git, workingTree] = await Promise.all([probeGitState(rootDir), probeWorkingTree(rootDir, config.stateDir)]);
@@ -1309,6 +1310,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // from the pickle the record ran, found by its feature and line.
     const pickleLines = new Map<string, (index: number) => number | null>();
     const pickleOutcomes = new Map<string, readonly boolean[]>();
+    const pickleExpects = new Map<string, readonly string[]>();
     const documentLines = new Map<string, Map<string, number>>();
     for (const { feature, pickle } of flatPickles) {
       let lines = documentLines.get(feature.relativePath);
@@ -1319,6 +1321,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       const key = criterionKey(feature.relativePath, pickle.location?.line ?? 0);
       pickleLines.set(key, pickleStepLines(pickle, lines));
       pickleOutcomes.set(key, pickle.steps.map((step) => step.type === PickleStepType.OUTCOME));
+      pickleExpects.set(key, expectsTagsOf(pickle.tags.map((tag) => tag.name)));
     }
     const inThenOf = (feature: string, line: number) => (index: number): boolean => pickleOutcomes.get(criterionKey(feature, line))?.[index] ?? false;
     // Each selected criterion's role in each environment, from its tags and
@@ -1389,6 +1392,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       readonly row: { readonly feature: string; readonly line: number };
       readonly stepLine: (index: number) => number | null;
       readonly inThen: (index: number) => boolean;
+      /** The old world's: the `@expects:` tags of the ref's scenario,
+       * which its execution ran under. */
+      readonly expects?: readonly string[];
     }
     const noteRecord = (record: ScenarioRecord, tree?: TreeRecord): void => {
       const stepRecords = readStepRecordsForScenario(rootDir, config.stateDir, record);
@@ -1415,6 +1421,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         rerun: conditionsOf.rerun(record),
         inThen,
         stepKind,
+        expects: tree?.expects ?? pickleExpects.get(criterionKey(record.feature, record.line)) ?? [],
         httpLog: (stepRecord) => {
           if (stepRecord.evidence.http === undefined) return [];
           try {
@@ -1621,6 +1628,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // A cell a claim judged too early made broke may sit under a
       // scenario that passed, whose line says nothing failed.
       rows.push(...judgedEarlyFindings(runScenarios, conditionsOf));
+      // So may a cell a failure underneath made broke, and a tag that
+      // accepted nothing is set beside the scenario that carries it.
+      rows.push(...unexpectedFailureFindings(runScenarios, conditionsOf), ...unseenExpectationNotes(runScenarios, conditionsOf));
       // A step that declares it changes nothing and whose trace holds a
       // committed write to state is set beside that write.
       rows.push(...undeclaredWriteFindings(runScenarios, (traceId) => stateWrites.get(traceId), conditionsOf));
@@ -1774,14 +1784,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       const stopped = runScenarios.find((scenario) => scenario.stopped !== undefined)?.stopped;
       walk?.end({ how: "finished", exit_code: exitCode, findings: runFindings, ...(stopped === undefined ? {} : { stopped }) });
       if (options.json) options.stdout.write(document);
-      // The criteria line is for a run with a control cell or a base, the
-      // only kinds whose verdicts the scenario count above it cannot tell.
-      const withControl = table.rows.some((row) => row.cells.some((cell) => cell.role === "control"));
+      // The criteria line is for a run with a control cell or a base, or one
+      // where a failure underneath turned a passed scenario's cell broke:
+      // the kinds whose verdicts the scenario count above it cannot tell.
+      const countHidesVerdicts =
+        table.rows.some((row) => row.cells.some((cell) => cell.role === "control")) ||
+        runScenarios.some((scenario) => scenario.world === undefined && demotingFailure(scenario) !== undefined);
       const count = (word: (typeof table.rows)[number]["verdict"]): number => table.rows.filter((row) => row.verdict === word).length;
       const criteria =
         base !== undefined
           ? { held: count("held"), proven: count("proven"), failed: count("failed"), unproven: count("unproven"), moved: count("moved"), removed: count("removed") }
-          : withControl
+          : countHidesVerdicts
             ? { held: count("held"), proven: count("proven"), failed: count("failed") }
             : null;
       return {
@@ -2125,6 +2138,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
                 row,
                 stepLine: pickleStepLines(refPickle, gherkinStepLines(refFeature.gherkinDocument)),
                 inThen: (index) => refPickle.steps[index]?.type === PickleStepType.OUTCOME,
+                expects: expectsTagsOf(refPickle.tags.map((tag) => tag.name)),
               });
             },
             progress,
