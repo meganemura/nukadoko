@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -19,7 +19,9 @@ import {
 // http.jsonl/record.json already are (a secret embedded in the console
 // text and the failed request's URL), and the field entirely absent — not
 // present-but-empty — when a step's page never produces any of the
-// three. PageEventsCollector's own record/reset/cap
+// three; and under `nuka run`, the uncaught error is a failure underneath
+// its passed step, which the fixture names with @expects:page-error=Error
+// and which, unnamed, turns the cell broke. PageEventsCollector's own record/reset/cap
 // behavior is unit-tested directly in tests/page-events.test.ts; a real
 // browser is a poor way to prove a 100-entry cap.
 
@@ -133,6 +135,31 @@ describe("page_events on the step record", () => {
     expect(step.underneath).toEqual({
       page_errors: [{ name: "Error", count: 1, first: { message: "uncaught says {{secret.PAGE_TOKEN}}" } }],
     });
+  });
+
+  it("nuka run: an uncaught page error no @expects tag names turns the passed scenario's cell broke", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "page-events.feature"),
+      ["Feature: Page events", "", "  Scenario: a step's page breaks underneath it", "    Given a page logs an error, throws, and calls an unreachable host", ""].join("\n"),
+    );
+    const exitCode = await runCli(["run", "features/page-events.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+
+    // The console error and the failed request are evidence about the page;
+    // the error it threw that nothing caught is the failure underneath.
+    expect(exitCode).toBe(1);
+    const run = latestRunJson(rootDir);
+    expect(run.scenarios[0].status).toBe("passed");
+    expect(run.table.rows[0].cells[0]).toMatchObject({
+      outcome: "broke",
+      line: 4,
+      reason: "the page threw an uncaught Error while the step at line 4 ran, which no @expects tag of the scenario names",
+    });
+    expect(run.findings.filter((finding: { code: string }) => finding.code === "unexpected-failure")).toEqual([
+      expect.objectContaining({
+        line: 4,
+        fix: "Fix what failed. A scenario that causes it on purpose names it on its Scenario line: @expects:page-error=Error",
+      }),
+    ]);
   });
 
   it("a step whose page never errors carries no page_events key at all", async () => {
