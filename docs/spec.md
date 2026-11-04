@@ -7131,8 +7131,9 @@ and `counts.passed` count the execution as passed. The table is where
 the run says it. The cell's `reason` names the step's line and the
 failure by what a tag would name, and for a status the request's method
 and path, as in `the step at line 4 got a 500 response to GET /broken,
-which no @expects tag of the scenario names`; never a count, a host, or
-a port, so two runs that failed the same way agree. The run raises one
+which no @expects tag of the scenario names`; never a count, a host, a
+port, or a query string, which a page may vary to defeat a cache, so two
+runs that failed the same way agree. The run raises one
 `unexpected-failure` per scenario and environment: it names every
 failure no tag names under the first step that has one (the first
 request's whole URL and its line of http.jsonl, the first line of the

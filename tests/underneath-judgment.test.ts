@@ -10,8 +10,8 @@ import { executionOutcome, foldCell } from "../src/run/verdict-table.js";
 // "Failures underneath") judges its cell: only a pass moves, and only to
 // broke; an @expects: tag that names a failure accepts it, so a tag never
 // turns a pass broke; what could not be seen never demotes; two runs that
-// failed the same way agree, whatever host, port, count, or message they
-// saw; and the findings that go with it name a head required cell once,
+// failed the same way agree, whatever host, port, query, count, or message
+// they saw; and the findings that go with it name a head required cell once,
 // and a tag that matched nothing only where its kind was watched whole.
 
 const STATUSES = [500, 503, 599] as const;
@@ -139,7 +139,7 @@ describe("a failure underneath judges a pass", () => {
       expect(executionOutcome(execution(steps, []), inThen)).toEqual({ kind: "pass" });
     }));
 
-  it("agrees across two runs that failed the same way, whatever host, port, count, line, or message they saw", () =>
+  it("agrees across two runs that failed the same way, whatever host, port, query, count, line, or message they saw", () =>
     hegel.test((tc) => {
       const drawn = drawExecution(tc);
       const again: RunScenario = {
@@ -149,7 +149,7 @@ describe("a failure underneath judges a pass", () => {
           const statuses = entry.underneath.statuses?.map((group) => ({
             ...group,
             count: group.count + 1,
-            first: { ...group.first, url: group.first.url.replace(/^http:\/\/[^/]+/, "http://127.0.0.1:59999"), http_line: group.first.http_line + 3 },
+            first: { ...group.first, url: group.first.url.replace(/^http:\/\/[^/]+/, "http://127.0.0.1:59999").replace(/\?.*$/, `?_=${tc.draw(gs.integers({ minValue: 0 }))}`), http_line: group.first.http_line + 3 },
           }));
           const pageErrors = entry.underneath.page_errors?.map((group) => ({ ...group, count: group.count + 2, first: { message: `${group.first.message} again` } }));
           return { ...entry, underneath: { ...entry.underneath, ...(statuses === undefined ? {} : { statuses }), ...(pageErrors === undefined ? {} : { page_errors: pageErrors }) } };
@@ -160,12 +160,12 @@ describe("a failure underneath judges a pass", () => {
       expect(foldCell(outcomes).outcome).not.toBe("flaky");
     }));
 
-  it("names the request by its method and path, never its host or port", () => {
+  it("names the request by its method and path, never its host, port, or query", () => {
     const broke = execution([stepOf(0, { statuses: [{ status: 503, count: 2, first: { method: "POST", url: "http://127.0.0.1:4100/orders?id=7", via: "page", http_line: 1 } }], pageErrors: [], errors: [], missed: undefined })], []);
     expect(executionOutcome(broke, inThen)).toEqual({
       kind: "broke",
       line: 4,
-      reason: "the step at line 4 got a 503 response to POST /orders?id=7, which no @expects tag of the scenario names",
+      reason: "the step at line 4 got a 503 response to POST /orders, which no @expects tag of the scenario names",
     });
   });
 

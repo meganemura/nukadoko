@@ -150,12 +150,12 @@ export function firstUnexpected(execution: Underneath): SeenFailure | undefined 
 }
 
 // A request as a reason names it: its method and its path. The port of a
-// world the run started differs from run to run, so the full URL would
-// make two runs that failed the same way disagree; the finding names it.
+// world the run started differs from run to run, and a page may add a
+// query that defeats a cache, so the full URL would make two runs that
+// failed the same way disagree; the finding names it.
 function requestOf(first: RunStatusGroup["first"]): string {
   try {
-    const url = new URL(first.url);
-    return `${first.method} ${url.pathname}${url.search}`;
+    return `${first.method} ${new URL(first.url).pathname}`;
   } catch {
     return `${first.method} ${first.url}`;
   }

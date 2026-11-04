@@ -5485,7 +5485,8 @@ step record は step が計測したものを持ち、stderr の scenario の行
 それを言うのは表です。
 セルの `reason` は、step の行と、tag が名指すものによる失敗を名指し、status ならリクエストのメソッドとパスも名指します。
 `the step at line 4 got a 500 response to GET /broken, which no @expects tag of the scenario names` のようにです。
-件数、ホスト、ポートは決して入れないので、同じように失敗した 2 つの実行は一致します。
+件数、ホスト、ポート、クエリ文字列は決して入れないので、同じように失敗した 2 つの実行は一致します。
+クエリ文字列は、page がキャッシュを避けるために変えることがあるからです。
 run は、scenario と environment ごとに 1 つの `unexpected-failure` を出します。
 それは、失敗を持つ最初の step の下にある、tag が名指さないすべての失敗を名指します(最初のリクエストの URL 全体と http.jsonl のその行、page のエラーのメッセージの最初の行、プログラムの行の数)。
 加えて step record と、それらを認める tag を綴る `fix:` の行を持ちます。
