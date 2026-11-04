@@ -7,6 +7,7 @@ import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 import { selectionProblems, type DeclaredEventSelection } from "../execution-events/selection.js";
 import { claimsProblem, eventsShapeOf, pathSegments, pollProblem, type Claim, type ClaimPoll, type ClaimStepShape } from "./claims.js";
 import { freezeInPlace, frozenCopy, type Keep } from "./frozen-copy.js";
+import { readStates, type StateKey, type StateRef, type StepStates } from "./states.js";
 import { MAX_TIMER_DELAY_MS } from "../timer/max-delay.js";
 import type { FileChange } from "../record/types.js";
 
@@ -335,6 +336,15 @@ export interface StepDefinitionCommon<TArgs extends z.ZodTypeAny, TFrom> {
    * `events` reads to be whole (ten seconds when the step names none, or
    * the project's `stepTimeout` when that is shorter). */
   timeout?: number;
+  /** States an earlier line of the scenario must have given, with no line
+   * since ending them, for this step's own `run` or `observe` to work at
+   * all (docs/spec.md "States"). Not a rule of the program a scenario may
+   * break on purpose: a scenario that checks what happens without the
+   * state uses a step that does not require it. `nuka check` and `nuka
+   * run` refuse a scenario where a line can only reach this step with the
+   * state not held. Judged on scenario lines only, never on a `call` or
+   * under `nuka do`. */
+  requires?: readonly StateRef<StateKey<TArgs>>[];
 }
 
 /** A step that acts: a Given or a When. */
@@ -359,6 +369,12 @@ export interface RunStepDefinition<
    * `from` and a step's own fixture destructuring both already have (this
    * file's own header). Omit it entirely for a step that calls no parts. */
   parts?: readonly RunStep[];
+  /** States that hold once this step has passed, for the holder its key
+   * names, what it does through its parts and the fixtures it builds
+   * included (docs/spec.md "States"). */
+  gives?: readonly StateRef<StateKey<TArgs>>[];
+  /** States that no longer hold once this step has passed. */
+  ends?: readonly StateRef<StateKey<TArgs>>[];
   /** `fixtures` is a `FixtureBag` (src/step/context.ts), named by destructuring
    * (`run({ page, section }, args) => ...`) —
    * only the names actually destructured get built at all (docs/spec.md
@@ -513,6 +529,8 @@ export interface ClaimStepDefinition<
   returns?: never;
   mutates?: never;
   parts?: never;
+  gives?: never;
+  ends?: never;
 }
 
 /** Either definition `defineStep` takes. */
@@ -546,6 +564,9 @@ export interface StepBase<TArgs extends z.ZodTypeAny, TReturns extends z.ZodType
    * A part is always a step that runs: a claim step judges, and only a
    * Then line judges. */
   readonly parts: readonly RunStep[];
+  /** What the step declared in `requires`, `gives`, and `ends`, each list
+   * empty when it declared none. */
+  readonly states: StepStates;
   readonly [STEP_BRAND]: true;
   /** Optional because a Step built by hand, not by `defineStep`, has none. */
   readonly [STEP_DECLARATION]?: StepDeclaration;
@@ -632,6 +653,9 @@ const STEP_OPTIONS: Record<keyof RunStepDefinition | keyof ClaimStepDefinition, 
   poll: true,
   events: true,
   files: true,
+  requires: true,
+  gives: true,
+  ends: true,
 };
 
 /** The options `defineStep` reads, in the order its reference lists them. */
@@ -719,6 +743,9 @@ interface DefinitionFields {
   poll?: unknown;
   events?: unknown;
   files?: unknown;
+  requires?: unknown;
+  gives?: unknown;
+  ends?: unknown;
 }
 
 function validateStepDefinition(definition: DefinitionFields): void {
@@ -786,6 +813,8 @@ const RUN_ONLY_OPTIONS = {
   returns: "a claim step returns nothing a later step cites",
   mutates: "a claim step is mutates: false by construction, since it has no action",
   parts: "a claim step has no run body to call parts from",
+  gives: "a claim step has no action, so it leaves no state; it may require one",
+  ends: "a claim step has no action, so it leaves no state; it may require one",
 } as const;
 
 /** The keys the patterns capture. A pattern that does not scan names none
@@ -970,6 +999,11 @@ export function defineStep<
 export function defineStep(input: StepDefinitionInput): Step {
   const definition = copiedDefinition(input);
   validateStepDefinition(definition);
+  const shape = asObjectShape(definition.args);
+  const states = readStates(definition, shape === undefined ? null : new Set(Object.keys(shape)));
+  if ("problem" in states) {
+    throw new InvalidStepDefinitionError(`defineStep ${states.problem}.`);
+  }
   const common = {
     patterns: Object.freeze(resolvePatterns(definition)) as string[],
     args: definition.args,
@@ -981,6 +1015,7 @@ export function defineStep(input: StepDefinitionInput): Step {
     // to begin with.
     from: (definition.from ?? {}) as StepFromMap,
     timeout: definition.timeout,
+    states: states.states,
     [STEP_BRAND]: true as const,
   };
   if (definition.claims !== undefined) {
@@ -1040,7 +1075,7 @@ function definedSteps(): WeakSet<object> {
 /** The fields of a definition that hold data a step file could change or
  * answer differently on a second read: each is copied once, frozen at
  * every level, and the copy is what defineStep validates and returns. */
-const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll", "events", "files"] as const;
+const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll", "events", "files", "requires", "gives", "ends"] as const;
 
 /** Where a definition field names another step, by the keys below the
  * field: `parts[i]`, in `events` and `files` the `of` of an entry,

@@ -102,6 +102,7 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "SentenceValue",
     "SettledCompare",
     "SettledCondition",
+    "StateRef",
     "Step",
     "StepBase",
     "StepDefinitionCommon",

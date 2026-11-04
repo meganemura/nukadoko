@@ -106,6 +106,9 @@ export type { EventsCount } from "./step/define-step.js";
 // What a claim step's `files` declares: the step whose commands changed
 // the files, and which changes and directory the list holds.
 export type { ChangeKind, ChangedFiles } from "./step/define-step.js";
+// What a step's `requires`, `gives`, and `ends` entries are: a state's
+// name, or its name and the args key that tells its holders apart.
+export type { StateRef } from "./step/states.js";
 export type { DeclaredEventSelection, EventSelection, SentenceValue } from "./execution-events/selection.js";
 export type { CountCompare, CountRange } from "./execution-events/count.js";
 export type { CountedGroup } from "./execution-events/counted.js";

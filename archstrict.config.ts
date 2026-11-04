@@ -253,6 +253,7 @@ export default {
         "resolve-use.ts",
         "returns-dropped.ts",
         "snapshot.ts",
+        "states.ts",
         "step-fixture-names.ts",
         "strict-args.ts",
         "validate-from.ts",

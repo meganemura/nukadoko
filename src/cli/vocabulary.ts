@@ -21,6 +21,7 @@ import { describeClaim, describeSettled, settledConditions, type Claim, type Cla
 import { describeChangedFiles, producersOf, fixtureSourceOf, isClaimStep, malformedFromEntryMessage, tryFromCandidates, type ChangedFiles, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
+import { describeStateUse, type StateUse } from "../step/states.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { stepNeeds } from "../fixture/step-needs.js";
 
@@ -455,6 +456,28 @@ export interface StepSummary {
    * key reads, by vocabulary name, and the changes and directory it
    * selects, as declared. Absent when the step declares none. */
   readonly files?: Readonly<Record<string, FilesSummary>>;
+  /** The states this step requires (docs/spec.md "States"), each with the
+   * steps whose `gives` names it, so a reader composing a scenario learns
+   * which line to put before this one. Absent when the step declares none,
+   * like `from` and `parts`. */
+  readonly requires?: readonly RequiredStateSummary[];
+  /** The states that hold once this step has passed. Absent when none. */
+  readonly gives?: readonly StateSummary[];
+  /** The states that no longer hold once this step has passed. Absent
+   * when none. */
+  readonly ends?: readonly StateSummary[];
+}
+
+/** One `requires`, `gives`, or `ends` entry: the state's name, and the
+ * args key whose value names its holder, absent for an unkeyed state. */
+export interface StateSummary {
+  readonly state: string;
+  readonly key?: string;
+}
+
+export interface RequiredStateSummary extends StateSummary {
+  /** Every step whose `gives` names the state, in vocabulary order. */
+  readonly given_by: readonly string[];
 }
 
 /** One events key of a claim step, as `nuka steps` and `nuka describe`
@@ -569,8 +592,39 @@ export function summarize(
     ...claimFields(entry.step),
     ...eventsFields(entry.step, stepNames),
     ...filesFields(entry.step, stepNames),
+    ...statesFields(entry.step, stepNames),
     ...needsFields(entry.step, graph),
   };
+}
+
+/** `requires`, `gives`, and `ends` for a step that declares any, the one
+ * rendering `nuka steps --json` and `nuka describe` share. `stepNames`
+ * holds every typed step of the vocabulary, and `given_by` names those
+ * with a pattern, the steps a line can run. */
+function statesFields(
+  step: Step,
+  stepNames: StepNames,
+): { readonly requires?: readonly RequiredStateSummary[]; readonly gives?: readonly StateSummary[]; readonly ends?: readonly StateSummary[] } {
+  const summary = (use: StateUse): StateSummary => (use.key === undefined ? { state: use.state } : { state: use.state, key: use.key });
+  const { requires, gives, ends } = step.states;
+  return {
+    ...(requires.length === 0
+      ? {}
+      : {
+          requires: requires.map((use) => ({
+            ...summary(use),
+            given_by: [...stepNames].flatMap(([other, name]) =>
+              other.patterns.length > 0 && other.states.gives.some((given) => given.state === use.state) ? [name] : [],
+            ),
+          })),
+        }),
+    ...(gives.length === 0 ? {} : { gives: gives.map(summary) }),
+    ...(ends.length === 0 ? {} : { ends: ends.map(summary) }),
+  };
+}
+
+function describeStateSummary(summary: StateSummary): string {
+  return describeStateUse({ state: summary.state, key: summary.key });
 }
 
 /** `events` for a claim step that declares any; nothing otherwise. */
@@ -683,6 +737,16 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   for (const condition of settledConditions(s.poll)) {
     lines.push(...wrapIndented(`settled: ${describeSettled(condition)}`, width));
   }
+  for (const required of s.requires ?? []) {
+    const givers = required.given_by.length === 0 ? "given by no step" : `given by ${required.given_by.join(" or ")}`;
+    lines.push(...wrapIndented(`requires: ${describeStateSummary(required)}, ${givers}`, width));
+  }
+  for (const given of s.gives ?? []) {
+    lines.push(...wrapIndented(`gives: ${describeStateSummary(given)}`, width));
+  }
+  for (const ended of s.ends ?? []) {
+    lines.push(...wrapIndented(`ends: ${describeStateSummary(ended)}`, width));
+  }
   if (s.needs_error !== undefined) {
     lines.push(...wrapIndented(`needs: ${s.needs_error}`, width));
   }
@@ -748,6 +812,11 @@ export interface TypedStepContract {
   readonly files?: Readonly<Record<string, FilesSummary>>;
   /** Same field and presence rule as `StepSummary.timeout`. */
   readonly timeout?: number;
+  /** Same fields, rendering, and presence rule as `StepSummary.requires`,
+   * `gives`, and `ends`. */
+  readonly requires?: StepSummary["requires"];
+  readonly gives?: StepSummary["gives"];
+  readonly ends?: StepSummary["ends"];
   /** The same shape as `StepSummary.from`, so a reader of `nuka steps
    * --json` and of `nuka describe` parses one form. Omitted, not `{}`, when
    * the step declares no `from` at all. */
@@ -879,6 +948,7 @@ export function describeContract(
     from: fromResult.rendered,
     from_errors: fromResult.errors,
     parts: partsHumanReadable(entry.step, stepNames),
+    ...statesFields(entry.step, stepNames),
     ...needsFields(entry.step, graph),
     // Zod's default JSON Schema is the output shape. A key with
     // `.default(...)` is required there, because the parsed value always
