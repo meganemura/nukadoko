@@ -9,6 +9,20 @@ just until 0.1.
 
 ### Added
 
+- **The skill answers a reviewer's merge-risk questions from a run.**
+  A common review rubric asks whether a change is verified, does only
+  what it says, what it touches, how hard it is to undo, and whether its
+  failures will be seen. `skills/nukadoko/scripts/merge-risk.jq` reads
+  one run.json of `nuka run --base` and answers each question with what
+  the run measured: the table's verdicts, the INTENT.md rows and the
+  differences nothing declares, the tables and routes head touches
+  differently (with the project's own list of sensitive ones), the
+  deletes and updates new at head, and the unexpected failures and new
+  errors. Each section says what the run does not measure: schema
+  changes, and whether a caught error reached monitoring.
+  `references/merge-risk.md` says how to read and report it, without a
+  score.
+
 - **`@expects:` tags name a failure a scenario causes on purpose.**
   `@expects:status=<500-599>`, `@expects:page-error=<name>`, and
   `@expects:error=<class>`, on a Feature, Rule, Scenario, or Examples

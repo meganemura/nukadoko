@@ -90,3 +90,10 @@ project with no nukadoko config, and costs one `nuka verdict` (about
 Code's hook fields as of 2.1.317 (`hook_event_name`, `session_id`, `cwd`,
 `stop_hook_active`; `decision: "block"` with `reason`); check them against
 the version you run.
+
+## When the reviewer asks how risky it is
+
+A pass and a clean intent still leave the reviewer's own question: what
+does this change touch, how hard is it to undo, and will its failures be
+seen. Answer it from the `--base` run's record, not from the diff, with
+`scripts/merge-risk.jq` beside `SKILL.md` (`references/merge-risk.md`).
