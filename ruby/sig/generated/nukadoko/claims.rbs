@@ -5,15 +5,16 @@ module Nukadoko
     module Claims
       COMPARES: untyped
 
-      def self.unknown_compares: (untyped node) -> untyped
-
       def self.judge: (untyped claims, untyped observed, untyped args) -> untyped
 
-      def self.judge_one: (untyped claim, untyped observed, untyped args) -> untyped
+      # `top` is what observe returned, which an expected { observe } reads
+      # from inside an each as well. A claim on an item with no actual reads
+      # the item itself.
+      def self.judge_one: (untyped claim, untyped observed, untyped args, ?untyped top) -> untyped
 
-      def self.judge_each: (untyped each, untyped items, untyped args) -> untyped
+      def self.judge_each: (untyped each, untyped items, untyped args, untyped top) -> untyped
 
-      def self.expected_value: (untyped claim, untyped args) -> untyped
+      def self.expected_value: (untyped claim, untyped args, ?untyped top) -> untyped
 
       VIEWS: untyped
 

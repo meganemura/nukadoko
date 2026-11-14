@@ -16,42 +16,44 @@ module Nukadoko
       COMPARES = %w[equal not-equal contains-text starts-with-text ends-with-text has-item has-same-items has-fields
                     lacks-field fits-text fits-aria-snapshot is-a matches greater-than at-least less-than at-most judged-as].freeze
 
-      def self.unknown_compares(node)
-        case node
-        in Array then node.flat_map { unknown_compares(_1) }
-        in Hash
-          own = node.key?(:compare) && !COMPARES.include?(node[:compare]) ? [node[:compare]] : []
-          own + node.values.flat_map { unknown_compares(_1) }
-        else []
-        end
-      end
-
       def self.judge(claims, observed, args)
         claims.map { judge_one(_1, observed, args) }
       end
 
-      def self.judge_one(claim, observed, args)
-        actual = dig(view(claim[:view], read(observed, claim[:actual])), claim[:at])
-        return judge_each(claim[:each], actual, args) if claim[:each]
+      # `top` is what observe returned, which an expected { observe } reads
+      # from inside an each as well. A claim on an item with no actual reads
+      # the item itself.
+      def self.judge_one(claim, observed, args, top = observed)
+        actual = dig(view(claim[:view], claim[:actual].nil? ? observed : read(observed, claim[:actual])), claim[:at])
+        return judge_each(claim[:each], actual, args, top) if claim[:each]
 
-        expected = expected_value(claim, args)
+        if claim[:count]
+          unless actual.is_a?(Array)
+            # A count of no array has no value, and the record says so by leaving the actual out.
+            return { compare: claim[:compare], expected: expected_value(claim, args, top), holds: false, reason: "count reads an array, and the value is #{article(json_type(actual))}" }
+          end
+
+          actual = actual.size
+        end
+        expected = expected_value(claim, args, top)
         result = compare(claim[:compare], actual, expected)
         { actual: actual, compare: claim[:compare], expected: expected, holds: result[:holds] == true,
           **(result[:reason] ? { reason: result[:reason] } : {}), **(result[:stopped] ? { reason: result[:stopped], unjudged: true } : {}) }
       end
 
-      def self.judge_each(each, items, args)
-        chosen = Array(items).select { |item| each[:where].all? { judge_one(_1, item, args)[:holds] } }
-        results = chosen.flat_map { |item| each[:claims].map { judge_one(_1, item, args) } }
+      def self.judge_each(each, items, args, top)
+        chosen = Array(items).select { |item| (each[:where] || []).all? { judge_one(_1, item, args, top)[:holds] } }
+        results = chosen.flat_map { |item| each[:claims].map { judge_one(_1, item, args, top) } }
         { each: results, chosen: chosen.size, holds: !chosen.empty? && results.all? { _1[:holds] } }
       end
 
-      def self.expected_value(claim, args)
+      def self.expected_value(claim, args, top = nil)
         value =
           case claim[:expected]
           in String => key then read(args, key)
           in { literal: literal } then literal
           in { from: String => key } then read(args, key)
+          in { observe: String => path } then dig(read(top, path.split(".").first), path.split(".").drop(1).join(".").then { _1.empty? ? nil : _1 })
           end
         claim[:expected_view] == "json" ? JSON.parse(value) : value
       end

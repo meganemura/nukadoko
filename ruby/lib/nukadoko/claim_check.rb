@@ -3,17 +3,19 @@
 
 # What `nuka check` can tell about a claim step's claims from the line it
 # is bound on and the earlier lines of its scenario, in the TypeScript
-# engine's words. A `from` value comes from the nearest earlier line that
-# runs its one producer bound before this line, as a run fills it, so the
-# producer's `returns` says what the value can hold: a path into it that is
-# not there (`claim-path-unknown`), a lacks-field on a field its object
-# never keeps (`claim-field-stripped`), an each on a value that is never an
-# array (`claim-not-an-array`), and two sides that read one place
-# (`claim-compares-itself`). A line whose producer is missing or ambiguous
-# is left to `from-order-violation`, and a type this module cannot read
-# (`unknown`) is taken to have every path, so each finding can only end one
-# way. A view reads text the step returned at run time, so no path after it
-# is checked.
+# engine's words and order. A `from` value comes from the nearest earlier
+# line that runs its one producer bound before this line, as a run fills
+# it, so the producer's `returns` says what the value can hold: a path
+# into it that is not there (`claim-path-unknown`), a path the step's own
+# args drops (`claim-args-dropped`), a lacks-field on a field its object
+# never keeps (`claim-field-stripped`), a count or an each on a value that
+# is never an array (`claim-not-an-array`), and two sides that read one
+# place, or an observe that receives the value it is compared with
+# (`claim-compares-itself`). A line whose producer is missing or
+# ambiguous is left to `from-order-violation`, and a type this module
+# cannot read (`unknown`) is taken to have every path, so each finding can
+# only end one way. A view reads text the step returned at run time, so no
+# path after it is checked.
 module Nukadoko
   module Engine
     module ClaimCheck
@@ -24,7 +26,8 @@ module Nukadoko
       )
 
       # A place a side reads: the line of its producer, or observe, and the
-      # path from there, a view as one segment of its own.
+      # path from there, a view or a count as one segment of its own and an
+      # item of each as ANY.
       Place = Data.define(
         :origin, #: String
         :segments, #: Array[String]
@@ -32,65 +35,28 @@ module Nukadoko
       )
 
       INDEX = /\A(0|[1-9][0-9]*)\z/
+      ANY = "*"
 
       module_function
 
-      # [line index, code, message] for each finding about the claim step
-      # bound on `index` of `resolved`, the [step, captures] of each line.
+      #: (String?) -> Array[String]?
+      def segments_of(path)
+        return [] if path.nil?
+
+        parts = path.to_s.split(".", -1)
+        parts.all? { !_1.empty? } && !parts.empty? ? parts : nil
+      end
+
+      # Every finding about the claim step bound on `index` of `resolved`,
+      # the [step, captures] of each line, as [code, message].
       #: (Array[[singleton(Step), Hash[String, untyped]]?], Array[Integer], Integer) -> Array[[String, String]]
       def issues(resolved, lines, index)
         step, captures = resolved[index]
         claims = step&.claims
         return [] unless step && claims
 
-        captures ||= {}
-
-        found = [] #: Array[[String, String]]
-        report = ->(code, message) { found << [code, %(Step "#{step.step_name}"'s #{message})] }
-        producer_of = ->(key) { producer(step, key, index, resolved, lines) }
-        claims.each_with_index do |claim, number|
-          label = "claims[#{number}]"
-          check_expected_from(label, claim, step, producer_of, report)
-          actual = claim[:actual].to_s
-          from = step.from.key?(actual)
-          at = claim[:view] ? nil : split(claim[:at])
-          producer = from ? producer_of.(actual) : nil
-          top = producer && walk(producer.step.returns, [producer.key])
-          report.("claim-path-unknown", missing("#{label}.actual", actual, producer, top, [producer.key])) if producer && top && top[:missing]
-          if producer && top&.key?(:schema) && at
-            path = [producer.key, *at]
-            if claim[:each]
-              not_an_array(label, "reads each item of", producer, path, claim[:at] ? "#{actual} at #{claim[:at]}" : actual, report)
-              (at.empty? ? each_entries(label, claim) : []).each do |entry_label, entry|
-                inside = entry[:view] ? nil : [*split(entry[:actual]), *split(entry[:at])]
-                next unless inside
-
-                named = inside.empty? ? "each item" : "#{inside.join(".")} of each item"
-                stripped(entry_label, entry, captures, step, producer, [*path, "0", *inside], [actual, *at, "0", *inside], "#{named} of #{actual}", report)
-              end
-            else
-              stripped(label, claim, captures, step, producer, path, [actual, *at], claim[:at] ? "#{actual} at #{claim[:at]}" : actual, report)
-            end
-          end
-          next if claim[:each]
-
-          actual_place = place(from ? "from" : "observe", actual, producer_of)
-          actual_place = shaped(actual_place, claim[:view], claim[:at]) if actual_place
-          expected_place = claim[:expected].is_a?(Hash) && claim[:expected][:from] ? place("from", claim[:expected][:from].to_s, producer_of) : nil
-          compares_itself(label, actual_place, expected_place, report)
-        end
-        found
+        Run.new(step, claims, captures || {}, resolved, lines, index).issues
       end
-
-      #: (String, Hash[Symbol, untyped]) -> Array[[String, Hash[Symbol, untyped]]]
-      def each_entries(label, claim)
-        each = claim[:each]
-        [*(each[:where] || []).each_with_index.map { ["#{label}.each.where[#{_2}]", _1] },
-         *each[:claims].each_with_index.map { ["#{label}.each.claims[#{_2}]", _1] }]
-      end
-
-      #: (String?) -> Array[String]
-      def split(path) = path.nil? || path.to_s.empty? ? [] : path.to_s.split(".")
 
       # The nearest earlier line that runs the one candidate producer bound
       # before this line, or nil when none or several are.
@@ -103,11 +69,11 @@ module Nukadoko
         bound.size == 1 ? bound.first : nil
       end
 
-      # Follows `segments` through a returns schema as the run reads a
-      # value: { schema: type } at the end, { open: true } past a type this
-      # module cannot read, or { missing: index, keys: } at the first
-      # segment the type does not have.
-      #: (Schema?, Array[String]) -> Hash[Symbol, untyped]
+      # Follows `segments` through a schema as the run reads a value:
+      # { schema: type } at the end, { open: true } past a type this module
+      # cannot read, or { missing: index, keys: } at the first segment the
+      # type does not have.
+      #: (untyped, Array[String]) -> Hash[Symbol, untyped]
       def walk(schema, segments)
         return { open: true } if schema.nil?
 
@@ -131,37 +97,6 @@ module Nukadoko
         { schema: current }
       end
 
-      #: (String, String, Producer, Hash[Symbol, untyped], Array[String]) -> String
-      def missing(label, path, producer, walk, segments)
-        at = walk[:missing]
-        segment = segments[at]
-        where = at.zero? ? "at the top of its result" : "under #{segments.first(at).join(".")}"
-        has = if walk[:keys].nil? then ""
-              elsif walk[:keys].empty? then ", which has no keys"
-              else ", which has #{walk[:keys].join(", ")}"
-              end
-        %(#{label} reads "#{path}", and step "#{producer.step.step_name}" on line #{producer.line} returns nothing at "#{segment}" #{where}#{has}. ) +
-          "The value would be undefined, so the claim would always break"
-      end
-
-      #: (String, Hash[Symbol, untyped], singleton(Step), ^(String) -> Producer?, ^(String, String) -> void) -> void
-      def check_expected_from(label, claim, step, producer_of, report)
-        entries = claim[:each] ? each_entries(label, claim) : [[label, claim]] #: Array[[String, Hash[Symbol, untyped]]]
-        entries.each do |entry_label, entry|
-          expected = entry[:expected] #: untyped
-          next unless expected.is_a?(Hash) && expected[:from]
-
-          path = split(expected[:from])
-          head = path.first.to_s
-          producer = (producer_of.(head) if step.from.key?(head))
-          next unless producer
-
-          upstream = [producer.key, *path.drop(1)]
-          walk = walk(producer.step.returns, upstream)
-          report.("claim-path-unknown", missing("#{entry_label}.expected.from", expected[:from].to_s, producer, walk, upstream)) if walk[:missing]
-        end
-      end
-
       NOUNS = { string: "a string", number: "a number", integer: "a number", boolean: "a boolean" }.freeze
 
       # What a value of `type` can be, as nouns, when none of them is an
@@ -177,13 +112,14 @@ module Nukadoko
         end
       end
 
-      #: (String, String, Producer, Array[String], String, ^(String, String) -> void) -> void
-      def not_an_array(label, reads, producer, path, what, report)
-        walked = walk(producer.step.returns, path)
-        nouns = walked.key?(:schema) ? non_array_nouns(walked[:schema]) : nil
-        return unless nouns
-
-        report.("claim-not-an-array", %(#{label} #{reads} #{what}, and step "#{producer.step.step_name}" on line #{producer.line} returns #{nouns.join(" or ")} there, never an array, so the claim never holds, whatever the behaviour is))
+      # The keys of the object at `segments`, which keeps no key it does not
+      # declare, as every object a Ruby schema declares does; nil for any
+      # other type.
+      #: (Schema?, Array[String]) -> Array[String]?
+      def object_keys_at(schema, segments)
+        type = walk(schema, segments)[:schema]
+        type = type[1] while type.is_a?(Array) && type[0] == :nullable
+        type.is_a?(Schema) ? type.fields.map { _1.name.to_s } : nil
       end
 
       # The field a lacks-field claim names on this line: a literal, or a
@@ -200,63 +136,41 @@ module Nukadoko
         name.nil? || name.strip.empty? ? nil : name
       end
 
-      # The keys of the object at `segments`, which keeps no key it does not
-      # declare, as every object a Ruby schema declares does; nil for any
-      # other type.
-      #: (Schema?, Array[String]) -> Array[String]?
-      def object_keys_at(schema, segments)
-        walked = walk(schema, segments)
-        type = walked[:schema]
-        type = type[1] while type.is_a?(Array) && type[0] == :nullable
-        type.is_a?(Schema) ? type.fields.map { _1.name.to_s } : nil
+      # The segments a claim reads before its view, as the run reads them:
+      # its path, then its at when no view comes first; nil for a path that
+      # is not one.
+      #: (String?, String?, String?) -> Array[String]?
+      def read_segments(path, view, at)
+        segments = segments_of(path) or return nil
+        view.nil? && at ? [*segments, *at.to_s.split(".")] : segments
       end
 
-      #: (String, Hash[Symbol, untyped], Hash[String, untyped], singleton(Step), Producer, Array[String], Array[String], String, ^(String, String) -> void) -> void
-      def stripped(label, entry, captures, step, producer, path, args_path, named, report)
-        field = lacked_field(entry, captures, step) or return
-        where = label.include?(".each.where[")
-        outcome = where ? "where never leaves an item out, whatever the behaviour is" : "the claim never breaks, whatever the behaviour is"
-        keys = object_keys_at(producer.step.returns, path)
-        if keys.nil? || keys.include?(field)
-          args_keys = object_keys_at(step.args, args_path)
-          return if args_keys.nil? || args_keys.include?(field)
+      #: (String, String?, String?) -> String
+      def read_text(path, view, at) = view.nil? && at ? "#{path} at #{at}" : path
 
-          report.("claim-args-dropped",
-                  "#{label} is lacks-field #{JSON.generate(field)} on #{named}, and the step's own args declares that value through an object schema that declares " \
-                  "#{args_keys.empty? ? "no keys" : args_keys.join(", ")}, which drops any key it does not declare. Step \"#{producer.step.step_name}\" on line #{producer.line} " \
-                  "may return #{field}, and the run leaves a claim unjudged when its args schema took a key out of the value it reads, so #{outcome}")
-          return
-        end
-        report.("claim-field-stripped",
-                "#{label} is lacks-field #{JSON.generate(field)} on #{named}, and step \"#{producer.step.step_name}\" on line #{producer.line} " \
-                "returns that value through an object schema that declares #{keys.empty? ? "no keys" : keys.join(", ")}, which drops any key it does not declare, or refuses it as a strict object. " \
-                "#{field} is never there, so #{outcome}")
+      #: (Hash[Symbol, untyped]) -> Array[String]?
+      def item_segments(item)
+        actual = segments_of(item[:actual]&.to_s)
+        at = segments_of(item[:at]&.to_s)
+        actual && at ? [*actual, *at] : nil
       end
 
-      #: (String, String, ^(String) -> Producer?) -> Place?
-      def place(source, path, producer_of)
-        segments = split(path)
-        return Place.new(origin: "observe", segments: segments, text: "the observe path #{path}") if source == "observe"
-
-        producer = producer_of.(segments.first.to_s) or return nil
-        upstream = [producer.key, *segments.drop(1)]
-        Place.new(origin: "line:#{producer.line}", segments: upstream, text: %(#{upstream.join(".")} of step "#{producer.step.step_name}" on line #{producer.line}))
-      end
-
-      #: (Place, String?, String?) -> Place
-      def shaped(place, view, at)
+      #: (Place, String?, String?, bool?) -> Place
+      def shaped(place, view, at, count)
         place = Place.new(origin: place.origin, segments: [*place.segments, "##{view}"], text: "#{place.text} as #{view}") if view
-        return place if at.nil? || at.to_s.empty?
-
-        Place.new(origin: place.origin, segments: [*place.segments, *at.to_s.split(".")], text: "#{place.text} at #{at}")
+        place = Place.new(origin: place.origin, segments: [*place.segments, *at.to_s.split(".")], text: "#{place.text} at #{at}") unless at.nil? || at.to_s.empty?
+        count ? Place.new(origin: place.origin, segments: [*place.segments, "#count"], text: "the count of #{place.text}") : place
       end
 
-      #: (String, Place?, Place?, ^(String, String) -> void) -> void
-      def compares_itself(label, actual, expected, report)
-        return unless actual && expected && actual.origin == expected.origin && actual.segments == expected.segments
+      #: (Place, Place) -> bool
+      def same_place?(a, b) = a.origin == b.origin && a.segments == b.segments
 
-        where = actual.text == expected.text ? "#{actual.text} on both sides" : "#{actual.text} as its actual value and #{expected.text} as its expected value, one place"
-        report.("claim-compares-itself", "#{label} reads #{where}, so it holds whatever the behaviour is")
+      #: (Place, Place) -> bool
+      def overlap?(a, b)
+        return false unless a.origin == b.origin
+
+        size = [a.segments.size, b.segments.size].min
+        a.segments.first(size).zip(b.segments.first(size)).all? { |x, y| x == y || (x == ANY && y.to_s.match?(INDEX)) || (y == ANY && x.to_s.match?(INDEX)) }
       end
     end
   end

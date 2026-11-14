@@ -52,11 +52,11 @@ module Nukadoko
         base = if observed then "observe:#{actual_key}"
                else origins.fetch(actual_key, "sentence:#{actual_key}")
                end
-        actual_from = place(base, declared[:view], declared[:at])
+        actual_from = counted(place(base, declared[:view], declared[:at]), declared[:count])
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
-        { actual: judged[:actual], actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s,
-          compare: declared[:compare], expected: judged[:expected], expected_from: expected_from,
-          expected_view: declared[:expected_view] }.compact.merge(expected_text: expected_text, **outcome(judged), measured: nil)
+        { **judged.slice(:actual), actual_from: actual_from, **{ view: declared[:view], at: declared[:at]&.to_s, count: declared[:count] }.compact,
+          compare: declared[:compare], **judged.slice(:expected), expected_from: expected_from,
+          **{ expected_view: declared[:expected_view] }.compact }.merge(expected_text: expected_text, **outcome(judged), measured: nil)
       end
 
       READING_MAX_BYTES = 1024
@@ -139,8 +139,8 @@ module Nukadoko
         actual_from = place(observed_from ? "observe:#{key}" : origins.fetch(key, "sentence:#{key}"), declared[:view], declared[:at])
         each = declared[:each]
         where = each[:where] || []
-        declarations = { **(where.empty? ? {} : { where: where.map { item_declaration(_1, args, origins, texts, patterns) } }),
-                         claims: each[:claims].map { item_declaration(_1, args, origins, texts, patterns) } }
+        declarations = { **(where.empty? ? {} : { where: where.map { item_declaration(_1, args, origins, texts, patterns, observed) } }),
+                         claims: each[:claims].map { item_declaration(_1, args, origins, texts, patterns, observed) } }
         base = { actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s }.compact
         value = begin
           Claims.dig(Claims.view(declared[:view], Claims.read(observed, declared[:actual])), declared[:at])
@@ -157,7 +157,7 @@ module Nukadoko
         judged = []
         value.each_with_index do |item, index|
           at = "#{actual_from}.#{index}"
-          where_records = where.map { item_comparison(_1, item, at, args, origins, texts, patterns) }
+          where_records = where.map { item_comparison(_1, item, at, args, origins, texts, patterns, observed) }
           # A where claim that could not compare says nothing about whether
           # the item belongs, so leaving it out would turn "every item" into
           # "the items that happen to compare".
@@ -168,7 +168,7 @@ module Nukadoko
           end
           next judged << { index: index, selected: false, where: where_records } unless where_records.all? { _1[:outcome] == "held" }
 
-          claims = each[:claims].map { item_comparison(_1, item, at, args, origins, texts, patterns) }
+          claims = each[:claims].map { item_comparison(_1, item, at, args, origins, texts, patterns, observed) }
           outcome = claims.any? { _1[:outcome] == "broken" } ? "broken" : claims.any? { _1[:outcome] == "unjudged" } ? "unjudged" : "held"
           identity = outcome == "broken" && item.is_a?(Hash) && IDENTITY_FIELDS.lazy.filter_map do |field|
             v = item.transform_keys(&:to_s)[field]
@@ -190,10 +190,10 @@ module Nukadoko
         record.merge(outcome: outcomes.include?("broken") ? "broken" : outcomes.include?("unjudged") ? "unjudged" : "held", measured: nil)
       end
 
-      def item_declaration(entry, args, origins, texts, patterns)
+      def item_declaration(entry, args, origins, texts, patterns, observed)
         expected_from, expected_text = expected_origin(entry, origins, texts, patterns)
         expected = begin
-          { expected: Claims.expected_value(entry, args) }
+          { expected: Claims.expected_value(entry, args, observed) }
         rescue StandardError
           {}
         end
@@ -202,12 +202,12 @@ module Nukadoko
                  expected_text: expected_text)
       end
 
-      def item_comparison(entry, item, at, args, origins, texts, patterns)
-        judged = Claims.judge_one(entry, item, args)
+      def item_comparison(entry, item, at, args, origins, texts, patterns, top)
+        judged = Claims.judge_one(entry, item, args, top)
         expected_from, expected_text = expected_origin(entry, origins, texts, patterns)
-        { actual: judged[:actual], actual_from: place(entry[:actual] ? "#{at}.#{entry[:actual]}" : at, entry[:view], entry[:at]),
-          view: entry[:view], at: entry[:at]&.to_s }.compact
-          .merge(compare: entry[:compare], expected: judged[:expected], expected_from: expected_from,
+        { **judged.slice(:actual), actual_from: counted(place(entry[:actual] ? "#{at}.#{entry[:actual]}" : at, entry[:view], entry[:at]), entry[:count]),
+          **{ view: entry[:view], at: entry[:at]&.to_s, count: entry[:count] }.compact }
+          .merge(compare: entry[:compare], **judged.slice(:expected), expected_from: expected_from,
                  **(entry[:expected_view] ? { expected_view: entry[:expected_view] } : {}), expected_text: expected_text,
                  **outcome(judged))
       end
@@ -237,9 +237,12 @@ module Nukadoko
       def unobserved_claim(declared, origins, texts, patterns: [])
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { actual_from: place("observe:#{declared[:actual]}", declared[:view], declared[:at]), view: declared[:view], at: declared[:at]&.to_s,
-          compare: declared[:compare], expected_from: expected_from, expected_view: declared[:expected_view], expected_text: expected_text,
-          outcome: "unobserved" }.compact.merge(measured: nil)
+          count: declared[:count], compare: declared[:compare], expected_from: expected_from, expected_view: declared[:expected_view], expected_text: expected_text,
+          outcome: "unobserved" }.compact.merge(measured: nil).tap { _1[:actual_from] = counted(_1[:actual_from], declared[:count]) }
       end
+
+      # A count is the last step a claim takes, so its label names it first.
+      def counted(label, count) = count ? "count of #{label}" : label
 
       # Where a side of a claim reads: its origin, read through its view,
       # then walked to its path, as the TypeScript engine labels it.
@@ -256,6 +259,7 @@ module Nukadoko
         case declared[:expected]
         in String => key then [place(origins.fetch(key, "sentence:#{key}"), declared[:expected_view], nil), texts[key]]
         in { from: String => key } then [origins.fetch(key, "sentence:#{key}"), nil]
+        in { observe: String => path } then ["observe:#{path}", nil]
         in { literal: value } then (words = Literal.stated_by_all(patterns, value) || "unstated"
                                     ["literal:#{words}", words])
         end

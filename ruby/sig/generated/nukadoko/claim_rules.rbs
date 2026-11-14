@@ -1,0 +1,172 @@
+# Generated from lib/nukadoko/claim_rules.rb with RBS::Inline
+
+# The claims a step may declare, as the TypeScript engine's defineStep
+# reads them: each refusal names a claim the run could judge only one way
+# on every line, or one that lets the line or step code decide what the
+# claim compares. `first_problem` gives the first refusal in the order the
+# TypeScript engine meets it, in its words, so `nuka check` reports one
+# step-file-import-failed per step in both engines. A Ruby args schema has
+# no optional key, no default, and no rewrite, so those refusals have no
+# Ruby counterpart.
+module Nukadoko
+  module Engine
+    module ClaimRules
+      class Refused < StandardError
+      end
+
+      # What the rules read about the step besides its claims.
+      class Shape < Data
+        attr_reader patterns(): Array[String]
+
+        attr_reader args_keys(): Array[String]
+
+        attr_reader string_args(): Array[String]
+
+        attr_reader from_keys(): Array[String]
+
+        attr_reader capture_keys(): Array[String]
+
+        attr_reader observe(): bool
+
+        def self.new: (Array[String] patterns, Array[String] args_keys, Array[String] string_args, Array[String] from_keys, Array[String] capture_keys, bool observe) -> instance
+                    | (patterns: Array[String], args_keys: Array[String], string_args: Array[String], from_keys: Array[String], capture_keys: Array[String], observe: bool) -> instance
+
+        def self.members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe ]
+
+        def members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe ]
+      end
+
+      VIEWS: untyped
+
+      COMPARISON_KEYS: untyped
+
+      EACH_CLAIM_KEYS: untyped
+
+      EACH_KEYS: untyped
+
+      PATH: ::Regexp
+
+      VIEW_MAKES: untyped
+
+      KIND_JSON_TYPES: untyped
+
+      COUNT_COMPARES: untyped
+
+      ORDER_COMPARES: untyped
+
+      ACTUAL_READS: untyped
+
+      READS_INSTEAD: untyped
+
+      WHERE_DECIDES: untyped
+
+      # The first reason the TypeScript engine's defineStep would refuse
+      # these claims, or nil.
+      # : (untyped, Shape) -> String?
+      def self?.first_problem: (untyped, Shape) -> String?
+
+      # : (untyped) -> String
+      def self?.describe: (untyped) -> String
+
+      # : (String) -> String
+      def self?.article: (String) -> String
+
+      # : (String) -> bot
+      def self?.refuse: (String) -> bot
+
+      # : (untyped) -> Array[String]?
+      def self?.segments: (untyped) -> Array[String]?
+
+      # : (String, untyped, bool) -> void
+      def self?.check_path: (String, untyped, bool) -> void
+
+      # : (String, Hash[Symbol, untyped], Array[String], String) -> void
+      def self?.check_keys: (String, Hash[Symbol, untyped], Array[String], String) -> void
+
+      # : (String, Hash[Symbol, untyped]) -> void
+      def self?.check_common: (String, Hash[Symbol, untyped]) -> void
+
+      # : (untyped) -> Hash[Symbol, untyped]?
+      def self?.literal_of: (untyped) -> Hash[Symbol, untyped]?
+
+      # : (untyped) -> bool
+      def self?.literal_value?: (untyped) -> bool
+
+      # : (String, Hash[Symbol, untyped], Shape) -> void
+      def self?.check_expected_view: (String, Hash[Symbol, untyped], Shape) -> void
+
+      # : (String, untyped, untyped, Shape, bool) -> void
+      def self?.check_expected: (String, untyped, untyped, Shape, bool) -> void
+
+      # : (String, untyped, untyped, Shape, bool) -> void
+      def self?.check_literal: (String, untyped, untyped, Shape, bool) -> void
+
+      # : (String, Hash[Symbol, untyped]) -> void
+      def self?.check_count: (String, Hash[Symbol, untyped]) -> void
+
+      # : (String, Hash[Symbol, untyped]) -> void
+      def self?.check_sides: (String, Hash[Symbol, untyped]) -> void
+
+      # : (String, Hash[Symbol, untyped]) -> void
+      def self?.check_actual_view: (String, Hash[Symbol, untyped]) -> void
+
+      # : (String, Hash[Symbol, untyped], Shape, bool, bool) -> void
+      def self?.check_aria_snapshot: (String, Hash[Symbol, untyped], Shape, bool, bool) -> void
+
+      # : (String, Hash[Symbol, untyped], bool) -> void
+      def self?.check_judged: (String, Hash[Symbol, untyped], bool) -> void
+
+      # : (String, Hash[Symbol, untyped], Shape, bool, bool) -> void
+      def self?.check_comparison: (String, Hash[Symbol, untyped], Shape, bool, bool) -> void
+
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.item_path: (Hash[Symbol, untyped]) -> Array[String]
+
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.item_read_path: (Hash[Symbol, untyped]) -> Array[String]
+
+      # : (Array[String], Array[String]) -> bool
+      def self?.overlap?: (Array[String], Array[String]) -> bool
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> bool
+      def self?.one_item_value?: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> bool
+
+      # : (Array[String]) -> String
+      def self?.described_item: (Array[String]) -> String
+
+      # : (untyped) -> String?
+      def self?.literal_json_type: (untyped) -> String?
+
+      # : (untyped, Shape) -> void
+      def self?.validate: (untyped, Shape) -> void
+
+      # : (String, untyped, Shape, bool) -> void
+      def self?.check_each: (String, untyped, Shape, bool) -> void
+
+      # The args keys observe never receives, each with the side a claim
+      # reads it on: a key a claim names as its expected value (a sentence
+      # key, or the head of a from path), and the from key a claim's actual
+      # starts with when that claim, or an item claim under its each, takes
+      # its expected value from observe. So observe cannot return what it
+      # will be compared with, either way.
+      # : (Array[Hash[Symbol, untyped]], Array[String]) -> Hash[String, String]
+      def self?.withheld_keys: (Array[Hash[Symbol, untyped]], Array[String]) -> Hash[String, String]
+
+      # An observe no claim reads changes no verdict; a key it returns under
+      # a from key's name never reaches a claim, since the from value wins.
+      # : (Array[Hash[Symbol, untyped]], Shape) -> void
+      def self?.check_observe_read: (Array[Hash[Symbol, untyped]], Shape) -> void
+
+      # A value the line states that no claim reads, in a step with no
+      # observe to receive it, is a value nothing checks.
+      # : (Array[Hash[Symbol, untyped]], Shape) -> void
+      def self?.check_captures_read: (Array[Hash[Symbol, untyped]], Shape) -> void
+
+      # The args keys the claims read: the head of each actual path, a
+      # sentence key named as an expected value, and the head of a from
+      # expected path, in every claim and in each each's where and claims.
+      # : (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def self?.keys_read: (Array[Hash[Symbol, untyped]]) -> Array[String]
+    end
+  end
+end

@@ -558,7 +558,16 @@ module Nukadoko
         if step.claims
           own = fixtures.slice(*step.fixtures)
           observes = step.method_defined?(:observe)
-          read = -> { observes ? step.new.observe(**own, args: step.inputs.load(args)) : args }
+          # A claim's actual that starts with a from key reads the value an
+          # earlier step returned, which wins over a key observe returns
+          # under the same name.
+          from_values = args.transform_keys(&:to_s).slice(*step.from.keys.map(&:to_s))
+          read = lambda do
+            next args unless observes
+
+            observed = step.new.observe(**own, args: step.inputs.load(args))
+            observed.is_a?(Hash) ? observed.transform_keys(&:to_s).merge(from_values) : observed
+          end
           # A reading with a page open is timed, so the record can say what the page had received by then.
           read = (plain = read; -> { @browser.reading(&plain) }) if own[:page]
           observed = begin
@@ -587,9 +596,9 @@ module Nukadoko
           patterns = [step.pattern].compact
           record[:claim_records] = step.claims.zip(judged).map do |declared, result|
             if declared[:each]
-              RunRecord.each_claim(declared, observed, args, origins, texts, observed_from: observes, patterns: patterns)
+              RunRecord.each_claim(declared, observed, args, origins, texts, observed_from: observes && !from_values.key?(declared[:actual].to_s.split(".").first), patterns: patterns)
             else
-              RunRecord.claim(declared, result, origins, texts, observed: observes, patterns: patterns)
+              RunRecord.claim(declared, result, origins, texts, observed: observes && !from_values.key?(declared[:actual].to_s.split(".").first), patterns: patterns)
             end
           end
           broken = record[:claim_records].index { _1[:outcome] != "held" }
@@ -642,7 +651,7 @@ module Nukadoko
           measured = Measured.channel_for(from_of.(declared[:actual]) || own, raw, channels_of)
           claim[:measured] = measured
           key = declared[:expected].is_a?(String) ? declared[:expected] : declared[:expected].is_a?(Hash) && declared[:expected][:from]
-          source = key && from_of.(key)
+          source = declared[:expected].is_a?(Hash) && declared[:expected].key?(:observe) ? own : key && from_of.(key)
           next unless source && claim.key?(:expected)
 
           # The expected side's channel comes before the actual's, as the TypeScript engine writes it.

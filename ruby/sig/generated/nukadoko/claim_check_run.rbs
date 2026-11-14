@@ -1,0 +1,88 @@
+# Generated from lib/nukadoko/claim_check_run.rb with RBS::Inline
+
+# The claim checks of one claim step on one scenario line, kept apart from
+# ClaimCheck's own module functions, which rbs-inline would otherwise read
+# into this class.
+module Nukadoko
+  module Engine
+    # One claim step on one line.
+    class ClaimCheck::Run
+      # : (singleton(Step), Array[Hash[Symbol, untyped]], Hash[String, untyped], Array[[singleton(Step), Hash[String, untyped]]?], Array[Integer], Integer) -> void
+      def initialize: (singleton(Step), Array[Hash[Symbol, untyped]], Hash[String, untyped], Array[[ singleton(Step), Hash[String, untyped] ]?], Array[Integer], Integer) -> void
+
+      # : () -> Array[[String, String]]
+      def issues: () -> Array[[ String, String ]]
+
+      private
+
+      # : (String, String) -> void
+      def report: (String, String) -> void
+
+      # : (String) -> ClaimCheck::Producer?
+      def producer_of: (String) -> ClaimCheck::Producer?
+
+      # : (String?) -> ClaimCheck::Producer?
+      def from_producer: (String?) -> ClaimCheck::Producer?
+
+      # The type a from path ends in, reporting a path the producer does
+      # not return; nil when the path is not a from path, is unresolved,
+      # or ends in a type this module cannot read.
+      # : (String, String) -> untyped
+      def from_path: (String, String) -> untyped
+
+      # : (String, String, ClaimCheck::Producer, Hash[Symbol, untyped], Array[String]) -> String
+      def missing: (String, String, ClaimCheck::Producer, Hash[Symbol, untyped], Array[String]) -> String
+
+      # A from path the step's own args takes out of the value before a
+      # claim reads it: the first key an object of args does not declare,
+      # where the producer may return one.
+      # : (String, String, Array[String]?) -> void
+      def args_drop: (String, String, Array[String]?) -> void
+
+      # : (String, untyped) -> void
+      def expected_args_drop: (String, untyped) -> void
+
+      # : (String, String, String, Array[String], String) -> void
+      def not_an_array: (String, String, String, Array[String], String) -> void
+
+      # : (String, Hash[Symbol, untyped], String, Array[String], String, bool) -> void
+      def stripped: (String, Hash[Symbol, untyped], String, Array[String], String, bool) -> void
+
+      # : (String, String) -> ClaimCheck::Place?
+      def place: (String, String) -> ClaimCheck::Place?
+
+      # : (untyped) -> ClaimCheck::Place?
+      def expected_place: (untyped) -> ClaimCheck::Place?
+
+      # : (String, ClaimCheck::Place?, ClaimCheck::Place?) -> void
+      def compares_itself: (String, ClaimCheck::Place?, ClaimCheck::Place?) -> void
+
+      # : (String, untyped) -> void
+      def note_expected_from: (String, untyped) -> void
+
+      # : (String, untyped, ClaimCheck::Place?, String) -> void
+      def note_actual_from: (String, untyped, ClaimCheck::Place?, String) -> void
+
+      # Each where clause and item claim of an each, with its label and
+      # whether it is a where clause.
+      # : (String, Hash[Symbol, untyped]) -> Array[[String, Hash[Symbol, untyped], bool]]
+      def each_entries: (String, Hash[Symbol, untyped]) -> Array[[ String, Hash[Symbol, untyped], bool ]]
+
+      # : (Hash[Symbol, untyped], String) -> void
+      def claim_issues: (Hash[Symbol, untyped], String) -> void
+
+      # : (Hash[Symbol, untyped], String, String, Array[String]?, untyped, String, ClaimCheck::Place?) -> void
+      def each_issues: (Hash[Symbol, untyped], String, String, Array[String]?, untyped, String, ClaimCheck::Place?) -> void
+
+      # Item paths of an each against the array's item type.
+      # : (String, Hash[Symbol, untyped], untyped) -> void
+      def item_paths: (String, Hash[Symbol, untyped], untyped) -> void
+
+      # An observe that receives a value an expected from reads, or the
+      # value an actual from reads when the claim takes its expected
+      # value from observe, could return the value it is compared with.
+      # : () -> void
+      def observe_receives: () -> void
+    end
+  end
+end

@@ -61,7 +61,10 @@ module Nukadoko
 
       # observe never sees the args a claim compares with, so it cannot pick
       # what to read by the answer it will be judged against.
-      def inputs = claims ? args.without(expected_keys(claims)) : args
+      def inputs
+        claims = self.claims
+        claims ? args.without(Engine::ClaimRules.withheld_keys(claims, from.keys).keys) : args
+      end
 
       def step_name = File.basename(file, ".rb").tr("_", "-")
 
@@ -85,24 +88,6 @@ module Nukadoko
 
         reachable = parts.select { _1.is_a?(Class) && _1 < Step }.flat_map { _1.bag([*seen, self]) }
         (fixtures + reachable - (seen.empty? ? [] : [:call])).uniq
-      end
-
-      private
-
-      def expected_keys(node)
-        case node
-        in Array then node.flat_map { expected_keys(_1) }
-        in Hash then node.flat_map { |k, v| k.to_s == "expected" ? expected_key(v) : expected_keys(v) }
-        else []
-        end
-      end
-
-      def expected_key(value)
-        case value
-        in String then [value]
-        in { from: String => key } then [key]
-        else []
-        end
       end
     end
   end

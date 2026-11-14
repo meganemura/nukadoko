@@ -71,11 +71,10 @@ module Nukadoko
           findings << Finding.new("error", pattern[0], step.file, nil, step.step_name, pattern[1], Codes.fix(pattern[0]))
           return true
         end
-        problems = Claims.unknown_compares(step.claims || []).map { "claims compare must be one of #{Claims::COMPARES.join(", ")}; got #{_1.inspect}." }
-        problems += Definition.new(step).problems
+        problems = Definition.new(step).problems
         problems.each do |problem|
           findings << Finding.about_step("error", "step-file-import-failed", step, problem,
-                                         "Correct the error that the message names in the file, then run nuka check again.")
+                                         "Correct the import or the error that the message names in the file, then run nuka check again.")
         end
         problems.any?
       end

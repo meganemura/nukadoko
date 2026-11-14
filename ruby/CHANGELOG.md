@@ -223,6 +223,10 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `timeout:` and `files:` too.
 - `nuka check` reads a claim step's claims against the step that fills each `from` value, as the TypeScript engine does: `claim-path-unknown` for a path its `returns` does not have, `claim-field-stripped` and `claim-args-dropped` for a lacks-field on a key an object schema drops, `claim-not-an-array` for an each on a value that is never an array, and `claim-compares-itself` when both sides read one place.
 - `nuka check` reports `claim-poll-unstated` for a claim step whose observe reaches a browser page, directly or through a project fixture, and does not state poll, and `claim-sentence-unread` for a table or docstring that fills a key no claim reads on a step with no observe.
+- A step's claims are held to the rules the TypeScript engine's defineStep holds them to, and `nuka check` refuses the first one a step breaks with the same words: a literal no fixed word states, an is-a kind that is none, a key a claim does not have, a view or a count whose compare always breaks, a where clause that selects by the value its claim judges, a capture no claim reads, and the rest.
+- A claim can count the items of its actual value (`count: true`) and take its expected value from what observe returned (`expected: { observe: path }`). A claim whose actual starts with a from key reads the value an earlier step returned in a step with observe too, and observe no longer receives the from value such a claim compares with what it read.
+- `nuka check` reports, as the TypeScript engine does, a path into an each item its producer does not return, a from path the step's own args drops, a count of a value that is never an array, and an observe that receives the value its claim is compared with.
+- A claim on an each item with no actual reads the item itself, and a record keeps an actual value of null.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

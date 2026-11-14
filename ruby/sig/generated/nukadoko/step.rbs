@@ -83,10 +83,6 @@ module Nukadoko
     # and those of every part it can reach, since the bag is closed before
     # any call happens.
     def self.bag: (?untyped seen) -> untyped
-
-    private def self.expected_keys: (untyped node) -> untyped
-
-    private def self.expected_key: (untyped value) -> untyped
   end
 
   # Each step file is registered for autoload under its class name first, so a

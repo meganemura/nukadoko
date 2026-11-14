@@ -54,9 +54,9 @@ module Nukadoko
       # most 20, in index order.
       def self?.each_claim: (untyped declared, untyped observed, untyped args, untyped origins, untyped texts, observed_from: untyped, ?patterns: untyped) -> untyped
 
-      def self?.item_declaration: (untyped entry, untyped args, untyped origins, untyped texts, untyped patterns) -> untyped
+      def self?.item_declaration: (untyped entry, untyped args, untyped origins, untyped texts, untyped patterns, untyped observed) -> untyped
 
-      def self?.item_comparison: (untyped entry, untyped item, untyped at, untyped args, untyped origins, untyped texts, untyped patterns) -> untyped
+      def self?.item_comparison: (untyped entry, untyped item, untyped at, untyped args, untyped origins, untyped texts, untyped patterns, untyped top) -> untyped
 
       # A claim's outcome and, when the two sides could not be compared or
       # nothing judged them, why.
@@ -68,6 +68,9 @@ module Nukadoko
 
       # A claim whose observe raised: where each side would come from, and no value.
       def self?.unobserved_claim: (untyped declared, untyped origins, untyped texts, ?patterns: untyped) -> untyped
+
+      # A count is the last step a claim takes, so its label names it first.
+      def self?.counted: (untyped label, untyped count) -> untyped
 
       # Where a side of a claim reads: its origin, read through its view,
       # then walked to its path, as the TypeScript engine labels it.
