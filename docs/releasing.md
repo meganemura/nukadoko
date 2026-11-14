@@ -167,3 +167,54 @@ registers the trusted publisher.
    `gh release create` with `--target` set to the published commit.
    That call creates the tag `v<version>` and the release. Creating
    both is that job.
+
+## The Ruby gem
+
+`ruby/` is the gem `nukadoko`, a separate package with its own version
+(`ruby/lib/nukadoko/version.rb`) and its own changelog
+(`ruby/CHANGELOG.md`). The two packages release independently: both
+engines pass the same `conformance/` cases, so their versions do not
+need to match. A push to `main` that changes `ruby/lib/nukadoko/version.rb`
+runs [`.github/workflows/release-gem.yml`](../.github/workflows/release-gem.yml);
+`publish.yml` does not run, because `package.json` did not change.
+
+The workflow has the same shape as `publish.yml`. Its `check` job reads
+the gem version and looks for the tag `ruby-v<version>`, and it reads
+that version's section of `ruby/CHANGELOG.md`, whose heading starts with
+`## [<version>]`. The `test` job runs the checks of `ci.yml`'s
+`ruby-engine` job. The `publish` job waits for the GitHub Environment
+`release`, builds the gem, exchanges the GitHub OIDC token for a
+RubyGems credential, and runs `gem push`. The `release` job then creates
+the tag `ruby-v<version>` and a GitHub release that is not marked as
+the latest, so the npm package's release stays the latest one. The
+`ruby-` prefix keeps the gem's tags apart from the npm package's `v*`
+tags. Nobody pushes either tag by hand.
+
+### One-time setup for the gem
+
+These are human steps, done once.
+
+1. Create the GitHub Environment `release` in `meganemura/nukadoko`, with
+   required reviewers, and allow deployments from `main`.
+2. On rubygems.org, add a pending trusted publisher (the gem does not
+   exist yet), at https://rubygems.org/profile/oidc/pending_trusted_publishers:
+   - Gem name: `nukadoko`
+   - Repository owner: `meganemura`
+   - Repository name: `nukadoko`
+   - Workflow filename: `release-gem.yml`
+   - Environment: `release`
+   - Workflow repository owner and name: leave both empty (the workflow is
+     in this repository, not a reusable workflow elsewhere).
+
+   After the first push the pending publisher becomes the gem's trusted
+   publisher.
+
+### Each gem version
+
+1. In `ruby/CHANGELOG.md`, move the notes under `## [Unreleased]` to a
+   new `## [<version>]` heading. Set the same version in
+   `ruby/lib/nukadoko/version.rb`, and run `bundle install` in `ruby/` so
+   `Gemfile.lock` names it.
+2. Commit both as `chore: release the gem <version>` and land the commit
+   on `main` through `queue`.
+3. Approve the `release` Environment when the run asks for it.

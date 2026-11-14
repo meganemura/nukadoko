@@ -133,3 +133,43 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    `--notes-file CHANGELOG.md` はすべてのバージョンのノートを貼るので、ジョブは見出しが `##` とそのバージョンと空白で始まる節だけを取り出してから、publish した commit を `--target` に指定して `gh release create` を実行します。
    その呼び出しが tag `v<version>` と release を作ります。
    両方を作るのはそのジョブです。
+
+## Ruby の gem
+
+`ruby/` は gem `nukadoko` で、独立したパッケージです。
+バージョンは `ruby/lib/nukadoko/version.rb`、変更履歴は `ruby/CHANGELOG.md` にあります。
+2 つのパッケージは別々にリリースします。
+どちらのエンジンも同じ `conformance/` のケースを通るので、バージョンをそろえる必要はありません。
+`ruby/lib/nukadoko/version.rb` を変える `main` への push が [`.github/workflows/release-gem.yml`](../.github/workflows/release-gem.yml) を動かします。
+`package.json` は変わらないので、`publish.yml` は動きません。
+
+workflow の形は `publish.yml` と同じです。
+`check` ジョブは gem のバージョンを読み、tag `ruby-v<version>` を探し、`ruby/CHANGELOG.md` の見出しが `## [<version>]` で始まる節を読みます。
+`test` ジョブは `ci.yml` の `ruby-engine` ジョブと同じチェックを実行します。
+`publish` ジョブは GitHub Environment `release` を待ち、gem をビルドし、GitHub の OIDC トークンを RubyGems の資格情報に交換し、`gem push` を実行します。
+そのあと `release` ジョブが tag `ruby-v<version>` と、latest にしない GitHub release を作ります。
+npm パッケージの release が latest のまま残ります。
+`ruby-` の接頭辞で、gem の tag と npm パッケージの `v*` の tag を分けます。
+どちらの tag も手で push しません。
+
+### gem の最初の設定
+
+一度だけ人が行う手順です。
+
+1. `meganemura/nukadoko` に GitHub Environment `release` を作り、required reviewers を付け、`main` からのデプロイを許します。
+2. rubygems.org の https://rubygems.org/profile/oidc/pending_trusted_publishers で、pending trusted publisher を足します(gem はまだありません)。
+   - Gem name: `nukadoko`
+   - Repository owner: `meganemura`
+   - Repository name: `nukadoko`
+   - Workflow filename: `release-gem.yml`
+   - Environment: `release`
+   - Workflow repository owner と name: 両方とも空にします(workflow はこのリポジトリにあり、ほかの場所の reusable workflow ではありません)。
+
+   最初の push のあと、pending publisher はその gem の trusted publisher になります。
+
+### gem の各バージョン
+
+1. `ruby/CHANGELOG.md` で、`## [Unreleased]` の下のノートを新しい `## [<version>]` の見出しへ移します。
+   同じバージョンを `ruby/lib/nukadoko/version.rb` に書き、`ruby/` で `bundle install` を実行して `Gemfile.lock` にそのバージョンを載せます。
+2. 両方を `chore: release the gem <version>` としてコミットし、`queue` を通して `main` に載せます。
+3. run が求めたら、Environment `release` を承認します。
