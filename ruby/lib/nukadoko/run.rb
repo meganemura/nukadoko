@@ -423,7 +423,7 @@ module Nukadoko
         if record[:claim_records]
           entry[:claims] = record[:claim_records]
           entry[:observation] = record[:observation] || "observed"
-          entry.merge!(RunRecord.poll_fields(record).except(:readings))
+          entry.merge!(RunRecord.poll_fields(record).except(:readings), **RunRecord.page_fields(record, File.join("steps", record[:step_record_id].to_s)))
         end
         entry
       end
@@ -496,15 +496,21 @@ module Nukadoko
             raise TypeError, "args: #{problems.join("; ")}"
           end
 
+          @browser&.step = { step_record_id: record[:step_record_id], step: record[:step], line: at_line }
+          @browser&.begin_step
           Trace.within(boundary) do
             fixtures, finish = build_fixtures(step, dir, log, world, record)
-            Processes.collect(processes) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) }
+            HttpRecording.collect(log) do
+              Processes.collect(processes) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) }
+            end
           end
+          record[:page_view] = @browser.judged(dir, record[:step_record_id]) if step.claims && fixtures[:page] && record[:observation] != "unobserved"
           record[:status] ||= "passed"
         rescue StandardError => e
           record.merge!(status: "failed", outcome: :broke, error: e.message)
           record[:error_kind] ||= "step_error"
         ensure
+          @browser&.step = nil
           finish&.call
           log.concat(fixtures[:request].log) if fixtures[:request]
           # A world at a URL has a log nukadoko does not read.
@@ -550,6 +556,8 @@ module Nukadoko
           own = fixtures.slice(*step.fixtures)
           observes = step.method_defined?(:observe)
           read = -> { observes ? step.new.observe(**own, args: step.inputs.load(args)) : args }
+          # A reading with a page open is timed, so the record can say what the page had received by then.
+          read = (plain = read; -> { @browser.reading(&plain) }) if own[:page]
           observed = begin
             step.poll ? Poll.new(step.poll, step.claims, args).call(record, &read) : read.()
           rescue StandardError => e
@@ -567,7 +575,9 @@ module Nukadoko
           record[:raw_actuals] = step.claims.map do |declared|
             next nil if declared[:each]
 
-            Claims.read(observed, declared[:actual])
+            # Under a view the raw value is the text the view read; else the value at `at`.
+            read = Claims.read(observed, declared[:actual])
+            declared[:view] ? read : Claims.dig(read, declared[:at])
           rescue StandardError
             nil
           end
@@ -630,7 +640,11 @@ module Nukadoko
           claim[:measured] = measured
           key = declared[:expected].is_a?(String) ? declared[:expected] : declared[:expected].is_a?(Hash) && declared[:expected][:from]
           source = key && from_of.(key)
-          claim[:expected_measured] = Measured.channel_for(source, claim[:expected], channels_of, measured) if source && claim.key?(:expected)
+          next unless source && claim.key?(:expected)
+
+          # The expected side's channel comes before the actual's, as the TypeScript engine writes it.
+          claim.delete(:measured)
+          claim.merge!(expected_measured: Measured.channel_for(source, claim[:expected], channels_of, measured), measured: measured)
         end
         record.delete(:raw_actuals)
       end

@@ -40,7 +40,7 @@ module Nukadoko
           mutates: record[:mutates], **(used.any? ? { used: used } : {}), **(record[:calls] ? { calls: record[:calls] } : {}),
           **(record[:actions] ? { actions: record[:actions] } : {}), **(record[:actions_truncated] ? { truncated: { actions: record[:actions_truncated] } } : {}),
           **(record[:fixtures] ? { fixtures: record[:fixtures] } : {}),
-          **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", **poll_fields(record) } : {}) }
+          **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", **poll_fields(record), **page_fields(record) } : {}) }
       end
 
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
@@ -55,11 +55,23 @@ module Nukadoko
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { actual: judged[:actual], actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s,
           compare: declared[:compare], expected: judged[:expected], expected_from: expected_from,
-          expected_view: declared[:expected_view], expected_text: expected_text,
-          outcome: judged[:holds] ? "held" : "broken", measured: nil }.compact.merge(measured: nil)
+          expected_view: declared[:expected_view] }.compact.merge(expected_text: expected_text, outcome: judged[:holds] ? "held" : "broken", measured: nil)
       end
 
       READING_MAX_BYTES = 1024
+
+      # What a claim step's page had received by its judged reading, and
+      # what the page showed right after it. A file is named from the step
+      # record's directory, or from the run's when `under` names the step's.
+      def page_fields(record, under = nil)
+        view = record[:page_view] or return {}
+        return view unless under && view[:judged_view]
+
+        pages = view[:judged_view][:pages].map do |page|
+          page.merge(%i[screenshot aria].to_h { |key| [key, page[key] && page[key].merge(file: File.join(under, page[key][:file]))] })
+        end
+        view.merge(judged_view: { pages: pages })
+      end
 
       # How many times a claim step read, and for a polled one each reading
       # and the settled conditions, with the reading the poll stopped on

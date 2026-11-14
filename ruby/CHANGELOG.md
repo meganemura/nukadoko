@@ -195,6 +195,17 @@ notes come from the section below whose heading starts with `## [<version>]`.
   lists the Playwright calls it made (`actions`), read from its
   trace.zip, and names the trace in `evidence`. run.json names the steps
   a step used only when it failed.
+- A page's documents, fetches, and XMLHttpRequests to the world carry the
+  step's traceparent, set through the Chrome DevTools Protocol. A claim
+  step that reads a page records what the page had received by the
+  judged reading (`pages`, `page_requests`) and what it showed right
+  after it (`judged_view`: its title, `judged/page.png`, and
+  `judged/page.aria.yml`).
+- A request a step sends through Net::HTTP itself is recorded in its
+  http.jsonl with `via: "net/http"` and carries the step's traceparent,
+  so a claim on what it returned names the channel it was measured in.
+  A claim's `measured` reads the value at its `at` path, and a claim
+  whose expected value comes from `from` keeps `expected_text: null`.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

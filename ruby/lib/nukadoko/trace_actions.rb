@@ -21,6 +21,7 @@ module Nukadoko
       KNOWN_VERSIONS = [8, 10].freeze
       MAX_ACTIONS = 100
       INTERNAL_WAIT = "__waitInfo__"
+      JUDGED_VIEW_GROUP = "nukadoko: view of the judged reading"
 
       module_function
 
@@ -38,6 +39,8 @@ module Nukadoko
       def parse(text)
         header = nil
         pending = {}
+        # The calls nukadoko made for the judged view, and every call under them.
+        own = {}
         actions = []
         total = 0
         text.force_encoding("UTF-8").each_line do |line|
@@ -48,7 +51,13 @@ module Nukadoko
           when "context-options"
             header ||= entry if %w[version wallTime monotonicTime].all? { entry[_1].is_a?(Numeric) }
           when "before"
-            pending[entry["callId"]] = entry if entry["method"].is_a?(String) && entry["startTime"].is_a?(Numeric)
+            next unless entry["method"].is_a?(String) && entry["startTime"].is_a?(Numeric)
+
+            if (entry["method"] == "tracingGroup" && entry["title"] == JUDGED_VIEW_GROUP) || own[entry["parentId"]]
+              own[entry["callId"]] = true
+              next
+            end
+            pending[entry["callId"]] = entry
           when "after"
             before = pending.delete(entry["callId"]) or next
             next if before["method"] == INTERNAL_WAIT || !entry["endTime"].is_a?(Numeric) || header.nil?
