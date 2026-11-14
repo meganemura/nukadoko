@@ -1,0 +1,24 @@
+# Conformance cases
+
+Each case is one small project that every nukadoko engine must judge the same way.
+The TypeScript engine is the reference: its result is the case's `expected.json`.
+
+```
+cases/<name>/
+  features/      the feature files, shared by every engine
+  steps-ts/      the steps for the TypeScript engine
+  steps-rb/      the same steps for the Ruby engine
+  program.json   how to start the program under test; {root} is this repository
+  expected.json  the findings of check, and the verdict of each scenario and step
+```
+
+`expected.json` holds only what both engines must agree on.
+A finding is its severity, its code, and the feature file and line or the step name it is about.
+A step is named by its step name, not its file, because each language spells step files its own way (`add-todo.ts`, `add_todo.rb`).
+Messages and timings are left out.
+
+## Commands
+
+- `node conformance/run-ts.mjs` runs every case under the TypeScript engine and compares the result with `expected.json`. It needs `npm run build` first.
+- `node conformance/run-ts.mjs --write` writes `expected.json` again. Read the diff before you commit it.
+- `node conformance/run-ts.mjs <name>...` runs only the named cases.

@@ -1,0 +1,66 @@
+{
+  "check": [],
+  "scenarios": [
+    {
+      "feature": "features/todo.feature",
+      "line": 3,
+      "status": "passed",
+      "steps": [
+        {
+          "line": 4,
+          "step": "add-todo",
+          "status": "passed"
+        },
+        {
+          "line": 5,
+          "step": "todo-list-includes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/todo.feature",
+      "line": 7,
+      "status": "passed",
+      "steps": [
+        {
+          "line": 8,
+          "step": "add-todo",
+          "status": "passed"
+        },
+        {
+          "line": 9,
+          "step": "complete-todo",
+          "status": "passed"
+        },
+        {
+          "line": 10,
+          "step": "todo-is-marked-done",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/todo.feature",
+      "line": 12,
+      "status": "passed",
+      "steps": [
+        {
+          "line": 13,
+          "step": "add-todos-from-table",
+          "status": "passed"
+        },
+        {
+          "line": 16,
+          "step": "todo-list-includes",
+          "status": "passed"
+        },
+        {
+          "line": 17,
+          "step": "todo-list-includes",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

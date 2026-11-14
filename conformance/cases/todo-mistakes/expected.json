@@ -1,0 +1,38 @@
+{
+  "check": [
+    {
+      "severity": "error",
+      "code": "step-file-import-failed",
+      "step": "todo-list-includes"
+    },
+    {
+      "severity": "error",
+      "code": "unknown-capture-key",
+      "step": "add-todo"
+    },
+    {
+      "severity": "error",
+      "code": "fixture-structural-violation",
+      "step": "complete-todo"
+    },
+    {
+      "severity": "error",
+      "code": "unfillable-required-key",
+      "file": "features/todo.feature",
+      "line": 4,
+      "step": "add-todo"
+    },
+    {
+      "severity": "error",
+      "code": "unfillable-required-key",
+      "file": "features/todo.feature",
+      "line": 8,
+      "step": "add-todo"
+    },
+    {
+      "severity": "warning",
+      "code": "undefined-step-check-suppressed",
+      "step": "todo-list-includes"
+    }
+  ]
+}
