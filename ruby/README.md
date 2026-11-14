@@ -42,7 +42,7 @@ end
 
 - `nuka init` writes `nukadoko.config.rb`, the empty `features/steps/`, and the `.gitignore` entries for `.nukadoko/` and `.env` files. It refuses when the config file exists.
 - `nuka check [--json]` reports what is wrong before anything runs.
-- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--json] [--no-check]` starts the program in each selected world, runs the selected scenarios, and writes a record per step under `.nukadoko/runs/`. With no target it runs `features/`.
+- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--proof-runs <n>] [--records] [--json] [--no-check]` starts the program in each selected world, runs the selected scenarios, and writes a record per step under `.nukadoko/runs/`. With no target it runs `features/`. `--order shuffled` plays the files, then each file's scenarios, in an order a seed names, the same order the TypeScript engine plays for that seed. `--repeat` plays the selection that many times, `--proof-runs` sets how many times each control runs, and `--records` writes each scenario record to stdout as it ends.
 - `nuka verdict [--json]` says whether the newest run judged the working tree as it is now and left nothing red. It never starts a run.
 - `nuka report [run] --format markdown [--out <file>] [--json]` renders a run's `summary.md` again from its `run.json` alone, the newest run when none is named.
 - `nuka clean [--dry-run] [--json]` removes the run directories under `.nukadoko/`.

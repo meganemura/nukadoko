@@ -1,0 +1,6 @@
+{
+  "environments": {
+    "on": { "conditions": { "search": true }, "env": { "SEARCH": "{condition.search}" } },
+    "off": { "conditions": { "search": false }, "env": { "SEARCH": "{condition.search}" } }
+  }
+}

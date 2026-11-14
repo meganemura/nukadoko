@@ -114,6 +114,18 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `fixture-unused` and `from-unused`. `unfillable-required-key` and
   `undefined-step-check-suppressed` now say what the TypeScript engine
   says.
+- `nuka run --order file|shuffled|shuffled:<seed>` plays the feature files,
+  then each file's scenarios, in the order the seed names, by the
+  TypeScript engine's key, so a seed names one order in either engine. A
+  shuffled run prints its seed, writes `order` into run.json, says it in
+  summary.md, and names what ran before a failed scenario in its rerun line.
+- `nuka run --repeat <n>` plays the selection n times and prints a
+  `repeat` line for each scenario that failed at least once.
+  `--proof-runs <n>` sets how many runs prove a control, and `--records`
+  writes each scenario record to stdout as it ends. A value none of them
+  can read is `invalid-value`.
+- A program file's `env` is the `env` fixture, and `requireEnv` reads one
+  of its keys.
 
 ### Changed
 
@@ -138,6 +150,9 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - A cell's `conditions` in run.json hold only the conditions the row's tags
   name, each with the value the environment declares or `null`, as the
   TypeScript engine writes them.
+- A control's proof runs come after every scenario of the pass has run
+  once, as in the TypeScript engine, rather than right after the control's
+  first run.
 
 ## [0.1.0] - 2026-11-14
 

@@ -63,7 +63,7 @@ module Nukadoko
       # proves the criterion tells the behaviour apart.
       def proves?(cell)
         absent = cell[:world] == "base" || (cell[:world] != "old" && cell[:role] == "control")
-        absent && cell[:outcome] == "fail" && cell[:runs] >= Table::PROOF_RUNS
+        absent && cell[:outcome] == "fail" && cell[:runs] >= Table.proof_runs
       end
 
       def failed_reason(cell, where)
@@ -113,8 +113,8 @@ module Nukadoko
         when "broke" then "it stopped at #{line} #{where} before a claim there was judged"
         when "flaky" then "its #{runs_text(cell[:runs])} #{where} disagree, the first that did not pass at #{line}"
         else
-          if cell[:world] == "base" && cell[:runs] < Table::PROOF_RUNS
-            "a claim broke at #{line} #{where} in only #{runs_text(cell[:runs])}, and proof needs #{Table::PROOF_RUNS}"
+          if cell[:world] == "base" && cell[:runs] < Table.proof_runs
+            "a claim broke at #{line} #{where} in only #{runs_text(cell[:runs])}, and proof needs #{Table.proof_runs}"
           else
             "a claim broke at #{line} #{where}"
           end

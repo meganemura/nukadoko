@@ -77,4 +77,22 @@ class PropertiesTest < Minitest::Test
       assert_equal(failed ? "failed" : proven ? "proven" : "held", Nukadoko::Engine::Table.verdict(cells))
     end
   end
+  O = Nukadoko::Engine::Order
+  Item = Struct.new(:uri, :line)
+
+  # A shuffled order is the whole selection sorted by its own keys, so a part
+  # of it runs in the order the whole gave it, and each file stays together.
+  def test_a_shuffled_part_runs_in_the_order_the_whole_gave_it
+    check do |tc|
+      seed = tc.draw(integers(min_value: 0, max_value: O::MAX_SEED))
+      uris = tc.draw(arrays(text(alphabet: "abc/", min_size: 1, max_size: 4), min_size: 1, max_size: 4)).uniq
+      all = uris.flat_map { |uri| tc.draw(arrays(integers(min_value: 1, max_value: 40), min_size: 1, max_size: 4)).uniq.map { Item.new(uri, _1) } }
+      part = all.select { tc.draw(booleans) }
+      order = { kind: "shuffled", seed: seed }
+      whole = O.arrange(all, order)
+      assert_equal all.sort_by { [_1.uri, _1.line] }, whole.sort_by { [_1.uri, _1.line] }
+      assert_equal whole & part, O.arrange(part, order)
+      assert_equal whole.map(&:uri).uniq, whole.chunk_while { _1.uri == _2.uri }.map { _1.first.uri }
+    end
+  end
 end

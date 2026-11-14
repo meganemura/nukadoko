@@ -52,8 +52,11 @@ end
 - `nuka init` は、`nukadoko.config.rb`、空の `features/steps/`、`.nukadoko/` と `.env` のための `.gitignore` の行を書きます。
 設定ファイルがすでにあれば断ります。
 - `nuka check [--json]` は、実行前にまちがいを報告します。
-- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
+- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--proof-runs <n>] [--records] [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
 対象を書かなければ `features/` を実行します。
+`--order shuffled` は、ファイルを、そしてファイルの中のシナリオを、seed が決める順番で実行します。
+seed が同じなら、TypeScript 版と同じ順番です。
+`--repeat` は選んだシナリオをその回数だけ実行し、`--proof-runs` は control を何回実行するかを決め、`--records` はシナリオの記録を終わるたびに stdout に書きます。
 - `nuka verdict [--json]` は、いちばん新しい run が今の作業ツリーを判定し、赤を残さなかったかを答えます。
 run は始めません。
 - `nuka report [run] --format markdown [--out <file>] [--json]` は、run の `summary.md` を `run.json` だけからもう一度書きます。

@@ -4,9 +4,9 @@
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
-    FLAGS = %w[--json --no-check --dry-run --then --replace --allure].freeze
+    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records].freeze
     REPEATED = %w[--tag --env --use].freeze
-    VALUED = %w[--format --out --base --args --pattern --description --feature --command --request --from --cwd --body --argv].freeze
+    VALUED = %w[--format --out --base --repeat --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv].freeze
 
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
@@ -99,6 +99,16 @@ module Nukadoko
     # A run checks the scenarios it selected, then runs them in each world
     # it selected; a target or a world it cannot reach is refused first.
     def run(steps)
+      repeat = count_flag("--repeat")
+      Engine::Table.proof_runs = count_flag("--proof-runs")
+      order = Engine::Order.read(@options["--order"].last)
+      unless order
+        raise Engine::Refusal.new("invalid-value", "--order must be file, shuffled, or shuffled:<seed> with a whole number from 0 to #{Engine::Order::MAX_SEED} (got #{JSON.generate(@options["--order"].last)}).")
+      end
+
+      # Under --records stdout holds only the records, so the rest is stderr's.
+      records = @options.key?("--records") ? @out : nil
+      progress = @json || records ? $stderr : @out
       ref = @options["--base"].last
       commit = ref && Engine::Base.resolve(@project, ref)
       selection = Engine::Selection.new(@project, @rest, @options["--tag"])
@@ -107,9 +117,15 @@ module Nukadoko
       # A scenario whose conditions hold in no environment of the run is
       # left out, and counted, since no cell of it could show it holds.
       kept, left_out = selection.scenarios.partition { meets?(_1, environments) }
-      check = Engine::Check.new(steps, kept)
-      # Under --no-check no finding of the check is reported, as none held the run back.
-      findings = @no_check ? [] : check.findings.map { relative(_1).to_h }
+      kept = Engine::Order.arrange(kept, order)
+      # Without --env, a scenario no environment meets is a check error,
+      # condition-unmet; a selection --env names leaves it out instead.
+      default = @options["--env"].empty?
+      declared = program.declared.values.flat_map { (_1[:conditions] || {}).keys.map(&:to_s) }
+      check = Engine::Check.new(steps, default ? selection.scenarios : kept, conditions: declared,
+                                environments: (environments if default), problems: selection.problems)
+      # Only the check's errors hold a run back, so only they are reported.
+      findings = @no_check ? [] : check.findings.map { relative(_1).to_h }.select { _1[:severity] == "error" }
       unless @no_check || check.passed?
         errors = findings.select { _1[:severity] == "error" }
         stop = { severity: "refused", code: "check-errors",
@@ -128,8 +144,10 @@ module Nukadoko
                                 targets: targets, envs: @options["--env"], head_program: Nukadoko.program_options)
              end
       result = Engine::Run.new(@project, check.usable, kept, Nukadoko.program_options,
-                               environments: environments, left_out: left_out.size, out: @json ? $stderr : @out,
-                               dir: dir, base: base, env_flags: @options["--env"].flat_map { ["--env", _1] }).call
+                               environments: environments, left_out: left_out.size, out: progress,
+                               dir: dir, base: base, env_flags: @options["--env"].flat_map { ["--env", _1] },
+                               repeat: repeat, order: order, records: records,
+                               rerun: { targets: @rest, tags: @options["--tag"].flat_map { ["--tag", _1] }, whole_files: selection.whole_files }).call
       passed = result.delete(:passed)
       findings += result.delete(:failures)
       started = result.slice(:run_id, :run_dir, :started_at, :finished_at, :commit, :environments, :worlds)
@@ -143,13 +161,26 @@ module Nukadoko
       written = JSON.parse(JSON.generate(envelope), symbolize_names: true)
       File.write(File.join(@project, result[:run_dir], "summary.md"), Engine::Summary.render(written))
       unless @json
-        @out.puts "summary   #{File.join(result[:run_dir], "summary.md")}"
-        @out.puts "run       #{File.join(result[:run_dir], "run.json")}"
+        progress.puts "summary   #{File.join(result[:run_dir], "summary.md")}"
+        progress.puts "run       #{File.join(result[:run_dir], "run.json")}"
       end
-      emit(envelope, findings, "run")
+      emit(envelope, findings, "run", io: records ? $stderr : @out)
+      repeat_tallies(envelope[:scenarios], progress) if repeat > 1 && !@json
       passed ? 0 : 1
     rescue Engine::Refusal => e
       refuse(e)
+    end
+
+    # `--repeat` and `--proof-runs` take a whole number of 1 or more.
+    def count_flag(name)
+      value = @options[name].last
+      return 1 if value.nil? && name == "--repeat"
+      return Engine::Table::PROOF_RUNS if value.nil?
+
+      number = Integer(value, 10, exception: false)
+      return number if number && number >= 1
+
+      raise Engine::Refusal.new("invalid-value", "#{name} must be a whole number of 1 or more (got #{value}).")
     end
 
     # One pass of a `--base` tree, in the tree's own directory: the plan
@@ -443,16 +474,31 @@ module Nukadoko
       exit_code
     end
 
-    def emit(envelope, findings, command)
+    def emit(envelope, findings, command, io: @out)
       if @json
         @out.puts JSON.pretty_generate(envelope)
       else
         findings.each do |f|
-          @out.puts [f[:severity], f[:code], Engine::Summary.where_of(f), f[:message]].join("\t")
-          @out.puts "  fix: #{f[:fix]}" if f[:fix]
-          @out.puts "  do: #{f[:do]}" if f[:do]
+          io.puts [f[:severity], f[:code], Engine::Summary.where_of(f), f[:message]].join("\t")
+          io.puts "  fix: #{f[:fix]}" if f[:fix]
+          io.puts "  do: #{f[:do]}" if f[:do]
         end
-        @out.puts "ok: no issues found" if command == "check" && findings.empty?
+        io.puts "ok: no issues found" if command == "check" && findings.empty?
+      end
+    end
+
+    # After the failed list, under --repeat, each scenario that failed at
+    # least once and how many of its executions passed. No verdict is
+    # named: one that fails every time is not flaky.
+    def repeat_tallies(scenarios, io)
+      named = @options["--env"].size > 1
+      scenarios.reject { _1[:world] }.group_by { _1.values_at(:feature, :line, :environment) }.each_value do |runs|
+        passed = runs.count { _1[:status] == "passed" }
+        next if passed == runs.size
+
+        first = runs.first
+        name = named ? "#{first[:scenario]} (#{first[:environment]})" : first[:scenario]
+        io.puts "repeat  #{first[:feature]}:#{first[:line]}  #{name}  #{passed} of #{runs.size} passed"
       end
     end
   end

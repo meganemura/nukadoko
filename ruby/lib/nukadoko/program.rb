@@ -57,14 +57,15 @@ module Nukadoko
       end
 
       def start(environment, dir, project)
-        return World.new(@options[:base_url], nil, nil) unless @options[:serve]
-
-        port = TCPServer.open("127.0.0.1", 0) { _1.addr[1] }
+        port = (TCPServer.open("127.0.0.1", 0) { _1.addr[1] } if @options[:serve])
         fill = ->(text) { placeholders(text.to_s, port, dir, environment) }
-        env = (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, fill.(v)] }
+        # The world's env is what its program and the steps' env fixture get.
+        env = (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, fill.(v)] }.freeze
+        return World.new(@options[:base_url], nil, nil, env) unless @options[:serve]
+
         log = File.open(File.join(dir, "program.log"), "w")
         pid = Process.spawn(env, fill.(@options[:serve][:command]), out: log, err: log, pgroup: true, chdir: project)
-        world = World.new("http://127.0.0.1:#{port}", pid, log)
+        world = World.new("http://127.0.0.1:#{port}", pid, log, env)
         world.wait_ready(@options[:serve][:ready])
         world
       end
@@ -78,7 +79,7 @@ module Nukadoko
       end
     end
 
-    World = Data.define(:base_url, :pid, :log) do
+    World = Data.define(:base_url, :pid, :log, :env) do
       def wait_ready(path)
         uri = URI.join(base_url, path)
         deadline = Time.now + 30

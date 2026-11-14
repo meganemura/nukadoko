@@ -35,7 +35,9 @@ module Nukadoko
     class Selection
       TAG = /\A(not )?(@\S+)\z/
 
-      attr_reader :scenarios, :selection, :tag_selection
+      # `whole_files` are the files a target named whole and --tag left
+      # whole, which a rerun line may name as a file.
+      attr_reader :scenarios, :selection, :tag_selection, :whole_files, :problems
 
       def initialize(project, targets, tags, features_dir: "features")
         @project = project
@@ -51,7 +53,8 @@ module Nukadoko
         end
 
         files = (whole + lines.keys).uniq.sort
-        all = Dir.chdir(@project) { Engine.load_features(files) }
+        @problems = []
+        all = Dir.chdir(@project) { Engine.load_features(files, problems: @problems) }
         by_line = all.select { whole.include?(_1.uri) || lines[_1.uri].include?(_1.line) }
         lines.each do |file, wanted|
           wanted.each do |line|
@@ -64,6 +67,7 @@ module Nukadoko
         end
         @scenarios = by_line.select { |s| @tags.all? { |negated, tag| s.tags.include?(tag) != negated } }
         left_out = by_line.size - @scenarios.size
+        @whole_files = whole.select { |file| by_line.select { _1.uri == file }.all? { @scenarios.include?(_1) } }
         @tag_selection = { expressions: tags, left_out: left_out } if tags.any?
         @selection = all.size == @scenarios.size ? "full" : "partial"
         return unless @scenarios.empty? && @tags.any?

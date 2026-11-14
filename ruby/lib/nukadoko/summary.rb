@@ -441,7 +441,12 @@ module Nukadoko
                      else ["- proof runs: #{proof} (`--proof-runs`: a control proves its row once it breaks the same claim at one Then line in #{proof} runs)"]
                      end
         elapsed = ((Time.iso8601(doc[:finished_at]) - Time.iso8601(doc[:started_at])) * 1000).round
-        ["", commit_line, *environments, "- browser: none launched", selection, *proof_line,
+        order = doc[:order]
+        order_line = if order && order[:kind] == "shuffled"
+                       ["- order: shuffled, seed #{order[:seed]} (`--order shuffled:#{order[:seed]}` runs this order again)"]
+                     else []
+                     end
+        ["", commit_line, *environments, "- browser: none launched", selection, *order_line, *proof_line,
          "- nukadoko: #{doc[:nukadoko]}", "- run: #{doc[:run_id]}",
          "- started #{doc[:started_at]}, finished #{doc[:finished_at]} (#{duration(elapsed)})"]
       end

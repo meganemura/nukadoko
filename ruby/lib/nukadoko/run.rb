@@ -13,8 +13,12 @@ module Nukadoko
     class Run
       # `world` is head for a run, or base or old for a tree's pass, which
       # writes into the head run's directory `dir`. `base` is the
-      # comparison a `--base` run judges its rows by.
-      def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout, world: "head", dir: nil, base: nil, env_flags: [])
+      # comparison a `--base` run judges its rows by. `scenarios` are in the
+      # run's order, which every round of every pass keeps; `records`, when
+      # given, gets each scenario's run.json entry as one line as it ends,
+      # and `rerun` is what a shuffled run's rerun lines name.
+      def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout, world: "head", dir: nil, base: nil, env_flags: [],
+                     repeat: 1, order: Order::FILE, records: nil, rerun: nil)
         @project = project
         @steps = steps
         @scenarios = scenarios
@@ -25,6 +29,10 @@ module Nukadoko
         @world = world
         @base = base
         @env_flags = env_flags
+        @repeat = repeat
+        @order = order
+        @records = records
+        @rerun = rerun || { targets: [], tags: [], whole_files: [] }
         @id = dir ? File.basename(dir) : new_id("run")
         @dir = dir || File.join(project, ".nukadoko", "runs", @id)
       end
@@ -33,6 +41,8 @@ module Nukadoko
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         @started_at = now
         @commit = RunRecord.commit(@project)
+        # Said before any scenario, so a run a signal stops still names its seed.
+        @out.puts "order #{Order.text(@order)}" unless @order[:kind] == "file"
         executions, cells = pass
         tree_cells = {}
         if @base
@@ -72,13 +82,27 @@ module Nukadoko
           @base_urls[environment.name] = world.base_url
           @process_fixtures = FixtureCache.new
           @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
-          @scenarios.each do |scenario|
-            role = @world == "head" ? role_of(scenario, environment) : "required"
-            runs = [play(scenario, environment, role, world)]
-            runs << play(scenario, environment, role, world) while proving?(role, runs)
-            executions.concat(runs)
-            cells[scenario] << cell(runs, environment, role, scenario)
+          roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
+          runs = Hash.new { |h, k| h[k] = [] }
+          play_one = lambda do |scenario|
+            execution = play(scenario, environment, roles[scenario], world)
+            runs[scenario] << execution
+            executions << execution
+            @records&.puts JSON.generate(execution[:json])
           end
+          # The whole selection once, then again, so a failure that depends
+          # on what ran before it meets the same neighbours every round.
+          @repeat.times { @scenarios.each(&play_one) }
+          # Then each control that broke a Then runs again, one round at a
+          # time, until it has broken the same claim at the same line
+          # --proof-runs times or a run disagrees.
+          loop do
+            due = @scenarios.select { proving?(roles[_1], runs[_1]) }
+            break if due.empty?
+
+            due.each(&play_one)
+          end
+          @scenarios.each { cells[_1] << cell(runs[_1], environment, roles[_1], _1) }
         ensure
           @browser&.close
           @process_fixtures&.teardown
@@ -91,7 +115,7 @@ module Nukadoko
       # so a Then failing there the same way in each proof run is proof.
       def proving?(role, runs)
         absent = @world == "base" || (@world == "head" && role == "control")
-        absent && runs.size < Table::PROOF_RUNS && runs.all? { _1[:execution].first == :fail } && runs.map { _1[:execution] }.uniq.size == 1
+        absent && runs.size < Table.proof_runs && runs.all? { _1[:execution].first == :fail } && runs.map { _1[:execution] }.uniq.size == 1
       end
 
       # A cell is what one scenario's executions in one environment came to;
@@ -134,11 +158,11 @@ module Nukadoko
         end
         judged = @base ? judged_findings(rows) : []
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
-          environments: @environments.map { environment_entry(_1) }, worlds: [], order: { kind: "file" },
+          environments: @environments.map { environment_entry(_1) }, worlds: [], order: @order,
           counts: RunRecord.counts(scenarios.reject { _1[:world] }), scenarios: scenarios,
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                    mapping_changes: @base&.mapping_changes, **(@base ? { judgments_changed: [] } : {}),
-                   worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table::PROOF_RUNS },
+                   worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },
           failures: executions.filter_map { _1[:failure] } + judged,
           passed: rows.none? { Summary::RED.include?(_1[:verdict]) } }
       end
@@ -187,9 +211,20 @@ module Nukadoko
 
       # Where a scenario's run starts again: its line, and its environment
       # unless that is the only one a run without --env would start.
+      # In a shuffled order what ran before a scenario is part of what it
+      # met, so the line names those scenarios, then it, with the order and
+      # the run's --env flags. Under --repeat no one part of the order ran
+      # before it, so the line is the run's own targets and flags.
       def again(scenario, environment)
-        env = @environments.map(&:name) == ["default"] ? "" : " --env #{environment.name}"
-        "nuka run #{scenario.uri}:#{scenario.line}#{env}"
+        if @order[:kind] == "file"
+          env = @environments.map(&:name) == ["default"] ? "" : " --env #{environment.name}"
+          return "nuka run #{scenario.uri}:#{scenario.line}#{env}"
+        end
+
+        words = if @repeat > 1 then [*@rerun[:targets], *@rerun[:tags], *Order.flags(@order), "--repeat", @repeat.to_s, *@env_flags]
+                else [*Order.replay_targets(@scenarios, @rerun[:whole_files], scenario), *Order.flags(@order), *@env_flags]
+                end
+        ["nuka", "run", *words].map { Selection.shell_word(_1) }.join(" ")
       end
 
       def play(scenario, environment, role, world)
@@ -214,7 +249,7 @@ module Nukadoko
         json = { scenario_record_id: new_id("scn"), feature: scenario.uri, line: scenario.line, scenario: scenario.name,
                  environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now,
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] }
-        json[:do] = again(scenario, environment) if failed
+        json[:do] = again(scenario, environment) if failed && role != "control"
         held = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "held" } }
         broken = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "broken" } }
         json[:claims] = { held: held, broken: broken }
@@ -451,6 +486,8 @@ module Nukadoko
           case name
           when :request then [name, Request.new(world.base_url)]
           when :baseURL then [name, world.base_url]
+          when :env then [name, world.env]
+          when :requireEnv then [name, ->(key) { world.env.fetch(key.to_s) { raise %(requireEnv("#{key}"): the world's env has no #{key}) } }]
           when :scratch then [name, @scratch]
           when :page
             page, finish = @browser.page_for(dir, log)

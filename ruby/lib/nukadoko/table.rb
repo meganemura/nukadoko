@@ -9,6 +9,14 @@ module Nukadoko
     module Table
       PROOF_RUNS = 2
 
+      # A run's --proof-runs, read by every judgment of the one run this
+      # process makes.
+      class << self
+        attr_writer :proof_runs
+
+        def proof_runs = @proof_runs || PROOF_RUNS
+      end
+
       def self.role(tags, conditions)
         meets = tags.all? do |tag|
           case tag
@@ -39,7 +47,7 @@ module Nukadoko
         required = cells.select { _1[:role] == "required" }
         return "failed" if required.empty? || required.any? { _1[:outcome] != "pass" }
 
-        proven = cells.any? { _1[:role] == "control" && _1[:outcome] == "fail" && _1[:runs] >= PROOF_RUNS }
+        proven = cells.any? { _1[:role] == "control" && _1[:outcome] == "fail" && _1[:runs] >= proof_runs }
         proven ? "proven" : "held"
       end
 
