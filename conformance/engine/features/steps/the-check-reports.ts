@@ -6,7 +6,7 @@ type Finding = { severity: string; code: string; file?: string; line?: number; m
 
 export default defineStep({
   description:
-    "The --json envelope's findings, one line each as severity, code, where, and message, sorted, are exactly the docstring; a step file is written as features/steps/<name>.* with no line, and the program file as nukadoko.program.*",
+    "The --json envelope's findings, one line each as severity, code, where, and message, sorted, are exactly the docstring; a step file is written as features/steps/<name>.* with no line, and the config and program files as nukadoko.config.* and nukadoko.program.*",
   pattern: "the check reports",
   args: z.object({
     expected: z.string().describe("One finding per line, sorted"),
@@ -20,8 +20,8 @@ export default defineStep({
     const lines = findings.map((finding) => {
       const stepFile = finding.file?.startsWith("features/steps/") ?? false;
       const where = finding.file === undefined ? "-" : stepFile || finding.line === undefined ? finding.file : `${finding.file}:${finding.line}`;
-      const message = finding.message.replace(/nukadoko\.(program|config)\.(ts|rb)/g, "nukadoko.$1.*");
-      return sameStepFiles(`${finding.severity} ${finding.code} ${where} ${message}`);
+      const line = `${finding.severity} ${finding.code} ${where} ${finding.message}`.replace(/nukadoko\.(program|config)\.(ts|rb)/g, "nukadoko.$1.*");
+      return sameStepFiles(line);
     });
     return { report: lines.sort().join("\n") };
   },

@@ -33,9 +33,14 @@ module Nukadoko
         load file if File.exist?(file)
       end
       steps = Nukadoko.load_steps(File.join(@project, "features", "steps"))
-      scenarios = Dir.chdir(@project) { Engine.load_features("features") }
+      problems = []
+      scenarios = Dir.chdir(@project) { Engine.load_features("features", problems: problems) }
       declared = (Nukadoko.program_options[:environments] || {}).values.flat_map { (_1[:conditions] || {}).keys.map(&:to_s) }
-      check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")), full: @command == "check", conditions: declared)
+      # condition-unmet is judged for the selection a run without --env
+      # starts; a selection --env names is a choice of where to run.
+      selected = (Engine::Program.new(Nukadoko.program_options).environments if Array(@options["--env"]).empty?) rescue nil
+      check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")), full: @command == "check",
+                                conditions: declared, environments: selected, problems: problems)
       findings = check.findings.map { relative(_1).to_h }
       case @command
       when "check" then finish("check", check.passed?, findings: findings)

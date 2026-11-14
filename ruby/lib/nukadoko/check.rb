@@ -19,9 +19,13 @@ module Nukadoko
     class Check
       attr_reader :findings, :usable
 
-      def initialize(steps, scenarios, features: true, full: false, conditions: nil)
+      # `environments` is the selection a run without --env starts, for
+      # condition-unmet; nil when --env named the selection. `problems` are
+      # what the feature loader found that runs nothing.
+      def initialize(steps, scenarios, features: true, full: false, conditions: nil, environments: nil, problems: [])
         @steps = steps
         @scenarios = scenarios
+        @conditions = conditions
         @findings = []
         # With no step file no line can ever match, so every line would read
         # as undefined; one finding says why instead.
@@ -39,7 +43,13 @@ module Nukadoko
         check_shapes
         check_tags(conditions)
         check_lines
-        check_unbound if full
+        check_fixtures(full)
+        check_conditions_met(environments) if environments
+        problems.each { |problem| findings << Finding.new("error", problem.code, problem.uri, problem.line, nil, problem.message, Codes.fix(problem.code)) }
+        if full
+          check_unbound
+          check_from_unused
+        end
         @findings = @findings.uniq { [_1.code, _1.file, _1.line, _1.message] }
       end
 
@@ -176,6 +186,180 @@ module Nukadoko
                                   %(Step "#{step.step_name}" still has the description nuka scaffold wrote ("#{step.description}"); nuka steps and nuka describe show it to whoever picks a step, so say what the step does.),
                                   Codes.fix("step-description-todo"))
         end
+      end
+
+      # A from key every line fills with a capture never takes its value
+      # from the producer it names.
+      def check_from_unused
+        bound = @scenarios.flat_map(&:steps).filter_map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first : nil }
+        @usable.each do |step|
+          occurrences = bound.select { _1.first == step }.map(&:last)
+          next if occurrences.empty?
+
+          step.from.each_key do |key|
+            next unless occurrences.all? { _1.key?(key) }
+
+            findings << Finding.new("note", "from-unused", step.file, nil, step.step_name,
+                                    %(Step "#{step.step_name}"'s from.#{key} declares a producer, but every bound occurrence of this step already fills "#{key}" from a pattern capture. That producer has never supplied it. Still reachable through `nuka do --use`; this is a fact, not a verdict on whether to remove it.),
+                                    Codes.fix("from-unused"))
+          end
+        end
+      end
+
+      # A from key whose producer has not run before the line fails args
+      # validation with certainty, and two producers that both ran leave
+      # the feature file unable to say which one counts. A line before it
+      # that matches no step may be the producer misspelled, so those
+      # findings wait behind one warning.
+      def check_from_order(scenario)
+        resolved = scenario.steps.map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first : nil }
+        held = []
+        resolved.each_with_index do |(step, captures), index|
+          next unless step
+
+          step.from.each do |key, sources|
+            next if captures.key?(key) || step.args.fields.none? { _1.name.to_s == key }
+
+            names = sources.filter_map { |producer, _| producer.step_name if @usable.include?(producer) }.uniq
+            next if names.empty?
+
+            before = names.select { |name| resolved.first(index).any? { _1&.first&.step_name == name } }
+            next if before.size == 1
+
+            line = scenario.steps[index]
+            if before.size > 1
+              quoted = before.map { %("#{_1}") }.join(", ")
+              findings << Finding.new("error", "from-order-violation", scenario.uri, line.line, step.step_name,
+                                      %(Step "#{step.step_name}"'s from.#{key} has more than one of its candidate producers bound earlier in this scenario (#{quoted}): from's candidates are mutually exclusive by design (docs/spec.md "Chaining steps"), so the feature file, not the tool, must make exactly one of them win),
+                                      "Remove or move lines so that exactly one of steps #{quoted} runs before this line.")
+              next
+            end
+            undefined = scenario.steps.first(index).each_index.select { Engine.matches(@usable, scenario.steps[_1].text).empty? }
+            issue = { index: index, step: step.step_name, key: key, candidates: names }
+            next held << issue.merge(undefined: undefined) if undefined.any?
+
+            findings << Finding.new("error", "from-order-violation", scenario.uri, line.line, step.step_name,
+                                    from_missing_message(step.step_name, key, names, resolved),
+                                    from_order_fix(issue))
+          end
+        end
+        hold_from_order(scenario, held) if held.any?
+      end
+
+      def from_missing_message(step_name, key, names, resolved)
+        anywhere = ->(name) { resolved.any? { _1&.first&.step_name == name } }
+        if names.size == 1
+          name = names.first
+          detail = anywhere.(name) ? %("#{name}" is bound in this scenario, but only at or after this line, never before it) : %("#{name}" is never bound anywhere in this scenario)
+          return %(Step "#{step_name}"'s from.#{key} needs step "#{name}" to have already run earlier in this scenario, but #{detail}. This line would fail args validation with certainty)
+        end
+        detail = names.map { anywhere.(_1) ? %("#{_1}" is bound only at or after this line, never before it) : %("#{_1}" is never bound anywhere in this scenario) }.join("; ")
+        %(Step "#{step_name}"'s from.#{key} needs exactly one of its candidate producers (#{names.map { %("#{_1}") }.join(", ")}) to have already run earlier in this scenario, but none has: #{detail}. This line would fail args validation with certainty)
+      end
+
+      def from_order_fix(issue)
+        names = issue[:candidates]
+        put = names.size == 1 ? %(Put a line that runs step "#{names.first}" earlier in the scenario) : "Put a line that runs exactly one of steps #{names.map { %("#{_1}") }.join(", ")} earlier in the scenario"
+        return "#{put}." if issue[:index].zero?
+
+        %(#{put}. Or, if a step that an earlier line runs returns #{issue[:key]}, list that step as another [step, "#{issue[:key]}"] candidate in from.#{issue[:key]} of step "#{issue[:step]}".)
+      end
+
+      def hold_from_order(scenario, held)
+        steps_phrase = ->(names) { names.size == 1 ? %(step "#{names.first}") : "one of steps #{names.map { %("#{_1}") }.join(", ")}" }
+        undefined = held.flat_map { _1[:undefined] }.uniq.sort
+        consumers = held.group_by { [_1[:index], _1[:candidates]] }.map do |(index, candidates), issues|
+          "line #{scenario.steps[index].line} step \"#{issues.first[:step]}\" needs #{steps_phrase.(candidates)} for #{issues.map { _1[:key] }.join(", ")}"
+        end
+        lines = undefined.map { %(line #{scenario.steps[_1].line} "#{scenario.steps[_1].text}") }
+        which = lines.size == 1 ? lines.first : "one of #{lines.join(", ")}"
+        count = held.size == 1 ? "1 from-order-violation finding" : "#{held.size} from-order-violation findings"
+        findings << Finding.new("warning", "from-order-check-suppressed", scenario.uri, scenario.steps[undefined.first].line, nil,
+                                "Held back #{count} while #{lines.join(", ")} #{lines.size == 1 ? "matches" : "match"} no step, because such a line may be meant to run the producer they need: #{consumers.join("; ")}",
+                                "If #{which} is meant to run #{steps_phrase.(held.flat_map { _1[:candidates] }.uniq)}, reword that line to match that step's pattern. Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.")
+      end
+
+      SCENARIO_ONLY = FIXTURES - %w[env requireEnv baseURL]
+
+      # Fixture definitions that can never resolve, and (in a whole-project
+      # check) one no step reaches.
+      def check_fixtures(full)
+        fixtures = Nukadoko.project_fixtures
+        return if fixtures.empty?
+
+        config = "nukadoko.config.rb"
+        state = Hash.new(:white)
+        visit = lambda do |name, stack|
+          state[name] = :gray
+          stack.push(name)
+          fixtures[name].dependencies.each do |dep|
+            next unless fixtures.key?(dep) && dep != name
+
+            if state[dep] == :gray
+              cycle = [*stack.drop(stack.index(dep)), dep]
+              findings << Finding.new("error", "fixture-cycle", config, nil, nil, "fixture dependency cycle: #{cycle.join(" -> ")}", Codes.fix("fixture-cycle"))
+            elsif state[dep] == :white
+              visit.(dep, stack)
+            end
+          end
+          stack.pop
+          state[name] = :black
+        end
+        fixtures.each_key { visit.(_1, []) if state[_1] == :white }
+
+        fixtures.each_value do |fixture|
+          next unless fixture.scope == :process
+
+          fixture.dependencies.each do |dep|
+            scenario = fixtures.key?(dep) && dep != fixture.name ? fixtures[dep].scope == :scenario : SCENARIO_ONLY.include?(dep.to_s)
+            next unless scenario
+
+            findings << Finding.new("error", "fixture-scope-violation", config, nil, nil,
+                                    %(fixture "#{fixture.name}" has scope "process" but depends on "#{dep}", which is scope "scenario": a "process"-scope fixture is built once for the whole run and can outlive any single scenario's own resources, so it cannot depend on something rebuilt per scenario),
+                                    Codes.fix("fixture-scope-violation"))
+          end
+        end
+        return unless full
+
+        reachable = []
+        pending = @steps.flat_map(&:bag)
+        until pending.empty?
+          name = pending.shift
+          next if reachable.include?(name)
+
+          reachable << name
+          pending.concat(fixtures[name].dependencies) if fixtures.key?(name)
+        end
+        (fixtures.keys - reachable).each do |name|
+          findings << Finding.new("note", "fixture-unused", config, nil, nil,
+                                  %(Fixture "#{name}" is declared under nukadoko.config.rb's own `fixtures`, but no typed step requires it, directly or through another fixture. Still reachable through `nuka do`; this is a fact, not a verdict on whether to remove it.),
+                                  Codes.fix("fixture-unused"))
+        end
+      end
+
+      # A scenario whose condition tags no environment of the selection meets
+      # has no required cell, so nothing in the run shows that it holds.
+      def check_conditions_met(environments)
+        declared = @conditions || []
+        described = environments.map { |e| "#{e.name} (#{describe_conditions(e.conditions)})" }.join("; ")
+        @scenarios.uniq { [_1.uri, _1.line] }.each do |scenario|
+          tags = Table.condition_tags(scenario.tags)
+          next if tags.empty?
+
+          names = tags.map { Check.condition_of(_1) }
+          next if names.any?(&:nil?) || names.any? { !declared.include?(_1) }
+          next if environments.any? { Table.role(tags, _1.conditions) == "required" }
+
+          findings << Finding.new("error", "condition-unmet", scenario.uri, scenario.line, nil,
+                                  %(Scenario "#{scenario.name}" needs #{tags.join(" ")}, and no selected environment meets #{tags.size == 1 ? "it" : "all of them"}: #{described}. Its cells would all be controls, so nothing would show that it holds),
+                                  Codes.fix("condition-unmet"))
+        end
+      end
+
+      def describe_conditions(conditions)
+        return "no conditions" if conditions.empty?
+
+        conditions.map { |name, value| "#{name}: #{value.is_a?(String) ? JSON.generate(value) : value}" }.join(", ")
       end
 
       CONDITION_NAME = /\A[A-Za-z0-9_.-]+\z/
@@ -317,6 +501,7 @@ module Nukadoko
             end
           end
         end
+        @scenarios.each { check_from_order(_1) }
         suppress_undefined(undefined)
         @scenarios.each { judging_nothing(_1) }
       end
@@ -343,7 +528,7 @@ module Nukadoko
         broken = @steps - @usable
         if broken.any? && undefined.any?
           findings << Finding.about_step("warning", "undefined-step-check-suppressed", broken.first,
-                                         "Suppressed #{undefined.size} undefined-step issues because #{broken.size} step file could not be read",
+                                         "Suppressed #{undefined.size} undefined-step #{undefined.size == 1 ? "issue" : "issues"} because #{broken.size} step #{broken.size == 1 ? "file" : "files"} could not be read. undefined-step judgment is on hold until the unreadable glue is fixed",
                                          "Correct the step-file-import-failed error, then run nuka check again.")
           return
         end
@@ -370,13 +555,41 @@ module Nukadoko
         end
       end
 
+      # The table or docstring fills the one required key no capture and no
+      # from speaks for, so zero or two such keys, or a key of a type the
+      # attachment can never be, fail binding with certainty.
       def check_fill(scenario, line, step, captures)
         missing = step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys
-        missing = missing.drop(1) if (line.table || line.doc_string) && missing.any?
+        if line.table || line.doc_string
+          if missing.size != 1
+            detail = missing.empty? ? "every args key is already consumed by named captures or declared from" : "#{missing.size} args keys are left unconsumed (#{missing.join(", ")}); exactly one is required"
+            findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name,
+                                    %(Step "#{step.step_name}" has a table/docstring attached but #{detail}), Codes.fix("table-docstring-key-mismatch"))
+          elsif (message = attachment_mismatch(step, missing.first, line))
+            findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name, message, Codes.fix("table-docstring-key-mismatch"))
+          end
+          return
+        end
         missing.each do |key|
           findings << Finding.new("error", "unfillable-required-key", scenario.uri, line.line, step.step_name,
-                                  %(Step "#{step.step_name}"'s args key "#{key}" is required, but nothing on this line can fill it),
-                                  "Capture the key in the pattern, attach a table, or make the key optional.")
+                                  %(Step "#{step.step_name}"'s args key "#{key}" is required, but nothing on this line can fill it: no named capture in the matched pattern binds it, there is no table/docstring attachment that resolves to filling it, and it has no declared from.#{key}. This line would fail args validation with certainty. Fix one of: add a named capture for "#{key}" to the step's pattern; attach a table/docstring that fills it; declare from.#{key}; or make "#{key}" optional in the step's args schema),
+                                  Codes.fix("unfillable-required-key"))
+        end
+      end
+
+      def attachment_mismatch(step, key, line)
+        type = step.args[key].type
+        kind = case type
+               in Schema then "object"
+               in [:array, *] then "array"
+               in :number | :integer then "number"
+               in :boolean then "boolean"
+               else type.to_s
+               end
+        if line.table && type == :string
+          %(Step "#{step.step_name}" has a table attached, which fills args key "#{key}" as an array of rows (string[][]), but "#{key}" is a string. This line would fail args validation with certainty)
+        elsif line.doc_string && %w[array number boolean object].include?(kind)
+          %(Step "#{step.step_name}" has a docstring attached, which fills args key "#{key}" as a string, but "#{key}" is a #{kind}. This line would fail args validation with certainty)
         end
       end
     end

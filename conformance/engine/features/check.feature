@@ -40,3 +40,24 @@ Feature: nuka check says what is wrong before anything runs
       warning outline-rows-share-name features/mistakes.feature:30 Scenario outline "rows that share one name" has 2 Examples rows, and its name uses none of the columns (<n>), so every row is reported under the same name.
       warning scenario-without-then features/mistakes.feature:9 Scenario "a step that runs in Then position" judges no claim: none of its Then lines binds a claim step, so it passes whenever its steps run without an error.
       """
+
+  Scenario: a value no line returns, fixtures that cannot resolve, and a file that does not parse
+    Given the project "more"
+    When nuka runs "check --json"
+    Then it exits with 1
+    And the check reports
+      """
+      error condition-unmet features/more.feature:22 Scenario "conditions no environment meets" needs @with:search @without:search, and no selected environment meets all of them: on (search: true); off (search: false). Its cells would all be controls, so nothing would show that it holds
+      error feature-parse-error features/broken.feature Parser errors:
+      (6:7): inconsistent cell count within the table
+      error fixture-cycle nukadoko.config.* fixture dependency cycle: left -> right -> left
+      error fixture-scope-violation nukadoko.config.* fixture "shared" has scope "process" but depends on "store", which is scope "scenario": a "process"-scope fixture is built once for the whole run and can outlive any single scenario's own resources, so it cannot depend on something rebuilt per scenario
+      error from-order-violation features/more.feature:19 Step "doubled-is-below"'s from.doubled needs step "double" to have already run earlier in this scenario, but "double" is never bound anywhere in this scenario. This line would fail args validation with certainty
+      error from-order-violation features/more.feature:4 Step "doubled-is-below"'s from.doubled needs step "double" to have already run earlier in this scenario, but "double" is never bound anywhere in this scenario. This line would fail args validation with certainty
+      error outline-does-not-run features/more.feature:30 Scenario "an outline with no rows" has an Examples table with no rows, so the scenario is left out of the run. Add a row, or remove the table.
+      error table-docstring-key-mismatch features/more.feature:17 Step "list-these" has a table/docstring attached but 2 args keys are left unconsumed (a, b); exactly one is required
+      note fixture-unused nukadoko.config.* Fixture "left" is declared under nukadoko.config.*'s own `fixtures`, but no typed step requires it, directly or through another fixture. Still reachable through `nuka do`; this is a fact, not a verdict on whether to remove it.
+      note fixture-unused nukadoko.config.* Fixture "right" is declared under nukadoko.config.*'s own `fixtures`, but no typed step requires it, directly or through another fixture. Still reachable through `nuka do`; this is a fact, not a verdict on whether to remove it.
+      note fixture-unused nukadoko.config.* Fixture "shared" is declared under nukadoko.config.*'s own `fixtures`, but no typed step requires it, directly or through another fixture. Still reachable through `nuka do`; this is a fact, not a verdict on whether to remove it.
+      note from-unused features/steps/halve.* Step "halve"'s from.doubled declares a producer, but every bound occurrence of this step already fills "doubled" from a pattern capture. That producer has never supplied it. Still reachable through `nuka do --use`; this is a fact, not a verdict on whether to remove it.
+      """

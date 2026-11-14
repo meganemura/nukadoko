@@ -104,6 +104,16 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `expects-tag-malformed`, `outline-rows-share-name`, and the vocabulary
   half of `scenario-without-then`. A whole-project check adds the notes
   `pattern-unbound` and `step-description-todo`.
+- `nuka check` reports a `from` key whose producer did not run earlier in
+  the scenario, or two producers that both did (`from-order-violation`,
+  held behind `from-order-check-suppressed` while an earlier line matches
+  no step), a table or docstring that fills no single key or a key of the
+  wrong type (`table-docstring-key-mismatch`), `fixture-cycle`,
+  `fixture-scope-violation`, `condition-unmet`, `outline-does-not-run`,
+  and `feature-parse-error`. A whole-project check adds the notes
+  `fixture-unused` and `from-unused`. `unfillable-required-key` and
+  `undefined-step-check-suppressed` now say what the TypeScript engine
+  says.
 
 ### Changed
 

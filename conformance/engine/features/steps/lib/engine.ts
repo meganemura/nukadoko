@@ -32,13 +32,18 @@ export function buildProject(name: string, dir: string): void {
     writeFileSync(path.join(dir, "package.json"), '{ "type": "module" }\n');
     mkdirSync(path.join(dir, "node_modules"));
     symlinkSync(path.join(root, "typescript"), path.join(dir, "node_modules", "nukadoko"), "dir");
-    if (!bare) writeFileSync(path.join(dir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({});\n');
+    // A project that declares fixtures brings its own config file, one per engine.
+    if (existsSync(path.join(source, "config.ts"))) cpSync(path.join(source, "config.ts"), path.join(dir, "nukadoko.config.ts"));
+    else if (!bare) writeFileSync(path.join(dir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({});\n');
     if (existsSync(program)) {
       writeFileSync(path.join(dir, "nukadoko.program.ts"), `import { defineProgram } from "nukadoko";\n\nexport default defineProgram(${readFileSync(program, "utf8")});\n`);
     }
-  } else if (existsSync(program)) {
+  } else {
+    if (existsSync(path.join(source, "config.rb"))) cpSync(path.join(source, "config.rb"), path.join(dir, "nukadoko.config.rb"));
     // JSON is a Ruby hash literal once its keys are symbols, so the program file is the JSON itself.
-    writeFileSync(path.join(dir, "nukadoko.program.rb"), `require "json"\nNukadoko.program(**JSON.parse(${JSON.stringify(readFileSync(program, "utf8"))}, symbolize_names: true))\n`);
+    if (existsSync(program)) {
+      writeFileSync(path.join(dir, "nukadoko.program.rb"), `require "json"\nNukadoko.program(**JSON.parse(${JSON.stringify(readFileSync(program, "utf8"))}, symbolize_names: true))\n`);
+    }
   }
 }
 
