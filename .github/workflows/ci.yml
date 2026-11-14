@@ -102,3 +102,37 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npx vitest run tests/windows-command.test.ts
+
+  # The Ruby engine under ruby/, held to the TypeScript engine by the cases
+  # under conformance/: the TypeScript engine runs each case and compares it
+  # with expected.json, then the Ruby engine runs the same case and must
+  # agree. 3.3 is the gem's floor; the property tests need hegeltest, which
+  # needs 3.4, so they run on 3.4 only.
+  ruby-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.3", "3.4"]
+    env:
+      BUNDLE_WITHOUT: ${{ matrix.ruby == '3.3' && 'hegel' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+          working-directory: ruby
+      - run: node conformance/run-ts.mjs
+      - run: bundle exec ruby ../conformance/run-rb.rb
+        working-directory: ruby
+      - run: bundle exec bin/test
+        working-directory: ruby

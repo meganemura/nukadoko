@@ -19,8 +19,9 @@ just until 0.1.
   engines today: the todo, HTTP API, command-line, and sign-up examples,
   a page case, a step made of parts, a polling Then step, and three cases
   of check findings. A case may bring `files/`
-  for its program and a `config.ts` or `config.rb` of its own. The npm
-  package is unchanged.
+  for its program and a `config.ts` or `config.rb` of its own. CI runs the
+  cases under both engines, on Ruby 3.3 and 3.4, with the Ruby engine's
+  unit and property tests. The npm package is unchanged.
 
 - **The skill answers a reviewer's merge-risk questions from a run.**
   A common review rubric asks whether a change is verified, does only
