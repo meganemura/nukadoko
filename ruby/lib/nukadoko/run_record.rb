@@ -36,31 +36,119 @@ module Nukadoko
           evidence: { dir: evidence_dir, screenshots: [], **(record[:scratch] ? { scratch: record[:scratch] } : {}),
                       **(record[:http_count].to_i.positive? ? { http: "http.jsonl" } : {}) },
           observed: { processes: processes&.any? ? processes : nil, http: record[:http_count].to_i.positive? ? record[:http_count] : nil,
-                      files: record[:files], unmeasured: [] },
+                      files: record[:files], unmeasured: [], **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}) },
           **(record[:calls] ? { calls: record[:calls] } : {}),
-          mutates: record[:mutates], **(used.any? ? { used: used } : {}),
+          mutates: record[:mutates], **(used.any? ? { used: used } : {}), **(record[:fixtures] ? { fixtures: record[:fixtures] } : {}),
           **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }
       end
 
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
       # maps an args key to the label of where its value came from, and
       # `texts` to the text the sentence stated it as.
-      def claim(declared, judged, origins, texts, observed:)
+      def claim(declared, judged, origins, texts, observed:, patterns: [])
         actual_key = declared[:actual].to_s
         base = if observed then "observe:#{actual_key}"
                else origins.fetch(actual_key, "sentence:#{actual_key}")
                end
         actual_from = place(base, declared[:view], declared[:at])
-        expected_from, expected_text = expected_origin(declared, origins, texts)
+        expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { actual: judged[:actual], actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s,
           compare: declared[:compare], expected: judged[:expected], expected_from: expected_from,
           expected_view: declared[:expected_view], expected_text: expected_text,
           outcome: judged[:holds] ? "held" : "broken", measured: nil }.compact.merge(measured: nil)
       end
 
+      EACH_RESULTS_CAP = 20
+      IDENTITY_FIELDS = %w[id name key].freeze
+
+      # A claim on each item of a list, as run.json holds it: each `where`
+      # and item claim as declared, how many items the list held and how
+      # many `where` selected, and the judged items, the broken first, at
+      # most 20, in index order.
+      def each_claim(declared, observed, args, origins, texts, observed_from:, patterns: [])
+        key = declared[:actual].to_s
+        actual_from = place(observed_from ? "observe:#{key}" : origins.fetch(key, "sentence:#{key}"), declared[:view], declared[:at])
+        each = declared[:each]
+        where = each[:where] || []
+        declarations = { **(where.empty? ? {} : { where: where.map { item_declaration(_1, args, origins, texts, patterns) } }),
+                         claims: each[:claims].map { item_declaration(_1, args, origins, texts, patterns) } }
+        base = { actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s }.compact
+        value = begin
+          Claims.dig(Claims.view(declared[:view], Claims.read(observed, declared[:actual])), declared[:at])
+        rescue StandardError => e
+          unread = e
+        end
+        ended = lambda do |reason, items = 0, results = []|
+          base.merge(each: { **declarations, items: items, selected: 0, results: results }, outcome: "broken", reason: reason, measured: nil)
+        end
+        return ended.("#{actual_from} could not be read: #{unread.message}") if unread
+        return ended.("each reads an array, and the value is #{article(json_type(value))}") unless value.is_a?(Array)
+        return ended.("the array is empty, and a claim on every item of nothing measures nothing") if value.empty?
+
+        judged = value.each_with_index.map do |item, index|
+          at = "#{actual_from}.#{index}"
+          where_records = where.map { item_comparison(_1, item, at, args, origins, texts, patterns) }
+          next { index: index, selected: false, where: where_records } unless where_records.all? { _1[:outcome] == "held" }
+
+          claims = each[:claims].map { item_comparison(_1, item, at, args, origins, texts, patterns) }
+          outcome = claims.any? { _1[:outcome] == "broken" } ? "broken" : "held"
+          identity = outcome == "broken" && item.is_a?(Hash) && IDENTITY_FIELDS.lazy.filter_map do |field|
+            v = item.transform_keys(&:to_s)[field]
+            { field: field, value: v } if v.is_a?(String) || (v.is_a?(Numeric) && v.finite?)
+          end.first
+          { index: index, selected: true, **(where_records.empty? ? {} : { where: where_records }), outcome: outcome, claims: claims,
+            **(identity ? { identity: identity } : {}) }
+        end
+        selected = judged.count { _1[:selected] }
+        rank = ->(entry) { !entry[:selected] ? 2 : entry[:outcome] == "broken" ? 0 : 3 }
+        kept = judged.sort_by { [rank.(_1), _1[:index]] }.first(EACH_RESULTS_CAP).sort_by { _1[:index] }
+        truncated = judged.size > kept.size ? { results_truncated: judged.size } : {}
+        record = base.merge(each: { **declarations, items: value.size, selected: selected, results: kept, **truncated })
+        if selected.zero?
+          return record.merge(outcome: "broken", reason: "where selected none of the #{value.size} items, and a claim on none of them measures nothing", measured: nil)
+        end
+
+        record.merge(outcome: judged.any? { _1[:selected] && _1[:outcome] == "broken" } ? "broken" : "held", measured: nil)
+      end
+
+      def item_declaration(entry, args, origins, texts, patterns)
+        expected_from, expected_text = expected_origin(entry, origins, texts, patterns)
+        expected = begin
+          { expected: Claims.expected_value(entry, args) }
+        rescue StandardError
+          {}
+        end
+        { actual: entry[:actual]&.to_s, view: entry[:view], at: entry[:at]&.to_s, count: entry[:count] }.compact
+          .merge(compare: entry[:compare], **expected, expected_from: expected_from, **(entry[:expected_view] ? { expected_view: entry[:expected_view] } : {}),
+                 expected_text: expected_text)
+      end
+
+      def item_comparison(entry, item, at, args, origins, texts, patterns)
+        judged = Claims.judge_one(entry, item, args)
+        expected_from, expected_text = expected_origin(entry, origins, texts, patterns)
+        { actual: judged[:actual], actual_from: place(entry[:actual] ? "#{at}.#{entry[:actual]}" : at, entry[:view], entry[:at]),
+          view: entry[:view], at: entry[:at]&.to_s }.compact
+          .merge(compare: entry[:compare], expected: judged[:expected], expected_from: expected_from,
+                 **(entry[:expected_view] ? { expected_view: entry[:expected_view] } : {}), expected_text: expected_text,
+                 outcome: judged[:holds] ? "held" : "broken")
+      end
+
+      def json_type(value)
+        case value
+        when nil then "null"
+        when true, false then "boolean"
+        when Numeric then "number"
+        when String then "string"
+        when Array then "array"
+        else "object"
+        end
+      end
+
+      def article(type) = %w[array object].include?(type) ? "an #{type}" : "a #{type}"
+
       # A claim whose observe raised: where each side would come from, and no value.
-      def unobserved_claim(declared, origins, texts)
-        expected_from, expected_text = expected_origin(declared, origins, texts)
+      def unobserved_claim(declared, origins, texts, patterns: [])
+        expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { actual_from: place("observe:#{declared[:actual]}", declared[:view], declared[:at]), view: declared[:view], at: declared[:at]&.to_s,
           compare: declared[:compare], expected_from: expected_from, expected_view: declared[:expected_view], expected_text: expected_text,
           outcome: "unobserved" }.compact.merge(measured: nil)
@@ -75,20 +163,20 @@ module Nukadoko
         "#{label}#{view ? " at " : "."}#{at}"
       end
 
-      def expected_origin(declared, origins, texts)
+      # A literal is named by the pattern words that state it, so the label
+      # reads as the sentence did.
+      def expected_origin(declared, origins, texts, patterns)
         case declared[:expected]
         in String => key then [place(origins.fetch(key, "sentence:#{key}"), declared[:expected_view], nil), texts[key]]
         in { from: String => key } then [origins.fetch(key, "sentence:#{key}"), nil]
-        in { literal: value } then ["literal:#{JSON.generate(value)}", JSON.generate(value)]
+        in { literal: value } then (words = Literal.stated_by_all(patterns, value) || "unstated"
+                                    ["literal:#{words}", words])
         end
       end
 
-      # The sentence a broken claim reads as, the same words the TypeScript
-      # engine prints.
-      def broken_message(claim)
-        view = claim[:view] ? " as #{claim[:view]}" : ""
-        "claim broken: #{JSON.generate(claim[:actual])} (#{claim[:actual_from]}#{view}) #{claim[:compare]} #{JSON.generate(claim[:expected])} (#{claim[:expected_from]})"
-      end
+      # The sentence a claim step's failure reads as, the same words the
+      # TypeScript engine prints.
+      def broken_message(records) = ClaimLine.broken_claims_message(records)
 
       def runs_text(runs) = runs == 1 ? "1 run" : "#{runs} runs"
 

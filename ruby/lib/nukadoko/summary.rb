@@ -451,17 +451,27 @@ module Nukadoko
          "- started #{doc[:started_at]}, finished #{doc[:finished_at]} (#{duration(elapsed)})"]
       end
 
-      # `<actual> (<from>) <compare> <expected> (<from>) <outcome>`, then
-      # where the actual value was measured.
-      def claim_line(claim)
-        actual = claim.key?(:actual) ? "#{value_text(claim[:actual])} (#{claim[:actual_from]})" : claim[:actual_from]
-        expected = claim.key?(:expected) ? "#{value_text(claim[:expected])} (#{claim[:expected_from]})" : claim[:expected_from]
-        reason = claim[:reason] ? ": #{claim[:reason]}" : ""
-        measured = claim[:outcome] == "unobserved" ? "" : "; measured: #{channel_text(claim[:measured])}"
-        "#{actual} #{claim[:compare]} #{expected} #{claim[:outcome]}#{reason}#{measured}"
+      # The claim as ClaimLine writes it, then where its values were
+      # measured: a value no recorded channel holds is what a constant in
+      # step code looks like, so the line says `measured: none`.
+      def claim_line(claim, own) = "#{ClaimLine.line(claim)}#{measured_text(claim, own)}"
+
+      def measured_text(claim, own)
+        return "" if claim[:outcome] == "unobserved"
+
+        actual = "; measured: #{channel_text(claim[:measured], own)}"
+        return claim.key?(:expected_measured) ? "#{actual}; expected measured: #{channel_text(claim[:expected_measured], own)}" : actual unless claim[:each]
+
+        declared = [*(claim[:each][:where] || []).each_with_index.map { ["where[#{_2}]", _1] }, *claim[:each][:claims].each_with_index.map { ["claims[#{_2}]", _1] }]
+                   .select { _2.key?(:expected_measured) }.map { "#{_1} #{channel_text(_2[:expected_measured], own)}" }
+        declared.empty? ? actual : "#{actual}; expected measured: #{declared.join(", ")}"
       end
 
-      def channel_text(measured) = measured ? measured[:channel] : "none"
+      def channel_text(measured, own)
+        return "none" unless measured
+
+        measured[:step_record_id] == own ? measured[:channel] : "#{measured[:channel]} of #{measured[:step_record_id]}"
+      end
 
       def claims(doc)
         named = doc[:environments].size > 1
@@ -478,7 +488,7 @@ module Nukadoko
             attempts = step[:attempts].to_i > 1 ? ", #{step[:attempts]} readings" : ""
             observation = step[:observation] == "unobserved" ? ", observed nothing" : ""
             head = "- #{cell_code(where)} #{cell_text(step[:text])}#{marks.empty? ? "" : " (#{marks.join(", ")})"}#{attempts}#{observation}"
-            claim_lines = step[:claims].map { "  - #{cell_text(claim_line(_1))}" }
+            claim_lines = step[:claims].map { "  - #{cell_text(claim_line(_1, step[:step_record_id]))}" }
             key = [head, *claim_lines].join("\n")
             next if entries.key?(key)
 

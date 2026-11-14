@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "socket"
+require "shellwords"
 require "net/http"
 
 # How the program under test starts, once per environment: an environment
@@ -64,12 +65,20 @@ module Nukadoko
         fill = ->(text) { placeholders(text.to_s, port, dir, environment) }
         # The world's env is what its program and the steps' env fixture get.
         env = (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, fill.(v)] }.freeze
-        return World.new(@options[:base_url], nil, nil, env) unless @options[:serve]
+        prefix = Trace.new_prefix
+        unless @options[:serve]
+          return World.new(base_url: @options[:base_url], pid: nil, log: nil, env: env, trace_prefix: prefix, log_path: nil, commands: [], timings: {})
+        end
 
-        log = File.open(File.join(dir, "program.log"), "w")
-        pid = Process.spawn(env, fill.(@options[:serve][:command]), out: log, err: log, pgroup: true, chdir: project)
-        world = World.new("http://127.0.0.1:#{port}", pid, log, env)
+        log_path = File.join(dir, "program.log")
+        log = File.open(log_path, "w")
+        command = fill.(@options[:serve][:command])
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        pid = Process.spawn(env, command, out: log, err: log, pgroup: true, chdir: project)
+        world = World.new(base_url: "http://localhost:#{port}", pid: pid, log: log, env: env, trace_prefix: prefix, log_path: log_path,
+                          commands: [{ phase: "serve", argv: Shellwords.split(command) }], timings: {})
         world.wait_ready(@options[:serve][:ready])
+        world.timings[:serve_ms] = Request.since(started)
         world
       end
 
@@ -82,7 +91,9 @@ module Nukadoko
       end
     end
 
-    World = Data.define(:base_url, :pid, :log, :env) do
+    # A started program: where it answers, its env, the prefix of every
+    # trace id its steps carry, and its log. `timings` gains stop_ms at its stop.
+    World = Data.define(:base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings) do
       def wait_ready(path)
         uri = URI.join(base_url, path)
         deadline = Time.now + 30
@@ -97,11 +108,15 @@ module Nukadoko
       end
 
       def stop
-        Process.kill("TERM", -pid) if pid
-        Process.wait(pid) if pid
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        begin
+          Process.kill("TERM", -pid) if pid
+          Process.wait(pid) if pid
+        rescue Errno::ESRCH, Errno::ECHILD
+          nil
+        end
         log&.close
-      rescue Errno::ESRCH, Errno::ECHILD
-        log&.close
+        timings[:stop_ms] = Request.since(started) if pid
       end
     end
   end

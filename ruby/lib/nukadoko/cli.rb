@@ -200,8 +200,9 @@ module Nukadoko
       result = begin
         environment = Engine::Program.new(Nukadoko.program_options).environments([plan[:environment]]).first
         usable = Engine::Check.new(steps, scenarios).usable
-        { results: Engine::Run.new(@project, usable, scenarios, Nukadoko.program_options, environments: [environment],
-                                   world: plan[:world], dir: plan[:dir], out: @out).tree_pass }
+        run = Engine::Run.new(@project, usable, scenarios, Nukadoko.program_options, environments: [environment],
+                              world: plan[:world], dir: plan[:dir], out: @out)
+        { results: run.tree_pass, worlds: run.world_entries }
       rescue Engine::Refusal => e
         { not_run: "the #{plan[:world]} tree's program file does not give this environment: #{e.message}" }
       end

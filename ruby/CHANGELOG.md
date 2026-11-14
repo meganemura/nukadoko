@@ -168,6 +168,25 @@ notes come from the section below whose heading starts with `## [<version>]`.
   view says so in `actual_from` (`as text`). http.jsonl keeps each
   request with its `via`, `duration_ms`, and bodies as text with their
   size, and a page's own requests are not counted as the step's.
+- A claim on a literal names the pattern words that state it
+  (`literal:accepted`), and a step record lists the project fixtures its
+  step used, built (`setup_ms`, `at`) or `reused`.
+- Each step gets a W3C trace id, as in the TypeScript engine. A request
+  the `request` fixture sends to the world carries a `traceparent`
+  (http.jsonl names it, with `declared_url`), and a process
+  `run_command` starts gets `TRACEPARENT`. The lines of program.log that
+  carry the step's trace id go to `program-log.txt` beside its record
+  (`observed.program_log`), and lines that came later to
+  `program-log-late.txt`. run.json's `worlds` names each world the run
+  started: its URL, commands, timings, log, and what the log held. A
+  served world's URL is `http://localhost:<port>`.
+- A claim on `each` item is recorded with its declarations, how many
+  items there were and were selected, and each judged item, and a claim
+  step's failure message is the TypeScript engine's: one line per claim
+  that broke, with where two values part under `equal` and
+  `has-same-items`, and the item a broken `each` names. The run summary
+  writes each claim the same way, and names the record a value was
+  measured in when it is another step's.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

@@ -21,17 +21,23 @@ module Nukadoko
   def self.run_command(command, args = [], cwd: Dir.pwd, env: {}, stdin: nil, timeout: nil, files: false)
     recording = Engine::Processes.current
     cwd = File.expand_path(cwd)
+    # A tool that copies TRACEPARENT into its requests makes the program's
+    # log lines for them the step's. A value the step chose is kept.
+    env = env.transform_keys(&:to_s)
+    traceparent = (Engine::Trace.current&.process_traceparent unless env.key?("TRACEPARENT"))
+    chosen = env
+    env = env.merge("TRACEPARENT" => traceparent) if traceparent
     before = Engine::FileWalk.snapshot(cwd) if recording || files
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     # A group of its own, so its close tells whether anything it started still runs.
-    stdout, stderr, status, timed_out = Engine::Processes.spawn(env.transform_keys(&:to_s), [command, *args], cwd, stdin, timeout, group: !recording.nil?)
+    stdout, stderr, status, timed_out = Engine::Processes.spawn(env, [command, *args], cwd, stdin, timeout, group: !recording.nil?)
     duration = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     changes = Engine::FileWalk.difference(before, Engine::FileWalk.snapshot(cwd)) if before
     signal = status.termsig && "SIG#{Signal.signame(status.termsig)}"
     recording&.push(
       { command: [command, *args], cwd: cwd, exit_code: status.exitstatus, signal: signal, timed_out: timed_out || nil,
         group: (Engine::Processes.group_state(status.pid) if Engine::Processes.groups?), duration_ms: duration, files: changes,
-        env: Engine::Processes.env_entry(env) }.compact.merge(output: { stdout: stdout, stderr: stderr, stdin: stdin })
+        env: Engine::Processes.env_entry(chosen), traceparent: traceparent }.compact.merge(output: { stdout: stdout, stderr: stderr, stdin: stdin })
     )
     raise Timeout::Error, "#{command} did not finish in #{timeout} seconds, so it has no exit code" if timed_out
 

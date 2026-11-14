@@ -32,6 +32,7 @@ module Nukadoko
         @repeat = repeat
         @concurrency = concurrency
         @incomplete = []
+        @world_entries = []
         @order = order
         @records = records
         @rerun = rerun || { targets: [], tags: [], whole_files: [] }
@@ -49,7 +50,9 @@ module Nukadoko
         tree_cells = {}
         if @base
           begin
-            tree_cells = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out).call(executions)
+            trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out)
+            tree_cells = trees.call(executions)
+            @world_entries.concat(trees.worlds)
           ensure
             @base.cleanup
           end
@@ -68,6 +71,9 @@ module Nukadoko
         end
       end
 
+      # Each world this run started, as run.json's worlds holds it.
+      attr_reader :world_entries
+
       def role_of(scenario, environment) = Table.role(Table.condition_tags(scenario.tags), environment.conditions)
 
       private
@@ -81,6 +87,7 @@ module Nukadoko
           world_dir = File.join(@dir, "worlds", @world == "head" ? environment.name : "#{environment.name}@#{@world}")
           FileUtils.mkdir_p(world_dir)
           world = @program.start(environment, world_dir, @project)
+          @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
           @base_urls[environment.name] = world.base_url
           roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
           runs = Hash.new { |h, k| h[k] = [] }
@@ -111,9 +118,30 @@ module Nukadoko
           @browser&.close
           @process_fixtures&.teardown
           world&.stop
-          @browser = @process_fixtures = nil
+          @world_entries << world_entry(environment, world, world_dir, (runs&.values || []).flatten) if world && @program.file?
+          @browser = @process_fixtures = @program_log = nil
         end
         [executions, cells]
+      end
+
+      # A stopped world as run.json names it. The lines of the program's log
+      # that came after their step's record was read go beside that record,
+      # and its run.json entry names them.
+      def world_entry(environment, world, world_dir, executions)
+        entry = { name: environment.name, tree: @world, url: world.base_url, commands: world.commands, timings: world.timings,
+                  log: world.log_path && File.join("worlds", File.basename(world_dir), "program.log"), error: nil }
+        return entry unless world.base_url
+        return entry.merge(program_log: nil) unless world.log_path
+
+        steps = executions.flat_map { _1[:json][:steps] || [] }.select { _1.dig(:observed, :program_log) }
+        traced = steps.to_h { |step| [step[:observed][:program_log][:trace_id], [step[:observed][:program_log][:lines], File.join(@dir, step[:record])]] }
+        found = Trace::Log.new(world.log_path, world.trace_prefix).late(traced)
+        steps.each do |step|
+          late = found[:late][step[:observed][:program_log][:trace_id]]
+          step[:program_log_late] = late if late
+        end
+        sum = ->(key) { steps.sum { _1[:observed][:program_log][key] } }
+        entry.merge(program_log: { stamped: sum.(:stamped), lines: sum.(:lines), late: found[:late].values.sum { _1[:lines] }, tagged: found[:tagged] })
       end
 
       # Under --concurrency the files go to worker processes in the run's
@@ -260,7 +288,7 @@ module Nukadoko
         end
         judged = @base ? judged_findings(rows) : []
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
-          environments: @environments.map { environment_entry(_1) }, worlds: [], order: @order,
+          environments: @environments.map { environment_entry(_1) }, worlds: @world_entries, order: @order,
           counts: RunRecord.counts(scenarios.reject { _1[:world] }), scenarios: scenarios,
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                    mapping_changes: @base&.mapping_changes, **(@base ? { judgments_changed: [] } : {}),
@@ -387,7 +415,8 @@ module Nukadoko
         processes = record[:processes]
         # run.json keeps the record's observed without file content, so it stays small.
         entry[:observed] = { processes: processes&.any? ? processes : nil, http: record[:http_count]&.positive? ? record[:http_count] : nil,
-                             files: record[:files]&.map { _1.except(:content) }, unmeasured: [] }
+                             files: record[:files]&.map { _1.except(:content) }, unmeasured: [],
+                             **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}) }
         entry[:error] = { kind: record[:error_kind], message: record[:error] } if record[:error]
         entry[:used] = record[:used] if record[:used]&.any?
         if record[:claim_records]
@@ -425,6 +454,7 @@ module Nukadoko
       def do_step(step, args, origins, texts, environment)
         FileUtils.mkdir_p(@dir)
         world = @program.start(environment, @dir, @project)
+        @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
         @scratch = Scratch.new
         @scenario_fixtures = FixtureCache.new
         @process_fixtures = FixtureCache.new
@@ -453,6 +483,8 @@ module Nukadoko
         processes = []
         scratch_dirs = @scratch&.dirs || []
         scratch_before = @scratch&.snapshot || {}
+        # A world with a URL is one the step's requests can be traced into.
+        boundary = world.base_url && Trace::Boundary.new(Trace.new_id(world.trace_prefix), world.base_url)
         begin
           record[:mutates] = step.mutating?
           args, texts = yield
@@ -463,8 +495,10 @@ module Nukadoko
             raise TypeError, "args: #{problems.join("; ")}"
           end
 
-          fixtures, finish = build_fixtures(step, dir, log, world)
-          Processes.collect(processes) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) }
+          Trace.within(boundary) do
+            fixtures, finish = build_fixtures(step, dir, log, world, record)
+            Processes.collect(processes) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) }
+          end
           record[:status] ||= "passed"
         rescue StandardError => e
           record.merge!(status: "failed", outcome: :broke, error: e.message)
@@ -472,6 +506,8 @@ module Nukadoko
         ensure
           finish&.call
           log.concat(fixtures[:request].log) if fixtures[:request]
+          # A world at a URL has a log nukadoko does not read.
+          record[:program_log] = @program_log&.slice(dir, boundary) if boundary
           record[:finished_at] = Time.now.utc.iso8601(3)
           # Each process's output is a file of the step's own, named by its number.
           processes.each.with_index(1) do |process, n|
@@ -514,29 +550,34 @@ module Nukadoko
 
             # observe failing is no claim breaking: nothing was read to judge.
             record[:observation] = "unobserved"
-            record[:claim_records] = step.claims.reject { _1[:each] }.map { RunRecord.unobserved_claim(_1, origins, texts) }
+            record[:claim_records] = step.claims.reject { _1[:each] }.map { RunRecord.unobserved_claim(_1, origins, texts, patterns: [step.pattern].compact) }
             record[:error_kind] = "unobserved"
             raise e.class, "the step observed nothing, so no claim was judged: #{e.message}"
           end
           judged = Claims.judge(step.claims, observed, args)
           record[:claims] = judged
           # The value each claim read before its view, for `measured`.
-          record[:raw_actuals] = step.claims.reject { _1[:each] }.map do |declared|
+          record[:raw_actuals] = step.claims.map do |declared|
+            next nil if declared[:each]
+
             Claims.read(observed, declared[:actual])
           rescue StandardError
             nil
           end
-          # A claim on an each list has no single actual value to name.
-          record[:claim_records] = step.claims.zip(judged).filter_map do |declared, result|
-            RunRecord.claim(declared, result, origins, texts, observed: observes) unless declared[:each]
+          patterns = [step.pattern].compact
+          record[:claim_records] = step.claims.zip(judged).map do |declared, result|
+            if declared[:each]
+              RunRecord.each_claim(declared, observed, args, origins, texts, observed_from: observes, patterns: patterns)
+            else
+              RunRecord.claim(declared, result, origins, texts, observed: observes, patterns: patterns)
+            end
           end
-          broken = judged.index { !_1[:holds] }
+          broken = record[:claim_records].index { _1[:outcome] != "held" }
           return unless broken
 
-          broken_record = record[:claim_records][broken]
           record.merge!(status: "failed", outcome: then_line ? :fail : :broke, claim: broken,
                         broken_actual: judged[broken][:actual], error_kind: "claim_broken",
-                        error: broken_record ? RunRecord.broken_message(broken_record) : "claim #{broken} broke")
+                        error: RunRecord.broken_message(record[:claim_records]))
         else
           value = step.new.run(**fixtures.slice(*step.fixtures), args: step.inputs.load(args))
           problems = step.returns ? step.returns.problems(value) : []
@@ -575,8 +616,8 @@ module Nukadoko
           end
         end
         from_of = ->(key) { (origin = (record[:args_origin] || {})[key.to_s.split(".").first]).is_a?(Hash) ? origin.dig(:from, :step_record_id) : nil }
-        step.claims.reject { _1[:each] }.zip(record[:claim_records], record[:raw_actuals] || []).each do |declared, claim, raw|
-          next if claim.nil? || claim[:outcome] == "unobserved"
+        step.claims.zip(record[:claim_records], record[:raw_actuals] || []).each do |declared, claim, raw|
+          next if claim.nil? || claim[:outcome] == "unobserved" || declared[:each]
 
           measured = Measured.channel_for(from_of.(declared[:actual]) || own, raw, channels_of)
           claim[:measured] = measured
@@ -637,8 +678,6 @@ module Nukadoko
         raise ArgumentError, "fixtures depend on each other in a cycle: #{[*chain, name].join(" -> ")}" if chain.include?(name)
 
         cache = fixture.scope == :process ? @process_fixtures : @scenario_fixtures
-        return cache[name] if cache.key?(name)
-
         deps = fixture.dependencies.to_h do |dep|
           case dep
           when :baseURL then [dep, world.base_url]
@@ -646,11 +685,24 @@ module Nukadoko
           else [dep, project_fixture(dep, world, [*chain, name])]
           end
         end
-        cache.build(fixture, deps)
+        return cache[name].tap { note_fixture(name, fixture.scope, nil, nil) } if cache.key?(name)
+
+        at = now
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        cache.build(fixture, deps).tap { note_fixture(name, fixture.scope, Request.since(started), at) }
       end
 
-      def build_fixtures(step, dir, log, world)
+      # Each project fixture a step's bag touched, once, as the step record
+      # lists it: built here with its setup time, or reused from its scope.
+      def note_fixture(name, scope, setup_ms, at)
+        return if @fixture_usage.nil? || @fixture_usage.any? { _1[:name] == name.to_s }
+
+        @fixture_usage << { name: name.to_s, scope: scope.to_s, reused: setup_ms.nil?, setup_ms: setup_ms, at: at }.compact
+      end
+
+      def build_fixtures(step, dir, log, world, record)
         finish = nil
+        @fixture_usage = []
         fixtures = (step.bag - [:call]).to_h do |name|
           case name
           when :request then [name, Request.new(world.base_url)]
@@ -665,6 +717,8 @@ module Nukadoko
           end
         end
         fixtures[:call] = Caller.new(step, fixtures) if step.fixtures.include?(:call)
+        record[:fixtures] = @fixture_usage if @fixture_usage.any?
+        @fixture_usage = nil
         [fixtures, finish]
       end
 

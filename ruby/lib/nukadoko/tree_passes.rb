@@ -26,7 +26,11 @@ module Nukadoko
         @old_environments = base.old_environments || environments
         @dir = dir
         @out = out
+        @worlds = []
       end
+
+      # The worlds each tree's passes started, as run.json names them.
+      attr_reader :worlds
 
       # Appends each tree execution to `executions`, and returns each row's
       # base and old cells by its scenario.
@@ -39,6 +43,7 @@ module Nukadoko
             next if rows.empty?
 
             outcome = root ? run_tree(world, root, environment, rows) : { not_run: "the #{world} world was not made" }
+            @worlds.concat(outcome[:worlds] || [])
             rows.each do |scenario|
               result = outcome[:results]&.find { |entry| [entry[:feature], entry[:line]] == place(world, scenario) }
               found[[scenario, world, environment.name]] = result || { reason: outcome[:not_run] || "no execution of it was recorded" }

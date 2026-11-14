@@ -50,16 +50,21 @@ module Nukadoko
             req.body = JSON.generate(data)
           end
           req.body = body if body
+          # The world's origin gets the step's traceparent, so the program's
+          # log says which step a request came from.
+          traceparent = req["traceparent"] ? nil : Trace.current&.stamp(uri)
+          req["traceparent"] = traceparent if traceparent
           started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          entry = { method: verb.upcase, url: uri.to_s }
+          entry = { method: verb.upcase, url: uri.to_s, **(path.to_s == uri.to_s ? {} : { declared_url: path.to_s }) }
+          stamp = traceparent ? { traceparent: traceparent, traceparent_sent_to: [Trace.origin(uri)] } : {}
           begin
             res = Net::HTTP.start(uri.host, uri.port) { _1.request(req) }
           rescue StandardError => e
-            @log << entry.merge(status: 0, duration_ms: Request.since(started), via: "request", **Request.body(:request_body, req.body),
+            @log << entry.merge(status: 0, duration_ms: Request.since(started), via: "request", **stamp, **Request.body(:request_body, req.body),
                                 error: e.message.lines.first.to_s.chomp)
             raise
           end
-          @log << entry.merge(status: res.code.to_i, duration_ms: Request.since(started), via: "request",
+          @log << entry.merge(status: res.code.to_i, duration_ms: Request.since(started), via: "request", **stamp,
                               **Request.body(:request_body, req.body), **Request.body(:response_body, res.body))
           Response.new(res.code.to_i, res.to_hash, res.body.to_s)
         end
