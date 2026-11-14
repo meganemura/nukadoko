@@ -184,7 +184,10 @@ that version's section of `ruby/CHANGELOG.md`, whose heading starts with
 `## [<version>]`. The `test` job runs the checks of `ci.yml`'s
 `ruby-engine` job. The `publish` job waits for the GitHub Environment
 `rubygems`, builds the gem, exchanges the GitHub OIDC token for a
-RubyGems credential, and runs `gem push`. The `release` job then creates
+RubyGems credential, and runs `gem push`. The exchange names the
+RubyGems.org account that will own the gem (`RUBYGEMS_OWNER`), which
+RubyGems requires before a pending trusted publisher can create a new
+gem. The `release` job then creates
 the tag `ruby-v<version>` and a GitHub release that is not marked as
 the latest, so the npm package's release stays the latest one. The
 `ruby-` prefix keeps the gem's tags apart from the npm package's `v*`
@@ -194,9 +197,9 @@ tags. Nobody pushes either tag by hand.
 
 These are human steps, done once.
 
-0. Allow the two actions the Ruby workflows use that are not GitHub's own,
-   under Settings, Actions, General, Actions permissions:
-   `ruby/setup-ruby@*` and `rubygems/configure-rubygems-credentials@*`.
+0. Allow the one action the Ruby workflows use that is not GitHub's own,
+   `ruby/setup-ruby@*`, under Settings, Actions, General, Actions
+   permissions.
    This repository allows only the actions it names, and a workflow that
    uses any other action fails before its first job starts
    (`startup_failure`), which a re-run cannot fix: a new push starts it
