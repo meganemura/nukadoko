@@ -49,6 +49,8 @@ function markdownUnder(dir: string): string[] {
 const REPOSITORY_ONLY_LINKS = new Set([
   "docs/releasing.md -> .github/workflows/publish.yml",
   "docs/releasing.ja.md -> .github/workflows/publish.yml",
+  "docs/releasing.md -> .github/workflows/release-gem.yml",
+  "docs/releasing.ja.md -> .github/workflows/release-gem.yml",
 ]);
 
 const packed = packedFiles();
