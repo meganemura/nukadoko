@@ -23,6 +23,10 @@ module Nukadoko
       def claims(list = nil) = list ? (@claims = list) : @claims
       def poll(value = nil) = value.nil? ? @poll : (@poll = value)
 
+      # The steps this one may run through the `call` fixture. A part with no
+      # pattern exists only for calls.
+      def parts(list = nil) = list ? (@parts = list.freeze) : (@parts || [])
+
       def args(&block) = block ? (@args = Schema.build(&block)) : (@args ||= Schema.new)
       def returns(&block) = block ? (@returns = Schema.build(&block)) : @returns
 
@@ -47,6 +51,16 @@ module Nukadoko
         return [] unless method_defined?(body)
 
         instance_method(body).parameters.filter_map { |kind, name| name if kind == :keyreq && name != :args }
+      end
+
+      # The fixtures the engine builds before the body runs: the step's own,
+      # and those of every part it can reach, since the bag is closed before
+      # any call happens.
+      def bag(seen = [])
+        return [] if seen.include?(self)
+
+        reachable = parts.select { _1.is_a?(Class) && _1 < Step }.flat_map { _1.bag([*seen, self]) }
+        (fixtures + reachable - (seen.empty? ? [] : [:call])).uniq
       end
 
       private

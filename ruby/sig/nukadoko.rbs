@@ -31,6 +31,7 @@ module Nukadoko
     def self.returns: () { () [self: Schema] -> void } -> Schema
                     | () -> Schema
     def self.from: (Hash[Symbol, untyped]) -> untyped
+    def self.parts: (Array[singleton(Step)]) -> Array[singleton(Step)]
   end
 
   module Engine
@@ -38,6 +39,10 @@ module Nukadoko
       attr_reader status: Integer
       def json: () -> untyped
       def ok?: () -> bool
+    end
+
+    class Caller
+      def call: (singleton(Nukadoko::Step), ?Hash[String | Symbol, untyped], **untyped) -> untyped
     end
 
     class Scratch

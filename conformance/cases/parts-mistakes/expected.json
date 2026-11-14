@@ -1,0 +1,15 @@
+{
+  "check": [
+    {
+      "severity": "error",
+      "code": "part-mutates-contradiction",
+      "step": "peek-todo"
+    },
+    {
+      "severity": "warning",
+      "code": "scenario-without-then",
+      "file": "features/done.feature",
+      "line": 12
+    }
+  ]
+}

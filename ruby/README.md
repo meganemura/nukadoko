@@ -3,7 +3,7 @@
 The Ruby engine of [nukadoko](../README.md): typed step contracts for Gherkin, written in Ruby, so a scenario can be told wrong before it runs.
 It reads the same feature files as the TypeScript engine and must judge them the same way; the cases in [`../conformance/`](../conformance/README.md) hold it to that.
 
-Status: an early core. It passes the six cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. Much of what the TypeScript engine does is not here yet, such as `parts`, polling, `--base`, and most of what `nuka check` reports.
+Status: an early core. It passes the eight cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. Much of what the TypeScript engine does is not here yet, such as polling, `--base`, and most of what `nuka check` reports.
 
 ## A step
 
@@ -37,6 +37,7 @@ end
 - Browser launch options go in `nukadoko.config.rb`, as `Nukadoko.config(browser: { executablePath: "..." })`. A step that names `page` gets a browser context of its own for each scenario; each step record holds the requests the page sent and a trace of the step.
 - A step that names `scratch` gets `scratch.dir`, a fresh directory that is removed when the scenario ends. `Nukadoko.run_command(command, args, cwd:)` runs a program and returns `{ exitCode:, stdout:, stderr: }`; the step record lists each run.
 - A project fixture goes in `nukadoko.config.rb`. The block calls `use` with the value, and what follows is the teardown: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`. `scope: :process` keeps one value for the whole run of an environment.
+- `parts [CreateTodo, CompleteById]` declares the steps a step may run, and `call.(CreateTodo, title: args.title)` runs one, with its args and returns checked. A part needs no pattern. Each call is kept under `calls` in the calling step's record. `nuka check` reports a cycle in `parts` and a `mutates false` step whose part declares `mutates true`.
 - `nuka sig` writes `sig/nukadoko/steps.rbs`. With Steep, a body that reads an undeclared args key or returns the wrong shape is an error.
 
 The program under test is described in `nukadoko.program.rb`:

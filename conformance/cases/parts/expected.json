@@ -1,0 +1,78 @@
+{
+  "check": [],
+  "scenarios": [
+    {
+      "feature": "features/done.feature",
+      "line": 3,
+      "environment": "default",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 4,
+          "step": "a-done-todo",
+          "status": "passed"
+        },
+        {
+          "line": 5,
+          "step": "todo-is-marked-done",
+          "status": "passed"
+        },
+        {
+          "line": 6,
+          "step": "todo-list-includes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/done.feature",
+      "line": 8,
+      "environment": "default",
+      "status": "failed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 9,
+          "step": "undeclared-part",
+          "status": "failed"
+        },
+        {
+          "line": 10,
+          "step": "todo-list-includes",
+          "status": "skipped"
+        }
+      ]
+    }
+  ],
+  "verdict": "failed",
+  "table": [
+    {
+      "feature": "features/done.feature",
+      "line": 3,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/done.feature",
+      "line": 8,
+      "verdict": "failed",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "broke",
+          "line": 9,
+          "runs": 1
+        }
+      ]
+    }
+  ]
+}

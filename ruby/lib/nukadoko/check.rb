@@ -25,6 +25,8 @@ module Nukadoko
         @findings = []
         @usable = steps.reject { definition_broken?(_1) }
         @usable.each { check_contract(_1) }
+        check_parts
+        check_shapes
         check_lines
       end
 
@@ -47,7 +49,7 @@ module Nukadoko
 
       def check_contract(step)
         keys = step.args.fields.map { _1.name.to_s }
-        (Pattern.new(step.pattern).keys - keys).each do |key|
+        (step.pattern ? Pattern.new(step.pattern).keys - keys : []).each do |key|
           findings << Finding.about_step("error", "unknown-capture-key", step,
                                          %(Step "#{step.step_name}" pattern "#{step.pattern}" binds key "#{key}", which is not a key of its args schema),
                                          "Rename the capture to a key of the args schema, or add the key to the schema.")
@@ -63,6 +65,59 @@ module Nukadoko
           findings << Finding.about_step("error", "fixture-structural-violation", step,
                                          %(#{step.body}() names unknown fixture "#{name}": known fixtures are #{known.uniq.sort.join(", ")}),
                                          "Name a known fixture as a keyword argument.")
+        end
+      end
+
+      # A cycle never closes into a fixture bag, and a read-only step cannot
+      # reach a part that writes: both can only end one way, so both are errors.
+      def check_parts
+        @usable.each do |step|
+          step.parts.reject { _1.is_a?(Class) && _1 < Step && @steps.include?(_1) }.each do |part|
+            findings << Finding.about_step("error", "part-structural-violation", step,
+                                           "Step \"#{step.step_name}\" declares #{part.inspect} as a part, which is not a registered step",
+                                           "Make each parts entry a step that a step file registers.")
+          end
+          step.parts.select { step.mutates == false && _1.respond_to?(:mutates) && _1.mutates == true }.each do |part|
+            findings << Finding.about_step("error", "part-mutates-contradiction", step,
+                                           "Step \"#{step.step_name}\" declares mutates: false, but its part \"#{part.step_name}\" declares mutates: true",
+                                           "Declare mutates: true on the step, or remove the part that declares mutates: true.")
+          end
+        end
+        part_cycles.each do |cycle|
+          findings << Finding.about_step("error", "part-cycle", cycle.first,
+                                         "part cycle: #{cycle.map(&:step_name).join(" -> ")}",
+                                         "Remove one part from the chain, so that no step reaches itself.")
+        end
+      end
+
+      # Each cycle once, named from the step whose walk first closed it.
+      def part_cycles
+        done = []
+        cycles = []
+        visit = lambda do |step, stack|
+          stack += [step]
+          step.parts.each do |part|
+            next unless @steps.include?(part)
+
+            if stack.include?(part) then cycles << stack.drop(stack.index(part)) + [part]
+            elsif !done.include?(part) then visit.(part, stack)
+            end
+          end
+          done << step
+        end
+        @usable.each { visit.(_1, []) unless done.include?(_1) }
+        cycles
+      end
+
+      # A scenario with steps of its own and no Then can never be judged on
+      # an outcome. The Background's steps count toward the Then.
+      def check_shapes
+        @scenarios.uniq { [_1.uri, _1.keyword_line] }.each do |scenario|
+          next if scenario.steps.all?(&:background) || scenario.steps.any? { _1.kind == "Outcome" }
+
+          findings << Finding.new("warning", "scenario-without-then", scenario.uri, scenario.keyword_line, nil,
+                                  %(Scenario "#{scenario.name}" has no Then step, so nothing about its outcome is judged),
+                                  "Add a Then step that states the outcome.")
         end
       end
 
@@ -112,7 +167,7 @@ module Nukadoko
     end
 
     def self.matches(steps, text)
-      steps.filter_map { |step| (captures = Pattern.new(step.pattern).match(text)) && [step, captures] }
+      steps.filter_map { |step| step.pattern && (captures = Pattern.new(step.pattern).match(text)) && [step, captures] }
     end
   end
 end

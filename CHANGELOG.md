@@ -15,9 +15,9 @@ just until 0.1.
   `conformance/` holds cases whose feature files both engines read; the
   TypeScript engine writes each case's `expected.json`, and
   `conformance/run-ts.mjs` and `conformance/run-rb.rb` compare each
-  engine's findings and verdicts with it. Six cases pass under both
+  engine's findings and verdicts with it. Eight cases pass under both
   engines today: the todo, HTTP API, command-line, and sign-up examples,
-  a page case, and a case of check findings. A case may bring `files/`
+  a page case, a step made of parts, and two cases of check findings. A case may bring `files/`
   for its program and a `config.ts` or `config.rb` of its own. The npm
   package is unchanged.
 

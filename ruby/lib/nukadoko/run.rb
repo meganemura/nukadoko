@@ -120,6 +120,7 @@ module Nukadoko
           log.concat(fixtures[:request].log) if fixtures[:request]
           record[:finished_at] = Time.now.utc.iso8601(3)
           record[:processes] = processes if processes&.any?
+          record[:calls] = fixtures[:call].calls if fixtures[:call]&.calls&.any?
           record[:observed] = { http: log.size, processes: processes&.size || 0 }
           File.write(File.join(dir, "http.jsonl"), log.map { JSON.generate(_1) }.join("\n"))
           File.write(File.join(dir, "record.json"), JSON.pretty_generate(record))
@@ -131,13 +132,14 @@ module Nukadoko
       # when it reads nothing itself; any other step runs and returns.
       def body(step, fixtures, args, line, record, results)
         if step.claims
-          observed = step.method_defined?(:observe) ? step.new.observe(**fixtures, args: step.inputs.load(args)) : args
+          own = fixtures.slice(*step.fixtures)
+          observed = step.method_defined?(:observe) ? step.new.observe(**own, args: step.inputs.load(args)) : args
           judged = Claims.judge(step.claims, observed, args)
           record[:claims] = judged
           broken = judged.index { !_1[:holds] }
           record.merge!(status: "failed", outcome: line_kind(line) == :then ? :fail : :broke, claim: broken, error: "claim #{broken} broke") if broken
         else
-          value = step.new.run(**fixtures, args: step.inputs.load(args))
+          value = step.new.run(**fixtures.slice(*step.fixtures), args: step.inputs.load(args))
           problems = step.returns ? step.returns.problems(value) : []
           raise TypeError, "returns: #{problems.join("; ")}" if problems.any?
 
@@ -185,7 +187,7 @@ module Nukadoko
 
       def build_fixtures(step, dir, log, world)
         finish = nil
-        fixtures = step.fixtures.to_h do |name|
+        fixtures = (step.bag - [:call]).to_h do |name|
           case name
           when :request then [name, Request.new(world.base_url)]
           when :baseURL then [name, world.base_url]
@@ -196,6 +198,7 @@ module Nukadoko
           else [name, project_fixture(name, world, [])]
           end
         end
+        fixtures[:call] = Caller.new(step, fixtures) if step.fixtures.include?(:call)
         [fixtures, finish]
       end
 

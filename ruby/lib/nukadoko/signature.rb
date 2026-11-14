@@ -6,7 +6,7 @@
 # Then step, an args key the claim keeps from observe.
 module Nukadoko
   module Signature
-    FIXTURE_TYPES = { request: "Nukadoko::Engine::Request", scratch: "Nukadoko::Engine::Scratch", baseURL: "String", page: "untyped", context: "untyped" }.freeze
+    FIXTURE_TYPES = { request: "Nukadoko::Engine::Request", scratch: "Nukadoko::Engine::Scratch", call: "Nukadoko::Engine::Caller", baseURL: "String", page: "untyped", context: "untyped" }.freeze
 
     def self.of(steps)
       steps.map { of_step(_1) }.join("\n")
