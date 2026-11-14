@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.summary = "Typed step contracts for Gherkin in Ruby, so a scenario can be told wrong before it runs."
   spec.homepage = "https://github.com/meganemura/nukadoko"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.3"
+  spec.required_ruby_version = ">= 3.4"
   spec.files = Dir["lib/**/*.rb", "sig/**/*.rbs", "exe/*", "README.md", "README.ja.md", "LICENSE"]
   spec.bindir = "exe"
   spec.executables = ["nuka"]

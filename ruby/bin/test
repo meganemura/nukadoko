@@ -1,12 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Runs every test file under test/, or the files named. The property tests
-# under test/hegel/ need hegeltest, so they are left out when it is not in
-# the bundle (BUNDLE_WITHOUT=hegel on Ruby 3.3).
+# Runs every test file under test/, or the files named.
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__), File.expand_path("../test", __dir__)
-hegel = Gem.loaded_specs.key?("hegeltest")
 files = ARGV.empty? ? Dir[File.expand_path("../test/**/*_test.rb", __dir__)].sort : ARGV.map { File.expand_path(_1) }
-files.reject! { _1.include?("/test/hegel/") } unless hegel
 require "minitest/autorun"
 files.each { require _1 }

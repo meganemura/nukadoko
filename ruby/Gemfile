@@ -4,11 +4,6 @@ source "https://rubygems.org"
 
 gemspec
 
-# Development only, pinned exactly. hegeltest needs Ruby 3.4, so the
-# property tests sit in a group of their own: BUNDLE_WITHOUT=hegel leaves
-# them out on 3.3, the gem's floor.
+# Development only, pinned exactly.
 gem "minitest", "5.25.5"
-
-group :hegel do
-  gem "hegeltest", "0.5.2"
-end
+gem "hegeltest", "0.5.2"

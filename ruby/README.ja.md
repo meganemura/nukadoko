@@ -59,4 +59,4 @@ Nukadoko.program serve: { command: "bin/rails server -p {port}", ready: "/up" }
 
 - このディレクトリで `bundle install` を実行します。
 - `bundle exec ruby ../conformance/run-rb.rb` で、すべての検査ケースをこのエンジンで走らせます。
-- `bundle exec bin/test` で単体テストを走らせます。`test/hegel/` の性質テストには hegeltest が要り、hegeltest は Ruby 3.4 が要ります。Ruby 3.3 では `BUNDLE_WITHOUT=hegel bundle install` で外せます。
+- `bundle exec bin/test` で単体テストと、`test/hegel/` の Hegel の性質テストを走らせます。gem には Ruby 3.4 以上が要ります。

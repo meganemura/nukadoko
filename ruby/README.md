@@ -53,6 +53,6 @@ Nukadoko.program serve: { command: "bin/rails server -p {port}", ready: "/up" }
 
 - `bundle install` in this directory.
 - `bundle exec ruby ../conformance/run-rb.rb` runs every conformance case under this engine.
-- `bundle exec bin/test` runs the unit tests. The property tests under `test/hegel/` need hegeltest, which needs Ruby 3.4; on Ruby 3.3, `BUNDLE_WITHOUT=hegel bundle install` leaves them out.
+- `bundle exec bin/test` runs the unit tests and the Hegel property tests under `test/hegel/`. The gem needs Ruby 3.4 or later.
 
 [日本語](README.ja.md)
