@@ -34,6 +34,9 @@ module Nukadoko
         end
       end
 
+      # Whether a program file gave any options, so each step names its world.
+      def file? = !@options.empty?
+
       def declared = (@options[:environments] || {}).transform_keys(&:to_s)
 
       def environment(name)

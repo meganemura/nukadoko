@@ -84,6 +84,27 @@ module Nukadoko
       (hash.keys - names).map { join(path, _1) } + fields.flat_map { Schema.dropped_type(_1.type, hash[_1.name.to_s], join(path, _1.name)) }
     end
 
+    # The keys the schema dropped, one entry per place that dropped any:
+    # `at` is the place as its keys and indexes, as the TypeScript engine's
+    # `returns_dropped` names it.
+    def drops(value, at = [])
+      return [] unless value.is_a?(Hash)
+
+      hash = value.transform_keys(&:to_s)
+      keys = hash.keys - fields.map { _1.name.to_s }
+      own = keys.any? ? [{ at: at, keys: keys }] : []
+      own + fields.flat_map { Schema.drops_type(_1.type, hash[_1.name.to_s], [*at, _1.name.to_s]) }
+    end
+
+    def self.drops_type(type, value, at)
+      case type
+      in [:nullable, inner] then value.nil? ? [] : drops_type(inner, value, at)
+      in [:array, item] then value.is_a?(Array) ? value.each_with_index.flat_map { drops_type(item, _1, [*at, _2.to_s]) } : []
+      in Schema then type.drops(value, at)
+      else []
+      end
+    end
+
     def self.dropped_type(type, value, path)
       case type
       in [:nullable, inner] then value.nil? ? [] : dropped_type(inner, value, path)

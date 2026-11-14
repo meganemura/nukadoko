@@ -329,7 +329,7 @@ module Nukadoko
         args: record[:args] || given, args_origin: args_origin, **outcome, status: record[:status], environment: environment.name,
         world_name: nil, scenario_record_id: nil, run_id: nil, started_at: record[:started_at], finished_at: record[:finished_at],
         evidence: { dir: File.join(".nukadoko", "do", id), screenshots: [] },
-        observed: { processes: processes&.any? ? processes.map { { command: [_1[:command], *_1[:args]], cwd: _1[:cwd], exit_code: _1[:exit_code] }.compact } : nil,
+        observed: { processes: processes&.any? ? processes : nil,
                     http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [] },
         mutates: record[:mutates], **(used.any? ? { used: used } : {}),
         **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }

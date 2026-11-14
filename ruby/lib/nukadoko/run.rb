@@ -341,6 +341,11 @@ module Nukadoko
         stopped = nil
         @scratch = Scratch.new
         @scenario_fixtures = FixtureCache.new
+        scenario_record_id = new_id("scn")
+        @step_file = lambda do |record|
+          RunRecord.step_file(record, environment: environment.name, world_name: @program.file? ? environment.name : nil, run_id: @id,
+                                      scenario_record_id: scenario_record_id, evidence_dir: File.join(".nukadoko", "runs", @id, "steps", record[:step_record_id]))
+        end
         records = scenario.steps.map do |line|
           record = stopped ? skipped(line) : play_step(line, results, world)
           stopped ||= [record[:outcome], line.line, record[:claim], record[:broken_actual]] if record[:status] == "failed"
@@ -353,7 +358,7 @@ module Nukadoko
         @scratch.remove_all
         execution = stopped ? stopped[0, 3].compact : [:pass]
         failed = records.find { _1[:status] == "failed" }
-        json = { scenario_record_id: new_id("scn"), feature: scenario.uri, line: scenario.line, scenario: scenario.name,
+        json = { scenario_record_id: scenario_record_id, feature: scenario.uri, line: scenario.line, scenario: scenario.name,
                  environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now,
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] }
         json[:do] = again(scenario, environment) if failed && role != "control"
@@ -380,8 +385,9 @@ module Nukadoko
 
         entry[:mutates] = record[:mutates]
         processes = record[:processes]
-        entry[:observed] = { processes: processes&.any? ? processes.map { process_entry(_1) } : nil,
-                             http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [] }
+        # run.json keeps the record's observed without file content, so it stays small.
+        entry[:observed] = { processes: processes&.any? ? processes : nil, http: record[:http_count]&.positive? ? record[:http_count] : nil,
+                             files: record[:files]&.map { _1.except(:content) }, unmeasured: [] }
         entry[:error] = { kind: record[:error_kind], message: record[:error] } if record[:error]
         entry[:used] = record[:used] if record[:used]&.any?
         if record[:claim_records]
@@ -390,11 +396,6 @@ module Nukadoko
           entry[:attempts] = 1
         end
         entry
-      end
-
-      def process_entry(process)
-        { command: [process[:command], *process[:args]], cwd: process[:cwd], exit_code: process[:exit_code],
-          signal: process[:signal], duration_ms: process[:duration_ms] }.compact
       end
 
       def skipped(line)
@@ -450,6 +451,8 @@ module Nukadoko
         fixtures = {}
         finish = nil
         processes = []
+        scratch_dirs = @scratch&.dirs || []
+        scratch_before = @scratch&.snapshot || {}
         begin
           record[:mutates] = step.mutating?
           args, texts = yield
@@ -470,12 +473,29 @@ module Nukadoko
           finish&.call
           log.concat(fixtures[:request].log) if fixtures[:request]
           record[:finished_at] = Time.now.utc.iso8601(3)
+          # Each process's output is a file of the step's own, named by its number.
+          processes.each.with_index(1) do |process, n|
+            output = process.delete(:output) || {}
+            %i[stdout stderr stdin].each do |stream|
+              next if output[stream].to_s.empty?
+
+              File.write(File.join(dir, "process-#{n}.#{stream}.txt"), output[stream])
+              process[stream] = "process-#{n}.#{stream}.txt"
+            end
+          end
           record[:processes] = processes if processes&.any?
+          if @scratch
+            changes = @scratch.changes(scratch_before)
+            record[:files] = changes if changes.any?
+            made = @scratch.dirs - scratch_dirs
+            record[:scratch] = made if made.any?
+          end
           record[:calls] = fixtures[:call].calls if fixtures[:call]&.calls&.any?
-          record[:observed] = { http: log.size, processes: processes&.size || 0 }
-          record[:http_count] = log.size
-          File.write(File.join(dir, "http.jsonl"), log.map { JSON.generate(_1) }.join("\n"))
-          File.write(File.join(dir, "record.json"), JSON.pretty_generate(record))
+          # A page's own traffic is in http.jsonl and the trace, not counted as the step's.
+          record[:http_count] = log.count { _1[:via] != "page" }
+          File.write(File.join(dir, "http.jsonl"), "#{log.map { JSON.generate(_1) }.join("\n")}\n") if log.any?
+          measure(step, record, dir) if record[:claim_records]
+          File.write(File.join(dir, "record.json"), JSON.pretty_generate(@step_file ? @step_file.(record) : record))
         end
         record
       end
@@ -500,6 +520,12 @@ module Nukadoko
           end
           judged = Claims.judge(step.claims, observed, args)
           record[:claims] = judged
+          # The value each claim read before its view, for `measured`.
+          record[:raw_actuals] = step.claims.reject { _1[:each] }.map do |declared|
+            Claims.read(observed, declared[:actual])
+          rescue StandardError
+            nil
+          end
           # A claim on an each list has no single actual value to name.
           record[:claim_records] = step.claims.zip(judged).filter_map do |declared, result|
             RunRecord.claim(declared, result, origins, texts, observed: observes) unless declared[:each]
@@ -520,8 +546,7 @@ module Nukadoko
           end
 
           if step.returns
-            dropped = step.returns.dropped(value)
-            record[:returns_dropped] = dropped if dropped.any?
+            record[:returns_dropped] = step.returns.drops(value)
             value = step.returns.strip(value)
           end
           results << [step, value.transform_keys(&:to_s), at_line, record[:step_record_id]]
@@ -533,8 +558,38 @@ module Nukadoko
       # gave it, then a table or docstring for the one required key still open.
       # `origins` gets each from key's label, `from:<step>@<line>.<key>`, and
       # `record[:used]` each earlier step a from key read, with its result.
+      # Each claim record's `measured`: the channel that holds the raw value
+      # it read, in the record of the step a `from` value came from, or in
+      # its own; and an expected value an earlier step gave, the same way.
+      def measure(step, record, dir)
+        own = record[:step_record_id]
+        own_channels = Measured.channels(dir, { processes: record[:processes], files: record[:files] }, record[:http_count].to_i.positive? ? "http.jsonl" : nil)
+        cache = {}
+        channels_of = lambda do |id|
+          next own_channels if id == own
+
+          cache[id] ||= begin
+            found = [File.join(@dir, "steps", id), File.join(@project, ".nukadoko", "do", id)].find { File.exist?(File.join(_1, "record.json")) }
+            other = found && JSON.parse(File.read(File.join(found, "record.json")), symbolize_names: true)
+            other ? Measured.channels(found, other[:observed] || {}, other.dig(:evidence, :http)) : [{ channel: "record", unknown: true }]
+          end
+        end
+        from_of = ->(key) { (origin = (record[:args_origin] || {})[key.to_s.split(".").first]).is_a?(Hash) ? origin.dig(:from, :step_record_id) : nil }
+        step.claims.reject { _1[:each] }.zip(record[:claim_records], record[:raw_actuals] || []).each do |declared, claim, raw|
+          next if claim.nil? || claim[:outcome] == "unobserved"
+
+          measured = Measured.channel_for(from_of.(declared[:actual]) || own, raw, channels_of)
+          claim[:measured] = measured
+          key = declared[:expected].is_a?(String) ? declared[:expected] : declared[:expected].is_a?(Hash) && declared[:expected][:from]
+          source = key && from_of.(key)
+          claim[:expected_measured] = Measured.channel_for(source, claim[:expected], channels_of, measured) if source && claim.key?(:expected)
+        end
+        record.delete(:raw_actuals)
+      end
+
       def bind_args(step, captures, line, results, origins, record)
         args = captures.dup
+        record[:args_origin] = captures.keys.to_h { [_1, "capture"] }
         used = []
         step.from.each do |key, sources|
           cls, value, at_line, record_id = results.reverse_each.find { |c, _| sources.any? { _1.first == c } }
@@ -546,13 +601,20 @@ module Nukadoko
           source_key = sources.find { _1.first == cls }[1].to_s
           args[key] = value.fetch(source_key)
           origins[key] = "from:#{cls.step_name}@#{at_line}.#{source_key}"
+          record[:args_origin][key] = { from: { step_record_id: record_id, step: cls.step_name, key: source_key } }
           used << { step: cls.step_name, record: "steps/#{record_id}", result: value } unless used.any? { _1[:record] == "steps/#{record_id}" }
         end
         record[:used] = used
         open = step.args.fields.map { _1.name.to_s } - args.keys
         attachment = line.table || line.doc_string
-        args[open.first] = attachment if attachment && open.any?
-        args
+        if attachment && open.any?
+          args[open.first] = attachment
+          record[:args_origin][open.first] = line.table ? "table" : "docstring"
+        end
+        # In the order the args schema declares, as the record shows them.
+        rank = step.args.fields.each_with_index.to_h { [_1.name.to_s, _2] }
+        record[:args_origin] = record[:args_origin].sort_by { |key, _| rank.fetch(key.to_s, rank.size) }.to_h
+        args.sort_by { |key, _| rank.fetch(key.to_s, rank.size) }.to_h
       end
 
       # The docstring or table a line attaches is the sentence's own text

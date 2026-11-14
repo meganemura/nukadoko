@@ -155,6 +155,19 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - A cell's `conditions` in run.json hold only the conditions the row's tags
   name, each with the value the environment declares or `null`, as the
   TypeScript engine writes them.
+- Each step record.json `nuka run` writes is in the TypeScript engine's
+  shape: `schema_version`, `kind`, `args_origin`, `returns_dropped`,
+  the environment, world, run, and scenario it ran in, `evidence`, and
+  `observed`. A process `run_command` started is kept with its `group`,
+  the `files` it changed under its working directory, its `env`, and its
+  stdout and stderr as `process-<n>.stdout.txt` and
+  `process-<n>.stderr.txt`, and `run_command` returns `signal` and
+  `files` too. What a step changed in a scratch directory is
+  `observed.files`, and each claim names the channel its value was
+  measured in (`measured`, `expected_measured`). A claim read through a
+  view says so in `actual_from` (`as text`). http.jsonl keeps each
+  request with its `via`, `duration_ms`, and bodies as text with their
+  size, and a page's own requests are not counted as the step's.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

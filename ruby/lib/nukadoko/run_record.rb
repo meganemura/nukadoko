@@ -15,15 +15,42 @@ module Nukadoko
 
       module_function
 
+      # A step's record.json as `nuka run` writes it, in the TypeScript engine's
+      # shape, from what the run kept of the step. The keywords name where it ran:
+      # the environment, the world, the run, the scenario, and the step's own
+      # directory. A record that passed names each step it used; a failed one
+      # names what each gave too, since that is what it failed on.
+      def step_file(record, environment:, world_name:, run_id:, scenario_record_id:, evidence_dir:)
+        passed = record[:status] == "passed"
+        outcome = if passed then { result: record[:result] || {}, returns_dropped: record[:returns_dropped] }.compact
+                  else { error: { message: record[:error], kind: record[:error_kind] } }
+                  end
+        processes = record[:processes]
+        used = (record[:used] || []).map do |entry|
+          { step_record_id: File.basename(entry[:record]), step: entry[:step], **(passed ? {} : { result: entry[:result] }) }
+        end
+        { schema_version: SCHEMA_VERSION, nukadoko: VERSION, step_record_id: record[:step_record_id], step: record[:step], kind: "run",
+          args: record[:args] || {}, **(record[:args_origin]&.any? ? { args_origin: record[:args_origin] } : {}),
+          **outcome, status: record[:status], environment: environment, world_name: world_name,
+          scenario_record_id: scenario_record_id, run_id: run_id, started_at: record[:started_at], finished_at: record[:finished_at],
+          evidence: { dir: evidence_dir, screenshots: [], **(record[:scratch] ? { scratch: record[:scratch] } : {}),
+                      **(record[:http_count].to_i.positive? ? { http: "http.jsonl" } : {}) },
+          observed: { processes: processes&.any? ? processes : nil, http: record[:http_count].to_i.positive? ? record[:http_count] : nil,
+                      files: record[:files], unmeasured: [] },
+          **(record[:calls] ? { calls: record[:calls] } : {}),
+          mutates: record[:mutates], **(used.any? ? { used: used } : {}),
+          **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }
+      end
+
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
       # maps an args key to the label of where its value came from, and
       # `texts` to the text the sentence stated it as.
       def claim(declared, judged, origins, texts, observed:)
         actual_key = declared[:actual].to_s
-        actual_from = if observed then "observe:#{actual_key}"
-                      else origins.fetch(actual_key, "sentence:#{actual_key}")
-                      end
-        actual_from = "#{actual_from}.#{declared[:at]}" if declared[:at]
+        base = if observed then "observe:#{actual_key}"
+               else origins.fetch(actual_key, "sentence:#{actual_key}")
+               end
+        actual_from = place(base, declared[:view], declared[:at])
         expected_from, expected_text = expected_origin(declared, origins, texts)
         { actual: judged[:actual], actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s,
           compare: declared[:compare], expected: judged[:expected], expected_from: expected_from,
@@ -34,14 +61,23 @@ module Nukadoko
       # A claim whose observe raised: where each side would come from, and no value.
       def unobserved_claim(declared, origins, texts)
         expected_from, expected_text = expected_origin(declared, origins, texts)
-        { actual_from: "observe:#{declared[:actual]}#{".#{declared[:at]}" if declared[:at]}", view: declared[:view], at: declared[:at]&.to_s,
+        { actual_from: place("observe:#{declared[:actual]}", declared[:view], declared[:at]), view: declared[:view], at: declared[:at]&.to_s,
           compare: declared[:compare], expected_from: expected_from, expected_view: declared[:expected_view], expected_text: expected_text,
           outcome: "unobserved" }.compact.merge(measured: nil)
       end
 
+      # Where a side of a claim reads: its origin, read through its view,
+      # then walked to its path, as the TypeScript engine labels it.
+      def place(base, view, at)
+        label = view ? "#{base} as #{view}" : base
+        return label unless at
+
+        "#{label}#{view ? " at " : "."}#{at}"
+      end
+
       def expected_origin(declared, origins, texts)
         case declared[:expected]
-        in String => key then [origins.fetch(key, "sentence:#{key}"), texts[key]]
+        in String => key then [place(origins.fetch(key, "sentence:#{key}"), declared[:expected_view], nil), texts[key]]
         in { from: String => key } then [origins.fetch(key, "sentence:#{key}"), nil]
         in { literal: value } then ["literal:#{JSON.generate(value)}", JSON.generate(value)]
         end

@@ -21,6 +21,23 @@ module Nukadoko
         @log = []
       end
 
+      BODY_TEXT = 16 * 1024
+
+      def self.since(started) = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+
+      # A body as http.jsonl keeps it: its text, at most 16 KiB, and its
+      # size; none when there was none.
+      def self.body(name, bytes)
+        return {} if bytes.nil? || bytes.empty?
+
+        raw = bytes.b
+        text = raw.byteslice(0, BODY_TEXT).force_encoding("UTF-8")
+        text = text.scrub("") if raw.bytesize > BODY_TEXT
+        return { name => { bytes: raw.bytesize, binary: true } } unless text.valid_encoding?
+
+        { name => { text: text, bytes: raw.bytesize, **(raw.bytesize > BODY_TEXT ? { truncated: true } : {}) } }
+      end
+
       %w[get post put patch delete].each do |verb|
         # `data:` is sent as JSON; `body:` is sent as it is, for a request
         # whose body is meant to be wrong.
@@ -34,9 +51,16 @@ module Nukadoko
           end
           req.body = body if body
           started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          res = Net::HTTP.start(uri.host, uri.port) { _1.request(req) }
-          @log << { method: verb.upcase, url: uri.to_s, request_body: req.body, status: res.code.to_i,
-                    response_body: res.body, ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(1) }
+          entry = { method: verb.upcase, url: uri.to_s }
+          begin
+            res = Net::HTTP.start(uri.host, uri.port) { _1.request(req) }
+          rescue StandardError => e
+            @log << entry.merge(status: 0, duration_ms: Request.since(started), via: "request", **Request.body(:request_body, req.body),
+                                error: e.message.lines.first.to_s.chomp)
+            raise
+          end
+          @log << entry.merge(status: res.code.to_i, duration_ms: Request.since(started), via: "request",
+                              **Request.body(:request_body, req.body), **Request.body(:response_body, res.body))
           Response.new(res.code.to_i, res.to_hash, res.body.to_s)
         end
       end
@@ -58,7 +82,7 @@ module Nukadoko
         @context ||= @browser.new_context(baseURL: @base_url).tap { _1.tracing.start(screenshots: true, snapshots: true) }
         @page ||= @context.new_page
         @context.tracing.start_chunk
-        listener = ->(req) { log << { method: req.method, url: req.url, from: "page" } }
+        listener = ->(req) { log << { method: req.method, url: req.url, via: "page" } }
         @page.on("request", listener)
         [@page, -> { @page.off("request", listener); @context.tracing.stop_chunk(path: File.join(step_dir, "trace.zip")) }]
       end
