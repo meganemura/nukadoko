@@ -12,12 +12,12 @@ on:
       - main
     paths:
       - ruby/lib/nukadoko/version.rb
-workflow_dispatch:
-  inputs:
-    rubygems-owner:
-      description: RubyGems.org account id that will own the gem, only for its first publication
-      type: string
-      required: false
+  workflow_dispatch:
+    inputs:
+      rubygems-owner:
+        description: RubyGems.org account id that will own the gem, only for its first publication
+        type: string
+        required: false
 
 permissions: {}
 
