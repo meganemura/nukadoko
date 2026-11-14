@@ -35,6 +35,9 @@ export default {
     "selftest-suite/**",
     "*.ts",
     "scripts/**",
+    // Each engine's test cases: small projects whose steps the engines
+    // load, not modules of the library.
+    "conformance/**",
   ],
   mustBeEmpty: [
     {
