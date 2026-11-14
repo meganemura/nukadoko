@@ -27,6 +27,7 @@ require_relative "nukadoko/run"
 require_relative "nukadoko/summary"
 require_relative "nukadoko/verdict"
 require_relative "nukadoko/signature"
+require_relative "nukadoko/scaffold"
 
 module Nukadoko
   def self.program(**options) = (@program = options)

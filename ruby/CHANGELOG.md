@@ -80,9 +80,21 @@ notes come from the section below whose heading starts with `## [<version>]`.
   a `do` or of a run. A step it does not know is `unknown-step`, args that
   are not a JSON object or do not fit the contract are `step-args-invalid`,
   and a `--use` that names no record is `step-inputs-invalid`.
+- `nuka scaffold <name> --pattern <p> [--then] [--description <text>]
+  [--replace]` writes a step file whose body raises `not implemented:
+  <name>` until it is written, and `nuka scaffold --feature <path>` writes
+  one for each line no step matches, its pattern read by
+  cucumber-expressions' generator and its name made from the pattern's
+  words, in the TypeScript engine's words: the same notes, the same
+  commands that write each stub again, and the same refusals
+  (`file-exists`, `file-edited`, `invalid-value`, `target-not-found`).
+  `--command`, `--request`, and `--from` are refused as not here yet.
 
 ### Changed
 
+- A Then step whose `observe` raises records `unobserved` with each
+  claim's `outcome: "unobserved"`, as the TypeScript engine does, instead
+  of a `step_error`.
 - The `--json` envelope opens with `schema_version` and no longer has
   `engine`, so both engines print the same fields.
 - `nuka run` checks only the scenarios it selected, as the TypeScript

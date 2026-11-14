@@ -4,12 +4,13 @@
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
-    FLAGS = %w[--json --no-check --dry-run].freeze
+    FLAGS = %w[--json --no-check --dry-run --then --replace].freeze
     REPEATED = %w[--tag --env --use].freeze
-    VALUED = %w[--format --out --base --args].freeze
+    VALUED = %w[--format --out --base --args --pattern --description --feature --command --request --from --cwd --body --argv].freeze
 
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
+      @words = rest.dup
       @options = Hash.new { |h, k| h[k] = [] }
       @rest = []
       @unknown = []
@@ -59,6 +60,7 @@ module Nukadoko
         finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
       when "run" then run(steps)
       when "do" then run_one(check)
+      when "scaffold" then scaffold(steps, scenarios)
       when "__tree" then tree(steps)
       else
         warn "usage: nuka check|run|verdict|steps|describe <step>|sig [--json] [--no-check]"
@@ -167,6 +169,25 @@ module Nukadoko
     # to stdout and to .nukadoko/do/<id>/record.json, where a later
     # `nuka do --use` reads it. A refusal goes to stderr, since stdout is
     # the record's.
+    # Writes stubs; their paths go to stdout, and notes and refusals to stderr.
+    def scaffold(steps, scenarios)
+      @out = $stderr
+      return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
+      if @rest.empty? && !@options.key?("--feature")
+        return refuse(Engine::Refusal.new("invalid-arguments", "Missing required argument: name (or --feature <path>)"))
+      end
+
+      scaffold = Engine::Scaffold.new(@project, @options, @rest, steps, scenarios)
+      scaffold.argv_words = @words.map { Engine::Selection.shell_word(_1) }
+      result = scaffold.call
+      return refuse(result) if result.is_a?(Engine::Refusal)
+
+      written, notes = result
+      written.each { $stdout.puts _1 }
+      notes.each { $stderr.puts _1 }
+      0
+    end
+
     def run_one(check)
       @out = $stderr
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
@@ -256,7 +277,7 @@ module Nukadoko
         observed: { processes: processes&.any? ? processes.map { { command: [_1[:command], *_1[:args]], cwd: _1[:cwd], exit_code: _1[:exit_code] }.compact } : nil,
                     http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [] },
         mutates: record[:mutates], **(used.any? ? { used: used } : {}),
-        **(record[:claim_records] ? { claims: record[:claim_records], observation: "observed", attempts: 1 } : {}) }
+        **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }
     end
 
     def meets?(scenario, environments)

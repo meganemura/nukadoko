@@ -1,7 +1,7 @@
 import { defineStep, z } from "nukadoko";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { nuka } from "./lib/engine.ts";
+import { nuka, sameStepFiles } from "./lib/engine.ts";
 import theProject from "./the-project.ts";
 import theProjectInGit from "./the-project-in-a-git-repository.ts";
 
@@ -63,6 +63,7 @@ export default defineStep({
     codes: z.string().describe("Under --json, the code of every finding in order, separated by spaces"),
     judged: z.string().describe("Under --json, the envelope's judged, or an empty string"),
     stops: z.string().describe("Under --json, the codes of the refused and failed findings, separated by spaces"),
+    printed: z.string().describe("stdout, then stderr, with each step file written as features/steps/<name>.*"),
     stop: z
       .string()
       .describe("The last refused or failed finding as lines of field: value (severity, code, message, fix, do), with the program file named nukadoko.program.*: the --json envelope's, or else the findings nuka printed on stderr"),
@@ -79,6 +80,7 @@ export default defineStep({
     const last = (parsed.findings ?? []).filter((f) => f.severity === "refused" || f.severity === "failed").at(-1);
     const fields = ["severity", "code", "message", "fix", "do"] as const;
     const stop = last === undefined ? "" : fields.flatMap((key) => (last[key] === undefined ? [] : [`${key}: ${last[key]}`])).join("\n").replace(/nukadoko\.(program|config)\.(ts|rb)/g, "nukadoko.$1.*");
-    return { stop, exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "", runDir: parsed.run_dir ?? "", codes: (parsed.findings ?? []).map((f) => f.code).join(" "), judged: parsed.judged ?? "" };
+    const printed = sameStepFiles(`${ran.stdout}${ran.stderr}`);
+    return { stop: sameStepFiles(stop), printed, exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "", runDir: parsed.run_dir ?? "", codes: (parsed.findings ?? []).map((f) => f.code).join(" "), judged: parsed.judged ?? "" };
   },
 });

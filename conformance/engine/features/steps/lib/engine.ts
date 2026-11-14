@@ -52,3 +52,18 @@ export async function nuka(dir: string, argv: string[]): Promise<Ran> {
     env: { ...process.env, BUNDLE_GEMFILE: path.join(root, "ruby", "Gemfile") },
   });
 }
+
+// A step file the scenario names by its step name as `features/steps/<name>.*`:
+// the TypeScript engine names the file after the step, and the Ruby engine
+// after its snake_case form.
+export function stepFile(file: string): string {
+  const named = /^features\/steps\/([a-z0-9-]+)\.\*$/.exec(file);
+  if (named === null) return file;
+  return engine() === "typescript" ? `features/steps/${named[1]}.ts` : `features/steps/${named[1]!.replaceAll("-", "_")}.rb`;
+}
+
+// The text nuka printed with each step file written as `features/steps/<name>.*`,
+// so both engines' output reads the same.
+export function sameStepFiles(text: string): string {
+  return text.replace(/features\/steps\/([a-z0-9_-]+)\.(ts|rb)\b/g, (_whole, name: string) => `features/steps/${name.replaceAll("_", "-")}.*`);
+}

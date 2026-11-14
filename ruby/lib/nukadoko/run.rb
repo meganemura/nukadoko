@@ -244,7 +244,7 @@ module Nukadoko
         entry[:used] = record[:used] if record[:used]&.any?
         if record[:claim_records]
           entry[:claims] = record[:claim_records]
-          entry[:observation] = "observed"
+          entry[:observation] = record[:observation] || "observed"
           entry[:attempts] = 1
         end
         entry
@@ -345,7 +345,17 @@ module Nukadoko
           own = fixtures.slice(*step.fixtures)
           observes = step.method_defined?(:observe)
           read = -> { observes ? step.new.observe(**own, args: step.inputs.load(args)) : args }
-          observed = step.poll ? Poll.new(step.poll, step.claims, args).call(record, &read) : read.()
+          observed = begin
+            step.poll ? Poll.new(step.poll, step.claims, args).call(record, &read) : read.()
+          rescue StandardError => e
+            raise unless observes && !step.poll
+
+            # observe failing is no claim breaking: nothing was read to judge.
+            record[:observation] = "unobserved"
+            record[:claim_records] = step.claims.reject { _1[:each] }.map { RunRecord.unobserved_claim(_1, origins, texts) }
+            record[:error_kind] = "unobserved"
+            raise e.class, "the step observed nothing, so no claim was judged: #{e.message}"
+          end
           judged = Claims.judge(step.claims, observed, args)
           record[:claims] = judged
           # A claim on an each list has no single actual value to name.

@@ -31,6 +31,14 @@ module Nukadoko
           outcome: judged[:holds] ? "held" : "broken", measured: nil }.compact.merge(measured: nil)
       end
 
+      # A claim whose observe raised: where each side would come from, and no value.
+      def unobserved_claim(declared, origins, texts)
+        expected_from, expected_text = expected_origin(declared, origins, texts)
+        { actual_from: "observe:#{declared[:actual]}#{".#{declared[:at]}" if declared[:at]}", view: declared[:view], at: declared[:at]&.to_s,
+          compare: declared[:compare], expected_from: expected_from, expected_view: declared[:expected_view], expected_text: expected_text,
+          outcome: "unobserved" }.compact.merge(measured: nil)
+      end
+
       def expected_origin(declared, origins, texts)
         case declared[:expected]
         in String => key then [origins.fetch(key, "sentence:#{key}"), texts[key]]
