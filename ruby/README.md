@@ -41,7 +41,7 @@ end
 ## Commands
 
 - `nuka check [--json]` reports what is wrong before anything runs.
-- `nuka run [--json] [--no-check]` starts the program, runs every scenario, and writes a record per step under `.nukadoko/runs/`.
+- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--json] [--no-check]` starts the program in each selected world, runs the selected scenarios, and writes a record per step under `.nukadoko/runs/`. With no target it runs `features/`.
 - Browser launch options go in `nukadoko.config.rb`, as `Nukadoko.config(browser: { executablePath: "..." })`. A step that names `page` gets a browser context of its own for each scenario; each step record holds the requests the page sent and a trace of the step.
 - A step that names `scratch` gets `scratch.dir`, a fresh directory that is removed when the scenario ends. `Nukadoko.run_command(command, args, cwd:)` runs a program and returns `{ exitCode:, stdout:, stderr: }`; the step record lists each run.
 - A project fixture goes in `nukadoko.config.rb`. The block calls `use` with the value, and what follows is the teardown: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`. `scope: :process` keeps one value for the whole run of an environment.

@@ -4,16 +4,24 @@
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
+    FLAGS = %w[--json --no-check].freeze
+    REPEATED = %w[--tag --env].freeze
+
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
-      @json = rest.delete("--json")
-      @no_check = rest.delete("--no-check")
-      @rest = rest
+      @options = Hash.new { |h, k| h[k] = [] }
+      @rest = []
+      @unknown = []
+      parse(rest)
+      @json = @options.key?("--json")
+      @no_check = @options.key?("--no-check")
       @project = File.expand_path(project)
       @out = out
     end
 
     def call
+      return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: #{@unknown.first}")) if @unknown.any?
+
       %w[nukadoko.config.rb nukadoko.program.rb].each do |name|
         file = File.join(@project, name)
         load file if File.exist?(file)
@@ -45,12 +53,7 @@ module Nukadoko
         end
 
         finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
-      when "run"
-        return finish("run", false, findings: findings) unless @no_check || check.passed?
-
-        result = Engine::Run.new(@project, check.usable, scenarios, Nukadoko.program_options, out: @json ? $stderr : @out).call
-        passed = result.delete(:passed)
-        finish("run", passed, findings: findings, **result)
+      when "run" then run(steps)
       else
         warn "usage: nuka check|run|steps|describe <step>|sig [--json] [--no-check]"
         2
@@ -59,18 +62,62 @@ module Nukadoko
 
     private
 
+    # `--name value` and `--name=value` for the repeated options, bare
+    # flags, and every other word a target. An unknown `--name` is kept to
+    # refuse, so a typo never reads as a target or is silently ignored.
+    def parse(words)
+      until words.empty?
+        word = words.shift
+        name, value = word.split("=", 2)
+        if REPEATED.include?(name)
+          value ||= words.shift
+          next @unknown << name.delete_prefix("--") if value.nil?
+
+          @options[name] << value
+        elsif FLAGS.include?(word) then @options[word]
+        elsif word.start_with?("--") then @unknown << name.delete_prefix("--")
+        else @rest << word
+        end
+      end
+    end
+
+    # A run checks the scenarios it selected, then runs them in each world
+    # it selected; a target or a world it cannot reach is refused first.
+    def run(steps)
+      selection = Engine::Selection.new(@project, @rest, @options["--tag"])
+      environments = Engine::Program.new(Nukadoko.program_options).environments(@options["--env"])
+      check = Engine::Check.new(steps, selection.scenarios)
+      findings = check.findings.map { relative(_1).to_h }
+      unless @no_check || check.passed?
+        stop = { severity: "refused", code: "check-errors", message: "nuka run did not start: nuka check reports errors for these scenarios" }
+        return finish("run", false, findings: findings + [stop], verdict: "refused", exit_code: 2)
+      end
+
+      result = Engine::Run.new(@project, check.usable, selection.scenarios, Nukadoko.program_options,
+                               environments: environments, out: @json ? $stderr : @out).call
+      passed = result.delete(:passed)
+      extra = { selection: selection.selection, tag_selection: selection.tag_selection }.compact
+      finish("run", passed, findings: findings, **extra, **result)
+    rescue Engine::Refusal => e
+      refuse(e)
+    end
+
+    def refuse(refusal)
+      finish(@command, false, findings: [refusal.to_h], verdict: refusal.severity, exit_code: refusal.exit_code)
+    end
+
     def relative(finding)
       finding.with(file: finding.file&.delete_prefix("#{@project}/"))
     end
 
-    def finish(command, passed, findings:, verdict: passed ? "passed" : "failed", **rest)
+    def finish(command, passed, findings:, verdict: passed ? "passed" : "failed", exit_code: passed ? 0 : 1, **rest)
       if @json
         @out.puts JSON.pretty_generate({ nukadoko: VERSION, engine: "ruby", command: command, verdict: verdict, findings: findings, **rest })
       else
         findings.each { @out.puts [_1[:severity], _1[:code], [_1[:file], _1[:line]].compact.join(":"), _1[:message]].join("\t") }
         @out.puts "ok: no issues found" if command == "check" && findings.empty?
       end
-      passed ? 0 : 1
+      exit_code
     end
   end
 end

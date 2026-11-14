@@ -15,11 +15,26 @@ module Nukadoko
         @options = options
       end
 
-      def environments
-        declared = @options[:environments]
-        return [Environment.new("default", {}, {})] unless declared
+      # The worlds a run starts: each --env in the order given; without one,
+      # defaultEnvironments in its order, else every environment that
+      # declares conditions, else the top level under the name default.
+      # default is always a name, whether or not the file defines it.
+      def environments(selected = [])
+        declared = (@options[:environments] || {}).transform_keys(&:to_s)
+        names = if selected.any? then selected
+                elsif @options[:defaultEnvironments] then @options[:defaultEnvironments].map(&:to_s)
+                else
+                  conditioned = declared.select { |_, e| e[:conditions] }.keys
+                  conditioned.any? ? conditioned : ["default"]
+                end
+        names.map do |name|
+          unless name == "default" || declared.key?(name)
+            raise Refusal.new("unknown-environment", %(Unknown environment "#{name}": not defined in nukadoko.program.rb's "environments"))
+          end
 
-        declared.map { |name, e| Environment.new(name.to_s, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {}) }
+          e = declared[name] || {}
+          Environment.new(name, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {})
+        end
       end
 
       def start(environment, dir, project)

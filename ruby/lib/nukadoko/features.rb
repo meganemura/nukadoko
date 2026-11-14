@@ -12,8 +12,11 @@ module Nukadoko
     Scenario = Data.define(:uri, :line, :keyword_line, :name, :tags, :steps)
     PickleStep = Data.define(:text, :line, :kind, :table, :doc_string, :background)
 
-    def self.load_features(dir)
-      paths = Dir.glob(File.join(dir, "**/*.feature")).sort
+    # A directory is every .feature file under it; a list is those files.
+    def self.load_features(dir_or_paths)
+      paths = dir_or_paths.is_a?(Array) ? dir_or_paths : Dir.glob(File.join(dir_or_paths, "**/*.feature")).sort
+      return [] if paths.empty?
+
       lines = {}
       background = {}
       scenarios = []

@@ -27,6 +27,16 @@ Messages and timings are left out.
 - `node conformance/run-ts.mjs --write` writes `expected.json` again. Read the diff before you commit it.
 - `node conformance/run-ts.mjs <name>...` runs only the named cases.
 - `ruby conformance/run-rb.rb [<name>...]` runs the cases under the Ruby engine and compares them with the same `expected.json`. Run `bundle install` in `ruby/` first.
+- `node conformance/run-engine.mjs [<nuka run argument>...]` runs the scenarios under `engine/` (below). `--env typescript` or `--env ruby` runs them against one engine.
+
+## What nuka itself does
+
+A case holds what a run of one project concludes. What the `nuka` command does with its arguments (which scenarios a target and `--tag` select, which worlds `--env` starts, which mistakes it refuses, and with which code) is not a case's result, so it lives in `engine/` as scenarios.
+`engine/` is a nukadoko project of its own, run by the TypeScript engine.
+Its program file has two worlds, `typescript` and `ruby`, so every scenario runs once against each engine, and a behavior holds only when both show it.
+A scenario builds a project from `engine/projects/<name>/` (its `features/`, and `steps-ts/` or `steps-rb/` for the engine at hand), runs that engine's `nuka` in it, and claims on the exit code and the `--json` envelope.
+Where `docs/spec.md` says what the TypeScript engine does, a scenario restates it.
+Where it does not, the scenario is where the behavior is written down, and the TypeScript engine is what it was read from.
 
 A case whose steps use `page` launches Chromium.
 When Playwright's own browser is not installed, set `NUKADOKO_CHROMIUM` to a Chromium executable, and both runners give it to their engine.

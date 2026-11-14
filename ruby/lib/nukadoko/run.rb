@@ -11,11 +11,12 @@ require "time"
 module Nukadoko
   module Engine
     class Run
-      def initialize(project, steps, scenarios, program, out: $stdout)
+      def initialize(project, steps, scenarios, program, environments: nil, out: $stdout)
         @project = project
         @steps = steps
         @scenarios = scenarios
         @program = Program.new(program)
+        @environments = environments || @program.environments
         @out = out
         @id = new_id("run")
         @dir = File.join(project, ".nukadoko", "runs", @id)
@@ -25,7 +26,7 @@ module Nukadoko
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         executions = []
         cells = Hash.new { |h, k| h[k] = [] }
-        @program.environments.each do |environment|
+        @environments.each do |environment|
           @out.puts "environment #{environment.name}"
           world_dir = File.join(@dir, "worlds", environment.name)
           FileUtils.mkdir_p(world_dir)

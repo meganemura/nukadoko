@@ -1,0 +1,8 @@
+{
+  "defaultEnvironments": ["blue", "green"],
+  "environments": {
+    "blue": {},
+    "green": {},
+    "staging": {}
+  }
+}

@@ -186,3 +186,7 @@ jobs:
         working-directory: ruby
       - run: bundle exec bin/test
         working-directory: ruby
+      # The scenarios under conformance/engine/, each run once in the world
+      # typescript and once in the world ruby: what nuka itself does (its
+      # targets, --tag, --env), which a case's expected.json cannot hold.
+      - run: node conformance/run-engine.mjs
