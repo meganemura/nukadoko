@@ -48,23 +48,89 @@ module Nukadoko
 
       def runs_text(runs) = runs == 1 ? "1 run" : "#{runs} runs"
 
-      def cell_text(cell) = cell[:outcome] == "pass" ? "pass" : "#{cell[:outcome]}@#{cell[:line]}"
+      def cell_text(cell) = { "pass" => "pass", "not-run" => "·" }.fetch(cell[:outcome]) { "#{cell[:outcome]}@#{cell[:line]}" }
 
-      def proves?(cell) = cell[:role] == "control" && cell[:outcome] == "fail" && cell[:runs] >= Table::PROOF_RUNS
+      # A head control or a base cell stands where the criterion's behaviour
+      # is absent, so a Then failing there the same way in each proof run
+      # proves the criterion tells the behaviour apart.
+      def proves?(cell)
+        absent = cell[:world] == "base" || (cell[:world] != "old" && cell[:role] == "control")
+        absent && cell[:outcome] == "fail" && cell[:runs] >= Table::PROOF_RUNS
+      end
 
       def failed_reason(cell, where)
         case cell[:outcome]
+        when "not-run" then "did not run #{where}: #{cell[:reason] || "no execution was recorded"}"
         when "fail" then "a claim broke at line #{cell[:line]} #{where}"
         when "broke" then "stopped at line #{cell[:line]} #{where} before a claim there was judged"
         else "its #{runs_text(cell[:runs])} #{where} disagree, the first that did not pass at line #{cell[:line]}"
         end
       end
 
+      def listed(parts) = parts.size <= 2 ? parts.join(" and ") : "#{parts[0..-2].join(", ")}, and #{parts.last}"
+
+      # What changed under an unchanged criterion, or nil when nothing did.
+      def underneath_change(context)
+        changed = [*("the mapping" if context[:mapping_changed]), *("its tags" if context[:retagged]), *("its name or its file" if context[:renamed])]
+        changed.empty? ? nil : "#{listed(changed)} changed since the base"
+      end
+
+      # The environments a row needs a base cell and an old cell in, from its
+      # head cells: none unless every required head cell passed; an
+      # unchanged row runs in the old world when something under it
+      # changed; a new or changed row runs at the base unless a head
+      # control already proves it, or it carries @held.
+      def planned_world_cells(head_cells, context, old_roles)
+        none = { base: [], old: [] }
+        return none unless context
+
+        required = head_cells.select { _1[:role] == "required" }
+        return none if required.empty? || required.any? { _1[:outcome] != "pass" }
+        if context[:change] == "unchanged"
+          return none unless underneath_change(context)
+
+          return { base: [], old: old_roles.select { _1[:role] == "required" }.map { _1[:environment] } }
+        end
+        return none if !context[:held] && head_cells.any? { proves?(_1) }
+
+        { base: required.map { _1[:environment] }, old: [] }
+      end
+
+      def world_cell_clause(cell)
+        where = cell[:world] == "old" ? "in the old world in #{cell[:environment]}" : "at the base in #{cell[:environment]}"
+        line = cell[:world] == "old" ? "line #{cell[:line]} of the base's feature file" : "line #{cell[:line]}"
+        case cell[:outcome]
+        when "not-run" then "it did not run #{where}: #{cell[:reason] || "no execution was recorded"}"
+        when "pass" then "it passed #{where}"
+        when "broke" then "it stopped at #{line} #{where} before a claim there was judged"
+        when "flaky" then "its #{runs_text(cell[:runs])} #{where} disagree, the first that did not pass at #{line}"
+        else
+          if cell[:world] == "base" && cell[:runs] < Table::PROOF_RUNS
+            "a claim broke at #{line} #{where} in only #{runs_text(cell[:runs])}, and proof needs #{Table::PROOF_RUNS}"
+          else
+            "a claim broke at #{line} #{where}"
+          end
+        end
+      end
+
+      def world_cells_clause(cells)
+        template = world_cell_clause(cells.first.merge(environment: "\u0000"))
+        same = cells.select { world_cell_clause(_1.merge(environment: "\u0000")) == template }.map { _1[:environment] }
+        template.sub("\u0000") { same.join(", ") }
+      end
+
+      def control_proof_reason(passed_in, proof)
+        "passes in #{passed_in}, and a claim broke at line #{proof[:line]} in #{proof[:environment]}, where its conditions do not hold, in each of #{runs_text(proof[:runs])}"
+      end
+
       # A row's verdict and why, from its cells: red for a required cell that
       # did not pass, or for a row with no required cell; proven when a
-      # control fails at a Then the same way in each proof run.
-      def judge_row(cells)
-        required = cells.select { _1[:role] == "required" }
+      # control fails at a Then the same way in each proof run. Under
+      # `--base` (`context`), red too for a new or changed row nothing proves
+      # (unproven) and an unchanged row the old world does not pass (moved).
+      def judge_row(cells, context = nil)
+        head = cells.select { _1[:world] == "head" }
+        required = head.select { _1[:role] == "required" }
         if required.empty?
           return ["failed", "no environment of this run meets its conditions, so every cell is a control and nothing shows that it holds"]
         end
@@ -79,14 +145,58 @@ module Nukadoko
         end
 
         passed_in = required.map { _1[:environment] }.join(", ")
-        controls = cells.select { _1[:role] == "control" }
+        controls = head.select { _1[:role] == "control" }
         proof = controls.find { proves?(_1) }
-        if proof
-          return ["proven", "passes in #{passed_in}, and a claim broke at line #{proof[:line]} in #{proof[:environment]}, where its conditions do not hold, in each of #{runs_text(proof[:runs])}"]
-        end
-        return ["held", "passes in #{passed_in}"] if controls.empty?
+        unless context
+          return ["proven", control_proof_reason(passed_in, proof)] if proof
+          return ["held", "passes in #{passed_in}"] if controls.empty?
 
-        ["held", "passes in #{passed_in}; no control shows a Then failing where its conditions do not hold (#{controls.map { "#{_1[:environment]}: #{cell_text(_1)}" }.join(", ")})"]
+          return ["held", "passes in #{passed_in}; no control shows a Then failing where its conditions do not hold (#{controls.map { "#{_1[:environment]}: #{cell_text(_1)}" }.join(", ")})"]
+        end
+
+        if context[:change] == "unchanged"
+          changed = underneath_change(context)
+          if changed
+            old = cells.select { _1[:world] == "old" }
+            moved = old.reject { _1[:outcome] == "pass" }
+            return ["moved", "passes in #{passed_in}, but #{changed} and the old world did not run it"] if old.empty?
+            return ["moved", "passes in #{passed_in}, but #{changed}, and #{world_cells_clause(moved)}"] if moved.any?
+          end
+          if proof
+            proven = control_proof_reason(passed_in, proof)
+            return ["proven", changed ? "#{proven}, and it passed in the old world, where the base's mapping runs head's code" : proven]
+          end
+          return ["held", "passes in #{passed_in}, and neither it nor the mapping changed since the base"] unless changed
+
+          return ["held", "passes in #{passed_in}, and in the old world, where the base's mapping runs head's code"]
+        end
+
+        base = cells.select { _1[:world] == "base" }
+        base_proof = base.find { proves?(_1) }
+        if base_proof
+          proven = "passes in #{passed_in}, and a claim broke at line #{base_proof[:line]} at the base in #{base_proof[:environment]} in each of #{runs_text(base_proof[:runs])}"
+          return ["proven", context[:held] ? "#{proven}, so the base does not have this behaviour and @held is not needed" : proven]
+        end
+        return ["proven", control_proof_reason(passed_in, proof)] if proof
+
+        if context[:held]
+          return ["held", "passes in #{passed_in} and at the base, as @held says"] if base.any? && base.all? { _1[:outcome] == "pass" }
+
+          short = base.reject { _1[:outcome] == "pass" }
+          clause = short.empty? ? "it did not run at the base" : world_cells_clause(short)
+          return ["unproven", "passes in #{passed_in}, and @held says the base has this behaviour, but #{clause}"]
+        end
+        absent = [*base.map { "base #{_1[:environment]}: #{cell_text(_1)}#{" (#{_1[:reason]})" if _1[:outcome] == "not-run" && _1[:reason]}" },
+                  *controls.map { "control #{_1[:environment]}: #{cell_text(_1)}" }]
+        if context[:then_judges_no_claim]
+          return ["unproven", "passes in #{passed_in}, but no claim step stands in its Then position, so no world can show a Then failing where its behaviour is absent" \
+                              "#{absent.empty? ? "" : " (#{absent.join(", ")})"}"]
+        end
+        if absent.empty?
+          return ["unproven", "passes in #{passed_in}, and no world where its behaviour is absent ran it, so nothing shows a Then failing without the change"]
+        end
+
+        ["unproven", "passes in #{passed_in}, and nothing shows a Then failing where its behaviour is absent (#{absent.join(", ")})"]
       end
 
       def counts(scenarios)

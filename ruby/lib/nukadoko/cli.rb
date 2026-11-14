@@ -6,7 +6,7 @@ module Nukadoko
   class CLI
     FLAGS = %w[--json --no-check --dry-run].freeze
     REPEATED = %w[--tag --env].freeze
-    VALUED = %w[--format --out].freeze
+    VALUED = %w[--format --out --base].freeze
 
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
@@ -58,6 +58,7 @@ module Nukadoko
 
         finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
       when "run" then run(steps)
+      when "__tree" then tree(steps)
       else
         warn "usage: nuka check|run|verdict|steps|describe <step>|sig [--json] [--no-check]"
         2
@@ -88,6 +89,8 @@ module Nukadoko
     # A run checks the scenarios it selected, then runs them in each world
     # it selected; a target or a world it cannot reach is refused first.
     def run(steps)
+      ref = @options["--base"].last
+      commit = ref && Engine::Base.resolve(@project, ref)
       selection = Engine::Selection.new(@project, @rest, @options["--tag"])
       program = Engine::Program.new(Nukadoko.program_options)
       environments = program.environments(@options["--env"])
@@ -108,8 +111,15 @@ module Nukadoko
         return finish("run", false, findings: [left_out_stop(left_out, program)], verdict: "failed", exit_code: 1)
       end
 
+      dir = File.join(@project, ".nukadoko", "runs", "run-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}")
+      base = if commit
+               targets = @rest.empty? ? nil : @rest.map { _1.sub(/:\d+\z/, "") }
+               Engine::Base.new(project: @project, ref: ref, commit: commit, run_dir: dir, selected: kept.map { Engine::Criteria.key(_1.uri, _1.line) },
+                                targets: targets, envs: @options["--env"], head_program: Nukadoko.program_options)
+             end
       result = Engine::Run.new(@project, check.usable, kept, Nukadoko.program_options,
-                               environments: environments, left_out: left_out.size, out: @json ? $stderr : @out).call
+                               environments: environments, left_out: left_out.size, out: @json ? $stderr : @out,
+                               dir: dir, base: base, env_flags: @options["--env"].flat_map { ["--env", _1] }).call
       passed = result.delete(:passed)
       findings += result.delete(:failures)
       started = result.slice(:run_id, :run_dir, :started_at, :finished_at, :commit, :environments, :worlds)
@@ -130,6 +140,25 @@ module Nukadoko
       passed ? 0 : 1
     rescue Engine::Refusal => e
       refuse(e)
+    end
+
+    # One pass of a `--base` tree, in the tree's own directory: the plan
+    # names the world, the environment, and the rows at their place in this
+    # tree, and the result goes to the file it names.
+    def tree(steps)
+      plan = JSON.parse(File.read(@rest.first), symbolize_names: true)
+      found = Dir.chdir(@project) { Engine.load_features(plan[:targets].map { _1[:feature] }.uniq) }
+      scenarios = plan[:targets].filter_map { |target| found.find { _1.uri == target[:feature] && _1.line == target[:line] } }
+      result = begin
+        environment = Engine::Program.new(Nukadoko.program_options).environments([plan[:environment]]).first
+        usable = Engine::Check.new(steps, scenarios).usable
+        { results: Engine::Run.new(@project, usable, scenarios, Nukadoko.program_options, environments: [environment],
+                                   world: plan[:world], dir: plan[:dir], out: @out).tree_pass }
+      rescue Engine::Refusal => e
+        { not_run: "the #{plan[:world]} tree's program file does not give this environment: #{e.message}" }
+      end
+      File.write(plan[:result], JSON.generate(result))
+      0
     end
 
     def meets?(scenario, environments)

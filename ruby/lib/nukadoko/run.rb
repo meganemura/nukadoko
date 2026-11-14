@@ -11,7 +11,10 @@ require "time"
 module Nukadoko
   module Engine
     class Run
-      def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout)
+      # `world` is head for a run, or base or old for a tree's pass, which
+      # writes into the head run's directory `dir`. `base` is the
+      # comparison a `--base` run judges its rows by.
+      def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout, world: "head", dir: nil, base: nil, env_flags: [])
         @project = project
         @steps = steps
         @scenarios = scenarios
@@ -19,52 +22,86 @@ module Nukadoko
         @environments = environments || @program.environments
         @left_out = left_out
         @out = out
-        @id = new_id("run")
-        @dir = File.join(project, ".nukadoko", "runs", @id)
+        @world = world
+        @base = base
+        @env_flags = env_flags
+        @id = dir ? File.basename(dir) : new_id("run")
+        @dir = dir || File.join(project, ".nukadoko", "runs", @id)
       end
 
       def call
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         @started_at = now
         @commit = RunRecord.commit(@project)
+        executions, cells = pass
+        tree_cells = {}
+        if @base
+          begin
+            tree_cells = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out).call(executions)
+          ensure
+            @base.cleanup
+          end
+        end
+        finish(executions, cells, tree_cells)
+      end
+
+      # One pass of a tree: each scenario in the one environment, as base or
+      # old, its executions and its cell.
+      def tree_pass
+        FileUtils.mkdir_p(File.join(@dir, "steps"))
+        executions, cells = pass
+        @scenarios.map do |scenario|
+          { feature: scenario.uri, line: scenario.line, cell: cells[scenario].first,
+            executions: executions.select { _1[:json][:feature] == scenario.uri && _1[:json][:line] == scenario.line }.map { _1[:json] } }
+        end
+      end
+
+      def role_of(scenario, environment) = Table.role(Table.condition_tags(scenario.tags), environment.conditions)
+
+      private
+
+      def pass
         @base_urls = {}
         executions = []
         cells = Hash.new { |h, k| h[k] = [] }
         @environments.each do |environment|
-          @out.puts "environment #{environment.name}"
-          world_dir = File.join(@dir, "worlds", environment.name)
+          @out.puts @world == "head" ? "environment #{environment.name}" : "#{@world} #{environment.name}"
+          world_dir = File.join(@dir, "worlds", @world == "head" ? environment.name : "#{environment.name}@#{@world}")
           FileUtils.mkdir_p(world_dir)
           world = @program.start(environment, world_dir, @project)
           @base_urls[environment.name] = world.base_url
           @process_fixtures = FixtureCache.new
           @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
           @scenarios.each do |scenario|
-            role = Table.role(Table.condition_tags(scenario.tags), environment.conditions)
+            role = @world == "head" ? role_of(scenario, environment) : "required"
             runs = [play(scenario, environment, role, world)]
             runs << play(scenario, environment, role, world) while proving?(role, runs)
             executions.concat(runs)
-            cells[scenario] << cell(runs, environment, role)
+            cells[scenario] << cell(runs, environment, role, scenario)
           end
         ensure
           @browser&.close
           @process_fixtures&.teardown
           world&.stop
         end
-        finish(executions, cells)
+        [executions, cells]
       end
 
-      private
-
+      # A head control and a base cell stand where the behaviour is absent,
+      # so a Then failing there the same way in each proof run is proof.
       def proving?(role, runs)
-        role == "control" && runs.size < Table::PROOF_RUNS && runs.all? { _1[:execution].first == :fail } && runs.map { _1[:execution] }.uniq.size == 1
+        absent = @world == "base" || (@world == "head" && role == "control")
+        absent && runs.size < Table::PROOF_RUNS && runs.all? { _1[:execution].first == :fail } && runs.map { _1[:execution] }.uniq.size == 1
       end
 
       # A cell is what one scenario's executions in one environment came to;
       # a cell whose first execution broke a claim names it and what it read.
-      def cell(runs, environment, role)
+      # Its conditions are the ones the row's tags name, as the environment
+      # gives them.
+      def cell(runs, environment, role, scenario)
         executions = runs.map { _1[:execution] }
         cell = Table.cell(executions)
-        entry = { world: "head", environment: environment.name, role: role, conditions: environment.conditions,
+        entry = { world: @world, environment: environment.name, role: role, conditions: Table.conditions_of(scenario.tags, environment.conditions),
                   outcome: cell[:outcome], line: cell[:line], runs: cell[:runs] }.compact
         if cell[:outcome] == "fail"
           entry[:claim] = executions.first[2]
@@ -75,21 +112,72 @@ module Nukadoko
 
       # run.json is the --json envelope as a file: the commit and worlds the
       # run judged, the counts, each execution, and the verdict table.
-      def finish(executions, cells)
+      # `tree_cells` holds each row's base and old cells, by its scenario,
+      # under `--base`; each row is judged with what changed since the base.
+      def finish(executions, cells, tree_cells = {})
         rows = @scenarios.map do |scenario|
-          row_cells = cells[scenario]
-          verdict, reason = RunRecord.judge_row(row_cells)
-          { feature: scenario.uri, line: scenario.line, name: scenario.name, change: nil,
-            conditions: Table.condition_tags(scenario.tags), cells: row_cells, verdict: verdict, reason: reason }
+          change = @base&.changes&.[](Criteria.key(scenario.uri, scenario.line))
+          row_cells = cells[scenario] + tree_cells.fetch(scenario, [])
+          verdict, reason = RunRecord.judge_row(row_cells, context_of(scenario, change, executions))
+          row = { feature: scenario.uri, line: scenario.line, name: scenario.name, change: change&.dig(:change) }
+          row[:renamed_from] = change[:renamed_from] if change&.dig(:renamed_from)
+          row[:retagged] = true if change&.dig(:retagged)
+          row.merge(conditions: Table.row_tags(scenario.tags), cells: row_cells, verdict: verdict, reason: reason)
         end
+        rows.sort_by! { [_1[:feature], _1[:line]] }
+        rows.concat(removed_rows) if @base
         scenarios = executions.map { _1[:json] }
+        worlds = %w[head base old].flat_map do |world|
+          environments = world == "old" ? (@base&.old_environments || @environments) : @environments
+          environments.map(&:name).select { |name| world == "head" || rows.any? { |row| row[:cells].any? { _1[:world] == world && _1[:environment] == name } } }
+                      .map { { world: world, environment: _1 } }
+        end
+        judged = @base ? judged_findings(rows) : []
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
           environments: @environments.map { environment_entry(_1) }, worlds: [], order: { kind: "file" },
-          counts: RunRecord.counts(scenarios), scenarios: scenarios,
-          table: { base: nil, mapping_changed: nil, mapping_changes: nil,
-                   worlds: @environments.map { { world: "head", environment: _1.name } },
-                   rows: rows, left_out: @left_out, proof_runs: Table::PROOF_RUNS },
-          failures: executions.filter_map { _1[:failure] }, passed: rows.none? { _1[:verdict] == "failed" } }
+          counts: RunRecord.counts(scenarios.reject { _1[:world] }), scenarios: scenarios,
+          table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
+                   mapping_changes: @base&.mapping_changes, **(@base ? { judgments_changed: [] } : {}),
+                   worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table::PROOF_RUNS },
+          failures: executions.filter_map { _1[:failure] } + judged,
+          passed: rows.none? { Summary::RED.include?(_1[:verdict]) } }
+      end
+
+      # What `--base` knows of one row: its change, whether it carries
+      # @held, whether the mapping changed, whether its tags or its name or
+      # file changed, and whether its passing executions judged no claim in
+      # Then position.
+      def context_of(scenario, change, executions)
+        return nil unless change
+
+        no_claim = executions.any? do |execution|
+          json = execution[:json]
+          json[:feature] == scenario.uri && json[:line] == scenario.line && !json[:world] && json[:role] == "required" &&
+            json[:status] == "passed" && json[:judged_by] == "nothing"
+        end
+        { change: change[:change], held: scenario.tags.include?(Criteria::HELD), mapping_changed: @base.mapping[:changed],
+          retagged: change[:retagged] == true, renamed: !change[:renamed_from].nil?, then_judges_no_claim: no_claim ? "nothing" : nil }
+      end
+
+      def removed_rows
+        @base.removed.sort_by { [_1.feature, _1.line] }.map do |criterion|
+          { feature: criterion.feature, line: criterion.line, name: criterion.name, change: "removed",
+            conditions: Table.row_tags(criterion.tags), cells: [], verdict: "removed",
+            reason: "the base holds this criterion, and head no longer does", lines: criterion.lines }
+        end
+      end
+
+      # A finding for each unproven and moved row, which has no failed
+      # execution to carry one, with the command that judges it again
+      # against the commit the run compared with.
+      def judged_findings(rows)
+        rows.filter_map do |row|
+          next unless %w[unproven moved].include?(row[:verdict])
+
+          command = ["nuka", "run", "#{row[:feature]}:#{row[:line]}", "--base", @base.commit, *@env_flags].map { Selection.shell_word(_1) }.join(" ")
+          { severity: "failed", code: row[:verdict] == "unproven" ? "criterion-unproven" : "criterion-moved", file: row[:feature], line: row[:line],
+            message: %(Scenario "#{row[:name]}" is #{row[:verdict]}: it #{row[:reason]}), do: command }
+        end
       end
 
       def environment_entry(environment)

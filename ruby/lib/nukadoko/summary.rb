@@ -42,7 +42,7 @@ module Nukadoko
 
       def render(doc)
         lines = [MARKER, *title(doc), *table(doc), *reasons(doc), *limits_section(doc), *condition(doc),
-                 *claims(doc), *findings(doc), *rerun(doc)]
+                 *removed(doc), *claims(doc), *findings(doc), *rerun(doc)]
         "#{lines.join("\n")}\n"
       end
 
@@ -155,9 +155,15 @@ module Nukadoko
           declared = (doc[:environments].find { _1[:name] == column[:environment] }&.dig(:conditions) if column[:world] == "head")
           "#{column[:world]} #{column[:environment]}#{declared ? " (#{conditions_text(declared)})" : ""}"
         end
-        change = ->(row) { base ? ["#{row[:change]}#{", retagged" if row[:retagged]}"] : [] }
+        change = lambda do |row|
+          next [] unless base
+
+          renamed = row[:renamed_from] ? ", renamed from #{cell_code(row[:renamed_from][:feature])} #{cell_text(row[:renamed_from][:name])}" : ""
+          ["#{row[:change]}#{renamed}#{", retagged" if row[:retagged]}"]
+        end
         seen = seen_column(doc)
         [
+          *base_line(doc),
           "",
           "| verdict | criterion | #{"change | " if base}#{worlds.map { cell_text(heading.(_1)) }.join(" | ")}#{" | seen" if seen} |",
           "| --- | --- | #{"--- | " if base}#{worlds.map { "---" }.join(" | ")}#{" | ---" if seen} |",
@@ -171,6 +177,54 @@ module Nukadoko
             "| #{[row[:verdict], "#{cell_code("#{row[:feature]}:#{row[:line]}")} #{cell_text(row[:name])}#{tags}", *change.(row), *cells, *(seen ? [seen.(row)] : [])].join(" | ")} |"
           end
         ]
+      end
+
+      # The line above the table under `--base`: what the run compared with,
+      # how many criteria changed, and whether the mapping changed and what
+      # in it, since an unchanged criterion over a changed mapping is what
+      # the old world was run for.
+      def base_line(doc)
+        base = doc[:table][:base] or return []
+        rows = doc[:table][:rows]
+        count = ->(change) { rows.count { _1[:change] == change } }
+        changes = "#{count.("unchanged")} unchanged, #{count.("changed")} changed, #{count.("new")} new, #{count.("removed")} removed"
+        mapping = doc[:table][:mapping_changes]
+        parts = []
+        if mapping
+          parts << "#{mapping[:files].size == 1 ? "file" : "files"} #{mapping[:files].map { cell_code(_1) }.join(", ")}" if mapping[:files].any?
+          parts << "the config's mapping part" if mapping[:config]
+          parts << "the conditions of #{mapping[:conditions].map { cell_code(_1) }.join(", ")}" if mapping[:conditions].any?
+          parts << "defaultEnvironments" if mapping[:default_environments]
+        end
+        unchanged = rows.select { _1[:change] == "unchanged" && _1[:verdict] != "failed" }
+        ran_old = unchanged.count do |row|
+          old = row[:cells].select { _1[:world] == "old" }
+          old.any? && old.none? { _1[:outcome] == "not-run" }
+        end
+        old_ran = if ran_old == unchanged.size then "so the old world ran each unchanged criterion under the base's steps."
+                  else "so each unchanged criterion needed the old world, but it ran #{ran_old.zero? ? "none of them" : "only #{ran_old} of the #{unchanged.size}"}; each moved row says why."
+                  end
+        mapping_line = if doc[:table][:mapping_changed]
+                         "The mapping changed (#{parts.empty? ? "the base's could not be read" : parts.join("; ")}), #{old_ran}"
+                       else "The mapping did not change, so no unchanged criterion needed the old world."
+                       end
+        compared = base[:commit].start_with?(base[:ref]) ? cell_code(base[:ref]) : "#{cell_code(base[:ref])} (`#{base[:commit][0, 7]}`)"
+        ["", "Compared with #{compared}: #{changes}. #{mapping_line}"]
+      end
+
+      # Each criterion the base holds and head does not, with its sentences
+      # at the base, so a reader approving the change sees what it drops.
+      def removed(doc)
+        rows = doc[:table][:rows].select { _1[:verdict] == "removed" }
+        return [] if rows.empty?
+
+        lines = ["", "## Removed criteria", "", "Each criterion below is in the base and not in head, quoted as the base has it."]
+        rows.each do |row|
+          text = row[:lines] || []
+          fence = "`" * ([2, *text.flat_map { _1.scan(/`+/).map(&:size) }].max + 1)
+          lines.push("", "### #{cell_code("#{row[:feature]}:#{row[:line]}")} #{cell_text(row[:name])}", "", "#{fence}gherkin", *text, fence)
+        end
+        lines
       end
 
       # A Then that sent requests is seen in its own http.jsonl, the
@@ -223,7 +277,8 @@ module Nukadoko
           next unless cell
 
           execution = doc[:scenarios].find do |scenario|
-            scenario[:feature] == row[:feature] && scenario[:line] == row[:line] && (scenario[:world] || "head") == world &&
+            at = scenario[:row] || { feature: scenario[:feature], line: scenario[:line] }
+            at[:feature] == row[:feature] && at[:line] == row[:line] && (scenario[:world] || "head") == world &&
               scenario[:environment] == cell[:environment] && scenario[:status] != "passed"
           end
           failure = execution && describe_failure(execution)

@@ -8,7 +8,8 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 状態: 初期の核です。
 `conformance/` の 10 のケースを通します。
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
-`--base`、`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
+`--base` も動きます。
+`nuka do`、`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
 
 ## インストール
 

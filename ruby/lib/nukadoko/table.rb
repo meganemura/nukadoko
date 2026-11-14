@@ -25,6 +25,8 @@ module Nukadoko
       # `[:fail, line, claim]`, or `[:broke, line]`.
       def self.cell(executions)
         first = executions.first
+        return { outcome: "not-run", runs: 0 } if first.nil?
+
         if executions.uniq.size > 1
           line = executions.find { _1.first != :pass }&.at(1)
           { outcome: "flaky", line: line }
@@ -42,6 +44,16 @@ module Nukadoko
       end
 
       def self.condition_tags(tags) = tags.grep(/\A@with(out)?:/)
+
+      # The tags a row lists: its condition tags and @held, as written.
+      def self.row_tags(tags) = [*condition_tags(tags), *("@held" if tags.include?("@held"))]
+
+      # For each condition the tags name, the value the environment declares
+      # for it, or nil: what a cell's role came from.
+      def self.conditions_of(tags, conditions)
+        names = condition_tags(tags).map { _1[/\A@with(?:out)?:([\w.-]+)/, 1] }.uniq
+        names.to_h { [_1, conditions.fetch(_1, nil)] }
+      end
     end
   end
 end

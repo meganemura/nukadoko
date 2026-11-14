@@ -56,6 +56,23 @@ notes come from the section below whose heading starts with `## [<version>]`.
   out and counted in `table.left_out`. When `--env` leaves out every
   selected scenario, the run fails with `nothing-selected` and names a run
   that meets them.
+- `nuka run --base <ref>` judges each criterion against the commit `ref`
+  names. A criterion is new, changed, unchanged (with `renamed_from` or
+  `retagged` when its name or its other tags moved), or removed. A new or
+  changed one runs at the base too, the ref's code with head's
+  `features/`, where a Then failing in each proof run makes it `proven`
+  and anything else `unproven`. An unchanged one runs in the old world,
+  head's working tree with the ref's `features/` and config, when the
+  mapping under it changed (a file under `features/` other than a
+  `.feature`, the config file, or the program file's `conditions` or
+  `defaultEnvironments`) or it was renamed or retagged, and is `moved` when
+  it does not pass there. Both trees are made under the run directory and
+  removed when it ends. `unproven` and `moved` rows are
+  `criterion-unproven` and `criterion-moved` findings, run.json's table
+  has `base`, `mapping_changed`, and `mapping_changes`, and summary.md
+  says what the run compared with and quotes each removed criterion. A ref
+  outside git or one that names no commit is refused with
+  `base-outside-git`, `base-shallow`, or `base-ref-unknown`.
 
 ### Changed
 
@@ -74,6 +91,9 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - A program file whose `environments` declare no `conditions` and that has
   no `defaultEnvironments` runs `default` alone, as the TypeScript engine
   does, rather than every environment.
+- A cell's `conditions` in run.json hold only the conditions the row's tags
+  name, each with the value the environment declares or `null`, as the
+  TypeScript engine writes them.
 
 ## [0.1.0] - 2026-11-14
 

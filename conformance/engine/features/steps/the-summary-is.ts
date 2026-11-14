@@ -12,12 +12,13 @@ function steady(text: string): string {
     .replace(/\b(run|step)-\d{8}-\d{6}-[a-z0-9]{4}\b/g, "$1-<id>")
     .replace(/- started \S+, finished \S+ \([^)]*\)/g, "- started <time>, finished <time> (<duration>)")
     .replace(/^- nukadoko: .*$/m, "- nukadoko: <version>")
+    .replace(/`[0-9a-f]{7}`/g, "`<commit>`")
     .replace(/nukadoko\.program\.(ts|rb)/g, "nukadoko.program.*")
     .trimEnd();
 }
 
 export default defineStep({
-  description: "The summary.md nuka wrote beside run.json is exactly the docstring, with ids, times, the duration, and the version written as <id>, <time>, <duration>, and <version>",
+  description: "The summary.md nuka wrote beside run.json is exactly the docstring, with ids, times, the duration, the version, and a short commit hash written as <id>, <time>, <duration>, <version>, and <commit>",
   pattern: "the summary is",
   args: z.object({
     expected: z.string().describe("The whole summary, without its last newline"),
