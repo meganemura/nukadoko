@@ -146,7 +146,7 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
 workflow の形は `publish.yml` と同じです。
 `check` ジョブは gem のバージョンを読み、tag `ruby-v<version>` を探し、`ruby/CHANGELOG.md` の見出しが `## [<version>]` で始まる節を読みます。
 `test` ジョブは `ci.yml` の `ruby-engine` ジョブと同じチェックを実行します。
-`publish` ジョブは GitHub Environment `release` を待ち、gem をビルドし、GitHub の OIDC トークンを RubyGems の資格情報に交換し、`gem push` を実行します。
+`publish` ジョブは GitHub Environment `rubygems` を待ち、gem をビルドし、GitHub の OIDC トークンを RubyGems の資格情報に交換し、`gem push` を実行します。
 そのあと `release` ジョブが tag `ruby-v<version>` と、latest にしない GitHub release を作ります。
 npm パッケージの release が latest のまま残ります。
 `ruby-` の接頭辞で、gem の tag と npm パッケージの `v*` の tag を分けます。
@@ -156,13 +156,13 @@ npm パッケージの release が latest のまま残ります。
 
 一度だけ人が行う手順です。
 
-1. `meganemura/nukadoko` に GitHub Environment `release` を作り、required reviewers を付け、`main` からのデプロイを許します。
+1. `meganemura/nukadoko` に GitHub Environment `rubygems` を作り、required reviewers を付け、`main` からのデプロイを許します。
 2. rubygems.org の https://rubygems.org/profile/oidc/pending_trusted_publishers で、pending trusted publisher を足します(gem はまだありません)。
    - Gem name: `nukadoko`
    - Repository owner: `meganemura`
    - Repository name: `nukadoko`
    - Workflow filename: `release-gem.yml`
-   - Environment: `release`
+   - Environment: `rubygems`
    - Workflow repository owner と name: 両方とも空にします(workflow はこのリポジトリにあり、ほかの場所の reusable workflow ではありません)。
 
    最初の push のあと、pending publisher はその gem の trusted publisher になります。
@@ -172,4 +172,4 @@ npm パッケージの release が latest のまま残ります。
 1. `ruby/CHANGELOG.md` で、`## [Unreleased]` の下のノートを新しい `## [<version>]` の見出しへ移します。
    同じバージョンを `ruby/lib/nukadoko/version.rb` に書き、`ruby/` で `bundle install` を実行して `Gemfile.lock` にそのバージョンを載せます。
 2. 両方を `chore: release the gem <version>` としてコミットし、`queue` を通して `main` に載せます。
-3. run が求めたら、Environment `release` を承認します。
+3. run が求めたら、Environment `rubygems` を承認します。

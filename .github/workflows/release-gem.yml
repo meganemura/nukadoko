@@ -94,14 +94,14 @@ jobs:
       - run: bundle exec bin/test
         working-directory: ruby
 
-  # The release environment's approval is the last gate, and only this job
+  # The rubygems environment's approval is the last gate, and only this job
   # holds the RubyGems OIDC token. It runs no test code. The RubyGems trusted
   # publisher names this file and this environment.
   publish:
     name: Publish the gem
     needs: [check, test]
     runs-on: ubuntu-latest
-    environment: release
+    environment: rubygems
     permissions:
       id-token: write
       contents: read

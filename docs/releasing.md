@@ -183,7 +183,7 @@ the gem version and looks for the tag `ruby-v<version>`, and it reads
 that version's section of `ruby/CHANGELOG.md`, whose heading starts with
 `## [<version>]`. The `test` job runs the checks of `ci.yml`'s
 `ruby-engine` job. The `publish` job waits for the GitHub Environment
-`release`, builds the gem, exchanges the GitHub OIDC token for a
+`rubygems`, builds the gem, exchanges the GitHub OIDC token for a
 RubyGems credential, and runs `gem push`. The `release` job then creates
 the tag `ruby-v<version>` and a GitHub release that is not marked as
 the latest, so the npm package's release stays the latest one. The
@@ -194,7 +194,7 @@ tags. Nobody pushes either tag by hand.
 
 These are human steps, done once.
 
-1. Create the GitHub Environment `release` in `meganemura/nukadoko`, with
+1. Create the GitHub Environment `rubygems` in `meganemura/nukadoko`, with
    required reviewers, and allow deployments from `main`.
 2. On rubygems.org, add a pending trusted publisher (the gem does not
    exist yet), at https://rubygems.org/profile/oidc/pending_trusted_publishers:
@@ -202,7 +202,7 @@ These are human steps, done once.
    - Repository owner: `meganemura`
    - Repository name: `nukadoko`
    - Workflow filename: `release-gem.yml`
-   - Environment: `release`
+   - Environment: `rubygems`
    - Workflow repository owner and name: leave both empty (the workflow is
      in this repository, not a reusable workflow elsewhere).
 
@@ -217,4 +217,4 @@ These are human steps, done once.
    `Gemfile.lock` names it.
 2. Commit both as `chore: release the gem <version>` and land the commit
    on `main` through `queue`.
-3. Approve the `release` Environment when the run asks for it.
+3. Approve the `rubygems` Environment when the run asks for it.
