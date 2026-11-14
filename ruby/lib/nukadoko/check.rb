@@ -19,10 +19,19 @@ module Nukadoko
     class Check
       attr_reader :findings, :usable
 
-      def initialize(steps, scenarios)
+      def initialize(steps, scenarios, features: true)
         @steps = steps
         @scenarios = scenarios
         @findings = []
+        # With no step file no line can ever match, so every line would read
+        # as undefined; one finding says why instead.
+        if !features
+          @findings << Finding.new("error", "features-dir-missing", "nukadoko.config.rb", nil, nil, %(featuresDir "features" does not exist),
+                                   "Create features/steps for the step files, or correct featuresDir in nukadoko.config.rb.")
+        elsif steps.empty?
+          @findings << Finding.new("error", "no-step-files-found", "features", nil, nil,
+                                   %(no .rb step file was found while scanning "features"; no step can ever be registered), Codes.fix("no-step-files-found"))
+        end
         @usable = steps.reject { definition_broken?(_1) }
         @usable.each { check_contract(_1) }
         check_parts

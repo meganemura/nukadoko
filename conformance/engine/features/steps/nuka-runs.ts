@@ -80,7 +80,9 @@ export default defineStep({
     const last = (parsed.findings ?? []).filter((f) => f.severity === "refused" || f.severity === "failed").at(-1);
     const fields = ["severity", "code", "message", "fix", "do"] as const;
     const stop = last === undefined ? "" : fields.flatMap((key) => (last[key] === undefined ? [] : [`${key}: ${last[key]}`])).join("\n").replace(/nukadoko\.(program|config)\.(ts|rb)/g, "nukadoko.$1.*");
-    const printed = sameStepFiles(`${ran.stdout}${ran.stderr}`);
-    return { stop: sameStepFiles(stop), printed, exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "", runDir: parsed.run_dir ?? "", codes: (parsed.findings ?? []).map((f) => f.code).join(" "), judged: parsed.judged ?? "" };
+    // The project's own directory differs on each run.
+    const own = (text: string): string => sameStepFiles(text).replaceAll(dir, "<project>");
+    const printed = own(`${ran.stdout}${ran.stderr}`);
+    return { stop: own(stop), printed, exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "", runDir: parsed.run_dir ?? "", codes: (parsed.findings ?? []).map((f) => f.code).join(" "), judged: parsed.judged ?? "" };
   },
 });

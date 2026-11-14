@@ -20,9 +20,11 @@ export function engine(): "typescript" | "ruby" {
 export function buildProject(name: string, dir: string): void {
   const source = path.join(engineRoot, "projects", name);
   if (!existsSync(source)) throw new Error(`no project ${name} under conformance/engine/projects`);
-  cpSync(path.join(source, "features"), path.join(dir, "features"), { recursive: true });
+  // A project for nuka init has no features, no steps, and no config file.
+  const bare = existsSync(path.join(source, "bare"));
+  if (existsSync(path.join(source, "features"))) cpSync(path.join(source, "features"), path.join(dir, "features"), { recursive: true });
   const lang = engine() === "typescript" ? "ts" : "rb";
-  cpSync(path.join(source, `steps-${lang}`), path.join(dir, "features", "steps"), { recursive: true });
+  if (existsSync(path.join(source, `steps-${lang}`))) cpSync(path.join(source, `steps-${lang}`), path.join(dir, "features", "steps"), { recursive: true });
   const files = path.join(source, "files");
   if (existsSync(files)) cpSync(files, dir, { recursive: true });
   const program = path.join(source, "program.json");
@@ -30,7 +32,7 @@ export function buildProject(name: string, dir: string): void {
     writeFileSync(path.join(dir, "package.json"), '{ "type": "module" }\n');
     mkdirSync(path.join(dir, "node_modules"));
     symlinkSync(path.join(root, "typescript"), path.join(dir, "node_modules", "nukadoko"), "dir");
-    writeFileSync(path.join(dir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({});\n');
+    if (!bare) writeFileSync(path.join(dir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({});\n');
     if (existsSync(program)) {
       writeFileSync(path.join(dir, "nukadoko.program.ts"), `import { defineProgram } from "nukadoko";\n\nexport default defineProgram(${readFileSync(program, "utf8")});\n`);
     }

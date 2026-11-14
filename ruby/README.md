@@ -3,7 +3,7 @@
 The Ruby engine of [nukadoko](../README.md): typed step contracts for Gherkin, written in Ruby, so a scenario can be told wrong before it runs.
 It reads the same feature files as the TypeScript engine and must judge them the same way; the cases in [`../conformance/`](../conformance/README.md) hold it to that.
 
-Status: an early core. It passes the ten cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, polling Then steps, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. It runs `--base`, `nuka do`, and `nuka scaffold`. Much of what the TypeScript engine does is not here yet, such as `nuka init` and most of what `nuka check` reports.
+Status: an early core. It passes the ten cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, polling Then steps, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. It runs `--base`, `nuka do`, `nuka scaffold`, and `nuka init`. Much of what the TypeScript engine does is not here yet, such as most of what `nuka check` reports.
 
 ## Install
 
@@ -40,6 +40,7 @@ end
 
 ## Commands
 
+- `nuka init` writes `nukadoko.config.rb`, the empty `features/steps/`, and the `.gitignore` entries for `.nukadoko/` and `.env` files. It refuses when the config file exists.
 - `nuka check [--json]` reports what is wrong before anything runs.
 - `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--json] [--no-check]` starts the program in each selected world, runs the selected scenarios, and writes a record per step under `.nukadoko/runs/`. With no target it runs `features/`.
 - `nuka verdict [--json]` says whether the newest run judged the working tree as it is now and left nothing red. It never starts a run.

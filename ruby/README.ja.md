@@ -8,8 +8,8 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 状態: 初期の核です。
 `conformance/` の 10 のケースを通します。
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
-`--base`、`nuka do`、`nuka scaffold` も動きます。
-`nuka init`、`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
+`--base`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
+`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
 
 ## インストール
 
@@ -48,6 +48,8 @@ end
 
 ## コマンド
 
+- `nuka init` は、`nukadoko.config.rb`、空の `features/steps/`、`.nukadoko/` と `.env` のための `.gitignore` の行を書きます。
+設定ファイルがすでにあれば断ります。
 - `nuka check [--json]` は、実行前にまちがいを報告します。
 - `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
 対象を書かなければ `features/` を実行します。

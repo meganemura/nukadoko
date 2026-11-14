@@ -89,6 +89,12 @@ notes come from the section below whose heading starts with `## [<version>]`.
   commands that write each stub again, and the same refusals
   (`file-exists`, `file-edited`, `invalid-value`, `target-not-found`).
   `--command`, `--request`, and `--from` are refused as not here yet.
+- `nuka init` writes `nukadoko.config.rb`, the empty `features/steps/`,
+  and the `.gitignore` entries the TypeScript engine writes, refuses with
+  `config-exists` when the config file is there, and ends with a
+  self-check that loads the config and the steps.
+- `nuka check` reports `features-dir-missing` when there is no
+  `features/`, and `no-step-files-found` when it holds no step file.
 
 ### Changed
 

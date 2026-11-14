@@ -4,7 +4,7 @@
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
-    FLAGS = %w[--json --no-check --dry-run --then --replace].freeze
+    FLAGS = %w[--json --no-check --dry-run --then --replace --allure].freeze
     REPEATED = %w[--tag --env --use].freeze
     VALUED = %w[--format --out --base --args --pattern --description --feature --command --request --from --cwd --body --argv].freeze
 
@@ -26,6 +26,7 @@ module Nukadoko
       return verdict if @command == "verdict"
       return report if @command == "report"
       return clean if @command == "clean"
+      return init if @command == "init"
 
       %w[nukadoko.config.rb nukadoko.program.rb].each do |name|
         file = File.join(@project, name)
@@ -33,7 +34,7 @@ module Nukadoko
       end
       steps = Nukadoko.load_steps(File.join(@project, "features", "steps"))
       scenarios = Dir.chdir(@project) { Engine.load_features("features") }
-      check = Engine::Check.new(steps, scenarios)
+      check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")))
       findings = check.findings.map { relative(_1).to_h }
       case @command
       when "check" then finish("check", check.passed?, findings: findings)
@@ -169,6 +170,16 @@ module Nukadoko
     # to stdout and to .nukadoko/do/<id>/record.json, where a later
     # `nuka do --use` reads it. A refusal goes to stderr, since stdout is
     # the record's.
+    # Paths written go to stdout, notes and refusals to stderr.
+    def init
+      @out = $stderr
+      return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
+      return refuse(Engine::Refusal.new("invalid-arguments", "--allure is not in the Ruby engine yet")) if @options.key?("--allure")
+
+      result = Engine::Init.new(@project, out: $stdout, err: $stderr).call
+      result.is_a?(Engine::Refusal) ? refuse(result) : result
+    end
+
     # Writes stubs; their paths go to stdout, and notes and refusals to stderr.
     def scaffold(steps, scenarios)
       @out = $stderr
