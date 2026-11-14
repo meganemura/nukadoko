@@ -7,7 +7,7 @@ function words(argv: string): string[] {
   return [...argv.matchAll(/'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2]);
 }
 
-type Envelope = { selection?: string; findings?: { severity: string; code: string }[]; scenarios?: { feature: string; line: number; environment: string; status: string }[] };
+type Envelope = { run_dir?: string; selection?: string; findings?: { severity: string; code: string }[]; scenarios?: { feature: string; line: number; environment: string; status: string }[] };
 
 function envelope(stdout: string): Envelope {
   try {
@@ -31,6 +31,7 @@ export default defineStep({
     stderr: z.string().describe("Everything nuka wrote to stderr"),
     scenarios: z.string().describe("Under --json, one line per scenario execution: feature:line environment status"),
     selection: z.string().describe("Under --json, the envelope's selection, or an empty string"),
+    runDir: z.string().describe("Under --json, the envelope's run_dir, or an empty string"),
     stops: z.string().describe("Under --json, the codes of the refused and failed findings, separated by spaces"),
   }),
   // nuka writes its run directory inside the scratch project only.
@@ -40,6 +41,6 @@ export default defineStep({
     const parsed = envelope(ran.stdout);
     const scenarios = (parsed.scenarios ?? []).map((s) => `${s.feature}:${s.line} ${s.environment} ${s.status}`).join("\n");
     const stops = (parsed.findings ?? []).filter((f) => f.severity === "refused" || f.severity === "failed").map((f) => f.code).join(" ");
-    return { exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "" };
+    return { exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "", runDir: parsed.run_dir ?? "" };
   },
 });

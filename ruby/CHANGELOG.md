@@ -25,9 +25,19 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `--tag` beside a line target), `invalid-arguments` (an unknown flag),
   and `check-errors`. A `--tag` that keeps no scenario fails with
   `nothing-selected` and exit 1.
+- `nuka run` writes `run.json` into the run directory, the `--json`
+  envelope as a file, in the TypeScript engine's shape: the commit and
+  working tree the run judged, the environments, `counts`, each
+  scenario execution with its steps (`step_record_id`, `observed`,
+  `error` with its `kind`, `used`, and each claim with `actual_from`,
+  `expected_from`, `expected_text`, and `outcome`), and the verdict table
+  with each row's `reason`. A failed scenario is a `scenario-failed`
+  finding with the `nuka run` line that runs it again.
 
 ### Changed
 
+- The `--json` envelope opens with `schema_version` and no longer has
+  `engine`, so both engines print the same fields.
 - `nuka run` checks only the scenarios it selected, as the TypeScript
   engine does, and a run stopped by `check` exits 2 with `check-errors`.
 - A program file whose `environments` declare no `conditions` and that has

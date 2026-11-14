@@ -96,8 +96,16 @@ module Nukadoko
       result = Engine::Run.new(@project, check.usable, selection.scenarios, Nukadoko.program_options,
                                environments: environments, out: @json ? $stderr : @out).call
       passed = result.delete(:passed)
-      extra = { selection: selection.selection, tag_selection: selection.tag_selection }.compact
-      finish("run", passed, findings: findings, **extra, **result)
+      findings += result.delete(:failures)
+      started = result.slice(:run_id, :run_dir, :started_at, :finished_at, :commit, :environments, :worlds)
+      rest = result.except(*started.keys)
+      envelope = { **head("run", passed ? "passed" : "failed", findings, check: @no_check ? "skipped" : "ran"),
+                   **started, selection: selection.selection, tag_selection: selection.tag_selection, **rest }
+      envelope.delete(:tag_selection) unless envelope[:tag_selection]
+      File.write(File.join(@project, result[:run_dir], "run.json"), "#{JSON.pretty_generate(envelope)}\n")
+      @out.puts "run       #{File.join(result[:run_dir], "run.json")}" unless @json
+      emit(envelope, findings, "run")
+      passed ? 0 : 1
     rescue Engine::Refusal => e
       refuse(e)
     end
@@ -110,14 +118,26 @@ module Nukadoko
       finding.with(file: finding.file&.delete_prefix("#{@project}/"))
     end
 
+    # Every envelope opens the same way, in the TypeScript engine's order.
+    def head(command, verdict, findings, **more)
+      { schema_version: Engine::RunRecord::SCHEMA_VERSION, nukadoko: VERSION, command: command, **more, verdict: verdict, findings: findings }
+    end
+
     def finish(command, passed, findings:, verdict: passed ? "passed" : "failed", exit_code: passed ? 0 : 1, **rest)
+      emit({ **head(command, verdict, findings), **rest }, findings, command)
+      exit_code
+    end
+
+    def emit(envelope, findings, command)
       if @json
-        @out.puts JSON.pretty_generate({ nukadoko: VERSION, engine: "ruby", command: command, verdict: verdict, findings: findings, **rest })
+        @out.puts JSON.pretty_generate(envelope)
       else
-        findings.each { @out.puts [_1[:severity], _1[:code], [_1[:file], _1[:line]].compact.join(":"), _1[:message]].join("\t") }
+        findings.each do |f|
+          @out.puts [f[:severity], f[:code], [f[:file], f[:line]].compact.join(":"), f[:message]].join("\t")
+          @out.puts "  do: #{f[:do]}" if f[:do]
+        end
         @out.puts "ok: no issues found" if command == "check" && findings.empty?
       end
-      exit_code
     end
   end
 end

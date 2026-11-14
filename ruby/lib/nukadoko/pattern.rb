@@ -24,6 +24,12 @@ module Nukadoko
         found = @expression.match(text)
         found && keys.zip(found.map { _1.value(nil) }).to_h
       end
+
+      # Each capture's text as the line wrote it, quotes included.
+      def texts(text)
+        found = @expression.match(text)
+        found && keys.zip(found.map { _1.group.value }).to_h
+      end
     end
   end
 end
