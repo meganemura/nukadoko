@@ -6,6 +6,13 @@ module Nukadoko
     def number: (Symbol, ?String) -> void
     def strings: (Symbol, ?String) -> void
     def table: (Symbol, ?String) -> void
+    def unknown: (Symbol, ?String) -> void
+    def object: (Symbol, ?String) { () [self: Schema] -> void } -> void
+    def field: (Symbol, Field, ?String) -> void
+    def []: (Symbol) -> Field
+
+    class Field
+    end
   end
 
   class Step
@@ -16,6 +23,8 @@ module Nukadoko
     def self.poll: (untyped) -> untyped
     def self.args: () { () [self: Schema] -> void } -> Schema
     def self.returns: () { () [self: Schema] -> void } -> Schema
+                    | () -> Schema
+    def self.from: (Hash[Symbol, untyped]) -> untyped
   end
 
   module Engine
@@ -26,11 +35,11 @@ module Nukadoko
     end
 
     class Request
-      def get: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
-      def post: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
-      def put: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
-      def patch: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
-      def delete: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
+      def get: (String, ?data: untyped, ?body: String?, ?headers: Hash[String, String]) -> Response
+      def post: (String, ?data: untyped, ?body: String?, ?headers: Hash[String, String]) -> Response
+      def put: (String, ?data: untyped, ?body: String?, ?headers: Hash[String, String]) -> Response
+      def patch: (String, ?data: untyped, ?body: String?, ?headers: Hash[String, String]) -> Response
+      def delete: (String, ?data: untyped, ?body: String?, ?headers: Hash[String, String]) -> Response
     end
   end
 end

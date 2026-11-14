@@ -49,8 +49,14 @@ def outcome(case_dir)
     if check[:verdict] == "passed"
       run = nuka(dir, "run", "--no-check")
       result[:scenarios] = run[:scenarios].map do |s|
-        { feature: s[:feature], line: s[:line], status: s[:status],
+        { feature: s[:feature], line: s[:line], environment: s[:environment], status: s[:status],
+          role: s[:role],
           steps: s[:steps].map { { line: _1[:line], step: _1[:step], status: _1[:status] } } }
+      end
+      result[:verdict] = run[:verdict]
+      result[:table] = run[:table][:rows].map do |row|
+        { feature: row[:feature], line: row[:line], verdict: row[:verdict],
+          cells: row[:cells].map { |c| { environment: c[:environment], role: c[:role], outcome: c[:outcome], **(c[:line] ? { line: c[:line] } : {}), runs: c[:runs] } } }
       end
     end
     result

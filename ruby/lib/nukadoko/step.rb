@@ -26,6 +26,15 @@ module Nukadoko
       def args(&block) = block ? (@args = Schema.build(&block)) : (@args ||= Schema.new)
       def returns(&block) = block ? (@returns = Schema.build(&block)) : @returns
 
+      # Args an earlier step of the scenario returned, by key: one source as
+      # `[Step, :field]`, or several as a list of them, where the nearest
+      # earlier one that ran gives the value.
+      def from(map = nil)
+        return @from || {} unless map
+
+        @from = map.to_h { |key, source| [key.to_s, source.first.is_a?(Array) ? source : [source]] }
+      end
+
       # observe never sees the args a claim compares with, so it cannot pick
       # what to read by the answer it will be judged against.
       def inputs = claims ? args.without(expected_keys(claims)) : args
@@ -45,15 +54,27 @@ module Nukadoko
       def expected_keys(node)
         case node
         in Array then node.flat_map { expected_keys(_1) }
-        in Hash then node.flat_map { |k, v| k.to_s == "expected" && v.is_a?(String) ? [v] : expected_keys(v) }
+        in Hash then node.flat_map { |k, v| k.to_s == "expected" ? expected_key(v) : expected_keys(v) }
+        else []
+        end
+      end
+
+      def expected_key(value)
+        case value
+        in String then [value]
+        in { from: String => key } then [key]
         else []
         end
       end
     end
   end
 
+  # Each step file is registered for autoload under its class name first, so a
+  # step can name another in `from` or `field` whatever order the files load in.
   def self.load_steps(dir)
-    Dir.glob(File.join(dir, "**/*.rb")).sort.each { require File.expand_path(_1) }
+    files = Dir.glob(File.join(dir, "**/*.rb")).sort.map { File.expand_path(_1) }
+    files.each { Object.autoload(File.basename(_1, ".rb").split("_").map(&:capitalize).join.to_sym, _1) }
+    files.each { require _1 }
     Step.registry
   end
 end

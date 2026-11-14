@@ -9,6 +9,8 @@ require_relative "nukadoko/features"
 require_relative "nukadoko/claims"
 require_relative "nukadoko/check"
 require_relative "nukadoko/fixtures"
+require_relative "nukadoko/program"
+require_relative "nukadoko/table"
 require_relative "nukadoko/run"
 require_relative "nukadoko/signature"
 

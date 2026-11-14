@@ -100,8 +100,8 @@ module Nukadoko
       end
 
       def check_fill(scenario, line, step, captures)
-        missing = step.args.fields.map { _1.name.to_s } - captures.keys
-        missing = missing.drop(1) if line.table && missing.any?
+        missing = step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys
+        missing = missing.drop(1) if (line.table || line.doc_string) && missing.any?
         missing.each do |key|
           findings << Finding.new("error", "unfillable-required-key", scenario.uri, line.line, step.step_name,
                                   %(Step "#{step.step_name}"'s args key "#{key}" is required, but nothing on this line can fill it),

@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require "socket"
 require "securerandom"
 require "fileutils"
 require "time"
 
-# One run: start the program, play each scenario's steps in order, write a
-# record per step and a summary per run. A scenario stops at its first failed
-# step and skips the rest, as the TypeScript engine does.
+# One run: for each environment, start its world, play every scenario's steps
+# in order, and write a record per step. A scenario stops at its first step
+# that does not pass and skips the rest. A control that fails at a Then runs
+# again for proof. The table and the summary come last.
 module Nukadoko
   module Engine
     class Run
@@ -15,71 +15,112 @@ module Nukadoko
         @project = project
         @steps = steps
         @scenarios = scenarios
-        @program = program
+        @program = Program.new(program)
         @out = out
-        @id = "run-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}"
+        @id = new_id("run")
         @dir = File.join(project, ".nukadoko", "runs", @id)
       end
 
       def call
         FileUtils.mkdir_p(File.join(@dir, "steps"))
-        with_program do |base_url|
-          @base_url = base_url
-          @browser = Browser.new(base_url, Nukadoko.config_options.fetch(:browser, {}))
-          results = @scenarios.each_with_index.map { |scenario, i| play(scenario, i) }
-          @browser.close
-          write_summary(results)
-          passed = results.count { _1[:status] == "passed" }
-          @out.puts "summary   #{File.join(".nukadoko/runs", @id, "summary.md")}"
-          @out.puts "#{results.size} scenarios: #{passed} passed, #{results.size - passed} failed"
-          { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), scenarios: results.map { scenario_json(_1) } }
+        executions = []
+        cells = Hash.new { |h, k| h[k] = [] }
+        @program.environments.each do |environment|
+          @out.puts "environment #{environment.name}"
+          world_dir = File.join(@dir, "worlds", environment.name)
+          FileUtils.mkdir_p(world_dir)
+          world = @program.start(environment, world_dir, @project)
+          @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
+          @scenarios.each do |scenario|
+            role = Table.role(Table.condition_tags(scenario.tags), environment.conditions)
+            runs = [play(scenario, environment, role, world)]
+            runs << play(scenario, environment, role, world) while proving?(role, runs)
+            executions.concat(runs)
+            cells[scenario] << Table.cell(runs.map { _1[:execution] }).merge(environment: environment.name, role: role)
+          end
+        ensure
+          @browser&.close
+          world&.stop
         end
+        finish(executions, cells)
       end
 
       private
 
-      def play(scenario, index)
-        @out.puts "scenario #{index + 1}/#{@scenarios.size}  #{scenario.uri}:#{scenario.line}  #{scenario.name}"
-        failed = nil
-        records = scenario.steps.each_with_index.map do |line, i|
-          record = failed ? { step: Engine.matches(@steps, line.text).first&.first&.step_name, text: line.text, status: "skipped" } : play_step(line)
-          failed ||= record[:error] if record[:status] == "failed"
-          @out.puts "  step #{i + 1}/#{scenario.steps.size}  #{record[:status]}  #{line.text}"
+      def proving?(role, runs)
+        role == "control" && runs.size < Table::PROOF_RUNS && runs.all? { _1[:execution].first == :fail } && runs.map { _1[:execution] }.uniq.size == 1
+      end
+
+      def finish(executions, cells)
+        rows = @scenarios.map do |scenario|
+          row_cells = cells[scenario]
+          { feature: scenario.uri, line: scenario.line, name: scenario.name, conditions: Table.condition_tags(scenario.tags),
+            cells: row_cells, verdict: Table.verdict(row_cells) }
+        end
+        write_summary(rows)
+        @out.puts "summary   #{File.join(".nukadoko/runs", @id, "summary.md")}"
+        { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), scenarios: executions.map { _1[:json] },
+          table: { rows: rows }, passed: rows.none? { _1[:verdict] == "failed" } }
+      end
+
+      def play(scenario, environment, role, world)
+        @out.puts "scenario  #{scenario.uri}:#{scenario.line}  #{scenario.name}#{role == "control" ? "  (control)" : ""}"
+        results = []
+        stopped = nil
+        records = scenario.steps.map do |line|
+          record = stopped ? skipped(line) : play_step(line, results, world)
+          stopped ||= [record[:outcome], line.line, record[:claim]] if record[:status] == "failed"
+          @out.puts "  #{record[:status]}  #{line.text}"
           @out.puts "      #{record[:error]}" if record[:error]
           record
         end
         @browser.end_scenario
-        { scenario: scenario, status: failed ? "failed" : "passed", steps: records }
+        execution = stopped ? stopped.compact : [:pass]
+        { execution: execution,
+          json: { feature: scenario.uri, line: scenario.line, scenario: scenario.name, environment: environment.name, role: role,
+                  status: stopped ? "failed" : "passed",
+                  steps: scenario.steps.zip(records).map do |line, record|
+                    { line: line.line, text: line.text, step: record[:step], status: record[:status], record: record[:step_record_id] }.compact
+                  end } }
       end
 
-      def play_step(line)
+      def skipped(line) = { step: Engine.matches(@steps, line.text).first&.first&.step_name, status: "skipped" }
+
+      def play_step(line, results, world)
         step, captures = Engine.matches(@steps, line.text).first
-        args = captures.dup
-        missing = step.args.fields.map { _1.name.to_s } - args.keys
-        args[missing.first] = line.table if line.table && missing.any?
-        id = "step-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}"
+        return { status: "failed", outcome: :broke, error: %(no step matches "#{line.text}") } unless step
+
+        id = new_id("step")
         dir = File.join(@dir, "steps", id)
         FileUtils.mkdir_p(dir)
         log = []
-        fixtures, finish = build_fixtures(step, dir, log)
-        started = Time.now.utc
-        record = { step_record_id: id, step: step.step_name, text: line.text, args: args, started_at: started.iso8601(3) }
+        record = { step_record_id: id, step: step.step_name, text: line.text, started_at: Time.now.utc.iso8601(3) }
+        fixtures = {}
+        finish = nil
         begin
-          check_values!(step.args, args, "args")
-          value = step.new.public_send(step.body, **fixtures, args: step.inputs.load(args))
+          args = bind_args(step, captures, line, results)
+          record[:args] = args
+          problems = step.args.problems(args)
+          raise TypeError, "args: #{problems.join("; ")}" if problems.any?
+
+          fixtures, finish = build_fixtures(step, dir, log, world)
           if step.claims
-            judged = Claims.judge(step.claims, value.transform_keys(&:to_s), args)
+            observed = step.method_defined?(:observe) ? step.new.observe(**fixtures, args: step.inputs.load(args)) : args
+            judged = Claims.judge(step.claims, observed, args)
             record[:claims] = judged
-            record[:status] = judged.all? { _1[:holds] } ? "passed" : "failed"
-            record[:error] = "a claim did not hold" if record[:status] == "failed"
+            broken = judged.index { !_1[:holds] }
+            record.merge!(status: "failed", outcome: line_kind(line) == :then ? :fail : :broke, claim: broken, error: "claim #{broken} broke") if broken
           else
-            check_values!(step.returns, value, "returns") if step.returns
+            value = step.new.run(**fixtures, args: step.inputs.load(args))
+            problems = step.returns ? step.returns.problems(value) : []
+            raise TypeError, "returns: #{problems.join("; ")}" if problems.any?
+
+            results << [step, value.transform_keys(&:to_s)]
             record[:result] = value
-            record[:status] = "passed"
           end
+          record[:status] ||= "passed"
         rescue StandardError => e
-          record[:status] = "failed"
-          record[:error] = "#{e.class}: #{e.message}"
+          record.merge!(status: "failed", outcome: :broke, error: "#{e.class}: #{e.message}")
         ensure
           finish&.call
           log.concat(fixtures[:request].log) if fixtures[:request]
@@ -91,83 +132,50 @@ module Nukadoko
         record
       end
 
-      def build_fixtures(step, dir, log)
+      # Captures first, then each `from` key from the nearest earlier step that
+      # gave it, then a table or docstring for the one required key still open.
+      def bind_args(step, captures, line, results)
+        args = captures.dup
+        step.from.each do |key, sources|
+          cls, value = results.reverse_each.find { |c, _| sources.any? { _1.first == c } }
+          raise ArgumentError, %(no earlier step in this scenario gave "#{key}") unless cls
+
+          args[key] = value.fetch(sources.find { _1.first == cls }[1].to_s)
+        end
+        open = step.args.fields.map { _1.name.to_s } - args.keys
+        attachment = line.table || line.doc_string
+        args[open.first] = attachment if attachment && open.any?
+        args
+      end
+
+      def line_kind(line) = line.kind == "Outcome" ? :then : :other
+
+      def build_fixtures(step, dir, log, world)
         finish = nil
         fixtures = step.fixtures.to_h do |name|
           case name
-          when :request then [name, Request.new(@base_url)]
+          when :request then [name, Request.new(world.base_url)]
+          when :baseURL then [name, world.base_url]
           when :page
             page, finish = @browser.page_for(dir, log)
             [name, page]
-          else raise ArgumentError, "fixture #{name} is not in this prototype"
+          else raise ArgumentError, "the Ruby engine has no fixture #{name} yet"
           end
         end
         [fixtures, finish]
       end
 
-      # The same rule zod applies on the TypeScript side: every declared key
-      # is present with its declared type, and nothing else.
-      def check_values!(schema, value, label)
-        hash = value.transform_keys(&:to_s)
-        extra = hash.keys - schema.fields.map { _1.name.to_s }
-        raise TypeError, "#{label} has keys the schema does not declare: #{extra.join(", ")}" if extra.any?
-
-        schema.fields.each do |field|
-          v = hash.fetch(field.name.to_s) { raise TypeError, "#{label}.#{field.name} is missing" }
-          ok = case field.type
-               when :string then v.is_a?(String)
-               when :boolean then v == true || v == false
-               when :integer then v.is_a?(Integer)
-               when :number then v.is_a?(Numeric)
-               when :array then v.is_a?(Array)
-               end
-          raise TypeError, "#{label}.#{field.name} must be #{field.type}, got #{v.inspect}" unless ok
+      def write_summary(rows)
+        verdicts = rows.map { _1[:verdict] }.tally.map { |v, n| "#{n} #{v}" }.join(", ")
+        lines = ["# nukadoko run #{rows.none? { _1[:verdict] == "failed" } ? "passed" : "failed"}: #{rows.size} criteria, #{verdicts}", ""]
+        rows.each do |r|
+          cells = r[:cells].map { |c| "#{c[:environment]} #{c[:outcome]}#{c[:line] ? "@#{c[:line]}" : ""}#{c[:role] == "control" ? " (control)" : ""}" }
+          lines << "- #{r[:verdict]}  #{r[:feature]}:#{r[:line]}  #{r[:name]}  #{cells.join(", ")}"
         end
+        File.write(File.join(@dir, "summary.md"), "#{lines.join("\n")}\n")
       end
 
-      def with_program
-        return yield(@program[:base_url]) unless @program[:serve]
-
-        port = TCPServer.open("127.0.0.1", 0) { _1.addr[1] }
-        command = @program[:serve][:command].gsub("{port}", port.to_s)
-        log = File.open(File.join(@dir, "program.log"), "w")
-        pid = Process.spawn(command, chdir: @project, out: log, err: log, pgroup: true)
-        base = "http://127.0.0.1:#{port}"
-        wait_ready(URI.join(base, @program[:serve][:ready]))
-        yield base
-      ensure
-        Process.kill("TERM", -pid) if pid
-        log&.close
-      end
-
-      def wait_ready(uri)
-        deadline = Time.now + 30
-        loop do
-          return if Net::HTTP.get_response(uri).code.to_i < 500
-        rescue SystemCallError
-          raise "program did not answer #{uri} within 30s" if Time.now > deadline
-
-          sleep 0.1
-        end
-      end
-
-      def scenario_json(result)
-        scenario = result[:scenario]
-        {
-          feature: scenario.uri, line: scenario.line, scenario: scenario.name, status: result[:status],
-          steps: scenario.steps.zip(result[:steps]).map do |line, record|
-            { line: line.line, text: line.text, step: record[:step], status: record[:status], record: record[:step_record_id] }.compact
-          end
-        }
-      end
-
-      def write_summary(results)
-        lines = ["# Run #{@id}", ""]
-        results.each do |r|
-          lines << "- #{r[:status]}  #{r[:scenario].uri}:#{r[:scenario].line}  #{r[:scenario].name}"
-        end
-        File.write(File.join(@dir, "summary.md"), lines.join("\n") + "\n")
-      end
+      def new_id(kind) = "#{kind}-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}"
     end
   end
 end

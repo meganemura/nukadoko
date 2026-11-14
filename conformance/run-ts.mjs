@@ -61,8 +61,17 @@ function outcome(caseDir) {
       result.scenarios = run.scenarios.map((s) => ({
         feature: s.feature,
         line: s.line,
+        environment: s.environment,
         status: s.status,
+        role: s.role,
         steps: s.steps.map((step) => ({ line: step.line, step: step.step, status: step.status })),
+      }));
+      result.verdict = run.verdict;
+      result.table = run.table.rows.map((row) => ({
+        feature: row.feature,
+        line: row.line,
+        verdict: row.verdict,
+        cells: row.cells.map((c) => ({ environment: c.environment, role: c.role, outcome: c.outcome, ...(c.line ? { line: c.line } : {}), runs: c.runs })),
       }));
     }
     return result;

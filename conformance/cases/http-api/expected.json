@@ -1,0 +1,614 @@
+{
+  "check": [],
+  "scenarios": [
+    {
+      "feature": "features/items.feature",
+      "line": 10,
+      "environment": "count-off",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 11,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 15,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 16,
+          "step": "body-has-name",
+          "status": "passed"
+        },
+        {
+          "line": 17,
+          "step": "body-has-id",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 19,
+      "environment": "count-off",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 20,
+          "step": "an-item-exists",
+          "status": "passed"
+        },
+        {
+          "line": 21,
+          "step": "get-item",
+          "status": "passed"
+        },
+        {
+          "line": 22,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 23,
+          "step": "body-is-created-item",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 25,
+      "environment": "count-off",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 26,
+          "step": "get-item-by-id",
+          "status": "passed"
+        },
+        {
+          "line": 27,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 28,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 46,
+      "environment": "count-off",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 34,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 38,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 39,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 47,
+      "environment": "count-off",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 34,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 38,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 39,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 48,
+      "environment": "count-off",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 34,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 38,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 39,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 50,
+      "environment": "count-off",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 51,
+          "step": "an-item-exists",
+          "status": "passed"
+        },
+        {
+          "line": 52,
+          "step": "list-items",
+          "status": "passed"
+        },
+        {
+          "line": 53,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 54,
+          "step": "list-has-created-item",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 57,
+      "environment": "count-off",
+      "status": "failed",
+      "role": "control",
+      "steps": [
+        {
+          "line": 58,
+          "step": "an-item-exists",
+          "status": "passed"
+        },
+        {
+          "line": 59,
+          "step": "count-items",
+          "status": "passed"
+        },
+        {
+          "line": 60,
+          "step": "status-is",
+          "status": "failed"
+        },
+        {
+          "line": 61,
+          "step": "body-has-count",
+          "status": "skipped"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 57,
+      "environment": "count-off",
+      "status": "failed",
+      "role": "control",
+      "steps": [
+        {
+          "line": 58,
+          "step": "an-item-exists",
+          "status": "passed"
+        },
+        {
+          "line": 59,
+          "step": "count-items",
+          "status": "passed"
+        },
+        {
+          "line": 60,
+          "step": "status-is",
+          "status": "failed"
+        },
+        {
+          "line": 61,
+          "step": "body-has-count",
+          "status": "skipped"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 10,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 11,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 15,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 16,
+          "step": "body-has-name",
+          "status": "passed"
+        },
+        {
+          "line": 17,
+          "step": "body-has-id",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 19,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 20,
+          "step": "an-item-exists",
+          "status": "passed"
+        },
+        {
+          "line": 21,
+          "step": "get-item",
+          "status": "passed"
+        },
+        {
+          "line": 22,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 23,
+          "step": "body-is-created-item",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 25,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 26,
+          "step": "get-item-by-id",
+          "status": "passed"
+        },
+        {
+          "line": 27,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 28,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 46,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 34,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 38,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 39,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 47,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 34,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 38,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 39,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 48,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 34,
+          "step": "create-item",
+          "status": "passed"
+        },
+        {
+          "line": 38,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 39,
+          "step": "body-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 50,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 51,
+          "step": "an-item-exists",
+          "status": "passed"
+        },
+        {
+          "line": 52,
+          "step": "list-items",
+          "status": "passed"
+        },
+        {
+          "line": 53,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 54,
+          "step": "list-has-created-item",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 57,
+      "environment": "count-on",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 58,
+          "step": "an-item-exists",
+          "status": "passed"
+        },
+        {
+          "line": 59,
+          "step": "count-items",
+          "status": "passed"
+        },
+        {
+          "line": 60,
+          "step": "status-is",
+          "status": "passed"
+        },
+        {
+          "line": 61,
+          "step": "body-has-count",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "verdict": "passed",
+  "table": [
+    {
+      "feature": "features/items.feature",
+      "line": 10,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 19,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 25,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 46,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 47,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 48,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 50,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/items.feature",
+      "line": 57,
+      "verdict": "proven",
+      "cells": [
+        {
+          "environment": "count-off",
+          "role": "control",
+          "outcome": "fail",
+          "line": 60,
+          "runs": 2
+        },
+        {
+          "environment": "count-on",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    }
+  ]
+}

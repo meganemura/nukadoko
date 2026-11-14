@@ -33,7 +33,8 @@ module Nukadoko
         return finish("run", false, findings: findings) unless @no_check || check.passed?
 
         result = Engine::Run.new(@project, check.usable, scenarios, Nukadoko.program_options, out: @json ? $stderr : @out).call
-        finish("run", result[:scenarios].all? { _1[:status] == "passed" }, findings: findings, **result)
+        passed = result.delete(:passed)
+        finish("run", passed, findings: findings, **result)
       else
         warn "usage: nuka check|run|sig [--json] [--no-check]"
         2

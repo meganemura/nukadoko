@@ -4,7 +4,9 @@
     {
       "feature": "features/todo.feature",
       "line": 3,
+      "environment": "default",
       "status": "passed",
+      "role": "required",
       "steps": [
         {
           "line": 4,
@@ -21,7 +23,9 @@
     {
       "feature": "features/todo.feature",
       "line": 7,
+      "environment": "default",
       "status": "passed",
+      "role": "required",
       "steps": [
         {
           "line": 8,
@@ -43,7 +47,9 @@
     {
       "feature": "features/todo.feature",
       "line": 12,
+      "environment": "default",
       "status": "passed",
+      "role": "required",
       "steps": [
         {
           "line": 13,
@@ -59,6 +65,48 @@
           "line": 17,
           "step": "todo-list-includes",
           "status": "passed"
+        }
+      ]
+    }
+  ],
+  "verdict": "passed",
+  "table": [
+    {
+      "feature": "features/todo.feature",
+      "line": 3,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/todo.feature",
+      "line": 7,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/todo.feature",
+      "line": 12,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
         }
       ]
     }

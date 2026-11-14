@@ -15,7 +15,9 @@
     {
       "feature": "features/list.feature",
       "line": 3,
+      "environment": "default",
       "status": "passed",
+      "role": "required",
       "steps": [
         {
           "line": 4,
@@ -37,7 +39,9 @@
     {
       "feature": "features/list.feature",
       "line": 8,
+      "environment": "default",
       "status": "passed",
+      "role": "required",
       "steps": [
         {
           "line": 9,
@@ -58,6 +62,35 @@
           "line": 12,
           "step": "list-includes",
           "status": "passed"
+        }
+      ]
+    }
+  ],
+  "verdict": "passed",
+  "table": [
+    {
+      "feature": "features/list.feature",
+      "line": 3,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/list.feature",
+      "line": 8,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
         }
       ]
     }

@@ -22,7 +22,9 @@ module Nukadoko
       end
 
       %w[get post put patch delete].each do |verb|
-        define_method(verb) do |path, data: nil, headers: {}|
+        # `data:` is sent as JSON; `body:` is sent as it is, for a request
+        # whose body is meant to be wrong.
+        define_method(verb) do |path, data: nil, body: nil, headers: {}|
           uri = URI.join(@base, path)
           klass = Net::HTTP.const_get(verb.capitalize)
           req = klass.new(uri, headers)
@@ -30,6 +32,7 @@ module Nukadoko
             req["content-type"] = "application/json"
             req.body = JSON.generate(data)
           end
+          req.body = body if body
           started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           res = Net::HTTP.start(uri.host, uri.port) { _1.request(req) }
           @log << { method: verb.upcase, url: uri.to_s, request_body: req.body, status: res.code.to_i,
