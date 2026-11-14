@@ -9,6 +9,9 @@ cases/<name>/
   steps-ts/      the steps for the TypeScript engine
   steps-rb/      the same steps for the Ruby engine
   program.json   how to start the program under test; {root} is this repository
+  files/         optional: files copied to the project root, such as the program a step runs
+  config.ts      optional: the TypeScript engine's nukadoko.config.ts, for fixtures the case declares
+  config.rb      optional: the same for the Ruby engine, after the line that names the browser
   expected.json  the findings of check, and the verdict of each scenario and step
 ```
 

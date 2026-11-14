@@ -30,6 +30,7 @@ module Nukadoko
           world_dir = File.join(@dir, "worlds", environment.name)
           FileUtils.mkdir_p(world_dir)
           world = @program.start(environment, world_dir, @project)
+          @process_fixtures = FixtureCache.new
           @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
           @scenarios.each do |scenario|
             role = Table.role(Table.condition_tags(scenario.tags), environment.conditions)
@@ -40,6 +41,7 @@ module Nukadoko
           end
         ensure
           @browser&.close
+          @process_fixtures&.teardown
           world&.stop
         end
         finish(executions, cells)
@@ -67,6 +69,8 @@ module Nukadoko
         @out.puts "scenario  #{scenario.uri}:#{scenario.line}  #{scenario.name}#{role == "control" ? "  (control)" : ""}"
         results = []
         stopped = nil
+        @scratch = Scratch.new
+        @scenario_fixtures = FixtureCache.new
         records = scenario.steps.map do |line|
           record = stopped ? skipped(line) : play_step(line, results, world)
           stopped ||= [record[:outcome], line.line, record[:claim]] if record[:status] == "failed"
@@ -75,6 +79,8 @@ module Nukadoko
           record
         end
         @browser.end_scenario
+        @scenario_fixtures.teardown
+        @scratch.remove_all
         execution = stopped ? stopped.compact : [:pass]
         { execution: execution,
           json: { feature: scenario.uri, line: scenario.line, scenario: scenario.name, environment: environment.name, role: role,
@@ -97,6 +103,7 @@ module Nukadoko
         record = { step_record_id: id, step: step.step_name, text: line.text, started_at: Time.now.utc.iso8601(3) }
         fixtures = {}
         finish = nil
+        processes = []
         begin
           args = bind_args(step, captures, line, results)
           record[:args] = args
@@ -104,20 +111,7 @@ module Nukadoko
           raise TypeError, "args: #{problems.join("; ")}" if problems.any?
 
           fixtures, finish = build_fixtures(step, dir, log, world)
-          if step.claims
-            observed = step.method_defined?(:observe) ? step.new.observe(**fixtures, args: step.inputs.load(args)) : args
-            judged = Claims.judge(step.claims, observed, args)
-            record[:claims] = judged
-            broken = judged.index { !_1[:holds] }
-            record.merge!(status: "failed", outcome: line_kind(line) == :then ? :fail : :broke, claim: broken, error: "claim #{broken} broke") if broken
-          else
-            value = step.new.run(**fixtures, args: step.inputs.load(args))
-            problems = step.returns ? step.returns.problems(value) : []
-            raise TypeError, "returns: #{problems.join("; ")}" if problems.any?
-
-            results << [step, value.transform_keys(&:to_s)]
-            record[:result] = value
-          end
+          Processes.collect(processes) { body(step, fixtures, args, line, record, results) }
           record[:status] ||= "passed"
         rescue StandardError => e
           record.merge!(status: "failed", outcome: :broke, error: "#{e.class}: #{e.message}")
@@ -125,11 +119,31 @@ module Nukadoko
           finish&.call
           log.concat(fixtures[:request].log) if fixtures[:request]
           record[:finished_at] = Time.now.utc.iso8601(3)
-          record[:observed] = { http: log.size }
+          record[:processes] = processes if processes&.any?
+          record[:observed] = { http: log.size, processes: processes&.size || 0 }
           File.write(File.join(dir, "http.jsonl"), log.map { JSON.generate(_1) }.join("\n"))
           File.write(File.join(dir, "record.json"), JSON.pretty_generate(record))
         end
         record
+      end
+
+      # A Then step's claims are judged on what it observed, or on its args
+      # when it reads nothing itself; any other step runs and returns.
+      def body(step, fixtures, args, line, record, results)
+        if step.claims
+          observed = step.method_defined?(:observe) ? step.new.observe(**fixtures, args: step.inputs.load(args)) : args
+          judged = Claims.judge(step.claims, observed, args)
+          record[:claims] = judged
+          broken = judged.index { !_1[:holds] }
+          record.merge!(status: "failed", outcome: line_kind(line) == :then ? :fail : :broke, claim: broken, error: "claim #{broken} broke") if broken
+        else
+          value = step.new.run(**fixtures, args: step.inputs.load(args))
+          problems = step.returns ? step.returns.problems(value) : []
+          raise TypeError, "returns: #{problems.join("; ")}" if problems.any?
+
+          results << [step, value.transform_keys(&:to_s)]
+          record[:result] = value
+        end
       end
 
       # Captures first, then each `from` key from the nearest earlier step that
@@ -150,16 +164,36 @@ module Nukadoko
 
       def line_kind(line) = line.kind == "Outcome" ? :then : :other
 
+      # A project fixture is built the first time a step of its scope names
+      # it, directly or through another fixture, and kept until the scope ends.
+      def project_fixture(name, world, chain)
+        fixture = Nukadoko.project_fixtures[name] or raise ArgumentError, "the Ruby engine has no fixture #{name} yet"
+        raise ArgumentError, "fixtures depend on each other in a cycle: #{[*chain, name].join(" -> ")}" if chain.include?(name)
+
+        cache = fixture.scope == :process ? @process_fixtures : @scenario_fixtures
+        return cache[name] if cache.key?(name)
+
+        deps = fixture.dependencies.to_h do |dep|
+          case dep
+          when :baseURL then [dep, world.base_url]
+          when :scratch then [dep, @scratch]
+          else [dep, project_fixture(dep, world, [*chain, name])]
+          end
+        end
+        cache.build(fixture, deps)
+      end
+
       def build_fixtures(step, dir, log, world)
         finish = nil
         fixtures = step.fixtures.to_h do |name|
           case name
           when :request then [name, Request.new(world.base_url)]
           when :baseURL then [name, world.base_url]
+          when :scratch then [name, @scratch]
           when :page
             page, finish = @browser.page_for(dir, log)
             [name, page]
-          else raise ArgumentError, "the Ruby engine has no fixture #{name} yet"
+          else [name, project_fixture(name, world, [])]
           end
         end
         [fixtures, finish]

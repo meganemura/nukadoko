@@ -1,0 +1,176 @@
+{
+  "check": [],
+  "scenarios": [
+    {
+      "feature": "features/tally.feature",
+      "line": 9,
+      "environment": "default",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 10,
+          "step": "a-csv-file-with",
+          "status": "passed"
+        },
+        {
+          "line": 16,
+          "step": "run-tally",
+          "status": "passed"
+        },
+        {
+          "line": 17,
+          "step": "exits-with",
+          "status": "passed"
+        },
+        {
+          "line": 18,
+          "step": "output-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/tally.feature",
+      "line": 24,
+      "environment": "default",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 25,
+          "step": "a-csv-file-with",
+          "status": "passed"
+        },
+        {
+          "line": 30,
+          "step": "run-tally",
+          "status": "passed"
+        },
+        {
+          "line": 31,
+          "step": "exits-with",
+          "status": "passed"
+        },
+        {
+          "line": 32,
+          "step": "output-is",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/tally.feature",
+      "line": 37,
+      "environment": "default",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 38,
+          "step": "an-empty-directory",
+          "status": "passed"
+        },
+        {
+          "line": 39,
+          "step": "run-tally",
+          "status": "passed"
+        },
+        {
+          "line": 40,
+          "step": "exits-with",
+          "status": "passed"
+        },
+        {
+          "line": 41,
+          "step": "error-says",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/tally.feature",
+      "line": 43,
+      "environment": "default",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 44,
+          "step": "a-csv-file-with",
+          "status": "passed"
+        },
+        {
+          "line": 49,
+          "step": "run-tally",
+          "status": "passed"
+        },
+        {
+          "line": 50,
+          "step": "exits-with",
+          "status": "passed"
+        },
+        {
+          "line": 51,
+          "step": "error-says",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "verdict": "passed",
+  "table": [
+    {
+      "feature": "features/tally.feature",
+      "line": 9,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/tally.feature",
+      "line": 24,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/tally.feature",
+      "line": 37,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/tally.feature",
+      "line": 43,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    }
+  ]
+}

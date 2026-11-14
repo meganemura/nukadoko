@@ -20,14 +20,16 @@ module Nukadoko
       @fields = fields
     end
 
-    def string(name, description = nil) = add(name, :string, description)
-    def boolean(name, description = nil) = add(name, :boolean, description)
-    def integer(name, description = nil) = add(name, :integer, description)
-    def number(name, description = nil) = add(name, :number, description)
+    # `null: true` lets the value be nil as well, as zod's `.nullable()` does.
+    def string(name, description = nil, null: false) = add(name, :string, description, null)
+    def boolean(name, description = nil, null: false) = add(name, :boolean, description, null)
+    def integer(name, description = nil, null: false) = add(name, :integer, description, null)
+    def number(name, description = nil, null: false) = add(name, :number, description, null)
     def unknown(name, description = nil) = add(name, :unknown, description)
-    def strings(name, description = nil) = add(name, [:array, :string], description)
-    def table(name, description = nil) = add(name, [:array, [:array, :string]], description)
-    def object(name, description = nil, &block) = add(name, Schema.build(&block), description)
+    def enum(name, values, description = nil, null: false) = add(name, [:enum, values.map(&:to_s)], description, null)
+    def strings(name, description = nil, null: false) = add(name, [:array, :string], description, null)
+    def table(name, description = nil, null: false) = add(name, [:array, [:array, :string]], description, null)
+    def object(name, description = nil, null: false, &block) = add(name, Schema.build(&block), description, null)
 
     # Reuses a field another step declared, so two contracts that must agree
     # on one shape are written once: `field :created, AnItemExists.returns[:body]`.
@@ -67,6 +69,8 @@ module Nukadoko
         in :integer then value.is_a?(Integer)
         in :number then value.is_a?(Numeric)
         in :unknown then true
+        in [:nullable, inner] then return value.nil? ? [] : type_problems(inner, value, path)
+        in [:enum, values] then values.include?(value.is_a?(Symbol) ? value.to_s : value)
         in [:array, item]
           return ["#{path} must be an array, got #{value.inspect}"] unless value.is_a?(Array)
 
@@ -86,6 +90,8 @@ module Nukadoko
       in :integer then "Integer"
       in :number then "Numeric"
       in :unknown then "untyped"
+      in [:nullable, inner] then "(#{rbs_type(inner)})?"
+      in [:enum, values] then values.map(&:inspect).join(" | ")
       in [:array, item] then "Array[#{rbs_type(item)}]"
       in Schema then type.fields.empty? ? "Hash[Symbol, untyped]" : type.rbs_record
       end
@@ -93,7 +99,7 @@ module Nukadoko
 
     private
 
-    def add(name, type, description) = fields << Field.new(name.to_sym, type, description)
+    def add(name, type, description, null = false) = fields << Field.new(name.to_sym, null ? [:nullable, type] : type, description)
     def join(path, name) = path ? "#{path}.#{name}" : name.to_s
   end
 end

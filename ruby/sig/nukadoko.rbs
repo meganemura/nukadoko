@@ -1,19 +1,25 @@
 module Nukadoko
   class Schema
-    def string: (Symbol, ?String) -> void
-    def boolean: (Symbol, ?String) -> void
-    def integer: (Symbol, ?String) -> void
-    def number: (Symbol, ?String) -> void
-    def strings: (Symbol, ?String) -> void
-    def table: (Symbol, ?String) -> void
+    def string: (Symbol, ?String, ?null: bool) -> void
+    def boolean: (Symbol, ?String, ?null: bool) -> void
+    def integer: (Symbol, ?String, ?null: bool) -> void
+    def number: (Symbol, ?String, ?null: bool) -> void
+    def strings: (Symbol, ?String, ?null: bool) -> void
+    def table: (Symbol, ?String, ?null: bool) -> void
     def unknown: (Symbol, ?String) -> void
-    def object: (Symbol, ?String) { () [self: Schema] -> void } -> void
+    def enum: (Symbol, Array[String | Symbol], ?String, ?null: bool) -> void
+    def object: (Symbol, ?String, ?null: bool) { () [self: Schema] -> void } -> void
     def field: (Symbol, Field, ?String) -> void
     def []: (Symbol) -> Field
 
     class Field
     end
   end
+
+  type command_result = { exitCode: Integer?, stdout: String, stderr: String }
+
+  def self.run_command: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?) -> command_result
+  def self.fixture: (Symbol, ?scope: :scenario | :process) { (^(untyped) -> void, **untyped) -> void } -> untyped
 
   class Step
     def self.pattern: (String) -> String
@@ -32,6 +38,10 @@ module Nukadoko
       attr_reader status: Integer
       def json: () -> untyped
       def ok?: () -> bool
+    end
+
+    class Scratch
+      def dir: (?String) -> String
     end
 
     class Request

@@ -27,7 +27,7 @@ module Nukadoko
       end
 
       def self.judge_one(claim, observed, args)
-        actual = dig(read(observed, claim[:actual]), claim[:at])
+        actual = dig(view(claim[:view], read(observed, claim[:actual])), claim[:at])
         return judge_each(claim[:each], actual, args) if claim[:each]
 
         expected = expected_value(claim, args)
@@ -48,6 +48,22 @@ module Nukadoko
           in { from: String => key } then read(args, key)
           end
         claim[:expected_view] == "json" ? JSON.parse(value) : value
+      end
+
+      VIEWS = %w[text lines comma-list json].freeze
+
+      # A view reads a string as something else before `at` walks into it.
+      def self.view(name, value)
+        return value unless name
+        raise ArgumentError, "view #{name} reads a string, and the value is #{value.inspect}" unless value.is_a?(String)
+
+        case name
+        when "text" then value.rstrip
+        when "lines" then value.rstrip.empty? ? [] : value.rstrip.split(/\r?\n/)
+        when "comma-list" then value.strip.empty? ? [] : value.strip.split(",").map(&:strip)
+        when "json" then JSON.parse(value)
+        else raise ArgumentError, "unknown view #{name}"
+        end
       end
 
       def self.read(hash, key)

@@ -26,11 +26,16 @@ function project(caseDir) {
   const dir = mkdtempSync(path.join(tmpdir(), "nukadoko-conformance-"));
   cpSync(path.join(caseDir, "features"), path.join(dir, "features"), { recursive: true });
   cpSync(path.join(caseDir, "steps-ts"), path.join(dir, "features", "steps"), { recursive: true });
+  // Files the program under test needs, at the project root.
+  if (existsSync(path.join(caseDir, "files"))) cpSync(path.join(caseDir, "files"), dir, { recursive: true });
   writeFileSync(path.join(dir, "package.json"), '{ "type": "module" }\n');
   mkdirSync(path.join(dir, "node_modules"));
   symlinkSync(root, path.join(dir, "node_modules", "nukadoko"), "dir");
   const browser = process.env.NUKADOKO_CHROMIUM ? `browser: { executablePath: ${JSON.stringify(process.env.NUKADOKO_CHROMIUM)} }` : "";
-  writeFileSync(path.join(dir, "nukadoko.config.ts"), `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ ${browser} });\n`);
+  const ownConfig = path.join(caseDir, "config.ts");
+  // A case that declares fixtures brings its own config; the rest get one that only names the browser.
+  if (existsSync(ownConfig)) cpSync(ownConfig, path.join(dir, "nukadoko.config.ts"));
+  else writeFileSync(path.join(dir, "nukadoko.config.ts"), `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ ${browser} });\n`);
   const programFile = path.join(caseDir, "program.json");
   if (existsSync(programFile)) {
     const program = readFileSync(programFile, "utf8").replaceAll("{root}", root);

@@ -22,9 +22,13 @@ end
 def project(case_dir, dir)
   FileUtils.cp_r(File.join(case_dir, "features"), dir)
   FileUtils.cp_r(File.join(case_dir, "steps-rb"), File.join(dir, "features", "steps"))
-  if (chromium = ENV["NUKADOKO_CHROMIUM"])
-    File.write(File.join(dir, "nukadoko.config.rb"), "Nukadoko.config(browser: { executablePath: #{chromium.inspect} })\n")
-  end
+  files = File.join(case_dir, "files")
+  FileUtils.cp_r("#{files}/.", dir) if File.directory?(files)
+  config = ENV["NUKADOKO_CHROMIUM"] ? "Nukadoko.config(browser: { executablePath: #{ENV["NUKADOKO_CHROMIUM"].inspect} })\n" : ""
+  # A case that declares fixtures brings its own config, after the browser line.
+  own = File.join(case_dir, "config.rb")
+  config += File.read(own) if File.exist?(own)
+  File.write(File.join(dir, "nukadoko.config.rb"), config) unless config.empty?
   program_file = File.join(case_dir, "program.json")
   return unless File.exist?(program_file)
 

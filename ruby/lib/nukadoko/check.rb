@@ -14,7 +14,7 @@ module Nukadoko
       def to_h = super.compact
     end
 
-    FIXTURES = %w[baseURL call context env evidence page pageAs poll request requireEnv result].freeze
+    FIXTURES = %w[baseURL call context env evidence page pageAs poll request requireEnv result scratch].freeze
 
     class Check
       attr_reader :findings, :usable
@@ -58,9 +58,10 @@ module Nukadoko
                                          "Step \"#{step.step_name}\" has schema fields with no description: #{undescribed.map(&:name).join(", ")}",
                                          "Give each field a description, so nuka steps and an agent can say what it means.")
         end
-        (step.fixtures.map(&:to_s) - FIXTURES).each do |name|
+        known = FIXTURES + Nukadoko.project_fixtures.keys.map(&:to_s)
+        (step.fixtures.map(&:to_s) - known).each do |name|
           findings << Finding.about_step("error", "fixture-structural-violation", step,
-                                         %(#{step.body}() names unknown fixture "#{name}": known fixtures are #{FIXTURES.join(", ")}),
+                                         %(#{step.body}() names unknown fixture "#{name}": known fixtures are #{known.uniq.sort.join(", ")}),
                                          "Name a known fixture as a keyword argument.")
         end
       end
