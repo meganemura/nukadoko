@@ -15,4 +15,6 @@ require_relative "nukadoko/signature"
 module Nukadoko
   def self.program(**options) = (@program = options)
   def self.program_options = @program || {}
+  def self.config(**options) = (@config = options)
+  def self.config_options = @config || {}
 end

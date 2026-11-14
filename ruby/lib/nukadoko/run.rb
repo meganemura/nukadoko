@@ -25,7 +25,7 @@ module Nukadoko
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         with_program do |base_url|
           @base_url = base_url
-          @browser = Browser.new(base_url)
+          @browser = Browser.new(base_url, Nukadoko.config_options.fetch(:browser, {}))
           results = @scenarios.each_with_index.map { |scenario, i| play(scenario, i) }
           @browser.close
           write_summary(results)
@@ -48,6 +48,7 @@ module Nukadoko
           @out.puts "      #{record[:error]}" if record[:error]
           record
         end
+        @browser.end_scenario
         { scenario: scenario, status: failed ? "failed" : "passed", steps: records }
       end
 

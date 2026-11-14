@@ -13,8 +13,10 @@ module Nukadoko
     end
 
     def call
-      program = File.join(@project, "nukadoko.program.rb")
-      load program if File.exist?(program)
+      %w[nukadoko.config.rb nukadoko.program.rb].each do |name|
+        file = File.join(@project, name)
+        load file if File.exist?(file)
+      end
       steps = Nukadoko.load_steps(File.join(@project, "features", "steps"))
       scenarios = Dir.chdir(@project) { Engine.load_features("features") }
       check = Engine::Check.new(steps, scenarios)

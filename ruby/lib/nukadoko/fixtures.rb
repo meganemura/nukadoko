@@ -43,20 +43,29 @@ module Nukadoko
     # TypeScript engine. Requests the page sends are recorded by the engine's
     # own listener, and each step gets a trace chunk.
     class Browser
-      def initialize(base_url)
+      def initialize(base_url, launch_options = {})
         @base_url = base_url
+        @launch_options = launch_options
       end
 
       def page_for(step_dir, log)
         require "playwright"
         @execution ||= Playwright.create(playwright_cli_executable_path: ENV.fetch("PLAYWRIGHT_CLI", "npx playwright"))
-        @browser ||= @execution.playwright.chromium.launch
+        @browser ||= @execution.playwright.chromium.launch(**@launch_options)
         @context ||= @browser.new_context(baseURL: @base_url).tap { _1.tracing.start(screenshots: true, snapshots: true) }
         @page ||= @context.new_page
         @context.tracing.start_chunk
         listener = ->(req) { log << { method: req.method, url: req.url, from: "page" } }
         @page.on("request", listener)
         [@page, -> { @page.off("request", listener); @context.tracing.stop_chunk(path: File.join(step_dir, "trace.zip")) }]
+      end
+
+      # Each scenario gets a browser context of its own, so cookies and storage
+      # never carry from one scenario to the next.
+      def end_scenario
+        @context&.tracing&.stop
+        @context&.close
+        @context = @page = nil
       end
 
       def close

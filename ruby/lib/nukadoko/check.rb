@@ -52,6 +52,12 @@ module Nukadoko
                                          %(Step "#{step.step_name}" pattern "#{step.pattern}" binds key "#{key}", which is not a key of its args schema),
                                          "Rename the capture to a key of the args schema, or add the key to the schema.")
         end
+        undescribed = [step.args, step.returns].compact.flat_map(&:fields).reject(&:description)
+        if undescribed.any?
+          findings << Finding.about_step("note", "schema-field-undescribed", step,
+                                         "Step \"#{step.step_name}\" has schema fields with no description: #{undescribed.map(&:name).join(", ")}",
+                                         "Give each field a description, so nuka steps and an agent can say what it means.")
+        end
         (step.fixtures.map(&:to_s) - FIXTURES).each do |name|
           findings << Finding.about_step("error", "fixture-structural-violation", step,
                                          %(#{step.body}() names unknown fixture "#{name}": known fixtures are #{FIXTURES.join(", ")}),

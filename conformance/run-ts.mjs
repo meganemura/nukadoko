@@ -29,7 +29,8 @@ function project(caseDir) {
   writeFileSync(path.join(dir, "package.json"), '{ "type": "module" }\n');
   mkdirSync(path.join(dir, "node_modules"));
   symlinkSync(root, path.join(dir, "node_modules", "nukadoko"), "dir");
-  writeFileSync(path.join(dir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({});\n');
+  const browser = process.env.NUKADOKO_CHROMIUM ? `browser: { executablePath: ${JSON.stringify(process.env.NUKADOKO_CHROMIUM)} }` : "";
+  writeFileSync(path.join(dir, "nukadoko.config.ts"), `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ ${browser} });\n`);
   const programFile = path.join(caseDir, "program.json");
   if (existsSync(programFile)) {
     const program = readFileSync(programFile, "utf8").replaceAll("{root}", root);

@@ -23,3 +23,6 @@ Messages and timings are left out.
 - `node conformance/run-ts.mjs --write` writes `expected.json` again. Read the diff before you commit it.
 - `node conformance/run-ts.mjs <name>...` runs only the named cases.
 - `ruby conformance/run-rb.rb [<name>...]` runs the cases under the Ruby engine and compares them with the same `expected.json`. Run `bundle install` in `ruby/` first.
+
+A case whose steps use `page` launches Chromium.
+When Playwright's own browser is not installed, set `NUKADOKO_CHROMIUM` to a Chromium executable, and both runners give it to their engine.

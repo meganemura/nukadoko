@@ -33,6 +33,7 @@ end
 
 - `nuka check [--json]` reports what is wrong before anything runs.
 - `nuka run [--json] [--no-check]` starts the program, runs every scenario, and writes a record per step under `.nukadoko/runs/`.
+- Browser launch options go in `nukadoko.config.rb`, as `Nukadoko.config(browser: { executablePath: "..." })`. A step that names `page` gets a browser context of its own for each scenario; each step record holds the requests the page sent and a trace of the step.
 - `nuka sig` writes `sig/nukadoko/steps.rbs`. With Steep, a body that reads an undeclared args key or returns the wrong shape is an error.
 
 The program under test is described in `nukadoko.program.rb`:

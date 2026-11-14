@@ -14,13 +14,17 @@ NUKA = File.join(ROOT, "ruby", "exe", "nuka")
 GEMFILE = File.join(ROOT, "ruby", "Gemfile")
 
 def nuka(dir, *args)
-  out, _status = Open3.capture2({ "BUNDLE_GEMFILE" => GEMFILE }, "bundle", "exec", "ruby", NUKA, *args, "--json", chdir: dir, err: File::NULL)
+  env = { "BUNDLE_GEMFILE" => GEMFILE, "PLAYWRIGHT_CLI" => File.join(ROOT, "node_modules", ".bin", "playwright") }
+  out, _status = Open3.capture2(env, "bundle", "exec", "ruby", NUKA, *args, "--json", chdir: dir, err: File::NULL)
   JSON.parse(out, symbolize_names: true)
 end
 
 def project(case_dir, dir)
   FileUtils.cp_r(File.join(case_dir, "features"), dir)
   FileUtils.cp_r(File.join(case_dir, "steps-rb"), File.join(dir, "features", "steps"))
+  if (chromium = ENV["NUKADOKO_CHROMIUM"])
+    File.write(File.join(dir, "nukadoko.config.rb"), "Nukadoko.config(browser: { executablePath: #{chromium.inspect} })\n")
+  end
   program_file = File.join(case_dir, "program.json")
   return unless File.exist?(program_file)
 

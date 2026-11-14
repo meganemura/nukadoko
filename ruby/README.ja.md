@@ -38,6 +38,7 @@ end
 
 - `nuka check [--json]` は、実行前にまちがいを報告します。
 - `nuka run [--json] [--no-check]` は、プログラムを起動してすべてのシナリオを実行し、ステップごとの記録を `.nukadoko/runs/` に書きます。
+- ブラウザの起動設定は `nukadoko.config.rb` に `Nukadoko.config(browser: { executablePath: "..." })` と書きます。`page` を使うステップは、シナリオごとに自分のブラウザコンテキストを持ちます。ステップの記録には、ページが送ったリクエストとステップのトレースが残ります。
 - `nuka sig` は `sig/nukadoko/steps.rbs` を書きます。Steep を使うと、宣言していない args のキーを読む本体や、形のちがう値を返す本体がエラーになります。
 
 テストするプログラムは `nukadoko.program.rb` に書きます。

@@ -1,0 +1,65 @@
+{
+  "check": [
+    {
+      "severity": "note",
+      "code": "schema-field-undescribed",
+      "step": "add-on-page"
+    },
+    {
+      "severity": "note",
+      "code": "schema-field-undescribed",
+      "step": "list-includes"
+    }
+  ],
+  "scenarios": [
+    {
+      "feature": "features/list.feature",
+      "line": 3,
+      "status": "passed",
+      "steps": [
+        {
+          "line": 4,
+          "step": "open-list",
+          "status": "passed"
+        },
+        {
+          "line": 5,
+          "step": "add-on-page",
+          "status": "passed"
+        },
+        {
+          "line": 6,
+          "step": "list-includes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/list.feature",
+      "line": 8,
+      "status": "passed",
+      "steps": [
+        {
+          "line": 9,
+          "step": "open-list",
+          "status": "passed"
+        },
+        {
+          "line": 10,
+          "step": "add-on-page",
+          "status": "passed"
+        },
+        {
+          "line": 11,
+          "step": "list-includes",
+          "status": "passed"
+        },
+        {
+          "line": 12,
+          "step": "list-includes",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}
