@@ -8,8 +8,8 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 状態: 初期の核です。
 `conformance/` の 10 のケースを通します。
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
-`--base` も動きます。
-`nuka do`、`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
+`--base` と `nuka do` も動きます。
+`nuka scaffold`、`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
 
 ## インストール
 
@@ -56,6 +56,8 @@ run は始めません。
 - `nuka report [run] --format markdown [--out <file>] [--json]` は、run の `summary.md` を `run.json` だけからもう一度書きます。
 run を名指ししなければ、いちばん新しい run を使います。
 - `nuka clean [--dry-run] [--json]` は、`.nukadoko/` の下の run ディレクトリを消します。
+- `nuka do <step> [--args <json>] [--use <step-id>]...` は、シナリオの外で 1 つのステップを実行し、ステップの記録を出します。
+`--use` は、前の記録(`do` のものでも run のものでも)から、ステップの `from` の args を埋めます。
 - ブラウザの起動設定は `nukadoko.config.rb` に `Nukadoko.config(browser: { executablePath: "..." })` と書きます。`page` を使うステップは、シナリオごとに自分のブラウザコンテキストを持ちます。ステップの記録には、ページが送ったリクエストとステップのトレースが残ります。
 - `scratch` を使うステップは `scratch.dir` で新しいディレクトリを得ます。シナリオが終わると消えます。`Nukadoko.run_command(command, args, cwd:)` はプログラムを実行し、`{ exitCode:, stdout:, stderr: }` を返します。ステップの記録には実行したプロセスが残ります。
 - プロジェクトのフィクスチャは `nukadoko.config.rb` に書きます。ブロックは値を `use` に渡し、その後ろが後片付けです。例: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`。`scope: :process` にすると、環境ごとの実行全体で 1 つの値を使います。

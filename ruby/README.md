@@ -3,7 +3,7 @@
 The Ruby engine of [nukadoko](../README.md): typed step contracts for Gherkin, written in Ruby, so a scenario can be told wrong before it runs.
 It reads the same feature files as the TypeScript engine and must judge them the same way; the cases in [`../conformance/`](../conformance/README.md) hold it to that.
 
-Status: an early core. It passes the ten cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, polling Then steps, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. It runs `--base`. Much of what the TypeScript engine does is not here yet, such as `nuka do`, and most of what `nuka check` reports.
+Status: an early core. It passes the ten cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, polling Then steps, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. It runs `--base` and `nuka do`. Much of what the TypeScript engine does is not here yet, such as `nuka scaffold` and most of what `nuka check` reports.
 
 ## Install
 
@@ -45,6 +45,7 @@ end
 - `nuka verdict [--json]` says whether the newest run judged the working tree as it is now and left nothing red. It never starts a run.
 - `nuka report [run] --format markdown [--out <file>] [--json]` renders a run's `summary.md` again from its `run.json` alone, the newest run when none is named.
 - `nuka clean [--dry-run] [--json]` removes the run directories under `.nukadoko/`.
+- `nuka do <step> [--args <json>] [--use <step-id>]...` runs one step outside any scenario and prints its step record. `--use` fills the step's `from` args from an earlier record, of a `do` or of a run.
 - Browser launch options go in `nukadoko.config.rb`, as `Nukadoko.config(browser: { executablePath: "..." })`. A step that names `page` gets a browser context of its own for each scenario; each step record holds the requests the page sent and a trace of the step.
 - A step that names `scratch` gets `scratch.dir`, a fresh directory that is removed when the scenario ends. `Nukadoko.run_command(command, args, cwd:)` runs a program and returns `{ exitCode:, stdout:, stderr: }`; the step record lists each run.
 - A project fixture goes in `nukadoko.config.rb`. The block calls `use` with the value, and what follows is the teardown: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`. `scope: :process` keeps one value for the whole run of an environment.

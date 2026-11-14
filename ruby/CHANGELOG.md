@@ -73,6 +73,13 @@ notes come from the section below whose heading starts with `## [<version>]`.
   says what the run compared with and quotes each removed criterion. A ref
   outside git or one that names no commit is refused with
   `base-outside-git`, `base-shallow`, or `base-ref-unknown`.
+- `nuka do <step> [--args <json>] [--use <step-id>]...` runs one step
+  outside any scenario, in one environment, and writes its step record to
+  `.nukadoko/do/<id>/record.json` and stdout, in the TypeScript engine's
+  shape. `--use` fills the step's `from` args from an earlier record, of
+  a `do` or of a run. A step it does not know is `unknown-step`, args that
+  are not a JSON object or do not fit the contract are `step-args-invalid`,
+  and a `--use` that names no record is `step-inputs-invalid`.
 
 ### Changed
 

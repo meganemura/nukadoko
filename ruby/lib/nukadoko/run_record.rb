@@ -33,7 +33,7 @@ module Nukadoko
 
       def expected_origin(declared, origins, texts)
         case declared[:expected]
-        in String => key then [origins.fetch(key, "sentence:#{key}"), origins.key?(key) ? nil : texts[key]]
+        in String => key then [origins.fetch(key, "sentence:#{key}"), texts[key]]
         in { from: String => key } then [origins.fetch(key, "sentence:#{key}"), nil]
         in { literal: value } then ["literal:#{JSON.generate(value)}", JSON.generate(value)]
         end

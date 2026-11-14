@@ -5,8 +5,8 @@
 module Nukadoko
   class CLI
     FLAGS = %w[--json --no-check --dry-run].freeze
-    REPEATED = %w[--tag --env].freeze
-    VALUED = %w[--format --out --base].freeze
+    REPEATED = %w[--tag --env --use].freeze
+    VALUED = %w[--format --out --base --args].freeze
 
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
@@ -58,6 +58,7 @@ module Nukadoko
 
         finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
       when "run" then run(steps)
+      when "do" then run_one(check)
       when "__tree" then tree(steps)
       else
         warn "usage: nuka check|run|verdict|steps|describe <step>|sig [--json] [--no-check]"
@@ -159,6 +160,103 @@ module Nukadoko
       end
       File.write(plan[:result], JSON.generate(result))
       0
+    end
+
+    # `nuka do <step>`: one step alone, its args from --args and from the
+    # records --use names, in a world started for it. The step record goes
+    # to stdout and to .nukadoko/do/<id>/record.json, where a later
+    # `nuka do --use` reads it. A refusal goes to stderr, since stdout is
+    # the record's.
+    def run_one(check)
+      @out = $stderr
+      return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
+
+      name = @rest.first
+      step = check.usable.find { _1.step_name == name }
+      return refuse(Engine::Refusal.new("unknown-step", "Unknown step: #{name}", fix: "Name a step that nuka steps lists.", run: "nuka steps")) unless step
+
+      describe = "nuka describe #{name}"
+      args_fix = "Pass --args as a JSON object with the keys that nuka describe <step> lists."
+      given = {}
+      if (text = @options["--args"].last)
+        begin
+          given = JSON.parse(text)
+        rescue JSON::ParserError => e
+          return refuse(Engine::Refusal.new("step-args-invalid", "Invalid JSON for --args: #{e.message.lines.first.strip}", fix: args_fix, run: describe))
+        end
+        return refuse(Engine::Refusal.new("step-args-invalid", "--args must be a JSON object", fix: args_fix, run: describe)) unless given.is_a?(Hash)
+      end
+      args, origins, used = used_args(step, @options["--use"])
+      if @options["--args"].empty? && (step.args.fields.map { _1.name.to_s } - args.keys).any?
+        return refuse(Engine::Refusal.new("step-args-invalid", "--args is required unless --use supplies this step's arguments", fix: args_fix, run: describe))
+      end
+
+      args = given.merge(args.reject { |key, _| given.key?(key) })
+      given.each_key { origins[_1] = "command_line:#{_1}" }
+      environment = Engine::Program.new(Nukadoko.program_options).environments(@options["--env"].last(1)).first
+      id = "step-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}"
+      dir = File.join(@project, ".nukadoko", "do", id)
+      run = Engine::Run.new(@project, check.usable, [], Nukadoko.program_options, environments: [environment], dir: dir, out: $stderr)
+      texts = given.to_h { |key, value| [key, JSON.generate(value)] }
+      record = run.do_step(step, args, origins, texts, environment)
+      written = do_record(record, id, step, given, origins, used, environment)
+      File.write(File.join(dir, "record.json"), JSON.pretty_generate(written))
+      $stdout.puts JSON.pretty_generate(written)
+      record[:status] == "passed" ? 0 : 1
+    rescue Engine::Refusal => e
+      refuse(e)
+    end
+
+    # Each from key of the step, from the newest record --use names whose
+    # step gives it, and where it came from.
+    def used_args(step, ids)
+      records = ids.map do |id|
+        path = [File.join(@project, ".nukadoko", "do", id, "record.json"), *Dir.glob(File.join(@project, ".nukadoko", "runs", "*", "steps", id, "record.json"))].find { File.exist?(_1) }
+        unless path
+          raise Engine::Refusal.new("step-inputs-invalid", "--use #{id}: no such step record. A step record is removed with its run once the run is older than the newest 20 runs, " \
+                                                           "and a nuka do record once it is older than 7 days (retention in nukadoko.config.rb)")
+        end
+        [id, JSON.parse(File.read(path))]
+      end
+      args = {}
+      origins = {}
+      used = []
+      step.from.each do |key, sources|
+        sources.each do |cls, source_key|
+          id, found = records.reverse.find { |_, record| record["step"] == cls.step_name && record["result"].is_a?(Hash) && record["result"].key?(source_key.to_s) }
+          next unless found
+
+          args[key] = found["result"][source_key.to_s]
+          origins[key] = "from:#{cls.step_name}@#{id}.#{source_key}"
+          used << { step_record_id: id, step: cls.step_name, result: found["result"] } unless used.any? { _1[:step_record_id] == id }
+          break
+        end
+      end
+      [args, origins, used]
+    end
+
+    # The record `nuka do` prints, in the TypeScript engine's shape.
+    def do_record(record, id, step, given, origins, used, environment)
+      args_origin = (record[:args] || {}).keys.to_h do |key|
+        origin = origins[key]
+        if origin&.start_with?("from:")
+          step_name, rest = origin.delete_prefix("from:").split("@", 2)
+          record_id, source_key = rest.split(".", 2)
+          [key, { from: { step_record_id: record_id, step: step_name, key: source_key } }]
+        else [key, "command_line"]
+        end
+      end
+      passed = record[:status] == "passed"
+      outcome = passed ? { result: record[:result] || {}, returns_dropped: record[:returns_dropped] || [] } : { error: { message: record[:error], kind: record[:error_kind] } }
+      processes = record[:processes]
+      { schema_version: Engine::RunRecord::SCHEMA_VERSION, nukadoko: VERSION, step_record_id: id, step: step.step_name, kind: "do",
+        args: record[:args] || given, args_origin: args_origin, **outcome, status: record[:status], environment: environment.name,
+        world_name: nil, scenario_record_id: nil, run_id: nil, started_at: record[:started_at], finished_at: record[:finished_at],
+        evidence: { dir: File.join(".nukadoko", "do", id), screenshots: [] },
+        observed: { processes: processes&.any? ? processes.map { { command: [_1[:command], *_1[:args]], cwd: _1[:cwd], exit_code: _1[:exit_code] }.compact } : nil,
+                    http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [] },
+        mutates: record[:mutates], **(used.any? ? { used: used } : {}),
+        **(record[:claim_records] ? { claims: record[:claim_records], observation: "observed", attempts: 1 } : {}) }
     end
 
     def meets?(scenario, environments)

@@ -267,16 +267,50 @@ module Nukadoko
 
         id = new_id("step")
         dir = File.join(@dir, "steps", id)
+        record = { step_record_id: id, step: step.step_name, text: line.text, started_at: Time.now.utc.iso8601(3) }
+        origins = {}
+        execute(step, record, dir, world, then_line: line_kind(line) == :then, at_line: line.line, results: results, origins: origins) do
+          args = bind_args(step, captures, line, results, origins, record)
+          [args, (Pattern.new(step.pattern).texts(line.text) || {}).merge(attachment_texts(step, captures, line))]
+        end
+      end
+
+      # One step alone, as `nuka do` runs it: its args given on the command
+      # line or by earlier records (`origins` says which), in a world
+      # started for this one execution, its evidence in this run's
+      # directory, which is the record's own.
+      def do_step(step, args, origins, texts, environment)
+        FileUtils.mkdir_p(@dir)
+        world = @program.start(environment, @dir, @project)
+        @scratch = Scratch.new
+        @scenario_fixtures = FixtureCache.new
+        @process_fixtures = FixtureCache.new
+        @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
+        record = { step_record_id: @id, step: step.step_name, started_at: now }
+        execute(step, record, @dir, world, then_line: true, at_line: nil, results: [], origins: origins) { [args, texts] }
+      ensure
+        @browser&.close
+        @scenario_fixtures&.teardown
+        @process_fixtures&.teardown
+        @scratch&.remove_all
+        world&.stop
+      end
+
+      public :do_step
+
+      private
+
+      # Runs one step whose args the block binds, and writes its record and
+      # HTTP log into `dir`.
+      def execute(step, record, dir, world, then_line:, at_line:, results:, origins:)
         FileUtils.mkdir_p(dir)
         log = []
-        record = { step_record_id: id, step: step.step_name, text: line.text, started_at: Time.now.utc.iso8601(3) }
         fixtures = {}
         finish = nil
         processes = []
         begin
           record[:mutates] = step.mutating?
-          origins = {}
-          args = bind_args(step, captures, line, results, origins, record)
+          args, texts = yield
           record[:args] = args
           problems = step.args.problems(args)
           if problems.any?
@@ -285,8 +319,7 @@ module Nukadoko
           end
 
           fixtures, finish = build_fixtures(step, dir, log, world)
-          texts = (Pattern.new(step.pattern).texts(line.text) || {}).merge(attachment_texts(step, captures, line))
-          Processes.collect(processes) { body(step, fixtures, args, line, record, results, origins, texts) }
+          Processes.collect(processes) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) }
           record[:status] ||= "passed"
         rescue StandardError => e
           record.merge!(status: "failed", outcome: :broke, error: e.message)
@@ -307,7 +340,7 @@ module Nukadoko
 
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
-      def body(step, fixtures, args, line, record, results, origins, texts)
+      def body(step, fixtures, args, (then_line, at_line), record, results, origins, texts)
         if step.claims
           own = fixtures.slice(*step.fixtures)
           observes = step.method_defined?(:observe)
@@ -323,7 +356,7 @@ module Nukadoko
           return unless broken
 
           broken_record = record[:claim_records][broken]
-          record.merge!(status: "failed", outcome: line_kind(line) == :then ? :fail : :broke, claim: broken,
+          record.merge!(status: "failed", outcome: then_line ? :fail : :broke, claim: broken,
                         broken_actual: judged[broken][:actual], error_kind: "claim_broken",
                         error: broken_record ? RunRecord.broken_message(broken_record) : "claim #{broken} broke")
         else
@@ -339,7 +372,7 @@ module Nukadoko
             record[:returns_dropped] = dropped if dropped.any?
             value = step.returns.strip(value)
           end
-          results << [step, value.transform_keys(&:to_s), line.line, record[:step_record_id]]
+          results << [step, value.transform_keys(&:to_s), at_line, record[:step_record_id]]
           record[:result] = value
         end
       end
