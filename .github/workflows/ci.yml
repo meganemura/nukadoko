@@ -26,12 +26,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
+  # Reads the source only: no browser and no test run. archstrict reads the
+  # TypeScript, and typecheck builds dist/ and checks the tests against it.
+  checks:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: typescript
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -45,17 +47,56 @@ jobs:
       # `--ignore-scripts` is also set by this repository's .npmrc. It is
       # written here too because the line is where a reader looks.
       - run: npm ci --ignore-scripts
-
-      # Reads the TypeScript source. No build and no browser.
       - run: npm run archstrict
+      - run: npm run typecheck
+
+  # The Vitest suite, split by file across four runners. Run whole on one
+  # runner it took seven and a half minutes, almost all of the gate's wall
+  # clock. A public repository's standard runners cost nothing per minute,
+  # so four of them cost only the setup each one repeats.
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - run: npm ci --ignore-scripts
 
       # Browsers are never installed by `npm ci`. They live in a cache
       # outside node_modules that only this command fills, and a fresh
       # runner has none. Chromium is the only one the suite launches.
       - run: npx playwright install --with-deps chromium
 
-      - run: npm run typecheck
-      - run: npm test
+      - run: npm test -- --shard=${{ matrix.shard }}/4
+
+  # The selftest suite: the same features run by nukadoko and by cucumber-js,
+  # which must agree. It needs the browser too, and runs beside the shards.
+  selftest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
       - run: npm run selftest
 
   # The packed tarball, installed into a fresh project and driven through
