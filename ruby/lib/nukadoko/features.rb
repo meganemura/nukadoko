@@ -10,7 +10,7 @@ module Nukadoko
     # `keyword_line` is the Scenario keyword's own line, the same for every
     # row of an outline, and `outline_name` the name as written, before a
     # row fills it. A step from a Background has `background` set.
-    Scenario = Data.define(:uri, :line, :keyword_line, :name, :tags, :steps, :tag_lines, :columns, :outline_name)
+    Scenario = Data.define(:uri, :line, :keyword_line, :name, :tags, :steps, :tag_lines, :columns, :outline_name, :serial)
     PickleStep = Data.define(:text, :line, :kind, :table, :doc_string, :background)
     # What makes a file, or a part of one, run nothing: a file that does
     # not parse, or an outline with no row to run. `line` is nil for a file.
@@ -26,14 +26,19 @@ module Nukadoko
       background = {}
       headers = {}
       names = {}
+      serial = {}
       scenarios = []
       parse_errors = Hash.new { |h, k| h[k] = [] }
       Gherkin.from_paths(paths, include_source: false, include_gherkin_document: true, include_pickles: true).each do |envelope|
         if (error = envelope.parse_error)
           parse_errors[error.source.uri] << error.message
         elsif (doc = envelope.gherkin_document)
-          collect_lines(doc.feature, lines, background, headers, names) if doc.feature
-          problems.concat(outlines_that_do_not_run(doc)) if doc.feature
+          if doc.feature
+            collect_lines(doc.feature, lines, background, headers, names)
+            serial[doc.uri] = doc.feature.tags.any? { _1.name == SERIAL_TAG }
+            problems.concat(serial_tags_on_scenarios(doc))
+            problems.concat(outlines_that_do_not_run(doc))
+          end
         elsif (pickle = envelope.pickle)
           steps = pickle.steps.map do |step|
             table = step.argument&.data_table&.rows&.map { |row| row.cells.map(&:value) }
@@ -43,12 +48,25 @@ module Nukadoko
           scenarios << Scenario.new(pickle.uri, lines.fetch(pickle.ast_node_ids.last), lines.fetch(pickle.ast_node_ids.first),
                                     pickle.name, pickle.tags.map(&:name), steps,
                                     pickle.tags.to_h { [_1.name, lines[_1.ast_node_id]] }, headers.fetch(pickle.ast_node_ids.last, []),
-                                    names.fetch(pickle.ast_node_ids.first, pickle.name))
+                                    names.fetch(pickle.ast_node_ids.first, pickle.name), serial.fetch(pickle.uri, false))
         end
       end
       # One finding per file, every error in the parser's words and order.
       parse_errors.each { |uri, messages| problems << FeatureProblem.new("feature-parse-error", uri, nil, "Parser errors:\n#{messages.join("\n")}") }
       scenarios
+    end
+
+    # The tag on a Feature line that runs the file while no other file runs.
+    SERIAL_TAG = "@nukadoko:serial"
+
+    # nuka run --concurrency reads the serial tag on the Feature line only,
+    # so on a scenario it would read as a rule in force while doing nothing.
+    def self.serial_tags_on_scenarios(doc)
+      scenarios = doc.feature.children.flat_map { |child| child.rule ? child.rule.children.filter_map(&:scenario) : [child.scenario].compact }
+      scenarios.select { |scenario| scenario.tags.any? { _1.name == SERIAL_TAG } }.map do |scenario|
+        FeatureProblem.new("serial-tag-on-scenario", doc.uri, scenario.location.line,
+                           %(@nukadoko:serial on scenario "#{scenario.name}" has no effect: nuka run --concurrency reads @nukadoko:serial only from the Feature line. Move the tag there.))
+      end
     end
 
     # An outline with no Examples runs its placeholder text as written, and

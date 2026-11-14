@@ -10,7 +10,7 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-`--concurrency` や Allure の出力など、TypeScript 版の機能の多くはまだありません。
+`--step` や Allure の出力など、TypeScript 版の機能の多くはまだありません。
 
 ## インストール
 
@@ -52,10 +52,12 @@ end
 - `nuka init` は、`nukadoko.config.rb`、空の `features/steps/`、`.nukadoko/` と `.env` のための `.gitignore` の行を書きます。
 設定ファイルがすでにあれば断ります。
 - `nuka check [--json]` は、実行前にまちがいを報告します。
-- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--proof-runs <n>] [--records] [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
+- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--concurrency <n>] [--proof-runs <n>] [--records] [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
 対象を書かなければ `features/` を実行します。
 `--order shuffled` は、ファイルを、そしてファイルの中のシナリオを、seed が決める順番で実行します。
 seed が同じなら、TypeScript 版と同じ順番です。
+`--concurrency` は、feature ファイルを丸ごと、その数の worker プロセスに分けて実行します。
+Feature の行に `@nukadoko:serial` があるファイルは、ほかのファイルのあとに 1 つずつ実行します。
 `--repeat` は選んだシナリオをその回数だけ実行し、`--proof-runs` は control を何回実行するかを決め、`--records` はシナリオの記録を終わるたびに stdout に書きます。
 - `nuka verdict [--json]` は、いちばん新しい run が今の作業ツリーを判定し、赤を残さなかったかを答えます。
 run は始めません。

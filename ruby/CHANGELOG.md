@@ -124,6 +124,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `--proof-runs <n>` sets how many runs prove a control, and `--records`
   writes each scenario record to stdout as it ends. A value none of them
   can read is `invalid-value`.
+- `nuka run --concurrency <n>` hands whole feature files to n worker
+  processes, round robin in the run's order, and runs a file whose
+  Feature line has `@nukadoko:serial` after them, alone. A worker that
+  ends without a record for a file it was given makes the run
+  `run-incomplete`. `nuka check` reports `serial-tag-on-scenario`.
 - A program file's `env` is the `env` fixture, and `requireEnv` reads one
   of its keys.
 

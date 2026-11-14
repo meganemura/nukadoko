@@ -6,7 +6,7 @@ module Nukadoko
   class CLI
     FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records].freeze
     REPEATED = %w[--tag --env --use].freeze
-    VALUED = %w[--format --out --base --repeat --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv].freeze
+    VALUED = %w[--format --out --base --repeat --concurrency --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv].freeze
 
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
@@ -100,6 +100,7 @@ module Nukadoko
     # it selected; a target or a world it cannot reach is refused first.
     def run(steps)
       repeat = count_flag("--repeat")
+      concurrency = count_flag("--concurrency")
       Engine::Table.proof_runs = count_flag("--proof-runs")
       order = Engine::Order.read(@options["--order"].last)
       unless order
@@ -143,10 +144,16 @@ module Nukadoko
                Engine::Base.new(project: @project, ref: ref, commit: commit, run_dir: dir, selected: kept.map { Engine::Criteria.key(_1.uri, _1.line) },
                                 targets: targets, envs: @options["--env"], head_program: Nukadoko.program_options)
              end
+      # Workers are handed whole feature files, so one file has nothing to
+      # spread across them.
+      if concurrency > 1 && kept.map(&:uri).uniq.size <= 1
+        progress.puts "--concurrency has nothing to distribute: this run selects one feature file."
+        concurrency = 1
+      end
       result = Engine::Run.new(@project, check.usable, kept, Nukadoko.program_options,
                                environments: environments, left_out: left_out.size, out: progress,
                                dir: dir, base: base, env_flags: @options["--env"].flat_map { ["--env", _1] },
-                               repeat: repeat, order: order, records: records,
+                               repeat: repeat, concurrency: concurrency, order: order, records: records,
                                rerun: { targets: @rest, tags: @options["--tag"].flat_map { ["--tag", _1] }, whole_files: selection.whole_files }).call
       passed = result.delete(:passed)
       findings += result.delete(:failures)
@@ -171,10 +178,10 @@ module Nukadoko
       refuse(e)
     end
 
-    # `--repeat` and `--proof-runs` take a whole number of 1 or more.
+    # `--repeat`, `--concurrency`, and `--proof-runs` take a whole number of 1 or more.
     def count_flag(name)
       value = @options[name].last
-      return 1 if value.nil? && name == "--repeat"
+      return 1 if value.nil? && name != "--proof-runs"
       return Engine::Table::PROOF_RUNS if value.nil?
 
       number = Integer(value, 10, exception: false)

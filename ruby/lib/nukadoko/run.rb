@@ -18,7 +18,7 @@ module Nukadoko
       # given, gets each scenario's run.json entry as one line as it ends,
       # and `rerun` is what a shuffled run's rerun lines name.
       def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout, world: "head", dir: nil, base: nil, env_flags: [],
-                     repeat: 1, order: Order::FILE, records: nil, rerun: nil)
+                     repeat: 1, concurrency: 1, order: Order::FILE, records: nil, rerun: nil)
         @project = project
         @steps = steps
         @scenarios = scenarios
@@ -30,6 +30,8 @@ module Nukadoko
         @base = base
         @env_flags = env_flags
         @repeat = repeat
+        @concurrency = concurrency
+        @incomplete = []
         @order = order
         @records = records
         @rerun = rerun || { targets: [], tags: [], whole_files: [] }
@@ -80,35 +82,135 @@ module Nukadoko
           FileUtils.mkdir_p(world_dir)
           world = @program.start(environment, world_dir, @project)
           @base_urls[environment.name] = world.base_url
-          @process_fixtures = FixtureCache.new
-          @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
           roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
           runs = Hash.new { |h, k| h[k] = [] }
-          play_one = lambda do |scenario|
-            execution = play(scenario, environment, roles[scenario], world)
+          ran = lambda do |scenario, execution|
             runs[scenario] << execution
             executions << execution
             @records&.puts JSON.generate(execution[:json])
           end
-          # The whole selection once, then again, so a failure that depends
-          # on what ran before it meets the same neighbours every round.
-          @repeat.times { @scenarios.each(&play_one) }
-          # Then each control that broke a Then runs again, one round at a
-          # time, until it has broken the same claim at the same line
-          # --proof-runs times or a run disagrees.
-          loop do
-            due = @scenarios.select { proving?(roles[_1], runs[_1]) }
-            break if due.empty?
-
-            due.each(&play_one)
+          # Each control that broke a Then runs again, one round at a time,
+          # until it has broken the same claim at the same line --proof-runs
+          # times or a run disagrees.
+          due = -> { @scenarios.select { proving?(roles[_1], runs[_1]) } }
+          if @concurrency > 1
+            play_in_workers(environment, roles, world, due, ran)
+          else
+            @process_fixtures = FixtureCache.new
+            @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
+            play_one = ->(scenario) { ran.(scenario, play(scenario, environment, roles[scenario], world)) }
+            # The whole selection once, then again, so a failure that depends
+            # on what ran before it meets the same neighbours every round.
+            @repeat.times { @scenarios.each(&play_one) }
+            until (round = due.()).empty?
+              round.each(&play_one)
+            end
           end
           @scenarios.each { cells[_1] << cell(runs[_1], environment, roles[_1], _1) }
         ensure
           @browser&.close
           @process_fixtures&.teardown
           world&.stop
+          @browser = @process_fixtures = nil
         end
         [executions, cells]
+      end
+
+      # Under --concurrency the files go to worker processes in the run's
+      # order, round-robin, and each worker plays its own files --repeat
+      # times. A file whose Feature line is @nukadoko:serial runs after
+      # them, alone, and each round of proof runs is one worker of its own.
+      # The parent keeps the world each worker reaches, and takes each
+      # execution as it arrives.
+      def play_in_workers(environment, roles, world, due, ran)
+        files = @scenarios.group_by(&:uri).values
+        parallel, serial = files.partition { !_1.first.serial }
+        buckets = Array.new([@concurrency, parallel.size].min) { [] }
+        parallel.each_with_index { |file, i| buckets[i % buckets.size] << file } unless buckets.empty?
+        groups = buckets.map(&:flatten)
+        unplayed = workers(groups.map { |group| @repeat.times.flat_map { group } }, environment, roles, world, ran)
+        serial.each { |file| unplayed += workers([@repeat.times.flat_map { file }], environment, roles, world, ran) }
+        until (round = due.()).empty?
+          break unless workers([round], environment, roles, world, ran).empty?
+        end
+        return if unplayed.empty?
+
+        where = unplayed.uniq.sort.map { @environments.size > 1 ? "#{_1} (#{environment.name})" : _1 }
+        @incomplete << { severity: "failed", code: "run-incomplete",
+                         message: "A worker exited without writing any record for: #{where.join(", ")}. This run is incomplete and cannot be treated as a pass" }
+      end
+
+      # Each list is one worker's scenarios in the order it plays them. A
+      # worker sends each line it prints and each execution down a pipe of
+      # its own, one Marshal frame at a time, so no line or record is ever
+      # spliced from two workers. Returns the files a worker that failed
+      # left without any execution.
+      def workers(lists, environment, roles, world, ran)
+        live = lists.each_with_index.map do |list, index|
+          reader, writer = IO.pipe
+          pid = fork do
+            reader.close
+            exit!(play_as_worker(index + 1, list, environment, roles, world, writer))
+          end
+          writer.close
+          { pid: pid, reader: reader, list: list, played: Set.new }
+        end
+        by_key = @scenarios.to_h { [[_1.uri, _1.line], _1] }
+        until (open = live.reject { _1[:done] }).empty?
+          IO.select(open.map { _1[:reader] })[0].each do |reader|
+            worker = open.find { _1[:reader] == reader }
+            kind, *value = Marshal.load(reader)
+            if kind == :line then @out.puts value.first
+            else
+              value[2].each { @out.puts _1 }
+              scenario = by_key.fetch(value[0])
+              worker[:played] << scenario.uri
+              ran.(scenario, value[1])
+            end
+          rescue EOFError
+            reader.close
+            worker[:done] = true
+            worker[:status] = Process.wait2(worker[:pid])[1]
+          end
+        end
+        live.reject { _1[:status].success? }.flat_map { |worker| worker[:list].map(&:uri).uniq - worker[:played].to_a }
+      end
+
+      def play_as_worker(number, list, environment, roles, world, pipe)
+        @worker = number
+        @out = WorkerOut.new(pipe)
+        @records = nil
+        @process_fixtures = FixtureCache.new
+        @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
+        list.each do |scenario|
+          execution = play(scenario, environment, roles[scenario], world)
+          Marshal.dump([:execution, [scenario.uri, scenario.line], execution, @out.take], pipe)
+        end
+        0
+      rescue Exception => e # rubocop:disable Lint/RescueException
+        Marshal.dump([:line, "worker #{number} stopped: #{e.class}: #{e.message}"], pipe) rescue nil
+        1
+      ensure
+        @browser&.close
+        @process_fixtures&.teardown
+        pipe.close
+      end
+
+      # A worker's progress: the line that a scenario starts goes to the
+      # parent at once, and the scenario's other lines go with its
+      # execution, so one scenario's lines are never split by another's.
+      class WorkerOut
+        def initialize(pipe)
+          @pipe = pipe
+          @held = []
+        end
+
+        def puts(text = "")
+          text = text.to_s
+          text.start_with?("scenario start  ") ? Marshal.dump([:line, text], @pipe) : @held << text
+        end
+
+        def take = @held.slice!(0..)
       end
 
       # A head control and a base cell stand where the behaviour is absent,
@@ -163,8 +265,8 @@ module Nukadoko
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                    mapping_changes: @base&.mapping_changes, **(@base ? { judgments_changed: [] } : {}),
                    worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },
-          failures: executions.filter_map { _1[:failure] } + judged,
-          passed: rows.none? { Summary::RED.include?(_1[:verdict]) } }
+          failures: executions.filter_map { _1[:failure] } + judged + @incomplete,
+          passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } }
       end
 
       # What `--base` knows of one row: its change, whether it carries
@@ -221,14 +323,19 @@ module Nukadoko
           return "nuka run #{scenario.uri}:#{scenario.line}#{env}"
         end
 
-        words = if @repeat > 1 then [*@rerun[:targets], *@rerun[:tags], *Order.flags(@order), "--repeat", @repeat.to_s, *@env_flags]
+        # Under --concurrency, what ran before it ran in other workers too.
+        words = if @repeat > 1 || @concurrency > 1
+                  [*@rerun[:targets], *@rerun[:tags], *Order.flags(@order), *(["--repeat", @repeat.to_s] if @repeat > 1),
+                   *(["--concurrency", @concurrency.to_s] if @concurrency > 1), *@env_flags]
                 else [*Order.replay_targets(@scenarios, @rerun[:whole_files], scenario), *Order.flags(@order), *@env_flags]
                 end
         ["nuka", "run", *words].map { Selection.shell_word(_1) }.join(" ")
       end
 
       def play(scenario, environment, role, world)
-        @out.puts "scenario  #{scenario.uri}:#{scenario.line}  #{scenario.name}#{role == "control" ? "  (control)" : ""}"
+        name = "#{scenario.uri}:#{scenario.line}  #{scenario.name}"
+        @out.puts "scenario start  worker #{@worker}  #{name}" if @worker
+        @out.puts "scenario  #{name}#{role == "control" ? "  (control)" : ""}"
         started_at = now
         results = []
         stopped = nil
