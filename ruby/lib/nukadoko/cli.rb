@@ -8,6 +8,7 @@ module Nukadoko
       @command, *rest = argv
       @json = rest.delete("--json")
       @no_check = rest.delete("--no-check")
+      @rest = rest
       @project = File.expand_path(project)
       @out = out
     end
@@ -29,6 +30,21 @@ module Nukadoko
         File.write(path, Signature.of(steps))
         @out.puts "wrote #{path.delete_prefix("#{@project}/")}"
         0
+      when "steps"
+        entries = check.usable.sort_by(&:file)
+        return finish("steps", true, findings: findings, steps: entries.map { Vocabulary.entry(_1, @project) }) if @json
+
+        @out.puts entries.map { Vocabulary.text(_1) }.join("\n\n")
+        0
+      when "describe"
+        step = check.usable.find { _1.step_name == @rest.first }
+        @json = true
+        unless step
+          refusal = { severity: "refused", code: "unknown-step", message: "Unknown step: #{@rest.first}", fix: "Name a step that nuka steps lists.", do: "nuka steps" }
+          return finish("describe", false, findings: findings + [refusal], verdict: "refused")
+        end
+
+        finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
       when "run"
         return finish("run", false, findings: findings) unless @no_check || check.passed?
 
@@ -36,7 +52,7 @@ module Nukadoko
         passed = result.delete(:passed)
         finish("run", passed, findings: findings, **result)
       else
-        warn "usage: nuka check|run|sig [--json] [--no-check]"
+        warn "usage: nuka check|run|steps|describe <step>|sig [--json] [--no-check]"
         2
       end
     end
@@ -47,8 +63,7 @@ module Nukadoko
       finding.with(file: finding.file&.delete_prefix("#{@project}/"))
     end
 
-    def finish(command, passed, findings:, **rest)
-      verdict = passed ? "passed" : "failed"
+    def finish(command, passed, findings:, verdict: passed ? "passed" : "failed", **rest)
       if @json
         @out.puts JSON.pretty_generate({ nukadoko: VERSION, engine: "ruby", command: command, verdict: verdict, findings: findings, **rest })
       else

@@ -44,6 +44,10 @@ module Nukadoko
       def inputs = claims ? args.without(expected_keys(claims)) : args
 
       def step_name = File.basename(file, ".rb").tr("_", "-")
+
+      # A step that runs code may change the world unless it says it does
+      # not; a claim step has no action, so it never does.
+      def mutating? = claims ? false : mutates != false
       def body = claims ? :observe : :run
       def line = method_defined?(body) ? instance_method(body).source_location&.last : nil
 

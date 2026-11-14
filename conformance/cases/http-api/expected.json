@@ -1,5 +1,706 @@
 {
   "check": [],
+  "vocabulary": [
+    {
+      "name": "an-item-exists",
+      "patterns": [
+        "an item named {name:string} exists"
+      ],
+      "description": "Create an item through the API so a later step can read it",
+      "mutates": true,
+      "needs": [
+        "baseURL"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The item's name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "The id the API assigned"
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "The item as the API answered it"
+          }
+        },
+        "required": [
+          "id",
+          "body"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "body-has-count",
+      "patterns": [
+        "the response body has a count of at least 1"
+      ],
+      "description": "The item count the API answered is at least 1",
+      "mutates": false,
+      "from": {
+        "body": {
+          "step": "count-items",
+          "key": "body"
+        }
+      },
+      "claims": [
+        {
+          "actual": "body",
+          "at": "count",
+          "compare": "at-least",
+          "expected": {
+            "literal": 1
+          }
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "body": {
+            "description": "The body the count request got"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "body-has-id",
+      "patterns": [
+        "the response body has an id of at least 1"
+      ],
+      "description": "The last response body holds an id the API assigned",
+      "mutates": false,
+      "from": {
+        "body": [
+          {
+            "step": "create-item",
+            "key": "body"
+          },
+          {
+            "step": "get-item",
+            "key": "body"
+          },
+          {
+            "step": "get-item-by-id",
+            "key": "body"
+          },
+          {
+            "step": "list-items",
+            "key": "body"
+          }
+        ]
+      },
+      "claims": [
+        {
+          "actual": "body",
+          "at": "id",
+          "compare": "at-least",
+          "expected": {
+            "literal": 1
+          }
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "body": {
+            "description": "The body the last request got"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "body-has-name",
+      "patterns": [
+        "the response body has the name {name:string}"
+      ],
+      "description": "The last response body's name is exactly this",
+      "mutates": false,
+      "from": {
+        "body": [
+          {
+            "step": "create-item",
+            "key": "body"
+          },
+          {
+            "step": "get-item",
+            "key": "body"
+          },
+          {
+            "step": "get-item-by-id",
+            "key": "body"
+          },
+          {
+            "step": "list-items",
+            "key": "body"
+          }
+        ]
+      },
+      "claims": [
+        {
+          "actual": "body",
+          "at": "name",
+          "compare": "equal",
+          "expected": "name"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The expected name"
+          },
+          "body": {
+            "description": "The body the last request got"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "body-is",
+      "patterns": [
+        "the response body is"
+      ],
+      "description": "The last response body, as JSON, deep-equals the docstring's JSON",
+      "mutates": false,
+      "from": {
+        "body": [
+          {
+            "step": "create-item",
+            "key": "body"
+          },
+          {
+            "step": "get-item",
+            "key": "body"
+          },
+          {
+            "step": "get-item-by-id",
+            "key": "body"
+          },
+          {
+            "step": "list-items",
+            "key": "body"
+          }
+        ]
+      },
+      "claims": [
+        {
+          "actual": "body",
+          "compare": "equal",
+          "expected": "expected",
+          "expected_view": "json"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "expected": {
+            "type": "string",
+            "description": "The expected body as JSON text"
+          },
+          "body": {
+            "description": "The body the last request got"
+          }
+        },
+        "required": [
+          "expected",
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "body-is-created-item",
+      "patterns": [
+        "the response body is the item that was created"
+      ],
+      "description": "The last response body is the item an earlier step created, id and name",
+      "mutates": false,
+      "from": {
+        "body": {
+          "step": "get-item",
+          "key": "body"
+        },
+        "created": {
+          "step": "an-item-exists",
+          "key": "body"
+        }
+      },
+      "claims": [
+        {
+          "actual": "body",
+          "compare": "equal",
+          "expected": {
+            "from": "created"
+          }
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "body": {
+            "description": "The body the read got"
+          },
+          "created": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "description": "The item as the API answered it"
+          }
+        },
+        "required": [
+          "body",
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "count-items",
+      "patterns": [
+        "I request the item count"
+      ],
+      "description": "GET /items/count",
+      "mutates": false,
+      "needs": [
+        "baseURL"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "number",
+            "description": "HTTP status"
+          },
+          "body": {
+            "description": "The parsed JSON response"
+          }
+        },
+        "required": [
+          "status",
+          "body"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "create-item",
+      "patterns": [
+        "I POST this body to \\/items"
+      ],
+      "description": "POST /items with this JSON body, verbatim",
+      "mutates": true,
+      "needs": [
+        "baseURL"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "description": "The request body, sent as-is"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "number",
+            "description": "HTTP status"
+          },
+          "body": {
+            "description": "The parsed JSON response"
+          }
+        },
+        "required": [
+          "status",
+          "body"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get-item",
+      "patterns": [
+        "I request that item"
+      ],
+      "description": "GET /items/<id> for the item an earlier step created",
+      "mutates": false,
+      "from": {
+        "id": {
+          "step": "an-item-exists",
+          "key": "id"
+        }
+      },
+      "needs": [
+        "baseURL"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "The id the API assigned"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "number",
+            "description": "HTTP status"
+          },
+          "body": {
+            "description": "The parsed JSON response"
+          }
+        },
+        "required": [
+          "status",
+          "body"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get-item-by-id",
+      "patterns": [
+        "I request item {id:int}"
+      ],
+      "description": "GET /items/<id> for a literal id",
+      "mutates": false,
+      "needs": [
+        "baseURL"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "The id in the path"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "number",
+            "description": "HTTP status"
+          },
+          "body": {
+            "description": "The parsed JSON response"
+          }
+        },
+        "required": [
+          "status",
+          "body"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list-has-created-item",
+      "patterns": [
+        "the list has the item that was created"
+      ],
+      "description": "The item list holds the item an earlier step created, id and name",
+      "mutates": false,
+      "from": {
+        "body": {
+          "step": "list-items",
+          "key": "body"
+        },
+        "created": {
+          "step": "an-item-exists",
+          "key": "body"
+        }
+      },
+      "claims": [
+        {
+          "actual": "body",
+          "compare": "has-item",
+          "expected": {
+            "from": "created"
+          }
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "body": {
+            "description": "The list the request got"
+          },
+          "created": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "description": "The item as the API answered it"
+          }
+        },
+        "required": [
+          "body",
+          "created"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list-items",
+      "patterns": [
+        "I request the item list"
+      ],
+      "description": "GET /items",
+      "mutates": false,
+      "needs": [
+        "baseURL"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "number",
+            "description": "HTTP status"
+          },
+          "body": {
+            "description": "The parsed JSON response"
+          }
+        },
+        "required": [
+          "status",
+          "body"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "status-is",
+      "patterns": [
+        "the response status is {expected:int}"
+      ],
+      "description": "The last response's HTTP status is exactly this",
+      "mutates": false,
+      "from": {
+        "status": [
+          {
+            "step": "create-item",
+            "key": "status"
+          },
+          {
+            "step": "get-item",
+            "key": "status"
+          },
+          {
+            "step": "get-item-by-id",
+            "key": "status"
+          },
+          {
+            "step": "list-items",
+            "key": "status"
+          },
+          {
+            "step": "count-items",
+            "key": "status"
+          }
+        ]
+      },
+      "claims": [
+        {
+          "actual": "status",
+          "compare": "equal",
+          "expected": "expected"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "expected": {
+            "type": "number",
+            "description": "The expected HTTP status"
+          },
+          "status": {
+            "type": "number",
+            "description": "The status the last request got"
+          }
+        },
+        "required": [
+          "expected",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ],
   "scenarios": [
     {
       "feature": "features/items.feature",

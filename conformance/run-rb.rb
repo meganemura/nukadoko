@@ -45,11 +45,28 @@ end
 
 def sort_findings(list) = list.sort_by { [_1[:file].to_s, _1[:line].to_i, _1[:code], _1[:step].to_s] }
 
+# What both engines must say about each step: everything `nuka steps` prints
+# except the file, and the JSON Schema of its args and returns.
+def vocabulary(entry, described)
+  { **entry.except(:file, :kind), args: described[:args], returns: described[:returns] }.compact
+end
+
+# Each place where the two results part, as `path: expected <> actual`, so a
+# difference reads at once instead of in two whole documents.
+def differences(expected, actual, path = "")
+  case [expected, actual]
+  in [Hash, Hash] then (expected.keys | actual.keys).flat_map { differences(expected[_1], actual[_1], "#{path}.#{_1}") }
+  in [Array, Array] then [expected.size, actual.size].max.times.flat_map { differences(expected[_1], actual[_1], "#{path}[#{_1}]") }
+  else expected == actual ? [] : ["#{path}: #{JSON.generate(expected)} <> #{JSON.generate(actual)}"]
+  end
+end
+
 def outcome(case_dir)
   Dir.mktmpdir("nukadoko-conformance-") do |dir|
     project(case_dir, dir)
     check = nuka(dir, "check")
     result = { check: sort_findings(check[:findings].map { finding(_1) }) }
+    result[:vocabulary] = nuka(dir, "steps")[:steps].sort_by { _1[:name] }.map { vocabulary(_1, nuka(dir, "describe", _1[:name])) }
     if check[:verdict] == "passed"
       run = nuka(dir, "run", "--no-check")
       result[:scenarios] = run[:scenarios].map do |s|
@@ -73,11 +90,12 @@ Dir.children(File.join(HERE, "cases")).sort.each do |name|
   next if only.any? && !only.include?(name)
 
   actual = outcome(File.join(HERE, "cases", name))
-  if JSON.parse(File.read(File.join(HERE, "cases", name, "expected.json")), symbolize_names: true) == actual
+  expected = JSON.parse(File.read(File.join(HERE, "cases", name, "expected.json")), symbolize_names: true)
+  if expected == actual
     puts "ok      #{name}"
   else
     failed += 1
-    puts "differs #{name}\n#{JSON.pretty_generate(actual)}"
+    puts "differs #{name}", *differences(expected, actual).first(20).map { "  #{_1}" }
   end
 end
 exit(failed.zero? ? 0 : 1)

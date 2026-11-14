@@ -14,9 +14,10 @@ const cli = path.join(root, "dist", "cli.js");
 const write = process.argv.includes("--write");
 const only = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 
-function nuka(dir, args) {
+// describe prints JSON already and refuses --json.
+function nuka(dir, args, json = true) {
   try {
-    return JSON.parse(execFileSync("node", [cli, ...args, "--json"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }));
+    return JSON.parse(execFileSync("node", [cli, ...args, ...(json ? ["--json"] : [])], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }));
   } catch (error) {
     return JSON.parse(error.stdout);
   }
@@ -56,11 +57,19 @@ function sortFindings(list) {
   return list.toSorted((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
 }
 
+// What both engines must say about each step: everything `nuka steps` prints
+// except the file, and the JSON Schema of its args and returns.
+function vocabulary(entry, described) {
+  const { file, kind, ...rest } = entry;
+  return { ...rest, ...(described.args ? { args: described.args } : {}), ...(described.returns ? { returns: described.returns } : {}) };
+}
+
 function outcome(caseDir) {
   const dir = project(caseDir);
   try {
     const check = nuka(dir, ["check"]);
     const result = { check: sortFindings(check.findings.map(finding)) };
+    result.vocabulary = nuka(dir, ["steps"]).steps.toSorted((a, b) => (a.name < b.name ? -1 : 1)).map((entry) => vocabulary(entry, nuka(dir, ["describe", entry.name], false)));
     if (check.verdict === "passed") {
       const run = nuka(dir, ["run", "--no-check"]);
       result.scenarios = run.scenarios.map((s) => ({

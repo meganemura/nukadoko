@@ -50,8 +50,9 @@ module Nukadoko
         problems = part.returns ? part.returns.problems(value) : []
         raise TypeError, "returns of #{part.step_name}: #{problems.join("; ")}" if problems.any?
 
+        value = part.returns.strip(value) if part.returns
         entry[:result] = value
-        part.returns ? part.returns.load(value.transform_keys(&:to_s)) : value
+        part.returns ? part.returns.load(value) : value
       rescue StandardError => e
         entry[:error] ||= "#{e.class}: #{e.message}"
         raise

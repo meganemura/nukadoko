@@ -144,6 +144,11 @@ module Nukadoko
           problems = step.returns ? step.returns.problems(value) : []
           raise TypeError, "returns: #{problems.join("; ")}" if problems.any?
 
+          if step.returns
+            dropped = step.returns.dropped(value)
+            record[:returns_dropped] = dropped if dropped.any?
+            value = step.returns.strip(value)
+          end
           results << [step, value.transform_keys(&:to_s)]
           record[:result] = value
         end

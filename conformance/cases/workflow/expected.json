@@ -1,5 +1,403 @@
 {
   "check": [],
+  "vocabulary": [
+    {
+      "name": "confirm",
+      "patterns": [
+        "the confirmation link is opened"
+      ],
+      "description": "Open the confirmation link the registration issued",
+      "mutates": true,
+      "from": {
+        "token": {
+          "step": "register",
+          "key": "token"
+        }
+      },
+      "needs": [
+        "store"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The confirmation token issued, when accepted"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The email the token confirmed"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "register",
+      "patterns": [
+        "a registration for {email:string} with password {password:string} is submitted"
+      ],
+      "description": "Submit a registration; returns the outcome, never throws on refusal",
+      "mutates": true,
+      "needs": [
+        "store"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email registered"
+          },
+          "password": {
+            "type": "string",
+            "description": "The password chosen"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "refused"
+            ],
+            "description": "Whether the registration was accepted or refused"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The confirmation token issued, when accepted"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was refused, when refused"
+          }
+        },
+        "required": [
+          "outcome",
+          "token",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "registration-is-refused",
+      "patterns": [
+        "the registration is refused because {expected:string}"
+      ],
+      "description": "The last registration was refused with exactly this reason",
+      "mutates": false,
+      "from": {
+        "outcome": {
+          "step": "register",
+          "key": "outcome"
+        },
+        "reason": {
+          "step": "register",
+          "key": "reason"
+        }
+      },
+      "claims": [
+        {
+          "actual": "outcome",
+          "compare": "equal",
+          "expected": {
+            "literal": "refused"
+          }
+        },
+        {
+          "actual": "reason",
+          "compare": "equal",
+          "expected": "expected"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "expected": {
+            "type": "string",
+            "description": "The expected reason"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "refused"
+            ],
+            "description": "Whether the registration was accepted or refused"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was refused, when refused"
+          }
+        },
+        "required": [
+          "expected",
+          "outcome",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sign-in",
+      "patterns": [
+        "{email:string} signs in with password {password:string}"
+      ],
+      "description": "Attempt a sign-in; returns the outcome, never throws on refusal",
+      "mutates": false,
+      "needs": [
+        "store"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email used"
+          },
+          "password": {
+            "type": "string",
+            "description": "The password used"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "refused"
+            ],
+            "description": "Whether the sign-in was accepted or refused"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was refused, when refused"
+          }
+        },
+        "required": [
+          "outcome",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sign-in-is-accepted",
+      "patterns": [
+        "the sign-in is accepted"
+      ],
+      "description": "The last sign-in attempt was accepted",
+      "mutates": false,
+      "from": {
+        "outcome": {
+          "step": "sign-in",
+          "key": "outcome"
+        }
+      },
+      "claims": [
+        {
+          "actual": "outcome",
+          "compare": "equal",
+          "expected": {
+            "literal": "accepted"
+          }
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "refused"
+            ],
+            "description": "Whether the sign-in was accepted or refused"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sign-in-is-refused",
+      "patterns": [
+        "the sign-in is refused because {expected:string}"
+      ],
+      "description": "The last sign-in attempt was refused with exactly this reason",
+      "mutates": false,
+      "from": {
+        "outcome": {
+          "step": "sign-in",
+          "key": "outcome"
+        },
+        "reason": {
+          "step": "sign-in",
+          "key": "reason"
+        }
+      },
+      "claims": [
+        {
+          "actual": "outcome",
+          "compare": "equal",
+          "expected": {
+            "literal": "refused"
+          }
+        },
+        {
+          "actual": "reason",
+          "compare": "equal",
+          "expected": "expected"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "expected": {
+            "type": "string",
+            "description": "The expected reason"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "refused"
+            ],
+            "description": "Whether the sign-in was accepted or refused"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it was refused, when refused"
+          }
+        },
+        "required": [
+          "expected",
+          "outcome",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ],
   "scenarios": [
     {
       "feature": "features/signup.feature",

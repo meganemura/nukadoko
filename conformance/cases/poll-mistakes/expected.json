@@ -15,5 +15,52 @@
       "code": "undefined-step-check-suppressed",
       "step": "job-ends"
     }
+  ],
+  "vocabulary": [
+    {
+      "name": "start-job",
+      "patterns": [
+        "a job named {name:string} is started and ends {ends:string}"
+      ],
+      "description": "Start a job via POST /jobs that ends in the given status",
+      "mutates": true,
+      "needs": [
+        "request"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The job's name"
+          },
+          "ends": {
+            "type": "string",
+            "description": "The status the job ends in: \"done\" or \"failed\""
+          }
+        },
+        "required": [
+          "name",
+          "ends"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The id the server assigned"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    }
   ]
 }

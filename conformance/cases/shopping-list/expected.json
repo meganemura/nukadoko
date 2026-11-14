@@ -11,6 +11,102 @@
       "step": "list-includes"
     }
   ],
+  "vocabulary": [
+    {
+      "name": "add-on-page",
+      "patterns": [
+        "{name:string} is added on the page"
+      ],
+      "mutates": true,
+      "needs": [
+        "page"
+      ],
+      "needs_browser": true,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list-includes",
+      "patterns": [
+        "the list on the page includes {name:string}"
+      ],
+      "mutates": false,
+      "claims": [
+        {
+          "actual": "items",
+          "compare": "has-item",
+          "expected": "name"
+        }
+      ],
+      "poll": false,
+      "needs": [
+        "page"
+      ],
+      "needs_browser": true,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "open-list",
+      "patterns": [
+        "the shopping list is open"
+      ],
+      "mutates": false,
+      "needs": [
+        "page"
+      ],
+      "needs_browser": true,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ],
   "scenarios": [
     {
       "feature": "features/list.feature",

@@ -7,8 +7,8 @@ class CreateItem < Nukadoko::Step
     unknown :body, "The parsed JSON response"
   end
 
-  def run(request:, args:)
-    res = request.post("/items", body: args.body)
-    { status: res.status, body: res.json }
+  def run(baseURL:, args:)
+    res = Net::HTTP.post(URI("#{baseURL}/items"), args.body)
+    { status: res.code.to_i, body: JSON.parse(res.body) }
   end
 end

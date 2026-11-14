@@ -1,5 +1,5 @@
 class Register < Nukadoko::Step
-  description "Submit a registration; returns the outcome, never raises on refusal"
+  description "Submit a registration; returns the outcome, never throws on refusal"
   pattern "a registration for {email:string} with password {password:string} is submitted"
   args do
     string :email, "The email registered"

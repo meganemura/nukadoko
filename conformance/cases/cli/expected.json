@@ -1,5 +1,318 @@
 {
   "check": [],
+  "vocabulary": [
+    {
+      "name": "a-csv-file-with",
+      "patterns": [
+        "a file {name:string} with these lines"
+      ],
+      "description": "Write the docstring to a named file in a fresh scratch directory",
+      "mutates": false,
+      "needs": [
+        "scratch"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The file name, relative to the scratch directory"
+          },
+          "lines": {
+            "type": "string",
+            "description": "The file's contents, verbatim"
+          }
+        },
+        "required": [
+          "name",
+          "lines"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "The scratch directory the file was written in"
+          },
+          "bytes": {
+            "type": "number",
+            "description": "Size of the file written, in bytes"
+          }
+        },
+        "required": [
+          "dir",
+          "bytes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "an-empty-directory",
+      "patterns": [
+        "an empty directory"
+      ],
+      "description": "A fresh, empty scratch directory to run the command in",
+      "mutates": false,
+      "needs": [
+        "scratch"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "description": "The scratch directory"
+          }
+        },
+        "required": [
+          "dir"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "error-says",
+      "patterns": [
+        "the error says {text:string}"
+      ],
+      "description": "The first line of stderr is exactly this",
+      "mutates": false,
+      "from": {
+        "stderr": {
+          "step": "run-tally",
+          "key": "stderr"
+        }
+      },
+      "claims": [
+        {
+          "actual": "stderr",
+          "view": "lines",
+          "at": "0",
+          "compare": "equal",
+          "expected": "text"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The expected first line of stderr"
+          },
+          "stderr": {
+            "type": "string",
+            "description": "Everything the process wrote to stderr"
+          }
+        },
+        "required": [
+          "text",
+          "stderr"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "exits-with",
+      "patterns": [
+        "it exits with {code:int}"
+      ],
+      "description": "The process exit code is exactly this",
+      "mutates": false,
+      "from": {
+        "exitCode": {
+          "step": "run-tally",
+          "key": "exitCode"
+        }
+      },
+      "claims": [
+        {
+          "actual": "exitCode",
+          "compare": "equal",
+          "expected": "code"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "number",
+            "description": "The expected exit code"
+          },
+          "exitCode": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The process exit code"
+          }
+        },
+        "required": [
+          "code",
+          "exitCode"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "output-is",
+      "patterns": [
+        "the output is"
+      ],
+      "description": "stdout is exactly the docstring, ignoring a trailing newline",
+      "mutates": false,
+      "from": {
+        "stdout": {
+          "step": "run-tally",
+          "key": "stdout"
+        }
+      },
+      "claims": [
+        {
+          "actual": "stdout",
+          "view": "text",
+          "compare": "equal",
+          "expected": "expected"
+        }
+      ],
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "expected": {
+            "type": "string",
+            "description": "The expected stdout, verbatim"
+          },
+          "stdout": {
+            "type": "string",
+            "description": "Everything the process wrote to stdout"
+          }
+        },
+        "required": [
+          "expected",
+          "stdout"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "run-tally",
+      "patterns": [
+        "I run tally with {argv:string}"
+      ],
+      "description": "Run tally with these arguments in the directory an earlier step prepared",
+      "mutates": false,
+      "from": {
+        "dir": [
+          {
+            "step": "a-csv-file-with",
+            "key": "dir"
+          },
+          {
+            "step": "an-empty-directory",
+            "key": "dir"
+          }
+        ]
+      },
+      "needs": [],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "argv": {
+            "type": "string",
+            "description": "Arguments after `tally`, separated by spaces"
+          },
+          "dir": {
+            "type": "string",
+            "description": "The scratch directory the file was written in"
+          }
+        },
+        "required": [
+          "argv",
+          "dir"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "exitCode": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The process exit code"
+          },
+          "stdout": {
+            "type": "string",
+            "description": "Everything the process wrote to stdout"
+          },
+          "stderr": {
+            "type": "string",
+            "description": "Everything the process wrote to stderr"
+          }
+        },
+        "required": [
+          "exitCode",
+          "stdout",
+          "stderr"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
   "scenarios": [
     {
       "feature": "features/tally.feature",

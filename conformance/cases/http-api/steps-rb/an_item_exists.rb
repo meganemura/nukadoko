@@ -10,11 +10,11 @@ class AnItemExists < Nukadoko::Step
     end
   end
 
-  def run(request:, args:)
-    res = request.post("/items", body: JSON.generate(name: args.name))
-    raise %(creating "#{args.name}": status #{res.status}, not 201) unless res.status == 201
+  def run(baseURL:, args:)
+    res = Net::HTTP.post(URI("#{baseURL}/items"), JSON.generate(name: args.name))
+    raise %(creating "#{args.name}": status #{res.code.to_i}, not 201) unless res.code.to_i == 201
 
-    item = res.json
+    item = JSON.parse(res.body)
     { id: item["id"], body: item }
   end
 end

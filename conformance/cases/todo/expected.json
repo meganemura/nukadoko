@@ -1,5 +1,255 @@
 {
   "check": [],
+  "vocabulary": [
+    {
+      "name": "add-todo",
+      "patterns": [
+        "a todo titled {title:string} is added"
+      ],
+      "description": "Create a todo via POST /todos and return the created record",
+      "mutates": true,
+      "needs": [
+        "request"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the todo to create"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The id the server assigned"
+          },
+          "title": {
+            "type": "string",
+            "description": "The title as the server stored it"
+          },
+          "done": {
+            "type": "boolean",
+            "description": "Whether the todo is done; false for a new one"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "done"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add-todos-from-table",
+      "patterns": [
+        "the following todos are added"
+      ],
+      "description": "POST /todos once per table row and return the titles created",
+      "mutates": true,
+      "needs": [
+        "request"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "todos": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "The data table's rows, one todo per row, the title in the first cell"
+          }
+        },
+        "required": [
+          "todos"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The titles the server stored, in row order"
+          }
+        },
+        "required": [
+          "created"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "complete-todo",
+      "patterns": [
+        "the todo titled {title:string} is completed"
+      ],
+      "description": "Find a todo by title and PATCH it to done: true",
+      "mutates": true,
+      "needs": [
+        "request"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the todo to complete; must already exist"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The id of the todo that was completed"
+          },
+          "title": {
+            "type": "string",
+            "description": "Its title, as the server returned it"
+          },
+          "done": {
+            "type": "boolean",
+            "description": "true after the PATCH"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "done"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "todo-is-marked-done",
+      "patterns": [
+        "the todo titled {title:string} is marked {state:word}"
+      ],
+      "description": "The todo with this title has the state the line names in GET /todos",
+      "mutates": false,
+      "claims": [
+        {
+          "actual": "todos",
+          "each": {
+            "where": [
+              {
+                "actual": "title",
+                "compare": "equal",
+                "expected": "title"
+              }
+            ],
+            "claims": [
+              {
+                "actual": "state",
+                "compare": "equal",
+                "expected": "state"
+              }
+            ]
+          }
+        }
+      ],
+      "needs": [
+        "request"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title of the todo to read"
+          },
+          "state": {
+            "type": "string",
+            "description": "The state the todo is expected to have: \"done\" or \"open\""
+          }
+        },
+        "required": [
+          "title",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "todo-list-includes",
+      "patterns": [
+        "the todo list includes {title:string}"
+      ],
+      "description": "A todo with this title is present in GET /todos",
+      "mutates": false,
+      "claims": [
+        {
+          "actual": "titles",
+          "compare": "has-item",
+          "expected": "title"
+        }
+      ],
+      "needs": [
+        "request"
+      ],
+      "needs_browser": false,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "The title expected to be present"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ],
   "scenarios": [
     {
       "feature": "features/todo.feature",

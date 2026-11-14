@@ -9,8 +9,8 @@ class GetItem < Nukadoko::Step
   end
   mutates false
 
-  def run(request:, args:)
-    res = request.get("/items/#{args.id}")
-    { status: res.status, body: res.json }
+  def run(baseURL:, args:)
+    res = Net::HTTP.get_response(URI("#{baseURL}/items/#{args.id}"))
+    { status: res.code.to_i, body: JSON.parse(res.body) }
   end
 end

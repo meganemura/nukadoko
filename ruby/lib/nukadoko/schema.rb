@@ -48,16 +48,48 @@ module Nukadoko
     end
 
     # Every way `value` departs from the schema, as `path: problem` lines.
-    # Keys the schema does not declare are a problem too, as zod's strict
-    # objects make them on the TypeScript side.
+    # A key the schema does not declare is no problem: as a zod object does,
+    # the schema drops it (`strip`), and `dropped` names where.
     def problems(value, path = nil)
       return ["#{path || "value"} must be an object, got #{value.inspect}"] unless value.is_a?(Hash)
 
       hash = value.transform_keys(&:to_s)
-      extra = (hash.keys - fields.map { _1.name.to_s }).map { "#{join(path, _1)} is not declared" }
-      extra + fields.flat_map do |field|
+      fields.flat_map do |field|
         key = join(path, field.name)
         hash.key?(field.name.to_s) ? Schema.type_problems(field.type, hash[field.name.to_s], key) : ["#{key} is missing"]
+      end
+    end
+
+    # The value with every key the schema does not declare left out, at any
+    # depth, with string keys. Assumes `problems` found none.
+    def strip(value)
+      hash = value.transform_keys(&:to_s)
+      fields.to_h { [_1.name.to_s, Schema.strip_type(_1.type, hash[_1.name.to_s])] }
+    end
+
+    def self.strip_type(type, value)
+      case type
+      in [:nullable, inner] then value.nil? ? nil : strip_type(inner, value)
+      in [:array, item] then value.map { strip_type(item, _1) }
+      in Schema then type.strip(value)
+      else value
+      end
+    end
+
+    # The paths of the keys `strip` leaves out, so a record can say what the
+    # step returned and the contract did not keep.
+    def dropped(value, path = nil)
+      hash = value.transform_keys(&:to_s)
+      names = fields.map { _1.name.to_s }
+      (hash.keys - names).map { join(path, _1) } + fields.flat_map { Schema.dropped_type(_1.type, hash[_1.name.to_s], join(path, _1.name)) }
+    end
+
+    def self.dropped_type(type, value, path)
+      case type
+      in [:nullable, inner] then value.nil? ? [] : dropped_type(inner, value, path)
+      in [:array, item] then value.each_with_index.flat_map { dropped_type(item, _1, "#{path}[#{_2}]") }
+      in Schema then type.dropped(value, path)
+      else []
       end
     end
 
@@ -78,6 +110,31 @@ module Nukadoko
         in Schema then return type.problems(value, path)
         end
       ok ? [] : ["#{path} must be #{type}, got #{value.inspect}"]
+    end
+
+    # The JSON Schema `nuka describe` prints, as zod's own conversion gives it:
+    # the root is closed, and an inner object is closed only on the output
+    # side (`returns`), where zod drops the keys it does not declare.
+    def json_schema(root: true, output: false)
+      schema = { type: "object", properties: fields.to_h { [_1.name, Schema.json_type(_1.type, output).merge(_1.description ? { description: _1.description } : {})] } }
+      schema[:required] = fields.map(&:name) if fields.any?
+      return { "$schema": "https://json-schema.org/draft/2020-12/schema", **schema, additionalProperties: false } if root
+
+      output ? schema.merge(additionalProperties: false) : schema
+    end
+
+    def self.json_type(type, output = false)
+      case type
+      in :string then { type: "string" }
+      in :boolean then { type: "boolean" }
+      in :integer then { type: "integer" }
+      in :number then { type: "number" }
+      in :unknown then {}
+      in [:nullable, inner] then { anyOf: [json_type(inner, output), { type: "null" }] }
+      in [:enum, values] then { type: "string", enum: values }
+      in [:array, item] then { type: "array", items: json_type(item, output) }
+      in Schema then type.json_schema(root: false, output: output)
+      end
     end
 
     def rbs_fields = fields.map { "attr_reader #{_1.name}: #{Schema.rbs_type(_1.type)}" }

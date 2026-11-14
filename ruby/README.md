@@ -39,6 +39,8 @@ end
 - A project fixture goes in `nukadoko.config.rb`. The block calls `use` with the value, and what follows is the teardown: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`. `scope: :process` keeps one value for the whole run of an environment.
 - `parts [CreateTodo, CompleteById]` declares the steps a step may run, and `call.(CreateTodo, title: args.title)` runs one, with its args and returns checked. A part needs no pattern. Each call is kept under `calls` in the calling step's record. `nuka check` reports a cycle in `parts` and a `mutates false` step whose part declares `mutates true`.
 - `poll timeout_ms: 3000` reads `observe` again, 100 ms apart, until every claim holds on two readings in a row or the time runs out. `settled:` names a state that cannot change once reached, so two settled readings in a row stop the wait for a claim that broke. Every reading is kept in the step record.
+- `nuka steps [--json]` lists the vocabulary, and `nuka describe <step>` prints one step with the JSON Schema of its args and returns, in the fields the TypeScript engine prints.
+- A returned key the contract does not declare is dropped, as a zod object drops it, and the step record names it under `returns_dropped`.
 - `nuka sig` writes `sig/nukadoko/steps.rbs`. With Steep, a body that reads an undeclared args key or returns the wrong shape is an error.
 
 The program under test is described in `nukadoko.program.rb`:

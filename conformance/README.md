@@ -16,6 +16,7 @@ cases/<name>/
 ```
 
 `expected.json` holds only what both engines must agree on.
+Each step is compared as `nuka steps --json` and `nuka describe` print it, without its file.
 A finding is its severity, its code, and the feature file and line or the step name it is about.
 A step is named by its step name, not its file, because each language spells step files its own way (`add-todo.ts`, `add_todo.rb`).
 Messages and timings are left out.

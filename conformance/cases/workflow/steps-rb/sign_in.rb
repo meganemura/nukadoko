@@ -1,5 +1,5 @@
 class SignIn < Nukadoko::Step
-  description "Attempt a sign-in; returns the outcome, never raises on refusal"
+  description "Attempt a sign-in; returns the outcome, never throws on refusal"
   pattern "{email:string} signs in with password {password:string}"
   args do
     string :email, "The email used"
