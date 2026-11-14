@@ -514,6 +514,7 @@ module Nukadoko
               check_fill(scenario, line, step, captures)
               check_position(scenario, line, step)
               check_kinds(scenario, line, step, captures)
+              check_unfit_trees(scenario, line, step, captures)
               check_poll(step)
             else
               findings << Finding.new("error", "ambiguous-step", scenario.uri, line.line, nil,
@@ -689,6 +690,29 @@ module Nukadoko
                                     %(Step "#{step.step_name}"'s #{entry_label}.expected is args.#{key}, which this line fills with #{JSON.generate(named)}, and is-a names one of the kinds #{Claims::VALUE_KINDS.join(", ")}, so the claim would always break),
                                     Codes.fix("claim-kind-unknown"))
           end
+        end
+      end
+
+      # A fits-aria-snapshot claim whose expected sentence key this line
+      # fills, through a capture or the docstring, with a tree the run breaks
+      # the claim on whatever the page shows: one that does not read, or one
+      # that names no node.
+      def check_unfit_trees(scenario, line, step, captures)
+        claims = step.claims or return
+        docstring_keys = line.doc_string ? step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys.map(&:to_s) : []
+        claims.each_with_index do |claim, index|
+          key = claim[:expected]
+          next if claim[:each] || claim[:compare] != "fits-aria-snapshot" || !key.is_a?(String)
+
+          captured = captures[key].is_a?(String) && step.args[key]&.type == :string ? captures[key] : nil
+          text = (captured || (docstring_keys == [key] ? line.doc_string : nil)) #: String?
+          next if text.nil?
+
+          problem = AriaSnapshot.expected_problem(text) or next
+          code = problem.first == :unreadable ? "claim-aria-snapshot-unreadable" : "claim-aria-snapshot-names-nothing"
+          findings << Finding.new("error", code, scenario.uri, line.line, step.step_name,
+                                  %(Step "#{step.step_name}"'s claims[#{index}].expected is args.#{key}, which this line's #{captured ? "capture" : "docstring"} fills, and #{AriaSnapshot.problem_reason(problem)}, so the claim would break whatever the page shows),
+                                  Codes.fix(code))
         end
       end
 

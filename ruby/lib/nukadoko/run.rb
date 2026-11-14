@@ -382,13 +382,14 @@ module Nukadoko
           @out.puts "      #{record[:error]}" if record[:error]
           record
         end
+        browser = @browser.scenario_browser
         @browser.end_scenario
         @scenario_fixtures.teardown
         @scratch.remove_all
         execution = stopped ? stopped[0, 3].to_a.compact : [:pass]
         failed = records.find { _1[:status] == "failed" }
         json = { scenario_record_id: scenario_record_id, feature: scenario.uri, line: scenario.line, scenario: scenario.name,
-                 environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now,
+                 environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
         json[:do] = again(scenario, environment) if failed && role != "control"
         held = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "held" } }
@@ -506,7 +507,7 @@ module Nukadoko
               Processes.collect(processes) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) }
             end
           end
-          record[:page_view] = @browser.judged(dir, record[:step_record_id]) if step.claims && fixtures[:page] && record[:observation] != "unobserved"
+          record[:page_view] = @browser.judged(dir, record[:step_record_id], aria_in_claims: step.claims.to_a.any? { !_1[:each] && _1[:compare] == "fits-aria-snapshot" }) if step.claims && fixtures[:page] && record[:observation] != "unobserved"
           record[:status] ||= "passed"
         rescue StandardError => e
           record.merge!(status: "failed", outcome: :broke, error: e.message)
@@ -566,7 +567,8 @@ module Nukadoko
             next args unless observes
 
             observed = step.new.observe(**own, args: step.inputs.load(args))
-            observed.is_a?(Hash) ? observed.transform_keys(&:to_s).merge(from_values) : observed
+            observed = observed.is_a?(Hash) ? observed.transform_keys(&:to_s).merge(from_values) : observed
+            Claims.take_aria_snapshots(step.claims, observed)
           end
           # A reading with a page open is timed, so the record can say what the page had received by then.
           read = (plain = read; -> { @browser.reading(&plain) }) if own[:page]
@@ -589,6 +591,8 @@ module Nukadoko
 
             # Under a view the raw value is the text the view read; else the value at `at`.
             read = Claims.read(observed, declared[:actual])
+            next nil if declared[:compare] == "fits-aria-snapshot"
+
             declared[:view] ? read : Claims.dig(read, declared[:at])
           rescue StandardError
             nil
@@ -647,6 +651,8 @@ module Nukadoko
         from_of = ->(key) { (origin = (record[:args_origin] || {})[key.to_s.split(".").first]).is_a?(Hash) ? origin.dig(:from, :step_record_id) : nil }
         step.claims.zip(record[:claim_records], record[:raw_actuals] || []).each do |declared, claim, raw|
           next if claim.nil? || claim[:outcome] == "unobserved" || declared[:each]
+          # A tree nukadoko took is a measurement of the page, not a value a channel carried.
+          next claim[:measured] = nil if declared[:compare] == "fits-aria-snapshot"
 
           measured = Measured.channel_for(from_of.(declared[:actual]) || own, raw, channels_of)
           claim[:measured] = measured

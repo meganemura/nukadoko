@@ -73,7 +73,7 @@ module Nukadoko
 
       # A claim step's `pages`, `page_requests`, and `judged_view`, after
       # the reading its claims were judged on, when a page was open.
-      def judged: (untyped dir, untyped step_record_id) -> untyped
+      def judged: (untyped dir, untyped step_record_id, ?aria_in_claims: untyped) -> untyped
 
       def request_record: (untyped entry, untyped step_record_id) -> untyped
 
@@ -82,9 +82,11 @@ module Nukadoko
       # the reading it was taken. The claims judged what observe returned,
       # not these files.
       # In a trace group of its own, so the step's actions leave these calls out.
-      def view: (untyped dir, untyped ended) -> untyped
+      def view: (untyped dir, untyped ended, untyped aria_in_claims) -> untyped
 
-      def view_files: (untyped dir, untyped ended) -> untyped
+      # A step whose claims judge a tree nukadoko took keeps that tree in its
+      # claims, so the view takes no second one.
+      def view_files: (untyped dir, untyped ended, untyped aria_in_claims) -> untyped
 
       def monotonic: () -> untyped
 
@@ -99,6 +101,10 @@ module Nukadoko
 
       # Each scenario gets a browser context of its own, so cookies and storage
       # never carry from one scenario to the next.
+      # The browser the scenario opened a page in, as run.json names it, or
+      # nil when it opened none.
+      def scenario_browser: () -> untyped
+
       def end_scenario: () -> untyped
 
       def close: () -> untyped

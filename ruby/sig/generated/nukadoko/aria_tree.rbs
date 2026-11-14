@@ -1,0 +1,142 @@
+# Generated from lib/nukadoko/aria_tree.rb with RBS::Inline
+
+# The values an ARIA snapshot reads as (lib/nukadoko/aria_snapshot.rb):
+# the YAML items of its text, the nodes of the tree nukadoko took and of
+# the tree a docstring states, and the scores the explanation of a misfit
+# aligns them with. Nothing here reads a text or judges a fit; the classes
+# sit apart from that module so its functions stay module functions of it
+# alone.
+module Nukadoko
+  module Engine
+    module AriaSnapshot
+      # One scalar of an item: its text after YAML unquoted it, and whether
+      # it was written plain, which is when YAML may read it as a number, a
+      # boolean, or null.
+      class Scalar < Data
+        attr_reader text(): String
+
+        attr_reader plain(): bool
+
+        def self.new: (String text, bool plain) -> instance
+                    | (text: String, plain: bool) -> instance
+
+        def self.members: () -> [ :text, :plain ]
+
+        def members: () -> [ :text, :plain ]
+      end
+
+      # One item of the list: a key alone, a key and its text, or a key and
+      # its children. `source` is the item as written, after `- ` and before
+      # any comment, for a message.
+      class Item < Data
+        attr_reader line(): Integer
+
+        attr_reader source(): String
+
+        attr_reader key(): Scalar
+
+        attr_reader value(): Scalar?
+
+        attr_reader children(): Array[Item]?
+
+        def self.new: (Integer line, String source, Scalar key, Scalar? value, Array[Item]? children) -> instance
+                    | (line: Integer, source: String, key: Scalar, value: Scalar?, children: Array[Item]?) -> instance
+
+        def self.members: () -> [ :line, :source, :key, :value, :children ]
+
+        def members: () -> [ :line, :source, :key, :value, :children ]
+      end
+
+      # A line of the text that holds an item: its number from 1, the
+      # column its content starts at, and the content.
+      class Line < Data
+        attr_reader number(): Integer
+
+        attr_reader indent(): Integer
+
+        attr_reader content(): String
+
+        def self.new: (Integer number, Integer indent, String content) -> instance
+                    | (number: Integer, indent: Integer, content: String) -> instance
+
+        def self.members: () -> [ :number, :indent, :content ]
+
+        def members: () -> [ :number, :indent, :content ]
+      end
+
+      # A text as a docstring states it, and with its white space folded
+      # the way a page's text is: either one fits.
+      class ExpectedText < Data
+        attr_reader raw(): String
+
+        attr_reader normalized(): String
+
+        def self.new: (String raw, String normalized) -> instance
+                    | (raw: String, normalized: String) -> instance
+
+        def self.members: () -> [ :raw, :normalized ]
+
+        def members: () -> [ :raw, :normalized ]
+      end
+
+      # Why a text is no ARIA snapshot, with the line it found that on.
+      class Problem < StandardError
+      end
+
+      # One node of the snapshot nukadoko took, or one a docstring names.
+      # A text node holds `text`; a role node holds the rest. The top of a
+      # tree is a node of role `fragment` that holds the list.
+      class Node
+        attr_reader kind: :role | :text
+
+        attr_reader role: String
+
+        attr_reader name: String
+
+        attr_reader states: Hash[String, untyped]
+
+        attr_reader props: Hash[String, untyped]
+
+        attr_reader children: Array[Node]
+
+        attr_accessor children_mode: String?
+
+        attr_reader text: untyped
+
+        attr_reader line: Integer
+
+        attr_reader source: String
+
+        # : (kind: :role | :text, line: Integer, source: String, ?role: String, ?name: String, ?states: Hash[String, untyped], ?props: Hash[String, untyped], ?children: Array[Node], ?children_mode: String?, ?text: untyped) -> void
+        def initialize: (kind: :role | :text, line: Integer, source: String, ?role: String, ?name: String, ?states: Hash[String, untyped], ?props: Hash[String, untyped], ?children: Array[Node], ?children_mode: String?, ?text: untyped) -> void
+
+        # : () -> bool
+        def text?: () -> bool
+      end
+
+      # How many nodes of an expected tree fit under an actual node, for
+      # each pairing, kept so the alignment counts each pair once.
+      class Scores
+        # : () -> void
+        def initialize: () -> void
+
+        # The nodes of `expected`'s tree that fit under `actual`, `expected`
+        # itself included (a fragment counts for none): 0 when `actual` is
+        # not the node `expected` names.
+        # : (Node, Node, bool) -> Integer
+        def of: (Node, Node, bool) -> Integer
+
+        # The in-order pairing of expected children with actual children
+        # that fits the most expected nodes; of equals, the one that pairs
+        # each expected child with the earliest actual child it can.
+        # : (Array[Node], Array[Node]) -> [Integer, Hash[Integer, Integer]]
+        def aligned: (Array[Node], Array[Node]) -> [ Integer, Hash[Integer, Integer] ]
+
+        private
+
+        # : (Node, Node, bool) -> Integer
+        def compute: (Node, Node, bool) -> Integer
+      end
+    end
+  end
+end

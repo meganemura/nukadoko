@@ -228,9 +228,26 @@ module Nukadoko
         lines
       end
 
-      # A Then that sent requests is seen in its own http.jsonl, the
-      # responses its claims were judged on.
+      # A capture taken at least this long after its reading says so beside
+      # its link: a page that changes on a timer of a few hundred
+      # milliseconds can show another state by then.
+      LATE_VIEW_MS = 100
+
+      # Where a Then's judged moment can be seen: each open page's view
+      # right after the reading its claims were judged on, its screenshot
+      # before its ARIA snapshot, or, for a Then that read no page, the
+      # requests its own step sent. Each link is [label, href, after_ms].
       def seen_links(step)
+        pages = step.dig(:judged_view, :pages) || []
+        links = pages.flat_map do |page|
+          name = pages.size == 1 ? "page" : "page #{page[:page]}#{page[:as].nil? ? "" : " of #{page[:as]}"}"
+          [*(page[:screenshot] ? [[name, page[:screenshot][:file], page[:screenshot][:after_reading_ms]]] : []),
+           *(page[:aria] ? [["#{name} ARIA", page[:aria][:file], page[:aria][:after_reading_ms]]] : [])]
+        end
+        # A Then that read a page is linked to its view or to nothing: the
+        # requests its pages sent during the step are not what it read.
+        return links if step[:judged_view] || step[:pages]
+
         http = step.dig(:observed, :http)
         return [] unless step[:record] && http.is_a?(Integer) && http.positive?
 
@@ -244,7 +261,7 @@ module Nukadoko
         "[#{text}](<#{href}>)"
       end
 
-      def seen_text(links) = links.map { |label, href| markdown_link(label, href) }.join(", ")
+      def seen_text(links) = links.map { |label, href, after| "#{markdown_link(label, href)}#{after && after >= LATE_VIEW_MS ? " (taken #{after} ms after the reading)" : ""}" }.join(", ")
 
       def seen_column(doc)
         chosen = {}
@@ -447,7 +464,9 @@ module Nukadoko
                        ["- order: shuffled, seed #{order[:seed]} (`--order shuffled:#{order[:seed]}` runs this order again)"]
                      else []
                      end
-        ["", commit_line, *environments, "- browser: none launched", selection, *order_line, *proof_line,
+        browsers = doc[:scenarios].filter_map { "#{_1[:browser][:type]} #{_1[:browser][:version]}" if _1[:browser] }.uniq
+        browser = browsers.empty? ? "- browser: none launched" : "- browser: #{browsers.join(", ")}"
+        ["", commit_line, *environments, browser, selection, *order_line, *proof_line,
          "- nukadoko: #{doc[:nukadoko]}", "- run: #{doc[:run_id]}",
          "- started #{doc[:started_at]}, finished #{doc[:finished_at]} (#{duration(elapsed)})"]
       end

@@ -193,6 +193,12 @@ module Nukadoko
       # the claim reads is the captured text.
       def check_kinds: (untyped scenario, untyped line, untyped step, untyped captures) -> untyped
 
+      # A fits-aria-snapshot claim whose expected sentence key this line
+      # fills, through a capture or the docstring, with a tree the run breaks
+      # the claim on whatever the page shows: one that does not read, or one
+      # that names no node.
+      def check_unfit_trees: (untyped scenario, untyped line, untyped step, untyped captures) -> untyped
+
       def attachment_mismatch: (untyped step, untyped key, untyped line) -> untyped
     end
 

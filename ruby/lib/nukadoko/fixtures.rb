@@ -159,7 +159,7 @@ module Nukadoko
 
       # A claim step's `pages`, `page_requests`, and `judged_view`, after
       # the reading its claims were judged on, when a page was open.
-      def judged(dir, step_record_id)
+      def judged(dir, step_record_id, aria_in_claims: false)
         return {} unless @page && @reading
 
         started, ended = @reading
@@ -171,7 +171,7 @@ module Nukadoko
         before = @requests.select { _1[:finished] && _1[:finished] < started }.max_by { _1[:finished] }
         open = @requests.select { _1[:sent] <= ended && !(_1[:finished] && _1[:finished] < started) && !(_1[:ended] && _1[:ended] < started) }
         page = { as: nil, page: 1, url: @page.url, last_response: before && index.(before), in_flight: open.map { index.(_1) } }
-        { pages: [page], page_requests: listed.map { request_record(_1, step_record_id) }, judged_view: view(dir, ended) }
+        { pages: [page], page_requests: listed.map { request_record(_1, step_record_id) }, judged_view: view(dir, ended, aria_in_claims) }
       rescue StandardError
         {}
       end
@@ -199,14 +199,16 @@ module Nukadoko
       # the reading it was taken. The claims judged what observe returned,
       # not these files.
       # In a trace group of its own, so the step's actions leave these calls out.
-      def view(dir, ended)
+      def view(dir, ended, aria_in_claims)
         @context.tracing.group(TraceActions::JUDGED_VIEW_GROUP)
-        view_files(dir, ended)
+        view_files(dir, ended, aria_in_claims)
       ensure
         @context.tracing.group_end rescue nil
       end
 
-      def view_files(dir, ended)
+      # A step whose claims judge a tree nukadoko took keeps that tree in its
+      # claims, so the view takes no second one.
+      def view_files(dir, ended, aria_in_claims)
         FileUtils.mkdir_p(File.join(dir, "judged"))
         title = (@page.title rescue nil)
         shot = begin
@@ -215,14 +217,14 @@ module Nukadoko
         rescue StandardError
           nil
         end
-        aria = begin
+        aria = aria_in_claims ? nil : begin
           tree = @page.aria_snapshot(mode: "ai")
           File.write(File.join(dir, "judged", "page.aria.yml"), tree.end_with?("\n") ? tree : "#{tree}\n")
           { file: "judged/page.aria.yml", after_reading_ms: ((monotonic - ended) * 1000).round }
         rescue StandardError
           nil
         end
-        { pages: [{ as: nil, page: 1, url: @page.url, title: title, screenshot: shot, aria: aria }] }
+        { pages: [{ as: nil, page: 1, url: @page.url, title: title, screenshot: shot, aria: aria }], **(aria_in_claims ? { aria_in_claims: true } : {}) }
       end
 
       def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -262,6 +264,12 @@ module Nukadoko
 
       # Each scenario gets a browser context of its own, so cookies and storage
       # never carry from one scenario to the next.
+      # The browser the scenario opened a page in, as run.json names it, or
+      # nil when it opened none.
+      def scenario_browser
+        @context && @browser ? { type: "chromium", version: @browser.version } : nil
+      end
+
       def end_scenario
         @context&.tracing&.stop
         @context&.close

@@ -16,6 +16,74 @@ module Nukadoko
       COMPARES = %w[equal not-equal contains-text starts-with-text ends-with-text has-item has-same-items has-fields
                     lacks-field fits-text fits-aria-snapshot is-a matches greater-than at-least less-than at-most judged-as].freeze
 
+      # The ARIA snapshots nukadoko took of what observe returned, by the
+      # value observe returned, so a claim judges the tree taken right
+      # after that reading and never reads a live page.
+      ARIA_TAKEN = ObjectSpace::WeakKeyMap.new #: ObjectSpace::WeakKeyMap[Hash[String, untyped], Hash[String, Hash[Symbol, String]]]
+      ARIA_TAKES = "fits-aria-snapshot takes the ARIA snapshot of a locator or page that observe returns: return the locator or page itself, and nukadoko takes its snapshot"
+
+      # Takes the ARIA snapshot of the locator or page at each path a
+      # fits-aria-snapshot claim reads, once per reading. One path's failure
+      # is that path's read, so taking them never raises.
+      def self.take_aria_snapshots(claims, observed)
+        paths = claims.filter_map { _1[:actual].to_s if !_1[:each] && _1[:compare] == "fits-aria-snapshot" }.uniq
+        return observed if paths.empty? || !observed.is_a?(Hash)
+
+        ARIA_TAKEN[observed] = paths.to_h { [_1, aria_snapshot_at(observed, _1.split("."))] }
+        observed
+      end
+
+      def self.aria_snapshot_at(root, segments)
+        found = segments.reduce(root) do |current, segment|
+          case current
+          when Hash then current.key?(segment) ? current[segment] : current.fetch(segment.to_sym, :missing)
+          when Array then segment.match?(/\A(0|[1-9][0-9]*)\z/) && segment.to_i < current.size ? current[segment.to_i] : :missing
+          else :missing
+          end
+        end
+        return { broken: "is undefined" } if found == :missing
+        return { broken: "is #{aria_value_kind(found)}, and #{ARIA_TAKES}" } unless aria_snapshot_taker?(found)
+
+        text = begin
+          found.aria_snapshot
+        rescue StandardError => e
+          return { unjudged: "gave no ARIA snapshot: #{e.message.lines.first.to_s.chomp.delete_suffix(".")}, so the claim was not judged" }
+        end
+        text.is_a?(String) ? { text: text } : { unjudged: "gave #{aria_value_kind(text)} from ariaSnapshot() rather than a text, so the claim was not judged" }
+      end
+
+      # Only Playwright's own locator and page: a value step code wrote with
+      # a method of that name would be a tree written in code.
+      def self.aria_snapshot_taker?(value)
+        value.class.ancestors.any? { %w[Playwright::Locator Playwright::Page].include?(_1.name) }
+      end
+
+      # The phrase for a value that is not a locator or a page, as the
+      # TypeScript engine names it.
+      def self.aria_value_kind(value)
+        case value
+        when nil then "null"
+        when String then "a string"
+        when Numeric then "a number"
+        when true, false then "a boolean"
+        when Hash then "an Object"
+        when Array then "an Array"
+        else
+          name = value.class.name.to_s.split("::").last.to_s
+          name.empty? ? "an object of no class" : article_of(name)
+        end
+      end
+
+      def self.article_of(word) = word.match?(/\A[aeiou]/i) ? "an #{word}" : "a #{word}"
+
+      # The side a fits-aria-snapshot claim reads: the text of the snapshot
+      # taken of the value at its actual path.
+      def self.aria_side(claim, observed)
+        path = claim[:actual].to_s
+        taken = (observed.is_a?(Hash) ? ARIA_TAKEN[observed] : nil)&.[](path) || { unjudged: "has no ARIA snapshot nukadoko took, so the claim was not judged" } #: Hash[Symbol, String]
+        taken[:text] ? taken : taken.transform_values { "observe:#{path} #{_1}" }
+      end
+
       def self.judge(claims, observed, args)
         claims.map { judge_one(_1, observed, args) }
       end
@@ -26,6 +94,7 @@ module Nukadoko
       def self.judge_one(claim, observed, args, top = observed)
         actual = dig(view(claim[:view], claim[:actual].nil? ? observed : read(observed, claim[:actual])), claim[:at])
         return judge_each(claim[:each], actual, args, top) if claim[:each]
+        return judge_aria(claim, observed, args, top) if claim[:compare] == "fits-aria-snapshot"
 
         if claim[:count]
           unless actual.is_a?(Array)
@@ -38,6 +107,17 @@ module Nukadoko
         expected = expected_value(claim, args, top)
         result = compare(claim[:compare], actual, expected)
         { actual: actual, compare: claim[:compare], expected: expected, holds: result[:holds] == true,
+          **(result[:reason] ? { reason: result[:reason] } : {}), **(result[:stopped] ? { reason: result[:stopped], unjudged: true } : {}) }
+      end
+
+      def self.judge_aria(claim, observed, args, top)
+        side = aria_side(claim, observed)
+        expected = expected_value(claim, args, top)
+        return { compare: claim[:compare], expected: expected, holds: false, reason: side[:broken] } if side[:broken]
+        return { compare: claim[:compare], expected: expected, holds: false, reason: side[:unjudged], unjudged: true } if side[:unjudged]
+
+        result = compare(claim[:compare], side[:text], expected)
+        { actual: side[:text], compare: claim[:compare], expected: expected, holds: result[:holds] == true,
           **(result[:reason] ? { reason: result[:reason] } : {}), **(result[:stopped] ? { reason: result[:stopped], unjudged: true } : {}) }
       end
 
@@ -291,7 +371,11 @@ module Nukadoko
         when "fits-aria-snapshot"
           return { reason: "fits-aria-snapshot reads two ARIA snapshots as texts, and compares #{article(a_type)} with #{article(e_type)}" } unless a_type == "string" && e_type == "string"
 
-          { stopped: "the Ruby engine does not judge fits-aria-snapshot yet" }
+          judged = AriaSnapshot.judge(actual, expected)
+          return { reason: judged[:broken] } if judged[:broken]
+          return { stopped: judged[:unjudged] } if judged[:unjudged]
+
+          { holds: judged[:fits] }
         when "is-a"
           return { reason: "is-a reads the name of a kind as a string, and the expected value is #{article(e_type)}" } unless e_type == "string"
 

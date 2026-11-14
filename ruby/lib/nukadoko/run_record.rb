@@ -53,6 +53,7 @@ module Nukadoko
                else origins.fetch(actual_key, "sentence:#{actual_key}")
                end
         actual_from = counted(place(base, declared[:view], declared[:at]), declared[:count])
+        actual_from = "ARIA snapshot of #{base}" if declared[:compare] == "fits-aria-snapshot"
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { **judged.slice(:actual), actual_from: actual_from, **{ view: declared[:view], at: declared[:at]&.to_s, count: declared[:count] }.compact,
           compare: declared[:compare], **judged.slice(:expected), expected_from: expected_from,
@@ -71,7 +72,7 @@ module Nukadoko
         pages = view[:judged_view][:pages].map do |page|
           page.merge(%i[screenshot aria].to_h { |key| [key, page[key] && page[key].merge(file: File.join(under, page[key][:file]))] })
         end
-        view.merge(judged_view: { pages: pages })
+        view.merge(judged_view: view[:judged_view].merge(pages: pages))
       end
 
       # How many times a claim step read, and for a polled one each reading
@@ -236,7 +237,7 @@ module Nukadoko
       # A claim whose observe raised: where each side would come from, and no value.
       def unobserved_claim(declared, origins, texts, patterns: [])
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
-        { actual_from: place("observe:#{declared[:actual]}", declared[:view], declared[:at]), view: declared[:view], at: declared[:at]&.to_s,
+        { actual_from: declared[:compare] == "fits-aria-snapshot" ? "ARIA snapshot of observe:#{declared[:actual]}" : place("observe:#{declared[:actual]}", declared[:view], declared[:at]), view: declared[:view], at: declared[:at]&.to_s,
           count: declared[:count], compare: declared[:compare], expected_from: expected_from, expected_view: declared[:expected_view], expected_text: expected_text,
           outcome: "unobserved" }.compact.merge(measured: nil).tap { _1[:actual_from] = counted(_1[:actual_from], declared[:count]) }
       end

@@ -214,8 +214,8 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `matches` pattern that ran out of time, is `unjudged`. A broken claim's
   line names the field that does not fit, the field that is present, or
   the line where a text stopped fitting. `nuka check` reports
-  `claim-kind-unknown`. `fits-aria-snapshot` and `judged-as` are
-  `unjudged` until the Ruby engine reads ARIA snapshots and judgments.
+  `claim-kind-unknown`. `judged-as` is `unjudged` until the Ruby engine
+  reads judgments.
 - The gem ships the signature of the whole engine, written by rbs-inline
   from `lib/`'s comments into `sig/generated`, and CI checks `lib/` with
   Steep. A step author's Steep reads the same `Step`, `Schema`, and fixture
@@ -227,6 +227,7 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - A claim can count the items of its actual value (`count: true`) and take its expected value from what observe returned (`expected: { observe: path }`). A claim whose actual starts with a from key reads the value an earlier step returned in a step with observe too, and observe no longer receives the from value such a claim compares with what it read.
 - `nuka check` reports, as the TypeScript engine does, a path into an each item its producer does not return, a from path the step's own args drops, a count of a value that is never an array, and an observe that receives the value its claim is compared with.
 - A claim on an each item with no actual reads the item itself, and a record keeps an actual value of null.
+- `fits-aria-snapshot` is judged as the TypeScript engine judges it: nukadoko takes the ARIA snapshot of the Playwright locator or page observe returns, right after each reading, and a broken claim's line shows the actual lines where the two trees part and names the first expected line that fits nothing and the nearest actual node. `nuka check` reports `claim-aria-snapshot-unreadable` and `claim-aria-snapshot-names-nothing` for a docstring or capture that states a tree no page can be judged on. A step whose claims judge a tree takes no second one into its judged view, and the run summary links each Then's judged view and names the browser the run launched.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

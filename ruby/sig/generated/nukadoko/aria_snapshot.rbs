@@ -1,0 +1,331 @@
+# Generated from lib/nukadoko/aria_snapshot.rb with RBS::Inline
+
+# What an ARIA snapshot says, and whether an expected one fits an actual
+# one (`fits-aria-snapshot`), in the TypeScript engine's words. An ARIA
+# snapshot is the YAML text a browser library prints for a page's
+# accessibility tree: a list of nodes, each a role with an optional name
+# and states, its text, and its children. This module reads two such
+# texts, the one nukadoko took (the actual side) and the docstring a line
+# states (the expected side), and judges whether every node the expected
+# side names is in the actual tree, at the place it names it, leaving the
+# rest of the tree unasked. For a broken claim it names the first expected
+# node that fits nothing and the actual node nearest to it.
+#
+# It is pure: it never touches a page. The claim judges the text the
+# runner took, so the record shows the one value that was judged, and a
+# reader can judge the record again from its two texts alone. That is why
+# the matching reads the printed text and not the browser's own tree: a
+# state the print leaves out (an unchecked box prints no `[checked]`) is
+# absent here too, so `[checked=false]` holds on any node that prints no
+# checked state.
+#
+# The reader takes the part of YAML an ARIA snapshot uses: a block list of
+# items, each a key alone or one key with a text or a list of children,
+# plain, single-quoted, or double-quoted scalars, and comments. Anything
+# else is refused with its line, and the refusal says how to write what
+# the line meant. On the expected side a pattern between slashes, the
+# state `[active]`, and a `/` property at the top of a list that names one
+# node are refused too, since nukadoko would otherwise accept a line it
+# does not judge.
+module Nukadoko
+  module Engine
+    module AriaSnapshot
+      FRAGMENT: ::String
+
+      # JavaScript's \s, which the TypeScript engine's texts are cut by.
+      SPACE: ::String
+
+      WS: ::Regexp
+
+      # YAML's indicators: a plain scalar may not start with one, since
+      # YAML reads it as structure.
+      PLAIN_START_REFUSED: untyped
+
+      DOUBLE_QUOTED_ESCAPES: untyped
+
+      HEX_ESCAPE_LENGTH: untyped
+
+      # What YAML's core schema reads a plain scalar as when it is not a
+      # string: a writer who means the text "3.50" and writes it plain gets
+      # the number 3.5, so such a value is refused, not read as other text.
+      YAML_NULL: ::Regexp
+
+      YAML_BOOLEAN: ::Regexp
+
+      YAML_NUMBER: ::Regexp
+
+      STATE_NAMES: untyped
+
+      PRINTED_STATE: ::Regexp
+
+      SOURCE_LIMIT: ::Integer
+
+      # The most actual lines an excerpt shows.
+      EXCERPT_LINES: ::Integer
+
+      # : (Integer, String) -> Problem
+      def self?.problem_at: (Integer, String) -> Problem
+
+      # : (String) -> String
+      def self?.trim: (String) -> String
+
+      # : (String) -> String
+      def self?.trim_end: (String) -> String
+
+      # : (String?) -> bool
+      def self?.space?: (String?) -> bool
+
+      # : (String) -> Array[Line]
+      def self?.content_lines: (String) -> Array[Line]
+
+      # A quoted scalar at `start` of `text`: its value and the index after
+      # its closing quote.
+      # : (String, Integer, Integer) -> [String, Integer]
+      def self?.read_quoted: (String, Integer, Integer) -> [ String, Integer ]
+
+      # A code point as text; a lone surrogate, which a Ruby string cannot
+      # hold, is the replacement character.
+      # : (Integer) -> String
+      def self?.code_point: (Integer) -> String
+
+      # Where a plain scalar that starts at `start` ends: before a `:` that
+      # a space or the end follows, when `key` is true, or before a ` #`
+      # comment either way.
+      # : (String, Integer, bool) -> Integer
+      def self?.plain_end: (String, Integer, bool) -> Integer
+
+      # : (String, Integer, bool, Integer) -> [Scalar, Integer]
+      def self?.read_scalar: (String, Integer, bool, Integer) -> [ Scalar, Integer ]
+
+      # : (String, Integer) -> Integer
+      def self?.skip_spaces: (String, Integer) -> Integer
+
+      # The rest of a line after a scalar may hold only spaces and a comment.
+      # : (String, Integer) -> bool
+      def self?.ends_here?: (String, Integer) -> bool
+
+      # One item's content after `- `: its key, whether a colon follows
+      # it, its text when one does, and the item as written.
+      # : (String, Integer) -> [Scalar, bool, Scalar?, String]
+      def self?.read_entry: (String, Integer) -> [ Scalar, bool, Scalar?, String ]
+
+      # : (Array[Line], Integer, Integer) -> [Array[Item], Integer]
+      def self?.read_list: (Array[Line], Integer, Integer) -> [ Array[Item], Integer ]
+
+      # : (String) -> Array[Item]
+      def self?.read_items: (String) -> Array[Item]
+
+      # The text a plain scalar on the expected side states, or why YAML
+      # reads it as something else. A number or a boolean whose own text
+      # YAML gives back unchanged (`42`, `true`) states that text.
+      # : (Scalar, Integer, String) -> String
+      def self?.stated_text: (Scalar, Integer, String) -> String
+
+      # The text of the number YAML reads a plain scalar as, spelled as
+      # JavaScript spells a number, since the TypeScript engine's messages
+      # name it so.
+      # : (String) -> String
+      def self?.yaml_number_text: (String) -> String
+
+      # A float as JavaScript's Number#toString writes it: its shortest
+      # digits, as a plain number from 1e-7 to 1e21, and with an exponent
+      # outside that.
+      # : (Float) -> String
+      def self?.js_number: (Float) -> String
+
+      # White space folded the way the snapshot folds a page's text.
+      # : (String) -> String
+      def self?.folded: (String) -> String
+
+      # : (String) -> ExpectedText
+      def self?.expected_text: (String) -> ExpectedText
+
+      # A key's role, name, and states, read the way a docstring writes
+      # them: a role, then a name in double quotes, then states in brackets.
+      # : (String, Integer) -> [String, String, Hash[String, untyped]]
+      def self?.expected_key: (String, Integer) -> [ String, String, Hash[String, untyped] ]
+
+      # : (Hash[String, untyped], String, String, Integer) -> void
+      def self?.apply_state: (Hash[String, untyped], String, String, Integer) -> void
+
+      # The children a list of items names, into `container`, with the
+      # first property item at the top kept in `first_prop`.
+      # : (Array[Item], Node, ?Hash[Symbol, Item]) -> void
+      def self?.expected_children: (Array[Item], Node, ?Hash[Symbol, Item]) -> void
+
+      # : (Item, String, String, Hash[String, untyped], Array[Node]) -> Node
+      def self?.role_node: (Item, String, String, Hash[String, untyped], Array[Node]) -> Node
+
+      # The tree a docstring states: [root, named], where root is the node
+      # the matching searches for (a fragment when it names several at the
+      # top, or states a children mode there) and named how many nodes it
+      # names; or a String saying why it reads as no snapshot.
+      # : (String) -> ([Node, Integer] | String)
+      def self?.read_expected: (String) -> ([ Node, Integer ] | String)
+
+      # The properties a node states that a page could lack: each one
+      # whose text is not empty, since an empty text fits any text.
+      # : (Hash[String, untyped]) -> Integer
+      def self?.stated_props: (Hash[String, untyped]) -> Integer
+
+      # The nodes a list names that a page could lack: every role, and
+      # every text that is not empty.
+      # : (Array[Node]) -> Integer
+      def self?.count_named: (Array[Node]) -> Integer
+
+      # A key as the snapshot prints it: a role, then a name as a JSON
+      # string, or as it is when it starts and ends with a slash, then its
+      # states.
+      # : (String, Integer) -> [String, String, Hash[String, untyped]]
+      def self?.actual_key: (String, Integer) -> [ String, String, Hash[String, untyped] ]
+
+      # : (Array[Item], Node) -> void
+      def self?.actual_children: (Array[Item], Node) -> void
+
+      # The tree a printed snapshot shows, under a node of role `fragment`
+      # that holds its list, or a String saying why it does not read. A
+      # plain scalar is the text it spells: the printer quotes every text
+      # YAML would read otherwise.
+      # : (String) -> (Node | String)
+      def self?.read_actual: (String) -> (Node | String)
+
+      # : (String?, ExpectedText) -> bool
+      def self?.text_fits?: (String?, ExpectedText) -> bool
+
+      # : (String, Hash[String, untyped], Hash[String, untyped]) -> bool
+      def self?.state_fits?: (String, Hash[String, untyped], Hash[String, untyped]) -> bool
+
+      # Whether `actual` is the node `expected` names, by its own line
+      # alone: its role, name, states, and properties, and for a text, its
+      # text.
+      # : (Node, Node) -> bool
+      def self?.node_fits?: (Node, Node) -> bool
+
+      # How `expected`'s children are read, as [contain, deep]: its own mode
+      # wins, and under a `deep-equal` above it, every list is read whole.
+      # : (Node, bool) -> [bool, bool]
+      def self?.children_reading: (Node, bool) -> [ bool, bool ]
+
+      # : (Node, Node, bool) -> bool
+      def self?.tree_fits?: (Node, Node, bool) -> bool
+
+      # : (Node) -> Array[Node]
+      def self?.every_node: (Node) -> Array[Node]
+
+      # : (Node) -> Array[Node]
+      def self?.below: (Node) -> Array[Node]
+
+      # Whether the tree an expected snapshot names is in the actual tree:
+      # its top node fits some actual node at any depth, each of its
+      # children fits a child of that node, in order, with other children
+      # between them unasked, and so on down, unless a `/children` mode
+      # asks for every child.
+      # : (Node, Node) -> bool
+      def self?.snapshot_fits?: (Node, Node) -> bool
+
+      # The text an expected line states after its key (`- listitem: one`),
+      # which the line reads as part of the node it names.
+      # : (Node) -> ExpectedText?
+      def self?.inline_text: (Node) -> ExpectedText?
+
+      # Whether `actual` is the node an expected line names, its inline
+      # text included.
+      # : (Node, Node) -> bool
+      def self?.line_fits?: (Node, Node) -> bool
+
+      # The edit distance between two texts, each cut to its first 200
+      # characters, so a long name costs no more than a short one.
+      # : (String, String) -> Integer
+      def self?.edit_distance: (String, String) -> Integer
+
+      # Of `candidates`, the one most like `expected`: a node of its role,
+      # or a text for a text, whose name or text is nearest to the one it
+      # states, the earliest of equals; nil when none is of its role.
+      # : (Node, Array[Node]) -> Node?
+      def self?.most_alike: (Node, Array[Node]) -> Node?
+
+      # A misfit where an expected node fits nothing: where it was looked
+      # for (nil for anywhere), the nearest actual node, and the place the
+      # previous sibling left it.
+      # : (Node, Node?, Node, ?Node?, ?Array[Node]) -> Hash[Symbol, untyped]
+      def self?.unmatched: (Node, Node?, Node, ?Node?, ?Array[Node]) -> Hash[Symbol, untyped]
+
+      # : (Scores, Node, Node, bool, Node) -> Hash[Symbol, untyped]?
+      def self?.explain_at: (Scores, Node, Node, bool, Node) -> Hash[Symbol, untyped]?
+
+      # Where `expected` first parts from `actual`, or nil when it fits. The
+      # walk starts at the actual node the expected tree fits best, the
+      # earliest of equals, and follows the docstring's order from there.
+      # : (Node, Node) -> Hash[Symbol, untyped]?
+      def self?.misfit: (Node, Node) -> Hash[Symbol, untyped]?
+
+      # : (String) -> String
+      def self?.source_text: (String) -> String
+
+      # : (Node) -> String
+      def self?.actual_named: (Node) -> String
+
+      # : (Node) -> String
+      def self?.expected_named: (Node) -> String
+
+      # What keeps an actual node of the expected line's role and name from
+      # fitting it: the first state or property it prints otherwise, or nil
+      # when the two lines already show it.
+      # : (Node, Node) -> String?
+      def self?.line_difference: (Node, Node) -> String?
+
+      # : (Node) -> String
+      def self?.role_words: (Node) -> String
+
+      # : (Node) -> Integer
+      def self?.last_line: (Node) -> Integer
+
+      # A misfit as one line: the expected node by its docstring line,
+      # where it was looked for, and the nearest actual node by its
+      # snapshot line.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.misfit_text: (Hash[Symbol, untyped]) -> String
+
+      # Why an expected text is no tree a claim can be judged on, as
+      # [:unreadable, line] or [:names_nothing]: either breaks the claim on
+      # every page.
+      # : ([Symbol, String] | [Symbol]) -> String
+      def self?.problem_reason: ([ Symbol, String ] | [ Symbol ]) -> String
+
+      # : (String) -> (Node | [Symbol, String] | [Symbol])
+      def self?.expected_tree: (String) -> (Node | [ Symbol, String ] | [ Symbol ])
+
+      # Why an expected text breaks a claim on every page, or nil: what the
+      # check reports from the line alone, before a run.
+      # : (String) -> ([Symbol, String] | [Symbol])?
+      def self?.expected_problem: (String) -> ([ Symbol, String ] | [ Symbol ])?
+
+      # Whether a claim's actual snapshot fits its expected one, from the
+      # two texts the record keeps: { fits: }, { broken: }, or { unjudged: }.
+      # An expected text that is no tree, or names nothing, breaks the
+      # claim, since the line states it. An actual text that does not read
+      # leaves the claim unjudged: the browser printed something this
+      # reader does not know, which says nothing about the page.
+      # : (String, String) -> Hash[Symbol, untyped]
+      def self?.judge: (String, String) -> Hash[Symbol, untyped]
+
+      # : (String, String) -> Hash[Symbol, untyped]?
+      def self?.misfit_of: (String, String) -> Hash[Symbol, untyped]?
+
+      # Where a broken claim's two snapshots part, as one line, or nil when
+      # they fit or either does not read.
+      # : (String, String) -> String?
+      def self?.difference: (String, String) -> String?
+
+      # The actual lines a misfit points at, so a line that cuts a long
+      # snapshot shows where the fix goes: from the child the previous
+      # expected sibling fit (or the node it was looked for under) to the
+      # nearest node, or with no node of its role, through the children at
+      # its place; the end of the node with a child missing; or the extra
+      # child. At most EXCERPT_LINES of them, kept at the end the named node
+      # is on, as { first:, last:, text: }.
+      # : (String, String) -> Hash[Symbol, untyped]?
+      def self?.excerpt: (String, String) -> Hash[Symbol, untyped]?
+    end
+  end
+end

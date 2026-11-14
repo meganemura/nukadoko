@@ -83,8 +83,15 @@ module Nukadoko
       # at the base, so a reader approving the change sees what it drops.
       def self?.removed: (untyped doc) -> untyped
 
-      # A Then that sent requests is seen in its own http.jsonl, the
-      # responses its claims were judged on.
+      # A capture taken at least this long after its reading says so beside
+      # its link: a page that changes on a timer of a few hundred
+      # milliseconds can show another state by then.
+      LATE_VIEW_MS: ::Integer
+
+      # Where a Then's judged moment can be seen: each open page's view
+      # right after the reading its claims were judged on, its screenshot
+      # before its ARIA snapshot, or, for a Then that read no page, the
+      # requests its own step sent. Each link is [label, href, after_ms].
       def self?.seen_links: (untyped step) -> untyped
 
       def self?.markdown_link: (untyped label, untyped href) -> untyped

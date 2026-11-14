@@ -27,9 +27,24 @@ module Nukadoko
       def expected_text(record) = record.key?(:expected) ? "#{value_text(record[:expected])} (#{record[:expected_from]})" : record[:expected_from]
 
       def comparison_text(record)
-        actual = record.key?(:actual) ? "#{value_text(record[:actual])} (#{record[:actual_from]})" : record[:actual_from]
+        actual = record.key?(:actual) ? snapshot_excerpt_text(record) || "#{value_text(record[:actual])} (#{record[:actual_from]})" : record[:actual_from]
         "#{actual} #{record[:compare]} #{expected_text(record)}"
       end
+
+      # The actual side of a broken fits-aria-snapshot claim as the lines
+      # the misfit points at, with their numbers, since a page's snapshot is
+      # longer than the line shows and its first lines are seldom where the
+      # two part.
+      def snapshot_excerpt_text(record)
+        return nil unless record[:compare] == "fits-aria-snapshot" && record[:outcome] == "broken" && !record[:reason]
+        return nil unless record[:actual].is_a?(String) && record[:expected].is_a?(String)
+
+        excerpt = AriaSnapshot.excerpt(record[:actual], record[:expected]) or return nil
+        lines = excerpt[:first] == excerpt[:last] ? "line #{excerpt[:first]}" : "lines #{excerpt[:first]} to #{excerpt[:last]}"
+        "#{JSON.generate(excerpt[:text])} (#{lines} of #{record[:actual_from]})"
+      end
+
+      def aria_snapshot_difference(actual, expected) = actual.is_a?(String) && expected.is_a?(String) ? AriaSnapshot.difference(actual, expected) : nil
 
       def item_declaration_text(entry)
         actual = "#{"count of " if entry[:count]}#{entry[:actual] || "item"}#{" as #{entry[:view]}" if entry[:view]}#{" at #{entry[:at]}" if entry[:at]}"
@@ -274,7 +289,8 @@ module Nukadoko
       end
 
       DIFFERENCES = { "equal" => :equal_difference, "has-same-items" => :same_items_difference, "has-fields" => :fields_difference,
-                      "lacks-field" => :present_field_difference, "fits-text" => :fits_difference }.freeze
+                      "lacks-field" => :present_field_difference, "fits-text" => :fits_difference,
+                      "fits-aria-snapshot" => :aria_snapshot_difference }.freeze
 
       def difference_text(record)
         return "" if each?(record) || record[:outcome] != "broken" || record[:reason]

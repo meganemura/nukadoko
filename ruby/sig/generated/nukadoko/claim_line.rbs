@@ -23,6 +23,14 @@ module Nukadoko
 
       def self?.comparison_text: (untyped record) -> untyped
 
+      # The actual side of a broken fits-aria-snapshot claim as the lines
+      # the misfit points at, with their numbers, since a page's snapshot is
+      # longer than the line shows and its first lines are seldom where the
+      # two part.
+      def self?.snapshot_excerpt_text: (untyped record) -> untyped
+
+      def self?.aria_snapshot_difference: (untyped actual, untyped expected) -> untyped
+
       def self?.item_declaration_text: (untyped entry) -> untyped
 
       def self?.item_count: (untyped count) -> untyped

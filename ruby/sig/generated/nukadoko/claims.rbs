@@ -5,12 +5,42 @@ module Nukadoko
     module Claims
       COMPARES: untyped
 
+      # The ARIA snapshots nukadoko took of what observe returned, by the
+      # value observe returned, so a claim judges the tree taken right
+      # after that reading and never reads a live page.
+      ARIA_TAKEN: ObjectSpace::WeakKeyMap[Hash[String, untyped], Hash[String, Hash[Symbol, String]]]
+
+      ARIA_TAKES: ::String
+
+      # Takes the ARIA snapshot of the locator or page at each path a
+      # fits-aria-snapshot claim reads, once per reading. One path's failure
+      # is that path's read, so taking them never raises.
+      def self.take_aria_snapshots: (untyped claims, untyped observed) -> untyped
+
+      def self.aria_snapshot_at: (untyped root, untyped segments) -> untyped
+
+      # Only Playwright's own locator and page: a value step code wrote with
+      # a method of that name would be a tree written in code.
+      def self.aria_snapshot_taker?: (untyped value) -> untyped
+
+      # The phrase for a value that is not a locator or a page, as the
+      # TypeScript engine names it.
+      def self.aria_value_kind: (untyped value) -> untyped
+
+      def self.article_of: (untyped word) -> untyped
+
+      # The side a fits-aria-snapshot claim reads: the text of the snapshot
+      # taken of the value at its actual path.
+      def self.aria_side: (untyped claim, untyped observed) -> untyped
+
       def self.judge: (untyped claims, untyped observed, untyped args) -> untyped
 
       # `top` is what observe returned, which an expected { observe } reads
       # from inside an each as well. A claim on an item with no actual reads
       # the item itself.
       def self.judge_one: (untyped claim, untyped observed, untyped args, ?untyped top) -> untyped
+
+      def self.judge_aria: (untyped claim, untyped observed, untyped args, untyped top) -> untyped
 
       def self.judge_each: (untyped each, untyped items, untyped args, untyped top) -> untyped
 
