@@ -1,0 +1,75 @@
+# frozen_string_literal: true
+
+require "time"
+
+# `poll timeout_ms: 3000` reads `observe` again, 100 ms apart, until every
+# claim holds on two consecutive readings or the timeout passes. One holding
+# reading is never enough: a page between two renders can show the expected
+# state for one frame. `settled:` names a state that cannot change once
+# reached, so two consecutive settled readings stop the wait for a claim
+# that broke on it. The last reading is what the step judges, and every
+# reading lands in the step record, because an observe that counts its
+# calls could walk toward the expected value.
+module Nukadoko
+  module Engine
+    class Poll
+      INTERVAL = 0.1
+
+      def initialize(options, claims, args)
+        @timeout = options.fetch(:timeout_ms) / 1000.0
+        @settled = options[:settled] || []
+        @claims = claims
+        @args = args
+      end
+
+      # A reading whose observe raised is kept with the first line of the
+      # error, and the poll reads again; only a last reading that raised
+      # fails the step with that error.
+      def call(record)
+        deadline = monotonic + @timeout
+        readings = []
+        stop = nil
+        begin
+          loop do
+            readings << read(readings.size + 1) { yield }
+            stop = stop_for(readings)
+            break if stop || monotonic + INTERVAL > deadline
+
+            sleep INTERVAL
+          end
+        ensure
+          record[:readings] = readings.map { _1.except(:value, :raised) }
+          record[:poll] = { readings: readings.size, stop: stop || "timeout" }
+        end
+        raise readings.last[:raised] if readings.last[:raised]
+
+        readings.last[:value]
+      end
+
+      private
+
+      def read(attempt)
+        judge(yield, attempt)
+      rescue StandardError => e
+        { attempt: attempt, at: Time.now.utc.iso8601(3), holds: false, error: "#{e.class}: #{e.message.lines.first&.chomp}", raised: e }
+      end
+
+      def judge(value, attempt)
+        judged = Claims.judge(@claims, value, @args)
+        reading = { attempt: attempt, at: Time.now.utc.iso8601(3), holds: judged.all? { _1[:holds] }, actuals: judged.map { _1[:actual] }, value: value }
+        reading[:settled] = @settled.all? { Claims.judge_one(_1, value, {})[:holds] } if @settled.any?
+        reading
+      end
+
+      def stop_for(readings)
+        last, before = readings.last(2).reverse
+        return nil unless before
+        return "held" if last[:holds] && before[:holds]
+
+        "settled" if last[:settled] && before[:settled]
+      end
+
+      def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    end
+  end
+end

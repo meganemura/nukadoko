@@ -1,0 +1,73 @@
+{
+  "check": [],
+  "scenarios": [
+    {
+      "feature": "features/jobs.feature",
+      "line": 3,
+      "environment": "default",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 4,
+          "step": "start-job",
+          "status": "passed"
+        },
+        {
+          "line": 5,
+          "step": "job-ends",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "feature": "features/jobs.feature",
+      "line": 7,
+      "environment": "default",
+      "status": "failed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 8,
+          "step": "start-job",
+          "status": "passed"
+        },
+        {
+          "line": 9,
+          "step": "job-ends",
+          "status": "failed"
+        }
+      ]
+    }
+  ],
+  "verdict": "failed",
+  "table": [
+    {
+      "feature": "features/jobs.feature",
+      "line": 3,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    },
+    {
+      "feature": "features/jobs.feature",
+      "line": 7,
+      "verdict": "failed",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "fail",
+          "line": 9,
+          "runs": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "check": [
+    {
+      "severity": "error",
+      "code": "step-file-import-failed",
+      "step": "job-ends"
+    },
+    {
+      "severity": "error",
+      "code": "step-file-import-failed",
+      "step": "job-id-is"
+    },
+    {
+      "severity": "warning",
+      "code": "undefined-step-check-suppressed",
+      "step": "job-ends"
+    }
+  ]
+}

@@ -133,7 +133,8 @@ module Nukadoko
       def body(step, fixtures, args, line, record, results)
         if step.claims
           own = fixtures.slice(*step.fixtures)
-          observed = step.method_defined?(:observe) ? step.new.observe(**own, args: step.inputs.load(args)) : args
+          read = -> { step.method_defined?(:observe) ? step.new.observe(**own, args: step.inputs.load(args)) : args }
+          observed = step.poll ? Poll.new(step.poll, step.claims, args).call(record, &read) : read.()
           judged = Claims.judge(step.claims, observed, args)
           record[:claims] = judged
           broken = judged.index { !_1[:holds] }

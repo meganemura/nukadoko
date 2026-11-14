@@ -38,13 +38,13 @@ module Nukadoko
       # out of the vocabulary, as the TypeScript engine leaves out a step file
       # that fails to import, so it can never match a line.
       def definition_broken?(step)
-        unknown = Claims.unknown_compares(step.claims || [])
-        unknown.each do |compare|
-          findings << Finding.about_step("error", "step-file-import-failed", step,
-                                         "claims compare must be one of #{Claims::COMPARES.join(", ")}; got #{compare.inspect}.",
+        problems = Claims.unknown_compares(step.claims || []).map { "claims compare must be one of #{Claims::COMPARES.join(", ")}; got #{_1.inspect}." }
+        problems += Definition.new(step).problems
+        problems.each do |problem|
+          findings << Finding.about_step("error", "step-file-import-failed", step, problem,
                                          "Correct the error that the message names in the file, then run nuka check again.")
         end
-        unknown.any?
+        problems.any?
       end
 
       def check_contract(step)

@@ -1,0 +1,1 @@
+{ "serve": { "command": "node {root}/conformance/apps/jobs.mjs --port {port}", "ready": "/jobs" } }
