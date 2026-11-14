@@ -206,6 +206,16 @@ notes come from the section below whose heading starts with `## [<version>]`.
   so a claim on what it returned names the channel it was measured in.
   A claim's `measured` reads the value at its `at` path, and a claim
   whose expected value comes from `from` keeps `expected_text: null`.
+- Claims are judged with the TypeScript engine's compares: `has-fields`,
+  `lacks-field`, `fits-text` (with `...`, `[..]`, and `[..:name]`), and
+  `is-a` (with its kinds) are judged now, and a claim whose two sides are
+  of two JSON types, or whose expected value every actual holds, breaks
+  with the TypeScript engine's `reason`. A claim nothing judged, such as a
+  `matches` pattern that ran out of time, is `unjudged`. A broken claim's
+  line names the field that does not fit, the field that is present, or
+  the line where a text stopped fitting. `nuka check` reports
+  `claim-kind-unknown`. `fits-aria-snapshot` and `judged-as` are
+  `unjudged` until the Ruby engine reads ARIA snapshots and judgments.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

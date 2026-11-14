@@ -55,7 +55,7 @@ module Nukadoko
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { actual: judged[:actual], actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s,
           compare: declared[:compare], expected: judged[:expected], expected_from: expected_from,
-          expected_view: declared[:expected_view] }.compact.merge(expected_text: expected_text, outcome: judged[:holds] ? "held" : "broken", measured: nil)
+          expected_view: declared[:expected_view] }.compact.merge(expected_text: expected_text, **outcome(judged), measured: nil)
       end
 
       READING_MAX_BYTES = 1024
@@ -146,29 +146,38 @@ module Nukadoko
         rescue StandardError => e
           unread = e
         end
-        ended = lambda do |reason, items = 0, results = []|
-          base.merge(each: { **declarations, items: items, selected: 0, results: results }, outcome: "broken", reason: reason, measured: nil)
+        ended = lambda do |reason, items = 0, results = [], outcome = "broken"|
+          base.merge(each: { **declarations, items: items, selected: 0, results: results }, outcome: outcome, reason: reason, measured: nil)
         end
         return ended.("#{actual_from} could not be read: #{unread.message}") if unread
         return ended.("each reads an array, and the value is #{article(json_type(value))}") unless value.is_a?(Array)
         return ended.("the array is empty, and a claim on every item of nothing measures nothing") if value.empty?
 
-        judged = value.each_with_index.map do |item, index|
+        judged = []
+        value.each_with_index do |item, index|
           at = "#{actual_from}.#{index}"
           where_records = where.map { item_comparison(_1, item, at, args, origins, texts, patterns) }
-          next { index: index, selected: false, where: where_records } unless where_records.all? { _1[:outcome] == "held" }
+          # A where claim that could not compare says nothing about whether
+          # the item belongs, so leaving it out would turn "every item" into
+          # "the items that happen to compare".
+          if (unjudgeable = where_records.find { _1[:reason] })
+            outcome = unjudgeable[:outcome] == "unjudged" ? "unjudged" : "broken"
+            return ended.("where could not #{outcome == "unjudged" ? "judge" : "compare"} item #{index}: #{unjudgeable[:reason]}", value.size,
+                          [{ index: index, selected: false, where: where_records }], outcome)
+          end
+          next judged << { index: index, selected: false, where: where_records } unless where_records.all? { _1[:outcome] == "held" }
 
           claims = each[:claims].map { item_comparison(_1, item, at, args, origins, texts, patterns) }
-          outcome = claims.any? { _1[:outcome] == "broken" } ? "broken" : "held"
+          outcome = claims.any? { _1[:outcome] == "broken" } ? "broken" : claims.any? { _1[:outcome] == "unjudged" } ? "unjudged" : "held"
           identity = outcome == "broken" && item.is_a?(Hash) && IDENTITY_FIELDS.lazy.filter_map do |field|
             v = item.transform_keys(&:to_s)[field]
             { field: field, value: v } if v.is_a?(String) || (v.is_a?(Numeric) && v.finite?)
           end.first
-          { index: index, selected: true, **(where_records.empty? ? {} : { where: where_records }), outcome: outcome, claims: claims,
-            **(identity ? { identity: identity } : {}) }
+          judged << { index: index, selected: true, **(where_records.empty? ? {} : { where: where_records }), outcome: outcome, claims: claims,
+                      **(identity ? { identity: identity } : {}) }
         end
         selected = judged.count { _1[:selected] }
-        rank = ->(entry) { !entry[:selected] ? 2 : entry[:outcome] == "broken" ? 0 : 3 }
+        rank = ->(entry) { !entry[:selected] ? 2 : { "broken" => 0, "unjudged" => 1 }.fetch(entry[:outcome], 3) }
         kept = judged.sort_by { [rank.(_1), _1[:index]] }.first(EACH_RESULTS_CAP).sort_by { _1[:index] }
         truncated = judged.size > kept.size ? { results_truncated: judged.size } : {}
         record = base.merge(each: { **declarations, items: value.size, selected: selected, results: kept, **truncated })
@@ -176,7 +185,8 @@ module Nukadoko
           return record.merge(outcome: "broken", reason: "where selected none of the #{value.size} items, and a claim on none of them measures nothing", measured: nil)
         end
 
-        record.merge(outcome: judged.any? { _1[:selected] && _1[:outcome] == "broken" } ? "broken" : "held", measured: nil)
+        outcomes = judged.select { _1[:selected] }.map { _1[:outcome] }
+        record.merge(outcome: outcomes.include?("broken") ? "broken" : outcomes.include?("unjudged") ? "unjudged" : "held", measured: nil)
       end
 
       def item_declaration(entry, args, origins, texts, patterns)
@@ -198,7 +208,15 @@ module Nukadoko
           view: entry[:view], at: entry[:at]&.to_s }.compact
           .merge(compare: entry[:compare], expected: judged[:expected], expected_from: expected_from,
                  **(entry[:expected_view] ? { expected_view: entry[:expected_view] } : {}), expected_text: expected_text,
-                 outcome: judged[:holds] ? "held" : "broken")
+                 **outcome(judged))
+      end
+
+      # A claim's outcome and, when the two sides could not be compared or
+      # nothing judged them, why.
+      def outcome(judged)
+        return { outcome: "held" } if judged[:holds]
+
+        { outcome: judged[:unjudged] ? "unjudged" : "broken", **(judged[:reason] ? { reason: judged[:reason] } : {}) }
       end
 
       def json_type(value)

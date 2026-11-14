@@ -495,6 +495,7 @@ module Nukadoko
             when 1
               check_fill(scenario, line, *matches.first)
               check_position(scenario, line, matches.first.first)
+              check_kinds(scenario, line, *matches.first)
             else
               findings << Finding.new("error", "ambiguous-step", scenario.uri, line.line, nil,
                                       %("#{line.text}" matches more than one step: #{matches.map { _1.first.step_name }.join(", ")}), Codes.fix("ambiguous-step"))
@@ -574,6 +575,32 @@ module Nukadoko
           findings << Finding.new("error", "unfillable-required-key", scenario.uri, line.line, step.step_name,
                                   %(Step "#{step.step_name}"'s args key "#{key}" is required, but nothing on this line can fill it: no named capture in the matched pattern binds it, there is no table/docstring attachment that resolves to filling it, and it has no declared from.#{key}. This line would fail args validation with certainty. Fix one of: add a named capture for "#{key}" to the step's pattern; attach a table/docstring that fills it; declare from.#{key}; or make "#{key}" optional in the step's args schema),
                                   Codes.fix("unfillable-required-key"))
+        end
+      end
+
+      # An is-a claim whose expected sentence key this line fills, through a
+      # capture, with a name that is no kind breaks on this line for certain.
+      # Only a plain string key read as it is or as text counts, so the value
+      # the claim reads is the captured text.
+      def check_kinds(scenario, line, step, captures)
+        (step.claims || []).each_with_index do |claim, index|
+          label = "claims[#{index}]"
+          entries = if claim[:each]
+                      [*(claim[:each][:where] || []).each_with_index.map { ["#{label}.each.where[#{_2}]", _1] },
+                       *claim[:each][:claims].each_with_index.map { ["#{label}.each.claims[#{_2}]", _1] }]
+                    else [[label, claim]]
+                    end
+          entries.each do |entry_label, entry|
+            key = entry[:expected]
+            next unless entry[:compare] == "is-a" && key.is_a?(String) && [nil, "text"].include?(entry[:expected_view])
+
+            named = captures[key]
+            next unless named.is_a?(String) && step.args[key]&.type == :string && Claims.value_kind(named).nil?
+
+            findings << Finding.new("error", "claim-kind-unknown", scenario.uri, line.line, step.step_name,
+                                    %(Step "#{step.step_name}"'s #{entry_label}.expected is args.#{key}, which this line fills with #{JSON.generate(named)}, and is-a names one of the kinds #{Claims::VALUE_KINDS.join(", ")}, so the claim would always break),
+                                    Codes.fix("claim-kind-unknown"))
+          end
         end
       end
 

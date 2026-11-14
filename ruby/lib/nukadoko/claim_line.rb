@@ -222,7 +222,57 @@ module Nukadoko
         unpaired && unshared_text(unpaired, actual, expected)
       end
 
-      DIFFERENCES = { "equal" => :equal_difference, "has-same-items" => :same_items_difference }.freeze
+      # The first expected field a broken has-fields claim's object lacks or
+      # holds another value at, found by the matcher that judged it.
+      def fields_difference(actual, expected)
+        misfit = Claims.field_misfit(actual, expected) or return nil
+        at = misfit[:path].join(".")
+        case misfit[:kind]
+        when "missing" then "first field that does not fit at #{at}: actual nothing, expected #{value_text(misfit[:expected])}"
+        when "length" then "first field that does not fit at #{at}: actual #{item_count(misfit[:actual])}, expected #{item_count(misfit[:expected])}"
+        else "first field that does not fit at #{difference_at(misfit[:path], misfit[:actual], misfit[:expected])}"
+        end
+      end
+
+      # How far a broken fits-text claim's text fit, and the line where it
+      # stopped, or the two named stand-ins that broke it.
+      def fits_difference(actual, expected)
+        return nil unless actual.is_a?(String) && expected.is_a?(String)
+
+        fit = TextFit.fit(actual, expected)
+        return nil if fit[:fits]
+        return readings_difference(*fit[:readings]) if fit[:readings]
+        return "every expected line fits, and actual line #{fit[:at]} is left over: actual #{side_text(fit.fetch(:actual, :none))}" unless fit.key?(:expected)
+
+        fitted = case fit[:fitted]
+                 when 0 then ""
+                 when 1 then "expected line 1 fits, and "
+                 else "expected lines 1 to #{fit[:fitted]} fit, and "
+                 end
+        "#{fitted}expected line #{fit[:fitted] + 1} fits nothing from actual line #{fit[:at]}: actual #{side_text(fit.fetch(:actual, :none))}, expected #{value_text(fit[:expected])}"
+      end
+
+      def readings_difference(first, after)
+        where = if first[:at] == after[:at] then "in actual line #{first[:at]}: actual #{value_text(first[:line])}"
+                else "in actual lines #{first[:at]} and #{after[:at]}: actual #{value_text(first[:line])}, then #{value_text(after[:line])}"
+                end
+        read = if first[:name] == after[:name] then "[..:#{first[:name]}] reads #{value_text(first[:text])} and then #{value_text(after[:text])}"
+               else "[..:#{first[:name]}] and [..:#{after[:name]}] both read #{value_text(first[:text])}"
+               end
+        "every expected line fits, but #{read} #{where}"
+      end
+
+      # The field a broken lacks-field claim's object holds, with its value,
+      # since a long object may not show it and a null reads as absent.
+      def present_field_difference(actual, expected)
+        return nil unless plain_object?(actual) && expected.is_a?(String)
+
+        object = Claims.normal(actual)
+        object.key?(expected) ? "field #{JSON.generate(expected)} is present and holds #{value_text(object[expected])}" : nil
+      end
+
+      DIFFERENCES = { "equal" => :equal_difference, "has-same-items" => :same_items_difference, "has-fields" => :fields_difference,
+                      "lacks-field" => :present_field_difference, "fits-text" => :fits_difference }.freeze
 
       def difference_text(record)
         return "" if each?(record) || record[:outcome] != "broken" || record[:reason]
