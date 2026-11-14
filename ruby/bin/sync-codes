@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Writes lib/nukadoko/codes.json from the TypeScript engine's code registry,
+# read as `nuka check --codes --json` prints it on stdin, so a refusal or a
+# finding of this engine gives the same fix for the same code. With
+# --check it writes nothing and exits 1 when the file is not what stdin
+# would write.
+require "json"
+
+path = File.expand_path("../lib/nukadoko/codes.json", __dir__)
+codes = JSON.parse($stdin.binmode.read.force_encoding(Encoding::UTF_8)).fetch("codes").sort_by { _1["code"] }.to_h do |entry|
+  [entry["code"], { "severity" => entry["severity"], "description" => entry["message"], "fix" => entry["fix"] }]
+end
+text = "#{JSON.pretty_generate(codes)}\n"
+if ARGV.include?("--check")
+  next_text = File.exist?(path) ? File.read(path, encoding: "UTF-8") : ""
+  abort "#{path} differs from the TypeScript engine's codes: run bin/sync-codes without --check" unless next_text == text
+else
+  File.write(path, text, encoding: "UTF-8")
+end

@@ -52,6 +52,9 @@ end
 対象を書かなければ `features/` を実行します。
 - `nuka verdict [--json]` は、いちばん新しい run が今の作業ツリーを判定し、赤を残さなかったかを答えます。
 run は始めません。
+- `nuka report [run] --format markdown [--out <file>] [--json]` は、run の `summary.md` を `run.json` だけからもう一度書きます。
+run を名指ししなければ、いちばん新しい run を使います。
+- `nuka clean [--dry-run] [--json]` は、`.nukadoko/` の下の run ディレクトリを消します。
 - ブラウザの起動設定は `nukadoko.config.rb` に `Nukadoko.config(browser: { executablePath: "..." })` と書きます。`page` を使うステップは、シナリオごとに自分のブラウザコンテキストを持ちます。ステップの記録には、ページが送ったリクエストとステップのトレースが残ります。
 - `scratch` を使うステップは `scratch.dir` で新しいディレクトリを得ます。シナリオが終わると消えます。`Nukadoko.run_command(command, args, cwd:)` はプログラムを実行し、`{ exitCode:, stdout:, stderr: }` を返します。ステップの記録には実行したプロセスが残ります。
 - プロジェクトのフィクスチャは `nukadoko.config.rb` に書きます。ブロックは値を `use` に渡し、その後ろが後片付けです。例: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`。`scope: :process` にすると、環境ごとの実行全体で 1 つの値を使います。

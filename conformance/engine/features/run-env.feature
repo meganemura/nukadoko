@@ -56,3 +56,17 @@ Feature: nuka run --env chooses the worlds a run starts
     When nuka runs "run --env nope --json"
     Then it exits with 2
     And it stops with "unknown-environment"
+
+  Scenario: a scenario whose conditions hold in no selected environment is left out
+    Given the project "switch"
+    When nuka runs "run --env off --json"
+    Then it exits with 0
+    And the run lists these scenarios
+      """
+      features/switch.feature:7 off passed
+      """
+    And the run.json at "table.left_out" is
+      """
+      1
+      """
+    And the run's selection is "full"

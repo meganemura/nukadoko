@@ -8,7 +8,8 @@ function words(argv: string): string[] {
   return [...argv.matchAll(/'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2]);
 }
 
-type Envelope = { judged?: string; run_dir?: string; selection?: string; findings?: { severity: string; code: string }[]; scenarios?: { feature: string; line: number; environment: string; status: string }[] };
+type Finding = { severity: string; code: string; message?: string; fix?: string; do?: string };
+type Envelope = { judged?: string; run_dir?: string; selection?: string; findings?: Finding[]; scenarios?: { feature: string; line: number; environment: string; status: string }[] };
 
 function envelope(stdout: string): Envelope {
   try {
@@ -36,6 +37,9 @@ export default defineStep({
     codes: z.string().describe("Under --json, the code of every finding in order, separated by spaces"),
     judged: z.string().describe("Under --json, the envelope's judged, or an empty string"),
     stops: z.string().describe("Under --json, the codes of the refused and failed findings, separated by spaces"),
+    stop: z
+      .string()
+      .describe("Under --json, the last refused or failed finding as lines of field: value (severity, code, message, fix, do), with the program file named nukadoko.program.*"),
   }),
   // nuka writes its run directory inside the scratch project only.
   mutates: false,
@@ -44,6 +48,10 @@ export default defineStep({
     const parsed = envelope(ran.stdout);
     const scenarios = (parsed.scenarios ?? []).map((s) => `${s.feature}:${s.line} ${s.environment} ${s.status}`).join("\n");
     const stops = (parsed.findings ?? []).filter((f) => f.severity === "refused" || f.severity === "failed").map((f) => f.code).join(" ");
-    return { exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "", runDir: parsed.run_dir ?? "", codes: (parsed.findings ?? []).map((f) => f.code).join(" "), judged: parsed.judged ?? "" };
+    // Each engine names its own program file; the rest of the text is the same.
+    const last = (parsed.findings ?? []).filter((f) => f.severity === "refused" || f.severity === "failed").at(-1);
+    const fields = ["severity", "code", "message", "fix", "do"] as const;
+    const stop = last === undefined ? "" : fields.flatMap((key) => (last[key] === undefined ? [] : [`${key}: ${last[key]}`])).join("\n").replace(/nukadoko\.program\.(ts|rb)/g, "nukadoko.program.*");
+    return { stop, exitCode: ran.exitCode, stdout: ran.stdout, stderr: ran.stderr, scenarios, stops, selection: parsed.selection ?? "", runDir: parsed.run_dir ?? "", codes: (parsed.findings ?? []).map((f) => f.code).join(" "), judged: parsed.judged ?? "" };
   },
 });

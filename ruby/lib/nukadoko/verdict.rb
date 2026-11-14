@@ -23,8 +23,20 @@ module Nukadoko
         # judged against the tree before it, which can only make the answer
         # stale, never wrongly fresh.
         @working_tree = RunRecord.commit(project)&.fetch(:working_tree)
-        @newest = newest_run(project)
+        @newest = Verdict.newest_run(project)
         @judged, @findings = judge
+      end
+
+      # The run with the latest start; a run.json whose run_id is not its
+      # directory's name, or that does not parse, is no run.
+      def self.newest_run(project)
+        Dir.glob(File.join(project, ".nukadoko", "runs", "*", "run.json")).filter_map do |file|
+          run = JSON.parse(File.read(file), symbolize_names: true)
+          started = Time.iso8601(run[:started_at]) rescue nil
+          run if started && run[:run_id] == File.basename(File.dirname(file))
+        rescue JSON::ParserError
+          nil
+        end.max_by { [Time.iso8601(_1[:started_at]), _1[:run_id]] }
       end
 
       def open? = findings.any? { %w[failed error].include?(_1[:severity]) }
@@ -47,18 +59,6 @@ module Nukadoko
       end
 
       private
-
-      # The run with the latest start; a run.json whose run_id is not its
-      # directory's name, or that does not parse, is no run.
-      def newest_run(project)
-        Dir.glob(File.join(project, ".nukadoko", "runs", "*", "run.json")).filter_map do |file|
-          run = JSON.parse(File.read(file), symbolize_names: true)
-          started = Time.iso8601(run[:started_at]) rescue nil
-          run if started && run[:run_id] == File.basename(File.dirname(file))
-        rescue JSON::ParserError
-          nil
-        end.max_by { [Time.iso8601(_1[:started_at]), _1[:run_id]] }
-      end
 
       def recorded
         tree = newest.dig(:commit, :working_tree) if newest[:commit].is_a?(Hash)

@@ -40,6 +40,22 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `run-failed`, and notes `working-tree-unknown` and `run-without-base`.
   The tree id is the one the TypeScript engine computes, so either engine's
   verdict reads the other's run.
+- `nuka run` writes `summary.md` beside `run.json`, rendered from it alone
+  in the TypeScript engine's words: the verdict table, each red row's
+  reason and where it stopped, what the run does not show (a criterion
+  `--env` left out, a skipped check, a held row no control proved, a
+  scenario with no claim on a Then line), the conditions, each claim, the
+  findings, and the commands that rerun a failed scenario. A scenario with
+  no claim on a Then line has `judged_by: "nothing"` in run.json.
+- `nuka report [run] --format markdown [--out <file>] [--json]` renders a
+  run directory's summary again from its run.json, the newest run when none
+  is named.
+- `nuka clean [--dry-run] [--json]` removes the run directories and the
+  directories an earlier release left under `.nukadoko/`.
+- A scenario whose conditions hold in no environment of the run is left
+  out and counted in `table.left_out`. When `--env` leaves out every
+  selected scenario, the run fails with `nothing-selected` and names a run
+  that meets them.
 
 ### Changed
 
@@ -47,6 +63,14 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `engine`, so both engines print the same fields.
 - `nuka run` checks only the scenarios it selected, as the TypeScript
   engine does, and a run stopped by `check` exits 2 with `check-errors`.
+- Each refusal and each `nothing-selected` finding carries the TypeScript
+  engine's message, `fix`, and `do` line. `lib/nukadoko/codes.json` holds
+  the TypeScript engine's code registry, and `bin/sync-codes` writes it
+  from `nuka check --codes --json`. The text output prints `-` for a
+  finding with no place, and each `fix:` line.
+- `nuka run --no-check` reports no finding of the check.
+- A line no step matches fails with the TypeScript engine's message, `No
+  step definition matches "<text>"`.
 - A program file whose `environments` declare no `conditions` and that has
   no `defaultEnvironments` runs `default` alone, as the TypeScript engine
   does, rather than every environment.

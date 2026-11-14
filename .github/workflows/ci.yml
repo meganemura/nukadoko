@@ -186,6 +186,9 @@ jobs:
         working-directory: ruby
       - run: bundle exec bin/test
         working-directory: ruby
+      # The Ruby engine's code registry is the TypeScript engine's, so one
+      # code gives the same fix in either.
+      - run: node typescript/dist/cli.js check --codes --json | ruby ruby/bin/sync-codes --check
       # The scenarios under conformance/engine/, each run once in the world
       # typescript and once in the world ruby: what nuka itself does (its
       # targets, --tag, --env), which a case's expected.json cannot hold.

@@ -11,12 +11,13 @@ require "time"
 module Nukadoko
   module Engine
     class Run
-      def initialize(project, steps, scenarios, program, environments: nil, out: $stdout)
+      def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout)
         @project = project
         @steps = steps
         @scenarios = scenarios
         @program = Program.new(program)
         @environments = environments || @program.environments
+        @left_out = left_out
         @out = out
         @id = new_id("run")
         @dir = File.join(project, ".nukadoko", "runs", @id)
@@ -81,15 +82,13 @@ module Nukadoko
           { feature: scenario.uri, line: scenario.line, name: scenario.name, change: nil,
             conditions: Table.condition_tags(scenario.tags), cells: row_cells, verdict: verdict, reason: reason }
         end
-        write_summary(rows)
-        @out.puts "summary   #{File.join(".nukadoko/runs", @id, "summary.md")}"
         scenarios = executions.map { _1[:json] }
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
           environments: @environments.map { environment_entry(_1) }, worlds: [], order: { kind: "file" },
           counts: RunRecord.counts(scenarios), scenarios: scenarios,
           table: { base: nil, mapping_changed: nil, mapping_changes: nil,
                    worlds: @environments.map { { world: "head", environment: _1.name } },
-                   rows: rows, left_out: 0, proof_runs: Table::PROOF_RUNS },
+                   rows: rows, left_out: @left_out, proof_runs: Table::PROOF_RUNS },
           failures: executions.filter_map { _1[:failure] }, passed: rows.none? { _1[:verdict] == "failed" } }
       end
 
@@ -131,6 +130,10 @@ module Nukadoko
         held = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "held" } }
         broken = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "broken" } }
         json[:claims] = { held: held, broken: broken }
+        # A scenario in which no claim on a Then line was judged says so,
+        # since a pass there shows only that nothing raised.
+        then_claims = scenario.steps.zip(records).select { |line, _| line_kind(line) == :then }.sum { (_2[:claim_records] || []).size }
+        json[:judged_by] = "nothing" if then_claims.zero?
         json[:role] = role
         failure = if failed && role != "control"
                     { severity: "failed", code: "scenario-failed", file: scenario.uri, line: scenario.line,
@@ -171,7 +174,7 @@ module Nukadoko
       def play_step(line, results, world)
         step, captures = Engine.matches(@steps, line.text).first
         unless step
-          return { status: "failed", outcome: :broke, step_record_id: nil, error_kind: "step_error", error: %(no step matches "#{line.text}") }
+          return { status: "failed", outcome: :broke, step_record_id: nil, error_kind: "step_error", error: %(No step definition matches "#{line.text}") }
         end
 
         id = new_id("step")
@@ -326,16 +329,6 @@ module Nukadoko
         end
         fixtures[:call] = Caller.new(step, fixtures) if step.fixtures.include?(:call)
         [fixtures, finish]
-      end
-
-      def write_summary(rows)
-        verdicts = rows.map { _1[:verdict] }.tally.map { |v, n| "#{n} #{v}" }.join(", ")
-        lines = ["# nukadoko run #{rows.none? { _1[:verdict] == "failed" } ? "passed" : "failed"}: #{rows.size} criteria, #{verdicts}", ""]
-        rows.each do |r|
-          cells = r[:cells].map { |c| "#{c[:environment]} #{c[:outcome]}#{c[:line] ? "@#{c[:line]}" : ""}#{c[:role] == "control" ? " (control)" : ""}" }
-          lines << "- #{r[:verdict]}  #{r[:feature]}:#{r[:line]}  #{r[:name]}  #{cells.join(", ")}"
-        end
-        File.write(File.join(@dir, "summary.md"), "#{lines.join("\n")}\n")
       end
 
       def new_id(kind) = "#{kind}-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}"

@@ -20,20 +20,39 @@ module Nukadoko
       # declares conditions, else the top level under the name default.
       # default is always a name, whether or not the file defines it.
       def environments(selected = [])
-        declared = (@options[:environments] || {}).transform_keys(&:to_s)
-        names = if selected.any? then selected
-                elsif @options[:defaultEnvironments] then @options[:defaultEnvironments].map(&:to_s)
-                else
-                  conditioned = declared.select { |_, e| e[:conditions] }.keys
-                  conditioned.any? ? conditioned : ["default"]
-                end
-        names.map do |name|
+        declared = self.declared
+        (selected.any? ? selected : default_names).map do |name|
           unless name == "default" || declared.key?(name)
-            raise Refusal.new("unknown-environment", %(Unknown environment "#{name}": not defined in nukadoko.program.rb's "environments"))
+            add = "add environments.#{name} to nukadoko.program.rb"
+            fix = if declared.empty? then "Leave out --env or pass --env default (nukadoko.program.rb defines no other environment), or #{add}."
+                  else "Pass --env with a name it accepts (#{["default", *declared.keys].uniq.sort.join(", ")}), or #{add}."
+                  end
+            raise Refusal.new("unknown-environment", %(Unknown environment "#{name}": not defined in nukadoko.program.rb's "environments"), fix: fix)
           end
 
-          e = declared[name] || {}
-          Environment.new(name, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {})
+          environment(name)
+        end
+      end
+
+      def declared = (@options[:environments] || {}).transform_keys(&:to_s)
+
+      def environment(name)
+        e = declared[name] || {}
+        Environment.new(name, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {})
+      end
+
+      def default_names
+        return @options[:defaultEnvironments].map(&:to_s) if @options[:defaultEnvironments]
+
+        conditioned = declared.select { |_, e| e[:conditions] }.keys
+        conditioned.any? ? conditioned : ["default"]
+      end
+
+      # Why a run without --env starts the environments it starts.
+      def chosen_by
+        if @options[:defaultEnvironments] then "defaultEnvironments in nukadoko.program.rb"
+        elsif default_names == ["default"] then "no environment declares conditions"
+        else "the environments that declare conditions"
         end
       end
 
