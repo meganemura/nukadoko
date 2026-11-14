@@ -5,6 +5,14 @@ It reads the same feature files as the TypeScript engine and must judge them the
 
 Status: an early core. It passes the ten cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, polling Then steps, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. Much of what the TypeScript engine does is not here yet, such as `--base`, and most of what `nuka check` reports.
 
+## Install
+
+Add it to the Gemfile of the project under test. It needs Ruby 3.4 or later.
+
+```ruby
+gem "nukadoko", group: :test
+```
+
 ## A step
 
 One step per file under `features/steps/`. The file name is the step name (`add_todo.rb` is `add-todo`).

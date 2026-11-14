@@ -10,6 +10,15 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
 
+## インストール
+
+テストするプロジェクトの Gemfile に足します。
+Ruby 3.4 以上が要ります。
+
+```ruby
+gem "nukadoko", group: :test
+```
+
 ## ステップ
 
 `features/steps/` の下に 1 ファイル 1 ステップで書きます。

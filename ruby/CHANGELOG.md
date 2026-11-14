@@ -6,6 +6,8 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-14
+
 ### Added
 
 - The first Ruby engine: steps written as Ruby classes with typed `args` and

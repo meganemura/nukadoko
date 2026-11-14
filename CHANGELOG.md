@@ -10,8 +10,9 @@ just until 0.1.
 ### Added
 
 - **A Ruby engine has started, held to the TypeScript engine by shared
-  cases.** `ruby/` is the gem `nukadoko`, not yet released: steps written
-  as Ruby classes, `nuka check`, `nuka run`, and `nuka sig` for Steep.
+  cases.** `ruby/` is the gem `nukadoko`, released on RubyGems with
+  its own version and its own `ruby/CHANGELOG.md`: steps written as Ruby
+  classes, `nuka check`, `nuka run`, and `nuka sig` for Steep.
   `conformance/` holds cases whose feature files both engines read; the
   TypeScript engine writes each case's `expected.json`, and
   `conformance/run-ts.mjs` and `conformance/run-rb.rb` compare each
