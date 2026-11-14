@@ -187,6 +187,14 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `has-same-items`, and the item a broken `each` names. The run summary
   writes each claim the same way, and names the record a value was
   measured in when it is another step's.
+- A polled claim step's record keeps each reading (`readings`), how many
+  there were (`attempts`), and its `settled` conditions with the reading
+  it stopped on, and its failure says why the poll stopped. A call a part
+  made is recorded as the TypeScript engine records it: `step`, `args`,
+  `result` or `error` with its kind, and its times. A step with a page
+  lists the Playwright calls it made (`actions`), read from its
+  trace.zip, and names the trace in `evidence`. run.json names the steps
+  a step used only when it failed.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

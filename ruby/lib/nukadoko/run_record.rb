@@ -34,12 +34,13 @@ module Nukadoko
           **outcome, status: record[:status], environment: environment, world_name: world_name,
           scenario_record_id: scenario_record_id, run_id: run_id, started_at: record[:started_at], finished_at: record[:finished_at],
           evidence: { dir: evidence_dir, screenshots: [], **(record[:scratch] ? { scratch: record[:scratch] } : {}),
-                      **(record[:http_count].to_i.positive? ? { http: "http.jsonl" } : {}) },
+                      **(record[:http_file] ? { http: "http.jsonl" } : {}), **(record[:trace] ? { trace: record[:trace] } : {}) },
           observed: { processes: processes&.any? ? processes : nil, http: record[:http_count].to_i.positive? ? record[:http_count] : nil,
                       files: record[:files], unmeasured: [], **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}) },
-          **(record[:calls] ? { calls: record[:calls] } : {}),
-          mutates: record[:mutates], **(used.any? ? { used: used } : {}), **(record[:fixtures] ? { fixtures: record[:fixtures] } : {}),
-          **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }
+          mutates: record[:mutates], **(used.any? ? { used: used } : {}), **(record[:calls] ? { calls: record[:calls] } : {}),
+          **(record[:actions] ? { actions: record[:actions] } : {}), **(record[:actions_truncated] ? { truncated: { actions: record[:actions_truncated] } } : {}),
+          **(record[:fixtures] ? { fixtures: record[:fixtures] } : {}),
+          **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", **poll_fields(record) } : {}) }
       end
 
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
@@ -56,6 +57,61 @@ module Nukadoko
           compare: declared[:compare], expected: judged[:expected], expected_from: expected_from,
           expected_view: declared[:expected_view], expected_text: expected_text,
           outcome: judged[:holds] ? "held" : "broken", measured: nil }.compact.merge(measured: nil)
+      end
+
+      READING_MAX_BYTES = 1024
+
+      # How many times a claim step read, and for a polled one each reading
+      # and the settled conditions, with the reading the poll stopped on
+      # when two settled.
+      def poll_fields(record)
+        poll = record[:poll] or return { attempts: 1 }
+
+        readings = record[:readings].map do |reading|
+          { attempt: reading[:attempt], at: reading[:at], held: reading[:holds],
+            **(reading[:error] ? { error: reading[:error] } : { actuals: reading[:actuals].map { reading_value(_1) } }),
+            **(reading.key?(:settled) ? { settled: reading[:settled] } : {}) }
+        end
+        settled = if poll[:conditions].any?
+                    last = readings.last
+                    stop = poll[:stop] == "settled" ? { stop: { reading: last[:attempt], actuals: last[:actuals] } } : {}
+                    { settled: { conditions: poll[:conditions], **stop } }
+                  else {}
+                  end
+        { attempts: [readings.size, 1].max, readings: readings, **settled }
+      end
+
+      def reading_value(value)
+        text = JSON.generate(value)
+        text.bytesize <= READING_MAX_BYTES ? { value: value } : { json_start: text.byteslice(0, READING_MAX_BYTES).scrub(""), json_bytes: text.bytesize }
+      end
+
+      # Why a poll whose claim broke stopped, on the failure's first line,
+      # so a reading that settled is never mistaken for the timeout passing.
+      def poll_end(step, record)
+        poll = record[:poll]
+        return "" if poll.nil? || poll[:conditions].empty? || poll[:stop] == "held"
+
+        conditions = poll[:conditions].join(" and ")
+        attempts = record[:readings].size
+        if poll[:stop] == "settled"
+          "; the poll stopped on reading #{attempts}, before its #{step.poll[:timeout_ms]} ms timeout, since readings #{attempts - 1} and #{attempts} settled (#{conditions})"
+        else
+          "; the poll read until its #{step.poll[:timeout_ms]} ms timeout, and no two consecutive readings settled (#{conditions})"
+        end
+      end
+
+      # A declared claim or settled condition as one line, as `nuka
+      # describe` writes it: `status not-equal "running"`.
+      def describe_comparison(claim)
+        expected = case claim[:expected]
+                   in String => key then key
+                   in { from: key } then "from #{key}"
+                   in { observe: key } then "observe #{key}"
+                   in { literal: value } then JSON.generate(value)
+                   end
+        "#{"count of " if claim[:count]}#{claim[:actual]}#{" as #{claim[:view]}" if claim[:view]}#{" at #{claim[:at]}" if claim[:at]} " \
+          "#{claim[:compare]} #{expected}#{" as #{claim[:expected_view]}" if claim[:expected_view]}"
       end
 
       EACH_RESULTS_CAP = 20

@@ -39,7 +39,7 @@ module Nukadoko
           end
         ensure
           record[:readings] = readings.map { _1.except(:value, :raised) }
-          record[:poll] = { readings: readings.size, stop: stop || "timeout" }
+          record[:poll] = { readings: readings.size, stop: stop || "timeout", conditions: @settled.map { RunRecord.describe_comparison(_1) } }
         end
         raise readings.last[:raised] if readings.last[:raised]
 

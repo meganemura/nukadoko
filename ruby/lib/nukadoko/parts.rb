@@ -22,46 +22,62 @@ module Nukadoko
         @into = [@calls]
       end
 
+
       def to_proc = method(:call).to_proc
 
+      # A refused call starts nothing, so it records nothing. Every other
+      # call is recorded in the order it started, with its result or its
+      # error, as the TypeScript engine records it.
       def call(part, args = {}, **keywords)
         caller = @stack.last
         unless part.is_a?(Class) && part < Step && caller.parts.include?(part)
-          raise Refused, "#{caller.step_name} calls #{part.respond_to?(:step_name) ? part.step_name : part.inspect}, which its parts do not declare"
+          raise Refused, %(Step "#{caller.step_name}" called "#{part.respond_to?(:step_name) ? part.step_name : part.inspect}" through call(), but does not list it in its own ) +
+                         %("parts" (docs/spec.md "Parts"). Add it there. The fixture bag this step runs with is ) +
+                         %(built from that list before "run" is called, so a part the list does not name has nothing to run with.)
         end
 
         args = args.merge(keywords).transform_keys(&:to_s)
-        entry = { part: part.step_name, args: args, started_at: Time.now.utc.iso8601(3) }
+        entry = { step: part.step_name, args: args }
+        started = Time.now.utc.iso8601(3)
         @into.last << entry
-        run(part, args, entry)
-      ensure
-        entry[:finished_at] = Time.now.utc.iso8601(3) if entry
+        run(part, args, entry, started)
       end
 
       private
 
-      def run(part, args, entry)
+      def run(part, args, entry, started)
+        nested = []
+        fail_with = lambda do |kind, message|
+          entry.merge!(error: { message: message, kind: kind }, started_at: started, finished_at: Time.now.utc.iso8601(3), **(nested.any? ? { calls: nested } : {}))
+        end
         problems = part.args.problems(args)
-        raise TypeError, "args of #{part.step_name}: #{problems.join("; ")}" if problems.any?
+        if problems.any?
+          message = "args validation failed: #{problems.join("; ")}"
+          fail_with.("args_invalid", message)
+          raise TypeError, message
+        end
 
         @stack << part
-        @into << (entry[:calls] = [])
-        value = part.new.run(**@fixtures.slice(*part.fixtures), args: part.inputs.load(args))
-        problems = part.returns ? part.returns.problems(value) : []
-        raise TypeError, "returns of #{part.step_name}: #{problems.join("; ")}" if problems.any?
-
-        value = part.returns.strip(value) if part.returns
-        entry[:result] = value
-        part.returns ? part.returns.load(value) : value
-      rescue StandardError => e
-        entry[:error] ||= "#{e.class}: #{e.message}"
-        raise
-      ensure
-        if @stack.last == part
+        @into << nested
+        begin
+          value = part.new.run(**@fixtures.slice(*part.fixtures), args: part.inputs.load(args))
+        rescue StandardError => e
+          fail_with.("step_error", e.message) unless entry[:error]
+          raise
+        ensure
           @stack.pop
           @into.pop
-          entry.delete(:calls) if entry[:calls]&.empty?
         end
+        problems = part.returns ? part.returns.problems(value) : []
+        if problems.any?
+          message = "returns: #{problems.join("; ")}"
+          fail_with.("result_invalid", message)
+          raise TypeError, message
+        end
+
+        value = part.returns.strip(value) if part.returns
+        entry.merge!(result: value, started_at: started, finished_at: Time.now.utc.iso8601(3), **(nested.any? ? { calls: nested } : {}))
+        part.returns ? part.returns.load(value) : value
       end
     end
   end

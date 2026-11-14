@@ -418,11 +418,12 @@ module Nukadoko
                              files: record[:files]&.map { _1.except(:content) }, unmeasured: [],
                              **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}) }
         entry[:error] = { kind: record[:error_kind], message: record[:error] } if record[:error]
-        entry[:used] = record[:used] if record[:used]&.any?
+        # Only a failed step names what it read: a reader then sees the value it broke on.
+        entry[:used] = record[:used] if record[:used]&.any? && record[:status] == "failed"
         if record[:claim_records]
           entry[:claims] = record[:claim_records]
           entry[:observation] = record[:observation] || "observed"
-          entry[:attempts] = 1
+          entry.merge!(RunRecord.poll_fields(record).except(:readings))
         end
         entry
       end
@@ -530,6 +531,12 @@ module Nukadoko
           # A page's own traffic is in http.jsonl and the trace, not counted as the step's.
           record[:http_count] = log.count { _1[:via] != "page" }
           File.write(File.join(dir, "http.jsonl"), "#{log.map { JSON.generate(_1) }.join("\n")}\n") if log.any?
+          record[:http_file] = log.any?
+          if (traced = TraceActions.read(File.join(dir, "trace.zip")))
+            record[:trace] = "trace.zip"
+            record[:actions] = traced[:actions] if traced[:actions].any?
+            record[:actions_truncated] = traced[:truncated] if traced[:truncated]
+          end
           measure(step, record, dir) if record[:claim_records]
           File.write(File.join(dir, "record.json"), JSON.pretty_generate(@step_file ? @step_file.(record) : record))
         end
@@ -575,9 +582,11 @@ module Nukadoko
           broken = record[:claim_records].index { _1[:outcome] != "held" }
           return unless broken
 
+          message = RunRecord.broken_message(record[:claim_records])
+          first, *rest = message.split("\n", -1)
+          message = ["#{first}#{RunRecord.poll_end(step, record)}", *rest].join("\n")
           record.merge!(status: "failed", outcome: then_line ? :fail : :broke, claim: broken,
-                        broken_actual: judged[broken][:actual], error_kind: "claim_broken",
-                        error: RunRecord.broken_message(record[:claim_records]))
+                        broken_actual: judged[broken][:actual], error_kind: "claim_broken", error: message)
         else
           value = step.new.run(**fixtures.slice(*step.fixtures), args: step.inputs.load(args))
           problems = step.returns ? step.returns.problems(value) : []
@@ -586,10 +595,8 @@ module Nukadoko
             raise TypeError, "returns: #{problems.join("; ")}"
           end
 
-          if step.returns
-            record[:returns_dropped] = step.returns.drops(value)
-            value = step.returns.strip(value)
-          end
+          record[:returns_dropped] = step.returns ? step.returns.drops(value) : []
+          value = step.returns.strip(value) if step.returns
           results << [step, value.transform_keys(&:to_s), at_line, record[:step_record_id]]
           record[:result] = value
         end

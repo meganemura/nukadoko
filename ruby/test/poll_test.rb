@@ -16,12 +16,12 @@ class PollTest < Minitest::Test
   def test_one_holding_reading_is_not_enough
     value, record = poll(%w[running done done])
     assert_equal({ status: "done" }, value)
-    assert_equal({ readings: 3, stop: "held" }, record[:poll])
+    assert_equal({ readings: 3, stop: "held", conditions: [] }, record[:poll])
   end
 
   def test_two_settled_readings_stop_a_broken_claim
     _, record = poll(%w[running failed failed failed], settled: SETTLED)
-    assert_equal({ readings: 3, stop: "settled" }, record[:poll])
+    assert_equal({ readings: 3, stop: "settled", conditions: ["status not-equal \"running\""] }, record[:poll])
   end
 
   def test_a_poll_that_never_holds_stops_at_its_timeout
@@ -43,7 +43,7 @@ class PollRecordTest < Minitest::Test
 
   def test_a_first_reading_that_holds_is_confirmed_by_a_second
     _, record = run_poll { { status: "done" } }
-    assert_equal({ readings: 2, stop: "held" }, record[:poll])
+    assert_equal({ readings: 2, stop: "held", conditions: [] }, record[:poll])
     assert_equal [1, 2], record[:readings].map { _1[:attempt] }
     assert_equal [["done"], ["done"]], record[:readings].map { _1[:actuals] }
   end

@@ -22,7 +22,7 @@ class CallerTest < Minitest::Test
     caller = Nukadoko::Engine::Caller.new(Composite, {})
     assert_equal 4, caller.call(Double, n: 2).twice
     entry = caller.calls.first
-    assert_equal Double.step_name, entry[:part]
+    assert_equal Double.step_name, entry[:step]
     assert_equal({ "twice" => 4 }, entry[:result])
   end
 
@@ -33,6 +33,7 @@ class CallerTest < Minitest::Test
   def test_wrong_args_fail_the_call_and_are_recorded
     caller = Nukadoko::Engine::Caller.new(Composite, {})
     assert_raises(TypeError) { caller.call(Double, n: "x") }
-    assert_match(/\AArgumentError: args of|TypeError: args of/, caller.calls.first[:error])
+    assert_equal "args_invalid", caller.calls.first[:error][:kind]
+    assert_match(/\Aargs validation failed: /, caller.calls.first[:error][:message])
   end
 end
