@@ -4,6 +4,7 @@ import path from "node:path";
 import { shapeText } from "./lib/json-shape.ts";
 import nukaRuns from "./nuka-runs.ts";
 import theProject from "./the-project.ts";
+import theProjectInGit from "./the-project-in-a-git-repository.ts";
 
 export default defineStep({
   description: "The run.json nuka wrote holds exactly these fields: one line per leaf path, items of an array as [], with the JSON type found there",
@@ -13,7 +14,7 @@ export default defineStep({
     dir: theProject.returns.shape.dir,
     runDir: nukaRuns.returns.shape.runDir,
   }),
-  from: { dir: [theProject, "dir"], runDir: [nukaRuns, "runDir"] },
+  from: { dir: [[theProject, "dir"], [theProjectInGit, "dir"]], runDir: [nukaRuns, "runDir"] },
   observe({}, { dir, runDir }) {
     return { fields: shapeText(JSON.parse(readFileSync(path.join(dir, runDir, "run.json"), "utf8"))) };
   },

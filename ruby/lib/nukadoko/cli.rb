@@ -21,6 +21,7 @@ module Nukadoko
 
     def call
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: #{@unknown.first}")) if @unknown.any?
+      return verdict if @command == "verdict"
 
       %w[nukadoko.config.rb nukadoko.program.rb].each do |name|
         file = File.join(@project, name)
@@ -55,7 +56,7 @@ module Nukadoko
         finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
       when "run" then run(steps)
       else
-        warn "usage: nuka check|run|steps|describe <step>|sig [--json] [--no-check]"
+        warn "usage: nuka check|run|verdict|steps|describe <step>|sig [--json] [--no-check]"
         2
       end
     end
@@ -108,6 +109,18 @@ module Nukadoko
       passed ? 0 : 1
     rescue Engine::Refusal => e
       refuse(e)
+    end
+
+    # Reads run.json files and git only, so it loads no step.
+    def verdict
+      answer = Engine::Verdict.new(@project)
+      if @json
+        emit({ **head("verdict", answer.open? ? "failed" : "passed", answer.findings), **answer.envelope_fields }, answer.findings, "verdict")
+      else
+        @out.puts answer.headline
+        emit({}, answer.findings, "verdict")
+      end
+      answer.open? ? 1 : 0
     end
 
     def refuse(refusal)

@@ -20,6 +20,7 @@ require_relative "nukadoko/program"
 require_relative "nukadoko/table"
 require_relative "nukadoko/run_record"
 require_relative "nukadoko/run"
+require_relative "nukadoko/verdict"
 require_relative "nukadoko/signature"
 
 module Nukadoko

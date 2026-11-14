@@ -122,7 +122,7 @@ module Nukadoko
           changed, listed = git(project, "ls-files", "-z", "--modified", "--deleted", "--others", "--exclude-standard",
                                 "--", ".", ":(exclude).nukadoko", env: env, strip: false)
           _, updated = git(project, "update-index", "-z", "--add", "--remove", "--info-only", "--stdin", env: env, input: changed)
-          tree, wrote = git(project, "write-tree", env: env)
+          tree, wrote = git(project, "write-tree", "--missing-ok", env: env)
           listed && updated && wrote ? tree : nil
         end
       end

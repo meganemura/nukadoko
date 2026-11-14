@@ -33,6 +33,13 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `expected_from`, `expected_text`, and `outcome`), and the verdict table
   with each row's `reason`. A failed scenario is a `scenario-failed`
   finding with the `nuka run` line that runs it again.
+- `nuka verdict [--json]`: whether the newest run that ended judged the
+  working tree as it is now and left nothing red, from run.json and one
+  git tree id, without starting a run. It fails with `run-missing`,
+  `run-stale`, `run-partial`, the run's own failed findings, or
+  `run-failed`, and notes `working-tree-unknown` and `run-without-base`.
+  The tree id is the one the TypeScript engine computes, so either engine's
+  verdict reads the other's run.
 
 ### Changed
 

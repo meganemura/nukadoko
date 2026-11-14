@@ -4,6 +4,7 @@ import path from "node:path";
 import { at, canonical } from "./lib/json-shape.ts";
 import nukaRuns from "./nuka-runs.ts";
 import theProject from "./the-project.ts";
+import theProjectInGit from "./the-project-in-a-git-repository.ts";
 
 export default defineStep({
   description: "The value at a path of the run.json nuka wrote, as JSON with its keys sorted, is exactly the docstring",
@@ -14,7 +15,7 @@ export default defineStep({
     dir: theProject.returns.shape.dir,
     runDir: nukaRuns.returns.shape.runDir,
   }),
-  from: { dir: [theProject, "dir"], runDir: [nukaRuns, "runDir"] },
+  from: { dir: [[theProject, "dir"], [theProjectInGit, "dir"]], runDir: [nukaRuns, "runDir"] },
   observe({}, { path: where, dir, runDir }) {
     return { value: canonical(at(JSON.parse(readFileSync(path.join(dir, runDir, "run.json"), "utf8")), where)) };
   },
