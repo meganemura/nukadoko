@@ -1,0 +1,116 @@
+# Generated from lib/nukadoko/claim_check.rb with RBS::Inline
+
+# What `nuka check` can tell about a claim step's claims from the line it
+# is bound on and the earlier lines of its scenario, in the TypeScript
+# engine's words. A `from` value comes from the nearest earlier line that
+# runs its one producer bound before this line, as a run fills it, so the
+# producer's `returns` says what the value can hold: a path into it that is
+# not there (`claim-path-unknown`), a lacks-field on a field its object
+# never keeps (`claim-field-stripped`), an each on a value that is never an
+# array (`claim-not-an-array`), and two sides that read one place
+# (`claim-compares-itself`). A line whose producer is missing or ambiguous
+# is left to `from-order-violation`, and a type this module cannot read
+# (`unknown`) is taken to have every path, so each finding can only end one
+# way. A view reads text the step returned at run time, so no path after it
+# is checked.
+module Nukadoko
+  module Engine
+    module ClaimCheck
+      class Producer < Data
+        attr_reader line(): Integer
+
+        attr_reader step(): singleton(Step)
+
+        attr_reader key(): String
+
+        def self.new: (Integer line, singleton(Step) step, String key) -> instance
+                    | (line: Integer, step: singleton(Step), key: String) -> instance
+
+        def self.members: () -> [ :line, :step, :key ]
+
+        def members: () -> [ :line, :step, :key ]
+      end
+
+      # A place a side reads: the line of its producer, or observe, and the
+      # path from there, a view as one segment of its own.
+      class Place < Data
+        attr_reader origin(): String
+
+        attr_reader segments(): Array[String]
+
+        attr_reader text(): String
+
+        def self.new: (String origin, Array[String] segments, String text) -> instance
+                    | (origin: String, segments: Array[String], text: String) -> instance
+
+        def self.members: () -> [ :origin, :segments, :text ]
+
+        def members: () -> [ :origin, :segments, :text ]
+      end
+
+      INDEX: ::Regexp
+
+      # [line index, code, message] for each finding about the claim step
+      # bound on `index` of `resolved`, the [step, captures] of each line.
+      # : (Array[[singleton(Step), Hash[String, untyped]]?], Array[Integer], Integer) -> Array[[String, String]]
+      def self?.issues: (Array[[ singleton(Step), Hash[String, untyped] ]?], Array[Integer], Integer) -> Array[[ String, String ]]
+
+      # : (String, Hash[Symbol, untyped]) -> Array[[String, Hash[Symbol, untyped]]]
+      def self?.each_entries: (String, Hash[Symbol, untyped]) -> Array[[ String, Hash[Symbol, untyped] ]]
+
+      # : (String?) -> Array[String]
+      def self?.split: (String?) -> Array[String]
+
+      # The nearest earlier line that runs the one candidate producer bound
+      # before this line, or nil when none or several are.
+      # : (singleton(Step), String, Integer, Array[[singleton(Step), Hash[String, untyped]]?], Array[Integer]) -> Producer?
+      def self?.producer: (singleton(Step), String, Integer, Array[[ singleton(Step), Hash[String, untyped] ]?], Array[Integer]) -> Producer?
+
+      # Follows `segments` through a returns schema as the run reads a
+      # value: { schema: type } at the end, { open: true } past a type this
+      # module cannot read, or { missing: index, keys: } at the first
+      # segment the type does not have.
+      # : (Schema?, Array[String]) -> Hash[Symbol, untyped]
+      def self?.walk: (Schema?, Array[String]) -> Hash[Symbol, untyped]
+
+      # : (String, String, Producer, Hash[Symbol, untyped], Array[String]) -> String
+      def self?.missing: (String, String, Producer, Hash[Symbol, untyped], Array[String]) -> String
+
+      # : (String, Hash[Symbol, untyped], singleton(Step), ^(String) -> Producer?, ^(String, String) -> void) -> void
+      def self?.check_expected_from: (String, Hash[Symbol, untyped], singleton(Step), ^(String) -> Producer?, ^(String, String) -> void) -> void
+
+      NOUNS: untyped
+
+      # What a value of `type` can be, as nouns, when none of them is an
+      # array; nil when one may be.
+      # : (untyped) -> Array[String]?
+      def self?.non_array_nouns: (untyped) -> Array[String]?
+
+      # : (String, String, Producer, Array[String], String, ^(String, String) -> void) -> void
+      def self?.not_an_array: (String, String, Producer, Array[String], String, ^(String, String) -> void) -> void
+
+      # The field a lacks-field claim names on this line: a literal, or a
+      # plain string key a capture fills with its own text.
+      # : (Hash[Symbol, untyped], Hash[String, untyped], singleton(Step)) -> String?
+      def self?.lacked_field: (Hash[Symbol, untyped], Hash[String, untyped], singleton(Step)) -> String?
+
+      # The keys of the object at `segments`, which keeps no key it does not
+      # declare, as every object a Ruby schema declares does; nil for any
+      # other type.
+      # : (Schema?, Array[String]) -> Array[String]?
+      def self?.object_keys_at: (Schema?, Array[String]) -> Array[String]?
+
+      # : (String, Hash[Symbol, untyped], Hash[String, untyped], singleton(Step), Producer, Array[String], Array[String], String, ^(String, String) -> void) -> void
+      def self?.stripped: (String, Hash[Symbol, untyped], Hash[String, untyped], singleton(Step), Producer, Array[String], Array[String], String, ^(String, String) -> void) -> void
+
+      # : (String, String, ^(String) -> Producer?) -> Place?
+      def self?.place: (String, String, ^(String) -> Producer?) -> Place?
+
+      # : (Place, String?, String?) -> Place
+      def self?.shaped: (Place, String?, String?) -> Place
+
+      # : (String, Place?, Place?, ^(String, String) -> void) -> void
+      def self?.compares_itself: (String, Place?, Place?, ^(String, String) -> void) -> void
+    end
+  end
+end

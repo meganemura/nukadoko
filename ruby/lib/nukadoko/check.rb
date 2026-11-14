@@ -252,6 +252,18 @@ module Nukadoko
         hold_from_order(scenario, held) if held.any?
       end
 
+      # What a claim step's claims read, from the producers of its from
+      # values on the earlier lines of the scenario (ClaimCheck).
+      def check_claim_sources(scenario)
+        resolved = scenario.steps.map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first : nil }
+        lines = scenario.steps.map(&:line)
+        resolved.each_index do |index|
+          ClaimCheck.issues(resolved, lines, index).each do |code, message|
+            findings << Finding.new("error", code, scenario.uri, lines[index], resolved[index]&.first&.step_name, message, Codes.fix(code))
+          end
+        end
+      end
+
       def from_missing_message(step_name, key, names, resolved)
         anywhere = ->(name) { resolved.any? { _1&.first&.step_name == name } }
         if names.size == 1
@@ -510,6 +522,7 @@ module Nukadoko
           end
         end
         @scenarios.each { check_from_order(_1) }
+        @scenarios.each { check_claim_sources(_1) }
         suppress_undefined(undefined)
         @scenarios.each { judging_nothing(_1) }
       end

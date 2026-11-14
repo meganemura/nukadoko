@@ -94,6 +94,10 @@ module Nukadoko
       # findings wait behind one warning.
       def check_from_order: (untyped scenario) -> untyped
 
+      # What a claim step's claims read, from the producers of its from
+      # values on the earlier lines of the scenario (ClaimCheck).
+      def check_claim_sources: (untyped scenario) -> untyped
+
       def from_missing_message: (untyped step_name, untyped key, untyped names, untyped resolved) -> untyped
 
       def from_order_fix: (untyped issue) -> untyped
