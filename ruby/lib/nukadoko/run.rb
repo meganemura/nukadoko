@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "securerandom"
 require "fileutils"
@@ -366,7 +367,7 @@ module Nukadoko
         @out.puts "scenario  #{name}#{role == "control" ? "  (control)" : ""}"
         started_at = now
         results = []
-        stopped = nil
+        stopped = nil #: Array[untyped]?
         @scratch = Scratch.new
         @scenario_fixtures = FixtureCache.new
         scenario_record_id = new_id("scn")
@@ -384,11 +385,11 @@ module Nukadoko
         @browser.end_scenario
         @scenario_fixtures.teardown
         @scratch.remove_all
-        execution = stopped ? stopped[0, 3].compact : [:pass]
+        execution = stopped ? stopped[0, 3].to_a.compact : [:pass]
         failed = records.find { _1[:status] == "failed" }
         json = { scenario_record_id: scenario_record_id, feature: scenario.uri, line: scenario.line, scenario: scenario.name,
                  environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now,
-                 steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] }
+                 steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
         json[:do] = again(scenario, environment) if failed && role != "control"
         held = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "held" } }
         broken = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "broken" } }
@@ -402,7 +403,7 @@ module Nukadoko
                     { severity: "failed", code: "scenario-failed", file: scenario.uri, line: scenario.line,
                       message: "#{scenario.name}: #{failed[:error]}", do: json[:do] }
                   end
-        { execution: execution, actual: stopped&.at(3), json: json, failure: failure }
+        { execution: execution, actual: stopped && stopped[3], json: json, failure: failure }
       end
 
       # One step as run.json's scenarios[].steps[] holds it.
@@ -448,6 +449,8 @@ module Nukadoko
         end
       end
 
+      public
+
       # One step alone, as `nuka do` runs it: its args given on the command
       # line or by earlier records (`origins` says which), in a world
       # started for this one execution, its evidence in this run's
@@ -470,17 +473,16 @@ module Nukadoko
         world&.stop
       end
 
-      public :do_step
-
       private
 
       # Runs one step whose args the block binds, and writes its record and
       # HTTP log into `dir`.
+      #: (singleton(Step), Hash[Symbol, untyped], String, World, then_line: bool, at_line: Integer?, results: Array[untyped], origins: Hash[String, String]) { () -> [Hash[String, untyped], Hash[String, String]] } -> Hash[Symbol, untyped]
       def execute(step, record, dir, world, then_line:, at_line:, results:, origins:)
         FileUtils.mkdir_p(dir)
         log = []
         fixtures = {}
-        finish = nil
+        finish = nil #: Proc?
         processes = []
         scratch_dirs = @scratch&.dirs || []
         scratch_before = @scratch&.snapshot || {}
@@ -551,7 +553,8 @@ module Nukadoko
 
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
-      def body(step, fixtures, args, (then_line, at_line), record, results, origins, texts)
+      def body(step, fixtures, args, position, record, results, origins, texts)
+        then_line, at_line = position
         if step.claims
           own = fixtures.slice(*step.fixtures)
           observes = step.method_defined?(:observe)

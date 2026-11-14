@@ -1,54 +1,11 @@
+# What rbs-inline cannot write from lib/'s comments: the methods
+# define_method defines, and the type of a command's result a step author
+# reads. The rest is in sig/generated.
 module Nukadoko
-  class Schema
-    def string: (Symbol, ?String, ?null: bool) -> void
-    def boolean: (Symbol, ?String, ?null: bool) -> void
-    def integer: (Symbol, ?String, ?null: bool) -> void
-    def number: (Symbol, ?String, ?null: bool) -> void
-    def strings: (Symbol, ?String, ?null: bool) -> void
-    def table: (Symbol, ?String, ?null: bool) -> void
-    def unknown: (Symbol, ?String) -> void
-    def enum: (Symbol, Array[String | Symbol], ?String, ?null: bool) -> void
-    def object: (Symbol, ?String, ?null: bool) { () [self: Schema] -> void } -> void
-    def field: (Symbol, Field, ?String) -> void
-    def []: (Symbol) -> Field
-
-    class Field
-    end
-  end
-
-  type command_result = { exitCode: Integer?, stdout: String, stderr: String }
-
-  def self.run_command: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?) -> command_result
-  def self.fixture: (Symbol, ?scope: :scenario | :process) { (^(untyped) -> void, **untyped) -> void } -> untyped
-
-  class Step
-    def self.pattern: (String) -> String
-    def self.description: (String) -> String
-    def self.mutates: (bool) -> bool
-    def self.claims: (Array[Hash[Symbol, untyped]]) -> untyped
-    def self.poll: (untyped) -> untyped
-    def self.args: () { () [self: Schema] -> void } -> Schema
-    def self.returns: () { () [self: Schema] -> void } -> Schema
-                    | () -> Schema
-    def self.from: (Hash[Symbol, untyped]) -> untyped
-    def self.parts: (Array[singleton(Step)]) -> Array[singleton(Step)]
-  end
+  # `files` is there when the run measured what changed under its cwd.
+  type command_result = { exitCode: Integer?, signal: String?, stdout: String, stderr: String, ?files: untyped }
 
   module Engine
-    class Response
-      attr_reader status: Integer
-      def json: () -> untyped
-      def ok?: () -> bool
-    end
-
-    class Caller
-      def call: (singleton(Nukadoko::Step), ?Hash[String | Symbol, untyped], **untyped) -> untyped
-    end
-
-    class Scratch
-      def dir: (?String) -> String
-    end
-
     class Request
       def get: (String, ?data: untyped, ?body: String?, ?headers: Hash[String, String]) -> Response
       def post: (String, ?data: untyped, ?body: String?, ?headers: Hash[String, String]) -> Response

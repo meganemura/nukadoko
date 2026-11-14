@@ -1,0 +1,15 @@
+# Generated from lib/nukadoko/signature.rb with RBS::Inline
+
+# The RBS of each step, written from the same declarations check reads, so a
+# project that runs Steep gets the body checked against its own contract:
+# args it does not declare, a return value of the wrong shape, and, in a
+# Then step, an args key the claim keeps from observe.
+module Nukadoko
+  module Signature
+    FIXTURE_TYPES: untyped
+
+    def self.of: (untyped steps) -> untyped
+
+    def self.of_step: (untyped step) -> untyped
+  end
+end

@@ -1,0 +1,36 @@
+# Generated from lib/nukadoko/poll.rb with RBS::Inline
+
+# `poll timeout_ms: 3000` reads `observe` again, 100 ms apart, until every
+# claim holds on two consecutive readings or the timeout passes. One holding
+# reading is never enough: a page between two renders can show the expected
+# state for one frame. `settled:` names a state that cannot change once
+# reached, so two consecutive settled readings stop the wait for a claim
+# that broke on it. The last reading is what the step judges, and every
+# reading lands in the step record, because an observe that counts its
+# calls could walk toward the expected value.
+module Nukadoko
+  module Engine
+    class Poll
+      INTERVAL: ::Float
+
+      def initialize: (untyped options, untyped claims, untyped args) -> untyped
+
+      # A reading whose observe raised is kept with the first line of the
+      # error, and the poll reads again; only a last reading that raised
+      # fails the step with that error.
+      # : (Hash[Symbol, untyped]) { () -> untyped } -> untyped
+      def call: (Hash[Symbol, untyped]) { () -> untyped } -> untyped
+
+      private
+
+      # : (Integer) { () -> untyped } -> Hash[Symbol, untyped]
+      def read: (Integer) { () -> untyped } -> Hash[Symbol, untyped]
+
+      def judge: (untyped value, untyped attempt) -> untyped
+
+      def stop_for: (untyped readings) -> untyped
+
+      def monotonic: () -> untyped
+    end
+  end
+end

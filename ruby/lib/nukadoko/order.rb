@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # The order `nuka run` plays its selection in, and the rerun line that plays
 # it again. File order is the order the targets select. A shuffled order

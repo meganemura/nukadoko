@@ -1,0 +1,112 @@
+# Generated from lib/nukadoko/trace.rb with RBS::Inline
+
+# The W3C trace context the engine puts on what a step sends to the world,
+# and the program's log read back by it, as the TypeScript engine does it.
+# Each step gets one trace id; each request to the world's origin, and
+# each process run_command starts, gets a span id of its own under it. A
+# line of program.log belongs to the step whose trace id it carries,
+# wherever it appears: every trace id of one world starts with the same
+# eight characters, so the id a line carries is the first place where
+# those begin 32 hexadecimal ones, and no list of ids is needed to read it.
+module Nukadoko
+  module Engine
+    module Trace
+      PREFIX_LENGTH: ::Integer
+
+      ID_LENGTH: ::Integer
+
+      MAX_SPANS: ::Integer
+
+      def self.new_prefix: () -> untyped
+
+      # W3C reserves an id of all zeros as invalid, so one is drawn again.
+      def self.new_id: (untyped prefix) -> untyped
+
+      def self.new_span: () -> untyped
+
+      def self.traceparent: (untyped trace_id, untyped span) -> untyped
+
+      # The trace id of the world `prefix` names that `line` carries, or nil.
+      def self.id_in: (untyped line, untyped prefix) -> untyped
+
+      def self.origin: (untyped uri) -> untyped
+
+      # Only the world's origin gets the header: a third party's server may
+      # answer a header it did not expect differently. A world at localhost
+      # also answers at each name below localhost on the same port.
+      def self.stamps?: (untyped world, untyped target) -> untyped
+
+      # The step that runs now, kept per thread as the processes are.
+      def self.current: () -> untyped
+
+      # : [T] (Boundary) { () -> T } -> T
+      def self.within: [T] (Boundary) { () -> T } -> T
+
+      # One step's trace: what it stamped, and when it last did.
+      class Boundary
+        attr_reader trace_id: untyped
+
+        attr_reader origin: untyped
+
+        attr_reader stamped: untyped
+
+        attr_reader spans: untyped
+
+        attr_reader process_spans: untyped
+
+        attr_reader last_stamp_at: untyped
+
+        def initialize: (untyped trace_id, untyped origin) -> untyped
+
+        # The traceparent a request to `url` goes out with, or nil when it
+        # is not the world's.
+        def stamp: (untyped url) -> untyped
+
+        # A process's TRACEPARENT is not a stamped request: nothing waits
+        # for the request it may send, but the log is read a little longer.
+        def process_traceparent: () -> untyped
+      end
+
+      # program.log read forward as the steps run: each step takes the
+      # complete lines written since the last step read, keeps those that
+      # carry its trace id, and, when it stamped anything, waits until the
+      # log has been quiet for 30 ms (at most 300 ms) for lines still on
+      # their way.
+      class Log
+        SLICE_FILE: ::String
+
+        LATE_FILE: ::String
+
+        QUIET: ::Float
+
+        SETTLE: ::Float
+
+        POLL: ::Float
+
+        KEPT: untyped
+
+        attr_reader path: untyped
+
+        attr_reader prefix: untyped
+
+        def initialize: (untyped path, untyped prefix) -> untyped
+
+        def slice: (untyped dir, untyped boundary) -> untyped
+
+        # Once the world stopped: how many lines carry a trace id of the
+        # world, and each step's lines that its slice did not read, written
+        # beside its record. `steps` maps a trace id to [lines read, dir].
+        def late: (untyped steps) -> untyped
+
+        private
+
+        def now: () -> untyped
+
+        # A line still being written, after the last newline, is left for
+        # the next read.
+        # : () { (String) -> void } -> void
+        def each_new_line: () { (String) -> void } -> void
+      end
+    end
+  end
+end

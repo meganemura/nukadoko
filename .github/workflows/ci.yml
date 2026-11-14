@@ -193,3 +193,25 @@ jobs:
       # typescript and once in the world ruby: what nuka itself does (its
       # targets, --tag, --env), which a case's expected.json cannot hold.
       - run: node conformance/run-engine.mjs
+
+  # The Ruby engine's own types: rbs-inline writes sig/generated from lib/'s
+  # comments, the committed copy must be that output, and Steep checks lib/
+  # against it. Steep logs a FATAL or ERROR line and skips the code it could
+  # not read while still exiting 0, so such a line fails the job too.
+  ruby-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+          working-directory: ruby
+      - run: bundle exec rbs-inline --output=sig/generated lib
+        working-directory: ruby
+      - run: git add --intent-to-add sig && git diff --exit-code sig
+        working-directory: ruby
+      - run: bundle exec steep check 2>&1 | tee steep.log; test "${PIPESTATUS[0]}" -eq 0 && ! grep -qE ': (FATAL|ERROR): \[Steep' steep.log
+        working-directory: ruby
+        shell: bash

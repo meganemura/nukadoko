@@ -1,0 +1,62 @@
+# Generated from lib/nukadoko/text_fit.rb with RBS::Inline
+
+# `fits-text`, as the TypeScript engine judges it: an expected text fits an
+# actual one line by line, where a line that is exactly `...` takes any run
+# of actual lines, `[..]` any characters inside one line, and `[..:name]`
+# does too, and then every stand-in of one name must have read one text and
+# two names two texts. The judge and the claim line both read this module,
+# so the two never disagree about where a text stopped fitting. It walks
+# the expected lines once and keeps only the actual lines each one can end
+# before, so a text costs time in its length rather than a power of its
+# `...` lines.
+module Nukadoko
+  module Engine
+    module TextFit
+      ANY_LINES: ::String
+
+      STAND_IN_NAME: ::Regexp
+
+      # An expected line split at its stand-ins: the fixed texts, and the
+      # place of each named stand-in among them.
+      class Fixed < Data
+        attr_reader parts(): untyped
+
+        attr_reader names(): untyped
+
+        def self.new: (untyped parts, untyped names) -> instance
+                    | (parts: untyped, names: untyped) -> instance
+
+        def self.members: () -> [ :parts, :names ]
+
+        def members: () -> [ :parts, :names ]
+      end
+
+      # A `[..` that `]`, or `:`, a name, and `]`, do not follow is text.
+      def self?.fixed_line: (untyped line) -> untyped
+
+      # A text's lines, at "\n" or "\r\n", with one final empty line dropped.
+      def self?.lines: (untyped text) -> untyped
+
+      # Each part between the first and the last is found leftmost after
+      # the one before it, which is enough when a stand-in takes anything.
+      def self?.parts_fit: (untyped parts, untyped line, ?untyped reads) -> untyped
+
+      def self?.line_fits: (untyped pattern, untyped line) -> untyped
+
+      # { fits: true }, or where the text stopped fitting: `fitted` expected
+      # lines fit, `expected` fit nothing from actual line `at` on, which is
+      # `actual`; or `readings`, the two named stand-ins that disagree.
+      def self?.fit: (untyped actual, untyped expected) -> untyped
+
+      # The actual line each expected line takes in the first way the text
+      # fits, each `...` taking as few lines as it can from the top: a walk
+      # from the end learns which lines the rest can start at.
+      def self?.first_fit: (untyped have, untyped want) -> untyped
+
+      def self?.names_fit: (untyped have, untyped want, untyped taken) -> untyped
+
+      # Whether an expected text states nothing beyond its stand-ins.
+      def self?.only_stand_ins?: (untyped expected) -> untyped
+    end
+  end
+end

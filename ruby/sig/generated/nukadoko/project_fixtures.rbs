@@ -1,0 +1,50 @@
+# Generated from lib/nukadoko/project_fixtures.rb with RBS::Inline
+
+# Fixtures a project declares in nukadoko.config.rb. A fixture block gets
+# `use` and calls it with the value; whatever follows that call is the
+# teardown, as with Playwright's `use()`. The block runs in a Fiber, so the
+# teardown waits until the scope ends, and runs whether the steps passed.
+#
+#   Nukadoko.fixture(:store) { |use| use.(Signup::Store.new) }
+#   Nukadoko.fixture(:db, scope: :process) { |use, env:| db = connect(env); use.(db); db.close }
+module Nukadoko
+  class Fixture < Data
+    attr_reader name(): Symbol
+
+    attr_reader scope(): Symbol
+
+    attr_reader block(): Proc
+
+    def self.new: (Symbol name, Symbol scope, Proc block) -> instance
+                | (name: Symbol, scope: Symbol, block: Proc) -> instance
+
+    def self.members: () -> [ :name, :scope, :block ]
+
+    def members: () -> [ :name, :scope, :block ]
+  end
+
+  class Fixture
+    def dependencies: () -> untyped
+  end
+
+  # : (Symbol | String, ?scope: :scenario | :process) { (^(untyped) -> void, **untyped) -> void } -> Fixture
+  def self.fixture: (Symbol | String, ?scope: :scenario | :process) { (^(untyped) -> void, **untyped) -> void } -> Fixture
+
+  def self.project_fixtures: () -> untyped
+
+  module Engine
+    # One scope's built fixtures, torn down in reverse build order.
+    class FixtureCache
+      def initialize: () -> untyped
+
+      def key?: (untyped name) -> untyped
+
+      def []: (untyped name) -> untyped
+
+      def build: (untyped fixture, untyped deps) -> untyped
+
+      # Every teardown runs; the first failure is raised after the rest.
+      def teardown: () -> untyped
+    end
+  end
+end

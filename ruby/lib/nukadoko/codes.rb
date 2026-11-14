@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "json"
 
@@ -9,7 +10,7 @@ require "json"
 module Nukadoko
   module Engine
     module Codes
-      ALL = JSON.parse(File.read(File.join(__dir__, "codes.json"), encoding: "UTF-8")).freeze
+      ALL = JSON.parse(File.read(File.join(__dir__.to_s, "codes.json"), encoding: "UTF-8")).freeze
 
       def self.fix(code) = ALL.dig(code, "fix")
     end

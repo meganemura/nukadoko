@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "cucumber/cucumber_expressions/cucumber_expression"
 require "cucumber/cucumber_expressions/parameter_type_registry"

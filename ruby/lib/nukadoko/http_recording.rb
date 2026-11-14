@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "net/http"
 
@@ -12,6 +13,7 @@ require "net/http"
 module Nukadoko
   module Engine
     module HttpRecording
+      #: [T] (Array[untyped]) { () -> T } -> T
       def self.collect(log)
         Thread.current[:nukadoko_http] = log
         yield
@@ -20,6 +22,7 @@ module Nukadoko
       end
 
       # Net::HTTP as the engine's own code calls it, recording nothing.
+      #: [T] () { () -> T } -> T
       def self.unrecorded
         was = Thread.current[:nukadoko_http_off]
         Thread.current[:nukadoko_http_off] = true
@@ -30,6 +33,7 @@ module Nukadoko
 
       # Prepended to Net::HTTP. `request` calls itself once more when the
       # connection was not started, so only the outermost call records.
+      # @rbs module-self Net::HTTP
       module Patch
         def request(req, body = nil, &block)
           log = Thread.current[:nukadoko_http]

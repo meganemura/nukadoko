@@ -1,0 +1,20 @@
+# Generated from lib/nukadoko/vocabulary.rb with RBS::Inline
+
+# What `nuka steps` and `nuka describe` print: each step as data, in the
+# fields the TypeScript engine prints, so an agent picks a step from either
+# engine's vocabulary without opening a file.
+module Nukadoko
+  module Vocabulary
+    BROWSER: untyped
+
+    def self.entry: (untyped step, untyped project) -> untyped
+
+    def self.describe: (untyped step, untyped project) -> untyped
+
+    def self.from: (untyped step) -> untyped
+
+    def self.text: (untyped step) -> untyped
+
+    def self.claim_text: (untyped claim) -> untyped
+  end
+end

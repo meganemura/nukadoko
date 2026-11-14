@@ -1,0 +1,118 @@
+# Generated from lib/nukadoko/schema.rb with RBS::Inline
+
+# One declaration of a step's args or returns gives three things: the check
+# a value must pass at run time, the RBS a Steep user checks the step body
+# against, and the Data class the body receives. A type is a symbol for a
+# scalar, `[:array, type]` for a list, or a nested Schema for an object.
+module Nukadoko
+  class Schema
+    class Field < Data
+      attr_reader name(): untyped
+
+      attr_reader type(): untyped
+
+      attr_reader description(): untyped
+
+      def self.new: (untyped name, untyped type, untyped description) -> instance
+                  | (name: untyped, type: untyped, description: untyped) -> instance
+
+      def self.members: () -> [ :name, :type, :description ]
+
+      def members: () -> [ :name, :type, :description ]
+    end
+
+    # : () ?{ () [self: Schema] -> void } -> Schema
+    def self.build: () ?{ () [self: Schema] -> void } -> Schema
+
+    attr_reader fields: untyped
+
+    def initialize: (?untyped fields) -> untyped
+
+    # `null: true` lets the value be nil as well, as zod's `.nullable()` does.
+    # : (Symbol, ?String?, ?null: bool) -> void
+    def string: (Symbol, ?String?, ?null: bool) -> void
+
+    # : (Symbol, ?String?, ?null: bool) -> void
+    def boolean: (Symbol, ?String?, ?null: bool) -> void
+
+    # : (Symbol, ?String?, ?null: bool) -> void
+    def integer: (Symbol, ?String?, ?null: bool) -> void
+
+    # : (Symbol, ?String?, ?null: bool) -> void
+    def number: (Symbol, ?String?, ?null: bool) -> void
+
+    # : (Symbol, ?String?) -> void
+    def unknown: (Symbol, ?String?) -> void
+
+    # : (Symbol, Array[String | Symbol], ?String?, ?null: bool) -> void
+    def enum: (Symbol, Array[String | Symbol], ?String?, ?null: bool) -> void
+
+    # : (Symbol, ?String?, ?null: bool) -> void
+    def strings: (Symbol, ?String?, ?null: bool) -> void
+
+    # : (Symbol, ?String?, ?null: bool) -> void
+    def table: (Symbol, ?String?, ?null: bool) -> void
+
+    # : (Symbol, ?String?, ?null: bool) { () [self: Schema] -> void } -> void
+    def object: (Symbol, ?String?, ?null: bool) { () [self: Schema] -> void } -> void
+
+    # Reuses a field another step declared, so two contracts that must agree
+    # on one shape are written once: `field :created, AnItemExists.returns[:body]`.
+    # : (Symbol, Field, ?String?) -> void
+    def field: (Symbol, Field, ?String?) -> void
+
+    # : (Symbol | String) -> Field?
+    def []: (Symbol | String) -> Field?
+
+    def without: (untyped names) -> untyped
+
+    def data_class: () -> untyped
+
+    def load: (untyped hash) -> untyped
+
+    # Every way `value` departs from the schema, as `path: problem` lines.
+    # A key the schema does not declare is no problem: as a zod object does,
+    # the schema drops it (`strip`), and `dropped` names where.
+    def problems: (untyped value, ?untyped path) -> untyped
+
+    # The value with every key the schema does not declare left out, at any
+    # depth, with string keys. Assumes `problems` found none.
+    def strip: (untyped value) -> untyped
+
+    def self.strip_type: (untyped type, untyped value) -> untyped
+
+    # The paths of the keys `strip` leaves out, so a record can say what the
+    # step returned and the contract did not keep.
+    def dropped: (untyped value, ?untyped path) -> untyped
+
+    # The keys the schema dropped, one entry per place that dropped any:
+    # `at` is the place as its keys and indexes, as the TypeScript engine's
+    # `returns_dropped` names it.
+    def drops: (untyped value, ?untyped at) -> untyped
+
+    def self.drops_type: (untyped type, untyped value, untyped at) -> untyped
+
+    def self.dropped_type: (untyped type, untyped value, untyped path) -> untyped
+
+    def self.type_problems: (untyped type, untyped value, untyped path) -> untyped
+
+    # The JSON Schema `nuka describe` prints, as zod's own conversion gives it:
+    # the root is closed, and an inner object is closed only on the output
+    # side (`returns`), where zod drops the keys it does not declare.
+    def json_schema: (?root: untyped, ?output: untyped) -> untyped
+
+    def self.json_type: (untyped type, ?untyped output) -> untyped
+
+    def rbs_fields: () -> untyped
+
+    def rbs_record: () -> untyped
+
+    def self.rbs_type: (untyped type) -> untyped
+
+    private
+
+    def add: (untyped name, untyped type, untyped description, ?untyped null) -> untyped
+
+    def join: (untyped path, untyped name) -> untyped
+  end
+end

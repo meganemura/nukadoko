@@ -1,0 +1,11 @@
+# Generated from lib/nukadoko.rb with RBS::Inline
+
+module Nukadoko
+  def self.program: (**untyped options) -> untyped
+
+  def self.program_options: () -> untyped
+
+  def self.config: (**untyped options) -> untyped
+
+  def self.config_options: () -> untyped
+end

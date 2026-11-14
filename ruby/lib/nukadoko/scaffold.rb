@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "fileutils"
 require "prism"
@@ -424,6 +425,7 @@ module Nukadoko
 
       private
 
+      #: (String) { (String) -> boolish } -> String
       def distinct(base)
         return base unless yield(base)
 

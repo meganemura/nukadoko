@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # What `check` can say without running anything: every finding follows from
 # the step classes, their patterns and schemas, `Method#parameters`, and the
@@ -6,7 +7,12 @@
 # conformance cases judges both engines.
 module Nukadoko
   module Engine
-    Finding = Data.define(:severity, :code, :file, :line, :step, :message, :fix) do
+    Finding = Data.define(:severity, :code, :file, :line, :step, :message, :fix)
+
+    # A Data block's methods are its own, but rbs-inline reads only a class
+    # body, so they are written in one.
+    class Finding
+      #: (String, String, singleton(Step), String, String?) -> Finding
       def self.about_step(severity, code, step, message, fix)
         new(severity, code, step.file, step.line, step.step_name, message, fix)
       end
@@ -493,9 +499,10 @@ module Nukadoko
             case matches.size
             when 0 then undefined << [scenario, line]
             when 1
-              check_fill(scenario, line, *matches.first)
-              check_position(scenario, line, matches.first.first)
-              check_kinds(scenario, line, *matches.first)
+              step, captures = matches.first
+              check_fill(scenario, line, step, captures)
+              check_position(scenario, line, step)
+              check_kinds(scenario, line, step, captures)
             else
               findings << Finding.new("error", "ambiguous-step", scenario.uri, line.line, nil,
                                       %("#{line.text}" matches more than one step: #{matches.map { _1.first.step_name }.join(", ")}), Codes.fix("ambiguous-step"))
@@ -621,6 +628,7 @@ module Nukadoko
       end
     end
 
+    #: (Array[singleton(Step)], String) -> Array[[singleton(Step), Hash[String, untyped]]]
     def self.matches(steps, text)
       steps.filter_map { |step| step.pattern && (captures = Pattern.new(step.pattern).match(text)) && [step, captures] }
     end

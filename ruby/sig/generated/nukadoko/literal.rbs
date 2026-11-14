@@ -1,0 +1,63 @@
+# Generated from lib/nukadoko/literal.rb with RBS::Inline
+
+# The literal rule, as the TypeScript engine reads it. A literal expected
+# value is in neither the sentence's data nor an earlier step's result, so
+# it would let step code carry the criterion again ("the command succeeds"
+# claiming 0). It is allowed only when the sentence states it: its text is
+# a run of the pattern's fixed words joined by one space, a whole number
+# from zero to twelve a fixed word spells (or once and twice), or the fixed
+# value of a word in WORDS. A word inside a capture, an optional group, or
+# an alternation is not fixed, since the sentence a line binds may not say
+# it. A value WORDS fixes is compared with equal alone, or with not-equal
+# right after "not", "neither", or "nor".
+module Nukadoko
+  module Engine
+    module Literal
+      class Statement < Data
+        attr_reader words(): untyped
+
+        attr_reader by_table(): untyped
+
+        attr_reader compare(): untyped
+
+        attr_reader negated_by(): untyped
+
+        def self.new: (untyped words, untyped by_table, untyped compare, untyped negated_by) -> instance
+                    | (words: untyped, by_table: untyped, compare: untyped, negated_by: untyped) -> instance
+
+        def self.members: () -> [ :words, :by_table, :compare, :negated_by ]
+
+        def members: () -> [ :words, :by_table, :compare, :negated_by ]
+      end
+
+      WORDS: untyped
+
+      NUMBERS: untyped
+
+      TIMES: untyped
+
+      NEGATING: untyped
+
+      EDGE: ::Regexp
+
+      # Every word of the pattern, with whether a matching sentence always holds it.
+      def self?.words: (untyped pattern) -> untyped
+
+      def self?.text: (untyped literal) -> untyped
+
+      def self?.number_of: (untyped word) -> untyped
+
+      def self?.same?: (untyped a, untyped b) -> untyped
+
+      def self?.statement: (untyped pattern, untyped literal) -> untyped
+
+      def self?.run_of?: (untyped words, untyped text) -> untyped
+
+      # How every pattern states `literal`, or nil when one does not: a line
+      # may bind any of them, and the first pattern's words name it.
+      def self?.statement_of_all: (untyped patterns, untyped literal) -> untyped
+
+      def self?.stated_by_all: (untyped patterns, untyped literal) -> untyped
+    end
+  end
+end

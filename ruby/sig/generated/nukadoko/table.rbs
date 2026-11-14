@@ -1,0 +1,36 @@
+# Generated from lib/nukadoko/table.rb with RBS::Inline
+
+# The run's verdict table: a row per criterion (a scenario, or an Examples
+# row), a cell per environment. A cell is `required` where its environment
+# meets the row's condition tags and a `control` elsewhere. Only a control
+# that fails at a Then, the same way, in every proof run proves a row.
+module Nukadoko
+  module Engine
+    module Table
+      PROOF_RUNS: ::Integer
+
+      # : (Integer) -> Integer
+      def self.proof_runs=: (Integer) -> Integer
+
+      # : () -> Integer
+      def self.proof_runs: () -> Integer
+
+      def self.role: (untyped tags, untyped conditions) -> untyped
+
+      # What a cell's executions came to. An execution is `[:pass]`,
+      # `[:fail, line, claim]`, or `[:broke, line]`.
+      def self.cell: (untyped executions) -> untyped
+
+      def self.verdict: (untyped cells) -> untyped
+
+      def self.condition_tags: (untyped tags) -> untyped
+
+      # The tags a row lists: its condition tags and @held, as written.
+      def self.row_tags: (untyped tags) -> untyped
+
+      # For each condition the tags name, the value the environment declares
+      # for it, or nil: what a cell's role came from.
+      def self.conditions_of: (untyped tags, untyped conditions) -> untyped
+    end
+  end
+end

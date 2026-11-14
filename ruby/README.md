@@ -68,5 +68,6 @@ Nukadoko.program serve: { command: "bin/rails server -p {port}", ready: "/up" }
 - `bundle install` in this directory.
 - `bundle exec ruby ../conformance/run-rb.rb` runs every conformance case under this engine.
 - `bundle exec bin/test` runs the unit tests and the Hegel property tests under `test/hegel/`. The gem needs Ruby 3.4 or later.
+- `bundle exec rbs-inline --output=sig/generated lib` writes the signatures from the `#:` and `# @rbs` comments in `lib/`, and `bundle exec steep check` checks `lib/` against them. Commit what rbs-inline writes. `sig/nukadoko.rbs` holds what rbs-inline cannot write, and `sig-deps/` the parts of other gems that ship no signature.
 
 [日本語](README.ja.md)

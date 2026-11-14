@@ -1,0 +1,112 @@
+# Generated from lib/nukadoko/claim_line.rb with RBS::Inline
+
+# One claim record as one line of plain text, in the words the TypeScript
+# engine uses: the step's failure message and the run summary read it, so
+# the two never describe one claim differently. It reads a record already
+# written and judges nothing. Where two values part under `equal` or
+# `has-same-items`, it names the place or the items they do not share.
+module Nukadoko
+  module Engine
+    module ClaimLine
+      # A value longer than this is cut in a line; the record keeps it whole.
+      VALUE_TEXT_LIMIT: ::Integer
+
+      DIFFERENCE_CONTEXT: ::Integer
+
+      ITEM_PAIRS_LIMIT: ::Integer
+
+      LISTED_ITEMS: ::Integer
+
+      def self?.value_text: (untyped value) -> untyped
+
+      def self?.expected_text: (untyped record) -> untyped
+
+      def self?.comparison_text: (untyped record) -> untyped
+
+      def self?.item_declaration_text: (untyped entry) -> untyped
+
+      def self?.item_count: (untyped count) -> untyped
+
+      def self?.each_text: (untyped record) -> untyped
+
+      def self?.each?: (untyped record) -> untyped
+
+      def self?.claim_text: (untyped record) -> untyped
+
+      def self?.plain_object?: (untyped value) -> untyped
+
+      def self?.same_json?: (untyped a, untyped b) -> untyped
+
+      # The first place two JSON values differ: a path of keys and indexes,
+      # and what each side holds there, :none for a side with nothing.
+      # : (untyped, untyped, Array[String]) -> [Array[String], untyped, untyped]?
+      def self?.difference_in: (untyped, untyped, Array[String]) -> [ Array[String], untyped, untyped ]?
+
+      def self?.side_text: (untyped value) -> untyped
+
+      def self?.text_difference: (untyped actual, untyped expected) -> untyped
+
+      def self?.equal_difference: (untyped actual, untyped expected) -> untyped
+
+      def self?.difference_at: (untyped path, untyped actual, untyped expected) -> untyped
+
+      def self?.same?: (untyped a, untyped b) -> untyped
+
+      def self?.shared_ends: (untyped actual, untyped expected) -> untyped
+
+      def self?.unpaired_items: (untyped actual, untyped expected) -> untyped
+
+      # The items a longest run of equal items, in order, leaves out, so an
+      # inserted item is one extra item and not a change to every one after it.
+      def self?.aligned_items: (untyped actual, untyped expected) -> untyped
+
+      def self?.listed_items: (untyped indexes, untyped items) -> untyped
+
+      def self?.unshared_text: (untyped unshared, untyped actual, untyped expected) -> untyped
+
+      def self?.changed_text: (untyped changed, untyped actual, untyped expected) -> untyped
+
+      def self?.list_difference: (untyped actual, untyped expected, untyped first) -> untyped
+
+      def self?.same_items_difference: (untyped actual, untyped expected) -> untyped
+
+      # The first expected field a broken has-fields claim's object lacks or
+      # holds another value at, found by the matcher that judged it.
+      def self?.fields_difference: (untyped actual, untyped expected) -> untyped
+
+      # How far a broken fits-text claim's text fit, and the line where it
+      # stopped, or the two named stand-ins that broke it.
+      def self?.fits_difference: (untyped actual, untyped expected) -> untyped
+
+      def self?.readings_difference: (untyped first, untyped after) -> untyped
+
+      # The field a broken lacks-field claim's object holds, with its value,
+      # since a long object may not show it and a null reads as absent.
+      def self?.present_field_difference: (untyped actual, untyped expected) -> untyped
+
+      DIFFERENCES: untyped
+
+      def self?.difference_text: (untyped record) -> untyped
+
+      def self?.reason_text: (untyped record) -> untyped
+
+      def self?.named_outcome: (untyped record) -> untyped
+
+      def self?.named_item: (untyped record) -> untyped
+
+      def self?.item_claim_text: (untyped claim) -> untyped
+
+      def self?.item_name: (untyped item) -> untyped
+
+      # The claim and its outcome on one line. A broken each names its
+      # first broken item and that item's first broken comparison.
+      def self?.line: (untyped record) -> untyped
+
+      def self?.named_item_lines: (untyped record) -> untyped
+
+      # A claim step's failure: one line per claim that broke or was not
+      # judged, the first line naming the first one.
+      def self?.broken_claims_message: (untyped records) -> untyped
+    end
+  end
+end

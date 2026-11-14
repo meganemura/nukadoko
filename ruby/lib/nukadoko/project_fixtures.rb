@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # Fixtures a project declares in nukadoko.config.rb. A fixture block gets
 # `use` and calls it with the value; whatever follows that call is the
@@ -8,10 +9,17 @@
 #   Nukadoko.fixture(:store) { |use| use.(Signup::Store.new) }
 #   Nukadoko.fixture(:db, scope: :process) { |use, env:| db = connect(env); use.(db); db.close }
 module Nukadoko
-  Fixture = Data.define(:name, :scope, :block) do
+  Fixture = Data.define(
+    :name, #: Symbol
+    :scope, #: Symbol
+    :block, #: Proc
+  )
+
+  class Fixture
     def dependencies = block.parameters.filter_map { |kind, n| n if kind == :keyreq }
   end
 
+  #: (Symbol | String, ?scope: :scenario | :process) { (^(untyped) -> void, **untyped) -> void } -> Fixture
   def self.fixture(name, scope: :scenario, &block)
     raise ArgumentError, "scope is :scenario or :process, not #{scope.inspect}" unless %i[scenario process].include?(scope)
 
@@ -45,7 +53,7 @@ module Nukadoko
 
       # Every teardown runs; the first failure is raised after the rest.
       def teardown
-        failure = nil
+        failure = nil #: StandardError?
         @fibers.reverse_each do |fiber|
           fiber.resume if fiber.alive?
         rescue StandardError => e

@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "json"
 require "time"
@@ -37,7 +38,7 @@ module Nukadoko
       end
 
       def parse(text)
-        header = nil
+        header = nil #: Hash[String, untyped]?
         pending = {}
         # The calls nukadoko made for the judged view, and every call under them.
         own = {}

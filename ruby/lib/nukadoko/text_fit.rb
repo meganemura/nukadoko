@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # `fits-text`, as the TypeScript engine judges it: an expected text fits an
 # actual one line by line, where a line that is exactly `...` takes any run
@@ -84,9 +85,9 @@ module Nukadoko
         have = lines(actual)
         want_lines = lines(expected)
         want = want_lines.map { _1 == ANY_LINES ? nil : fixed_line(_1) }
-        reach = { at: [0] }
+        reach = { at: [0] } #: Hash[Symbol, untyped]
         want.each_with_index do |line, index|
-          earliest = reach[:from] || reach[:at][0]
+          earliest = reach[:from] || reach[:at][0] #: Integer
           if line.nil?
             reach = { from: earliest }
             next

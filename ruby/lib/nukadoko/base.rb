@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "digest"
 require "fileutils"
@@ -184,7 +185,7 @@ module Nukadoko
       def read_program(root)
         script = 'require "nukadoko"; load ARGV[0]; o = Nukadoko.program_options; ' \
                  'puts JSON.generate(environments: (o[:environments] || {}).to_h { |k, v| [k, { conditions: v[:conditions] }] }, defaultEnvironments: o[:defaultEnvironments])'
-        out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("..", __dir__), "-rjson", "-e", script, File.join(root, PROGRAM), chdir: root)
+        out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("..", __dir__.to_s), "-rjson", "-e", script, File.join(root, PROGRAM), chdir: root)
         return { problem: err.lines.first.to_s.strip } unless status.success?
 
         program = JSON.parse(out, symbolize_names: true)

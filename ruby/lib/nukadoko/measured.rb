@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # The `measured` of each claim record: which recorded channel of which step
 # record holds exactly the raw value the claim read, as the TypeScript

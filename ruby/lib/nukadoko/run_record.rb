@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "open3"
 require "tmpdir"
@@ -95,7 +96,7 @@ module Nukadoko
 
       def reading_value(value)
         text = JSON.generate(value)
-        text.bytesize <= READING_MAX_BYTES ? { value: value } : { json_start: text.byteslice(0, READING_MAX_BYTES).scrub(""), json_bytes: text.bytesize }
+        text.bytesize <= READING_MAX_BYTES ? { value: value } : { json_start: text.byteslice(0, READING_MAX_BYTES).to_s.scrub(""), json_bytes: text.bytesize }
       end
 
       # Why a poll whose claim broke stopped, on the failure's first line,

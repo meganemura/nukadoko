@@ -1,0 +1,84 @@
+# Generated from lib/nukadoko/program.rb with RBS::Inline
+
+# How the program under test starts, once per environment: an environment
+# is a world of its own, with its own port, directory, and process, so one
+# environment's state never reaches another's scenarios.
+module Nukadoko
+  module Engine
+    class Environment < Data
+      attr_reader name(): untyped
+
+      attr_reader conditions(): untyped
+
+      attr_reader env(): untyped
+
+      def self.new: (untyped name, untyped conditions, untyped env) -> instance
+                  | (name: untyped, conditions: untyped, env: untyped) -> instance
+
+      def self.members: () -> [ :name, :conditions, :env ]
+
+      def members: () -> [ :name, :conditions, :env ]
+    end
+
+    class Program
+      def initialize: (untyped options) -> untyped
+
+      # The worlds a run starts: each --env in the order given; without one,
+      # defaultEnvironments in its order, else every environment that
+      # declares conditions, else the top level under the name default.
+      # default is always a name, whether or not the file defines it.
+      def environments: (?untyped selected) -> untyped
+
+      # Whether a program file gave any options, so each step names its world.
+      def file?: () -> untyped
+
+      def declared: () -> untyped
+
+      def environment: (untyped name) -> untyped
+
+      def default_names: () -> untyped
+
+      # Why a run without --env starts the environments it starts.
+      def chosen_by: () -> untyped
+
+      def start: (untyped environment, untyped dir, untyped project) -> untyped
+
+      private
+
+      def placeholders: (untyped text, untyped port, untyped dir, untyped environment) -> untyped
+    end
+
+    # A started program: where it answers, its env, the prefix of every
+    # trace id its steps carry, and its log. `timings` gains stop_ms at its stop.
+    class World < Data
+      attr_reader base_url(): String
+
+      attr_reader pid(): Integer?
+
+      attr_reader log(): File?
+
+      attr_reader env(): Hash[String, String]
+
+      attr_reader trace_prefix(): String
+
+      attr_reader log_path(): String?
+
+      attr_reader commands(): Array[Hash[Symbol, untyped]]
+
+      attr_reader timings(): Hash[Symbol, Integer]
+
+      def self.new: (String base_url, Integer? pid, File? log, Hash[String, String] env, String trace_prefix, String? log_path, Array[Hash[Symbol, untyped]] commands, Hash[Symbol, Integer] timings) -> instance
+                  | (base_url: String, pid: Integer?, log: File?, env: Hash[String, String], trace_prefix: String, log_path: String?, commands: Array[Hash[Symbol, untyped]], timings: Hash[Symbol, Integer]) -> instance
+
+      def self.members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings ]
+
+      def members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings ]
+    end
+
+    class World
+      def wait_ready: (untyped path) -> untyped
+
+      def stop: () -> untyped
+    end
+  end
+end

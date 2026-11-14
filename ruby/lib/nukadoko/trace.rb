@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "securerandom"
 require "uri"
@@ -70,6 +71,7 @@ module Nukadoko
       # The step that runs now, kept per thread as the processes are.
       def self.current = Thread.current[:nukadoko_trace]
 
+      #: [T] (Boundary) { () -> T } -> T
       def self.within(boundary)
         Thread.current[:nukadoko_trace] = boundary
         yield
@@ -203,6 +205,7 @@ module Nukadoko
 
         # A line still being written, after the last newline, is left for
         # the next read.
+        #: () { (String) -> void } -> void
         def each_new_line
           size = File.size?(@path).to_i
           return if size <= @offset
@@ -210,7 +213,7 @@ module Nukadoko
           chunk = File.binread(@path, size - @offset, @offset)
           stop = chunk.rindex("\n") or return
           @offset += stop + 1
-          chunk.byteslice(0, stop).force_encoding("UTF-8").scrub.split("\n", -1).each { yield _1 }
+          chunk.byteslice(0, stop).to_s.force_encoding("UTF-8").scrub.split("\n", -1).each { yield _1 }
         rescue SystemCallError
           nil
         end

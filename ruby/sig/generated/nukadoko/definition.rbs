@@ -1,0 +1,26 @@
+# Generated from lib/nukadoko/definition.rb with RBS::Inline
+
+# What the TypeScript engine's defineStep refuses when a step file loads:
+# a claim or a poll that could only be judged one way, or that would let a
+# line fill the value a claim measures. The Ruby engine reads the same
+# declarations after loading, and check reports each as the TypeScript
+# engine does, as step-file-import-failed, so the step leaves the vocabulary.
+module Nukadoko
+  module Engine
+    class Definition
+      def initialize: (untyped step) -> untyped
+
+      def problems: () -> untyped
+
+      private
+
+      def claim_problems: () -> untyped
+
+      def actual_problems: (untyped label, untyped claim) -> untyped
+
+      def expected_problems: (untyped label, untyped claim) -> untyped
+
+      def poll_problems: () -> untyped
+    end
+  end
+end

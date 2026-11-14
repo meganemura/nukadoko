@@ -1,0 +1,28 @@
+# Generated from lib/nukadoko/http_recording.rb with RBS::Inline
+
+# Requests a step sends through Net::HTTP itself, without the `request`
+# fixture, measured as the TypeScript engine measures a step's own `fetch`:
+# each lands in the step's http.jsonl with `via: "net/http"`, and one to
+# the world's origin carries the step's traceparent. It records only while
+# a step runs, on the thread that runs it, so a fixture's setup, the
+# engine's own readiness check, and the `request` fixture (which records
+# its requests itself) go through Net::HTTP untouched.
+module Nukadoko
+  module Engine
+    module HttpRecording
+      # : [T] (Array[untyped]) { () -> T } -> T
+      def self.collect: [T] (Array[untyped]) { () -> T } -> T
+
+      # Net::HTTP as the engine's own code calls it, recording nothing.
+      # : [T] () { () -> T } -> T
+      def self.unrecorded: [T] () { () -> T } -> T
+
+      # Prepended to Net::HTTP. `request` calls itself once more when the
+      # connection was not started, so only the outermost call records.
+      # @rbs module-self Net::HTTP
+      module Patch : Net::HTTP
+        def request: (untyped req, ?untyped body) ?{ (?) -> untyped } -> untyped
+      end
+    end
+  end
+end

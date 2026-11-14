@@ -90,3 +90,7 @@ Nukadoko.program serve: { command: "bin/rails server -p {port}", ready: "/up" }
 - このディレクトリで `bundle install` を実行します。
 - `bundle exec ruby ../conformance/run-rb.rb` で、すべての検査ケースをこのエンジンで走らせます。
 - `bundle exec bin/test` で単体テストと、`test/hegel/` の Hegel の性質テストを走らせます。gem には Ruby 3.4 以上が要ります。
+- `bundle exec rbs-inline --output=sig/generated lib` で、`lib/` の `#:` と `# @rbs` のコメントから型の定義を書き出します。
+  `bundle exec steep check` で、`lib/` をその定義で検査します。
+  rbs-inline が書き出したものはコミットします。
+  `sig/nukadoko.rbs` には rbs-inline が書けないものを、`sig-deps/` には型の定義を持たない gem の、使っている部分を書きます。

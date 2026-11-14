@@ -1,0 +1,36 @@
+# Generated from lib/nukadoko/measured.rb with RBS::Inline
+
+# The `measured` of each claim record: which recorded channel of which step
+# record holds exactly the raw value the claim read, as the TypeScript
+# engine names it. A claim on a `from` value looks in the record of the step
+# that returned it; any other looks in the claim step's own channels. The
+# channels are a process's stdout, stderr, and exit code, an HTTP
+# response's status and body, and a changed file's content. A number
+# channel matches only a number, and a number another channel of the record
+# also holds names no channel: content alone cannot tell which one the value
+# came from, and nil says less than a source that may be false. So does any
+# value while a channel's content is unknown. It is information for a
+# reader, never a condition of the claim.
+module Nukadoko
+  module Engine
+    module Measured
+      # Every channel of a step record, in record order: processes, then
+      # HTTP responses, then files. A channel whose content is not on disk
+      # whole is unknown.
+      def self?.channels: (untyped dir, untyped observed, untyped http) -> untyped
+
+      def self?.kept: (untyped channel, untyped text) -> untyped
+
+      def self?.read: (untyped path) -> untyped
+
+      # The channel of `record_id` that holds `raw`, or nil; `skip` is a
+      # channel the other side already matched.
+      def self?.channel_for: (untyped record_id, untyped raw, untyped channels_of, ?untyped skip) -> untyped
+
+      def self?.same?: (untyped raw, untyped channel) -> untyped
+
+      # Whether a channel holds `n` as a number of its own, not as part of another.
+      def self?.holds_number?: (untyped channel, untyped number) -> untyped
+    end
+  end
+end

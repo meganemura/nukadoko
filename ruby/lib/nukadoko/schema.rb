@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # One declaration of a step's args or returns gives three things: the check
 # a value must pass at run time, the RBS a Steep user checks the step body
@@ -8,9 +9,10 @@ module Nukadoko
   class Schema
     Field = Data.define(:name, :type, :description)
 
+    #: () ?{ () [self: Schema] -> void } -> Schema
     def self.build(&block)
       schema = new
-      schema.instance_eval(&block) if block
+      schema.instance_exec(&block) if block
       schema
     end
 
@@ -21,20 +23,31 @@ module Nukadoko
     end
 
     # `null: true` lets the value be nil as well, as zod's `.nullable()` does.
+    #: (Symbol, ?String?, ?null: bool) -> void
     def string(name, description = nil, null: false) = add(name, :string, description, null)
+    #: (Symbol, ?String?, ?null: bool) -> void
     def boolean(name, description = nil, null: false) = add(name, :boolean, description, null)
+    #: (Symbol, ?String?, ?null: bool) -> void
     def integer(name, description = nil, null: false) = add(name, :integer, description, null)
+    #: (Symbol, ?String?, ?null: bool) -> void
     def number(name, description = nil, null: false) = add(name, :number, description, null)
+    #: (Symbol, ?String?) -> void
     def unknown(name, description = nil) = add(name, :unknown, description)
+    #: (Symbol, Array[String | Symbol], ?String?, ?null: bool) -> void
     def enum(name, values, description = nil, null: false) = add(name, [:enum, values.map(&:to_s)], description, null)
+    #: (Symbol, ?String?, ?null: bool) -> void
     def strings(name, description = nil, null: false) = add(name, [:array, :string], description, null)
+    #: (Symbol, ?String?, ?null: bool) -> void
     def table(name, description = nil, null: false) = add(name, [:array, [:array, :string]], description, null)
+    #: (Symbol, ?String?, ?null: bool) { () [self: Schema] -> void } -> void
     def object(name, description = nil, null: false, &block) = add(name, Schema.build(&block), description, null)
 
     # Reuses a field another step declared, so two contracts that must agree
     # on one shape are written once: `field :created, AnItemExists.returns[:body]`.
+    #: (Symbol, Field, ?String?) -> void
     def field(name, other, description = nil) = add(name, other.type, description || other.description)
 
+    #: (Symbol | String) -> Field?
     def [](name) = fields.find { _1.name == name.to_sym }
 
     def without(names) = Schema.new(fields.reject { names.include?(_1.name.to_s) })

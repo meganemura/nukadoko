@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # The `nuka` command. With --json it prints one envelope in the shape the
 # TypeScript engine prints, so an agent reads both engines the same way.

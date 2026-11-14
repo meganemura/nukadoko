@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # What `nuka steps` and `nuka describe` print: each step as data, in the
 # fields the TypeScript engine prints, so an agent picks a step from either

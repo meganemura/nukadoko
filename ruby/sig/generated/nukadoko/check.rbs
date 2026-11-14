@@ -1,0 +1,176 @@
+# Generated from lib/nukadoko/check.rb with RBS::Inline
+
+# What `check` can say without running anything: every finding follows from
+# the step classes, their patterns and schemas, `Method#parameters`, and the
+# feature files. The codes are the TypeScript engine's codes, so one set of
+# conformance cases judges both engines.
+module Nukadoko
+  module Engine
+    class Finding < Data
+      attr_reader severity(): untyped
+
+      attr_reader code(): untyped
+
+      attr_reader file(): untyped
+
+      attr_reader line(): untyped
+
+      attr_reader step(): untyped
+
+      attr_reader message(): untyped
+
+      attr_reader fix(): untyped
+
+      def self.new: (untyped severity, untyped code, untyped file, untyped line, untyped step, untyped message, untyped fix) -> instance
+                  | (severity: untyped, code: untyped, file: untyped, line: untyped, step: untyped, message: untyped, fix: untyped) -> instance
+
+      def self.members: () -> [ :severity, :code, :file, :line, :step, :message, :fix ]
+
+      def members: () -> [ :severity, :code, :file, :line, :step, :message, :fix ]
+    end
+
+    # A Data block's methods are its own, but rbs-inline reads only a class
+    # body, so they are written in one.
+    class Finding
+      # : (String, String, singleton(Step), String, String?) -> Finding
+      def self.about_step: (String, String, singleton(Step), String, String?) -> Finding
+
+      def to_h: () -> untyped
+    end
+
+    FIXTURES: untyped
+
+    class Check
+      attr_reader findings: untyped
+
+      attr_reader usable: untyped
+
+      # `environments` is the selection a run without --env starts, for
+      # condition-unmet; nil when --env named the selection. `problems` are
+      # what the feature loader found that runs nothing.
+      def initialize: (untyped steps, untyped scenarios, ?features: untyped, ?full: untyped, ?conditions: untyped, ?environments: untyped, ?problems: untyped) -> untyped
+
+      def passed?: () -> untyped
+
+      private
+
+      # A step whose definition cannot stand (an unknown claim compare) is left
+      # out of the vocabulary, as the TypeScript engine leaves out a step file
+      # that fails to import, so it can never match a line.
+      def definition_broken?: (untyped step) -> untyped
+
+      KEY: ::Regexp
+
+      # Why the step's pattern cannot be read, as the TypeScript engine says
+      # it: the first broken capture, then what cucumber-expressions refuses.
+      def pattern_problem: (untyped step) -> untyped
+
+      NUMBER_TYPES: untyped
+
+      STRING_TYPES: untyped
+
+      # A capture hands the step a number or a string, and an args field of
+      # the other kind can never hold it.
+      def capture_mismatches: (untyped step) -> untyped
+
+      def check_contract: (untyped step) -> untyped
+
+      # Two patterns that read the same once their names go would match the
+      # same lines; the later file is named, with every step that shares it.
+      def check_duplicate_patterns: () -> untyped
+
+      # A pattern no line binds alone has no place in a scenario; a placeholder
+      # description is what a person picking a step would read.
+      def check_unbound: () -> untyped
+
+      # A from key every line fills with a capture never takes its value
+      # from the producer it names.
+      def check_from_unused: () -> untyped
+
+      # A from key whose producer has not run before the line fails args
+      # validation with certainty, and two producers that both ran leave
+      # the feature file unable to say which one counts. A line before it
+      # that matches no step may be the producer misspelled, so those
+      # findings wait behind one warning.
+      def check_from_order: (untyped scenario) -> untyped
+
+      def from_missing_message: (untyped step_name, untyped key, untyped names, untyped resolved) -> untyped
+
+      def from_order_fix: (untyped issue) -> untyped
+
+      def hold_from_order: (untyped scenario, untyped held) -> untyped
+
+      SCENARIO_ONLY: untyped
+
+      # Fixture definitions that can never resolve, and (in a whole-project
+      # check) one no step reaches.
+      def check_fixtures: (untyped full) -> untyped
+
+      # A scenario whose condition tags no environment of the selection meets
+      # has no required cell, so nothing in the run shows that it holds.
+      def check_conditions_met: (untyped environments) -> untyped
+
+      def describe_conditions: (untyped conditions) -> untyped
+
+      CONDITION_NAME: ::Regexp
+
+      CONDITION_VALUE: ::Regexp
+
+      # The condition a tag names, nil for one that does not read.
+      def self.condition_of: (untyped tag) -> untyped
+
+      EXPECTED: untyped
+
+      EXPECTS_FORMS: ::String
+
+      # Why an @expects: tag accepts nothing, nil for one that reads.
+      def self.expects_problem: (untyped tag) -> untyped
+
+      def check_tags: (untyped conditions) -> untyped
+
+      # A cycle never closes into a fixture bag, and a read-only step cannot
+      # reach a part that writes: both can only end one way, so both are errors.
+      def check_parts: () -> untyped
+
+      # Each cycle once, named from the step whose walk first closed it.
+      def part_cycles: () -> untyped
+
+      # A scenario with steps of its own and no Then can never be judged on
+      # an outcome. The Background's steps count toward the Then.
+      def check_shapes: () -> untyped
+
+      def check_lines: () -> untyped
+
+      # A scenario whose Then lines each bind one step, none of them a claim
+      # step, passes whenever its steps run.
+      def judging_nothing: (untyped scenario) -> untyped
+
+      # While a step definition is broken, a line it would have matched looks
+      # undefined. Saying so would send the reader after the wrong fix, so the
+      # judgment waits for the broken definition, with one warning.
+      def suppress_undefined: (untyped undefined) -> untyped
+
+      KEYWORD: untyped
+
+      # Only a Then judges, so a claim step elsewhere and a step that runs in
+      # Then position are both mistakes.
+      def check_position: (untyped scenario, untyped line, untyped step) -> untyped
+
+      # The table or docstring fills the one required key no capture and no
+      # from speaks for, so zero or two such keys, or a key of a type the
+      # attachment can never be, fail binding with certainty.
+      def check_fill: (untyped scenario, untyped line, untyped step, untyped captures) -> untyped
+
+      # An is-a claim whose expected sentence key this line fills, through a
+      # capture, with a name that is no kind breaks on this line for certain.
+      # Only a plain string key read as it is or as text counts, so the value
+      # the claim reads is the captured text.
+      def check_kinds: (untyped scenario, untyped line, untyped step, untyped captures) -> untyped
+
+      def attachment_mismatch: (untyped step, untyped key, untyped line) -> untyped
+    end
+
+    # : (Array[singleton(Step)], String) -> Array[[singleton(Step), Hash[String, untyped]]]
+    def self.matches: (Array[singleton(Step)], String) -> Array[[ singleton(Step), Hash[String, untyped] ]]
+  end
+end

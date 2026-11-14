@@ -1,0 +1,40 @@
+# Generated from lib/nukadoko/tree_passes.rb with RBS::Inline
+
+# The base and the old world's passes of a `--base` run. Each row plans the
+# cells its verdict needs from its head cells (RunRecord.planned_world_cells),
+# and each tree runs its planned rows one environment at a time, in a
+# process of its own started in the tree: a step file is loaded into the
+# process that runs it, and head's steps are already loaded in this one.
+# The pass writes its step records into the head run's directory, and its
+# executions and cells come back as JSON. A cell whose pass did not run
+# says why.
+module Nukadoko
+  module Engine
+    class TreePasses
+      EXE: untyped
+
+      LIB: untyped
+
+      def initialize: (untyped base, untyped scenarios, untyped head_cells, untyped environments, untyped dir, untyped out) -> untyped
+
+      # The worlds each tree's passes started, as run.json names them.
+      attr_reader worlds: untyped
+
+      # Appends each tree execution to `executions`, and returns each row's
+      # base and old cells by its scenario.
+      def call: (untyped executions) -> untyped
+
+      private
+
+      def plan: (untyped scenario) -> untyped
+
+      # Where a tree runs a head row: at its own place in the base tree,
+      # which holds head's features, and at the ref's place in the old one.
+      def place: (untyped world, untyped scenario) -> untyped
+
+      def cell: (untyped scenario, untyped world, untyped environment, untyped found) -> untyped
+
+      def run_tree: (untyped world, untyped root, untyped environment, untyped rows) -> untyped
+    end
+  end
+end

@@ -7,3 +7,9 @@ gemspec
 # Development only, pinned exactly.
 gem "minitest", "5.25.5"
 gem "hegeltest", "0.5.2"
+
+# The type check of lib/ (rbs-inline writes sig/generated, Steep reads it).
+group :types do
+  gem "rbs-inline", "0.14.0", require: false
+  gem "steep", "2.1.0", require: false
+end

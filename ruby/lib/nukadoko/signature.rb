@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # The RBS of each step, written from the same declarations check reads, so a
 # project that runs Steep gets the body checked against its own contract:

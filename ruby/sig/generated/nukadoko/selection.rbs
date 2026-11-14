@@ -1,0 +1,72 @@
+# Generated from lib/nukadoko/selection.rb with RBS::Inline
+
+# Which scenarios a run executes: the targets on the command line (feature
+# files, `file:line` selections, directories) narrowed by `--tag`. A target
+# that names nothing runnable is refused before anything runs, with the
+# TypeScript engine's code for the same mistake, so a run never quietly
+# does less than its command line asked for.
+module Nukadoko
+  module Engine
+    class Refusal < StandardError
+      attr_reader code: untyped
+
+      attr_reader severity: untyped
+
+      # `fix` and `run` are this refusal's own way past it; without either,
+      # the code's registry fix and the command's --help stand in.
+      def initialize: (untyped code, untyped message, ?severity: untyped, ?fix: untyped, ?run: untyped) -> untyped
+
+      # A refusal stops before anything runs (exit 2); a selection that kept
+      # no scenario ran and found nothing to do (exit 1).
+      def exit_code: () -> untyped
+
+      def to_h: (?untyped command) -> untyped
+    end
+
+    class Selection
+      TAG: ::Regexp
+
+      # `whole_files` are the files a target named whole and --tag left
+      # whole, which a rerun line may name as a file.
+      attr_reader scenarios: untyped
+
+      # `whole_files` are the files a target named whole and --tag left
+      # whole, which a rerun line may name as a file.
+      attr_reader selection: untyped
+
+      # `whole_files` are the files a target named whole and --tag left
+      # whole, which a rerun line may name as a file.
+      attr_reader tag_selection: untyped
+
+      # `whole_files` are the files a target named whole and --tag left
+      # whole, which a rerun line may name as a file.
+      attr_reader whole_files: untyped
+
+      # `whole_files` are the files a target named whole and --tag left
+      # whole, which a rerun line may name as a file.
+      attr_reader problems: untyped
+
+      def initialize: (untyped project, untyped targets, untyped tags, ?features_dir: untyped) -> untyped
+
+      SHELL_SAFE: ::Regexp
+
+      # A word as a POSIX shell reads it back: as it is when it holds no
+      # character the shell treats apart, otherwise in single quotes.
+      def self.shell_word: (untyped word) -> untyped
+
+      private
+
+      def parse_tag: (untyped expression) -> untyped
+
+      def add: (untyped target, untyped whole, untyped lines) -> untyped
+
+      # Every .feature file below dir, skipping node_modules and any directory
+      # whose name starts with a dot, as step discovery skips them.
+      def walk: (untyped dir) -> untyped
+
+      # Two spellings of one file are one file: a target is named by its real
+      # path relative to the project, so it is selected once.
+      def relative: (untyped absolute) -> untyped
+    end
+  end
+end

@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # The literal rule, as the TypeScript engine reads it. A literal expected
 # value is in neither the sentence's data nor an earlier step's result, so
@@ -90,9 +91,10 @@ module Nukadoko
           next unless WORDS.fetch(word.downcase, []).any? { same?(literal, _1) }
           next if word.downcase == "neither" && all[(index + 1)..].any? { |w, f| f && w.downcase == "nor" }
 
-          before = index.positive? ? all[index - 1] : nil
-          negated = before && before[1] && NEGATING.include?(before[0].downcase)
-          return negated ? Statement.new(word, true, "not-equal", before[0]) : Statement.new(word, true, "equal", nil)
+          before = (index.positive? ? all[index - 1] : nil) #: [String, bool]?
+          return Statement.new(word, true, "not-equal", before[0]) if before && before[1] && NEGATING.include?(before[0].downcase)
+
+          return Statement.new(word, true, "equal", nil)
         end
         nil
       end

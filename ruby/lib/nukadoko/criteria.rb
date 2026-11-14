@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "gherkin"
 require "json"
@@ -120,7 +121,7 @@ module Nukadoko
         unmatched = base.dup
         take = lambda do |found, criterion, renamed|
           unmatched.delete_at(unmatched.index { _1.equal?(found) })
-          change = { change: "unchanged", at: { feature: found.feature, line: found.line } }
+          change = { change: "unchanged", at: { feature: found.feature, line: found.line } } #: Hash[Symbol, untyped]
           change[:renamed_from] = { feature: found.feature, name: found.name } if renamed
           change[:retagged] = true if found.all_tags != criterion.all_tags
           changes[key(criterion.feature, criterion.line)] = change

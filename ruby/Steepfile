@@ -1,0 +1,22 @@
+# frozen_string_literal: true
+
+# The type check of the engine itself: lib/ against the signatures
+# rbs-inline writes from its comments (sig/generated), what rbs-inline
+# cannot write (sig/nukadoko.rbs), and hand-written stubs of the gems that
+# ship no signature (sig-deps, not in the gem).
+D = Steep::Diagnostic
+
+target :lib do
+  check "lib"
+  signature "sig", "sig-deps"
+
+  library "digest", "fileutils", "json", "net-http", "open3", "pathname", "securerandom", "shellwords", "socket",
+          "time", "timeout", "tmpdir", "uri", "zlib", "prism"
+
+  # Most values here are JSON a step returned, so an empty [] or {} has no
+  # element type worth naming; a warning on each would hide the ones that
+  # say something.
+  configure_code_diagnostics(D::Ruby.default) do |hash|
+    hash[D::Ruby::UnannotatedEmptyCollection] = nil
+  end
+end

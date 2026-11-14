@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "fileutils"
 
@@ -21,7 +22,7 @@ module Nukadoko
       # `.env` files are ignored since a committed one is configuration, not
       # a secret source; `!.env.example` must follow `.env.*` to re-include it.
       IGNORED = [".nukadoko/", ".env", ".env.*", "!.env.example"].freeze
-      README = File.expand_path("../../README.md", __dir__)
+      README = File.expand_path("../../README.md", __dir__.to_s)
 
       def initialize(project, out:, err:)
         @project = project

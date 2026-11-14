@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "time"
 
@@ -25,6 +26,7 @@ module Nukadoko
       # A reading whose observe raised is kept with the first line of the
       # error, and the poll reads again; only a last reading that raised
       # fails the step with that error.
+      #: (Hash[Symbol, untyped]) { () -> untyped } -> untyped
       def call(record)
         deadline = monotonic + @timeout
         readings = []
@@ -48,6 +50,7 @@ module Nukadoko
 
       private
 
+      #: (Integer) { () -> untyped } -> Hash[Symbol, untyped]
       def read(attempt)
         judge(yield, attempt)
       rescue StandardError => e

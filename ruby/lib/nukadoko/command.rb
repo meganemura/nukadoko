@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "open3"
 require "tmpdir"
@@ -18,6 +19,7 @@ module Nukadoko
   # measures that outside a step as well. `env` is added to the runner's
   # environment. A run that `timeout` seconds stopped raises, since it has
   # no exit code to read.
+  #: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?, ?timeout: Numeric?, ?files: bool) -> Hash[Symbol, untyped]
   def self.run_command(command, args = [], cwd: Dir.pwd, env: {}, stdin: nil, timeout: nil, files: false)
     recording = Engine::Processes.current
     cwd = File.expand_path(cwd)
@@ -52,6 +54,7 @@ module Nukadoko
 
       # Fills `into` even when the step raises, so a failed step still names
       # the processes it ran.
+      #: [T] (Array[untyped]) { () -> T } -> T
       def self.collect(into)
         Thread.current[:nukadoko_processes] = into
         yield
@@ -162,6 +165,7 @@ module Nukadoko
 
       # A directory under the system's temporary directory, named
       # `<prefix>-` and six characters, as the TypeScript engine names it.
+      #: (?String) -> String
       def dir(prefix = "nukadoko-scratch")
         raise ArgumentError, "a scratch prefix cannot hold a path separator: #{prefix}" if prefix.match?(%r{[/\\]})
 

@@ -1,0 +1,25 @@
+# Generated from lib/nukadoko/pattern.rb with RBS::Inline
+
+# A pattern names every capture (`{title:string}`). The names are stripped and
+# the plain expression goes to the official cucumber-expressions gem, so the
+# syntax owner is the same one the TypeScript engine uses.
+module Nukadoko
+  module Engine
+    class Pattern
+      NAMED: ::Regexp
+
+      REGISTRY: untyped
+
+      attr_reader source: untyped
+
+      attr_reader keys: untyped
+
+      def initialize: (untyped source) -> untyped
+
+      def match: (untyped text) -> untyped
+
+      # Each capture's text as the line wrote it, quotes included.
+      def texts: (untyped text) -> untyped
+    end
+  end
+end

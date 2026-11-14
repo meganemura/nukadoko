@@ -1,0 +1,74 @@
+# Generated from lib/nukadoko/criteria.rb with RBS::Inline
+
+# What one criterion is, and how `nuka run --base <ref>` finds the same
+# criterion at the ref. A criterion is one pickle: a scenario, or one
+# Examples row. Its identity is its feature file and its name. Its content
+# is what a person approved: the steps in order (Background steps first),
+# each with its effective keyword, text, docstring, and table; the
+# Examples row; and the tags that decide where it must hold (condition
+# tags, `@expects:` tags, and `@held`). Other tags and the name are not
+# content, so a scenario renamed or tagged `@smoke` still says what it said,
+# though a hook or a World could read them, so such a criterion keeps its
+# change and is marked `retagged` or `renamed_from`, and runs in the old
+# world as a changed mapping does.
+#
+# Matching follows the TypeScript engine's order: the same identity and
+# content is unchanged; the same content under another identity, where it
+# is the one answer (same file first, then anywhere), is unchanged and
+# renamed; one left over per identity on each side is changed; the rest of
+# head is new and the rest of the ref removed. Taking the first of several
+# candidates would make the answer depend on reading order, so a tie is
+# never paired.
+module Nukadoko
+  module Engine
+    module Criteria
+      class Criterion < Data
+        attr_reader feature(): untyped
+
+        attr_reader line(): untyped
+
+        attr_reader name(): untyped
+
+        attr_reader content(): untyped
+
+        attr_reader tags(): untyped
+
+        attr_reader all_tags(): untyped
+
+        attr_reader lines(): untyped
+
+        def self.new: (untyped feature, untyped line, untyped name, untyped content, untyped tags, untyped all_tags, untyped lines) -> instance
+                    | (feature: untyped, line: untyped, name: untyped, content: untyped, tags: untyped, all_tags: untyped, lines: untyped) -> instance
+
+        def self.members: () -> [ :feature, :line, :name, :content, :tags, :all_tags, :lines ]
+
+        def members: () -> [ :feature, :line, :name, :content, :tags, :all_tags, :lines ]
+      end
+
+      HELD: ::String
+
+      def self?.content_tags: (untyped tags) -> untyped
+
+      # The criteria of each feature file under `root` that `paths` names,
+      # relative to it. A file that does not parse is returned apart, with
+      # why, since its criteria cannot be compared.
+      def self?.of_files: (untyped root, untyped paths) -> untyped
+
+      def self?.of_feature: (untyped feature, untyped document, untyped pickles) -> untyped
+
+      def self?.places_of: (untyped document) -> untyped
+
+      def self?.row_line: (untyped row) -> untyped
+
+      def self?.step_lines: (untyped step) -> untyped
+
+      def self?.identity: (untyped criterion) -> untyped
+
+      def self?.key: (untyped feature, untyped line) -> untyped
+
+      # Each head criterion's change, by `key`, and the ref's criteria that
+      # head no longer has.
+      def self?.compare: (untyped base, untyped head) -> untyped
+    end
+  end
+end

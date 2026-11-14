@@ -1,0 +1,46 @@
+# Generated from lib/nukadoko/verdict.rb with RBS::Inline
+
+# `nuka verdict`: whether the newest run that ended judged the working tree
+# as it is now and left nothing red. It reads run.json files and one git
+# tree id, and never starts a run. A run's red findings are relayed only
+# when it judged this tree: a red row of an earlier tree may be fixed
+# already, and a green one may not hold now.
+module Nukadoko
+  module Engine
+    class Verdict
+      FIXES: untyped
+
+      attr_reader judged: untyped
+
+      attr_reader findings: untyped
+
+      attr_reader newest: untyped
+
+      attr_reader working_tree: untyped
+
+      def initialize: (untyped project) -> untyped
+
+      # The run with the latest start; a run.json whose run_id is not its
+      # directory's name, or that does not parse, is no run.
+      def self.newest_run: (untyped project) -> untyped
+
+      def open?: () -> untyped
+
+      def envelope_fields: () -> untyped
+
+      def headline: () -> untyped
+
+      private
+
+      def recorded: () -> untyped
+
+      def again: () -> untyped
+
+      def judge: () -> untyped
+
+      def note: (untyped code, untyped message) -> untyped
+
+      def stale_message: () -> untyped
+    end
+  end
+end

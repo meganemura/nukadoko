@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # A Then step declares what it compares; the engine judges. A claim names the
 # actual value (a key the step observed or was given, and an optional `at`
@@ -113,15 +114,23 @@ module Nukadoko
       end
 
       def self.date?(value)
-        match = value.is_a?(String) && DATE.match(value)
-        !!match && calendar_day?(*match.captures.map(&:to_i))
+        match = value.is_a?(String) ? DATE.match(value) : nil
+        return false unless match
+
+        year, month, day = match.captures.map(&:to_i)
+        calendar_day?(year.to_i, month.to_i, day.to_i)
       end
 
       def self.timestamp?(value)
-        match = value.is_a?(String) && TIMESTAMP.match(value)
-        return false unless match && calendar_day?(*match.captures[0, 3].map(&:to_i))
+        match = value.is_a?(String) ? TIMESTAMP.match(value) : nil
+        return false unless match
 
-        hour, minute, second = match.captures[3, 3].map(&:to_i)
+        year, month, day, hour, minute, second = match.captures.map(&:to_i)
+        return false unless calendar_day?(year.to_i, month.to_i, day.to_i)
+
+        hour = hour.to_i
+        minute = minute.to_i
+        second = second.to_i
         offset = match[7].nil? || (match[7].to_i <= 23 && match[8].to_i <= 59)
         hour <= 23 && minute <= 59 && second <= 59 && offset
       end

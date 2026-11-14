@@ -1,0 +1,107 @@
+# Generated from lib/nukadoko/fixtures.rb with RBS::Inline
+
+# Fixtures are built by the engine, not the step, so what they record is
+# measured: every request a step sends goes through Request and lands in the
+# step's http.jsonl as it was sent and answered.
+module Nukadoko
+  module Engine
+    class Response < Data
+      attr_reader status(): Integer
+
+      attr_reader headers(): Hash[String, Array[String]]
+
+      attr_reader body(): String
+
+      def self.new: (Integer status, Hash[String, Array[String]] headers, String body) -> instance
+                  | (status: Integer, headers: Hash[String, Array[String]], body: String) -> instance
+
+      def self.members: () -> [ :status, :headers, :body ]
+
+      def members: () -> [ :status, :headers, :body ]
+    end
+
+    class Response
+      def json: () -> untyped
+
+      def ok?: () -> untyped
+    end
+
+    class Request
+      attr_reader log: untyped
+
+      def initialize: (untyped base_url) -> untyped
+
+      BODY_TEXT: untyped
+
+      def self.since: (untyped started) -> untyped
+
+      # A body as http.jsonl keeps it: its text, at most 16 KiB, and its
+      # size; none when there was none.
+      def self.body: (untyped name, untyped bytes) -> untyped
+    end
+
+    # Opened only for a step whose body names page or context, as in the
+    # TypeScript engine. Requests the page sends are recorded by the engine's
+    # own listener, and each step gets a trace chunk.
+    class Browser
+      def initialize: (untyped base_url, ?untyped launch_options) -> untyped
+
+      def page_for: (untyped step_dir, untyped log) -> untyped
+
+      STAMPED_TYPES: untyped
+
+      ORDERED_KINDS: untyped
+
+      # The step that runs now, as a page request names it: set for every
+      # step, a page or not, so a request a page sends during a step is
+      # that step's.
+      attr_writer step: untyped
+
+      # Which requests to the world the page had finished receiving the
+      # response of, and which were in flight, around a claim step's
+      # reading: an order of the events this process received, never a
+      # claim that the page drew from a response. Only a document, a
+      # fetch, and an XMLHttpRequest count; an EventSource stays open, so
+      # it would be in flight on every reading.
+      def watch_requests: (untyped context) -> untyped
+
+      # Runs one reading of a claim step and keeps when it began and ended.
+      # : [T] () { () -> T } -> T
+      def reading: [T] () { () -> T } -> T
+
+      def begin_step: () -> untyped
+
+      # A claim step's `pages`, `page_requests`, and `judged_view`, after
+      # the reading its claims were judged on, when a page was open.
+      def judged: (untyped dir, untyped step_record_id) -> untyped
+
+      def request_record: (untyped entry, untyped step_record_id) -> untyped
+
+      # What the page showed right after the judged reading: its title, a
+      # viewport screenshot, and its ARIA snapshot, each with how long after
+      # the reading it was taken. The claims judged what observe returned,
+      # not these files.
+      # In a trace group of its own, so the step's actions leave these calls out.
+      def view: (untyped dir, untyped ended) -> untyped
+
+      def view_files: (untyped dir, untyped ended) -> untyped
+
+      def monotonic: () -> untyped
+
+      # A page's documents, fetches, and XMLHttpRequests to the world get
+      # the running step's traceparent through the Chrome DevTools
+      # Protocol's Fetch domain, on a session of the page's own: a header set
+      # on the whole context would reach other origins too, and a route
+      # turns the browser's cache off. Images, scripts, and stylesheets are
+      # left out, since each paused request costs a round trip. A session
+      # that cannot be opened leaves the page's requests unstamped.
+      def stamp: (untyped page) -> untyped
+
+      # Each scenario gets a browser context of its own, so cookies and storage
+      # never carry from one scenario to the next.
+      def end_scenario: () -> untyped
+
+      def close: () -> untyped
+    end
+  end
+end

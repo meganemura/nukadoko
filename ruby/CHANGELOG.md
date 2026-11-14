@@ -216,6 +216,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
   the line where a text stopped fitting. `nuka check` reports
   `claim-kind-unknown`. `fits-aria-snapshot` and `judged-as` are
   `unjudged` until the Ruby engine reads ARIA snapshots and judgments.
+- The gem ships the signature of the whole engine, written by rbs-inline
+  from `lib/`'s comments into `sig/generated`, and CI checks `lib/` with
+  Steep. A step author's Steep reads the same `Step`, `Schema`, and fixture
+  types as before, now from that signature, and `run_command` declares
+  `timeout:` and `files:` too.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

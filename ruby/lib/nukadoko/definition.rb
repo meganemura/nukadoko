@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # What the TypeScript engine's defineStep refuses when a step file loads:
 # a claim or a poll that could only be judged one way, or that would let a

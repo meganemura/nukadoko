@@ -1,0 +1,144 @@
+# Generated from lib/nukadoko/scaffold.rb with RBS::Inline
+
+# `nuka scaffold`: a step file a person fills in, written in the TypeScript
+# engine's terms. `nuka scaffold <name> --pattern <p> [--then]` writes one
+# stub; `nuka scaffold --feature <path>` writes one per line no step
+# matches, read as a pattern by cucumber-expressions' own generator, and
+# names each from the pattern's literal words. A stub's body raises
+# "not implemented: <name>" until someone writes it, so a run of it fails
+# instead of passing.
+#
+# The Ruby engine has no `--command`, `--request`, or `--from` stub yet, so
+# it refuses them rather than writing a stub that silently lacks them. A
+# step's class name comes from its file name (how `load_steps` autoloads
+# it), so a name whose class would not be a new Ruby constant is refused.
+module Nukadoko
+  module Engine
+    class Scaffold
+      VALID_NAME: ::Regexp
+
+      NAME_LIMIT: ::Integer
+
+      NAMED: ::Regexp
+
+      DESCRIPTION_TODO: ::String
+
+      CAPTURED: untyped
+
+      ATTACHMENT: untyped
+
+      LITERAL_WORDS: untyped
+
+      NUMBER_WORDS: untyped
+
+      TIMES_WORDS: untyped
+
+      STATES_NO_VALUE: ::String
+
+      LITERAL_FIX: ::String
+
+      REDO_HEADER: ::String
+
+      UNPORTED: untyped
+
+      class Capture < Data
+        attr_reader key(): untyped
+
+        attr_reader type(): untyped
+
+        def self.new: (untyped key, untyped type) -> instance
+                    | (key: untyped, type: untyped) -> instance
+
+        def self.members: () -> [ :key, :type ]
+
+        def members: () -> [ :key, :type ]
+      end
+
+      def self.refusal: (untyped message, ?untyped code, **untyped hint) -> untyped
+
+      # The captures of `pattern`, or the reason no step could hold it.
+      def self.read_pattern: (untyped pattern) -> untyped
+
+      # The class `load_steps` autoloads from the step's file.
+      def self.class_name: (untyped name) -> untyped
+
+      def self.class_refusal: (untyped name) -> untyped
+
+      def self.file_of: (untyped name) -> untyped
+
+      def self.ruby: (untyped text) -> untyped
+
+      def self.field_line: (untyped capture) -> untyped
+
+      def self.template: (name: untyped, pattern: untyped, captures: untyped, then_step: untyped, attachment: untyped, description: untyped) -> untyped
+
+      def self.when_lines: (untyped name, untyped keys) -> untyped
+
+      # The expected value is the first one the line states; observe raises
+      # until someone writes the reading, so the step records as unobserved
+      # instead of passing.
+      def self.then_lines: (untyped name, untyped keys) -> untyped
+
+      # Whether `source` is a stub this command writes for `name`: some
+      # reading of its own pattern and description draws it byte for byte.
+      def self.unedited?: (untyped source, untyped name) -> untyped
+
+      # The string a `  <call> "..."` line passes, nil when there is no such
+      # line, false when the line holds something else.
+      def self.literal: (untyped source, untyped call) -> untyped
+
+      def self.words: (untyped pattern) -> untyped
+
+      # Each word of the pattern that states a literal, with its values.
+      def self.literal_words: (untyped pattern) -> untyped
+
+      def self.states_value?: (untyped pattern, untyped captures, untyped attachment) -> untyped
+
+      # Without a chained value no word's literal has a JSON type to pick.
+      def self.literal_refusal: (untyped pattern, untyped captures, untyped attachment) -> untyped
+
+      def initialize: (untyped project, untyped options, untyped rest, untyped steps, untyped scenarios) -> untyped
+
+      # The paths written, and the lines for stderr, or a Refusal.
+      def call: () -> untyped
+
+      def single: () -> untyped
+
+      # The command line after `nuka scaffold`, as typed, for a refusal's do.
+      attr_writer argv_words: untyped
+
+      def feature: (untyped target) -> untyped
+
+      # How cucumber-expressions reads a line: with captures when every
+      # reading hands the step the same kind of value, otherwise as the line
+      # itself, with the readings it could not choose between.
+      def self.infer: (untyped text) -> untyped
+
+      # The generator escapes `(`, `{`, and `/` but leaves a backslash bare,
+      # which the parser then refuses, so each backslash is doubled first.
+      def self.generate: (untyped text, untyped registry) -> untyped
+
+      # The line as a pattern that matches it and nothing else.
+      def self.literal_pattern: (untyped text) -> untyped
+
+      def self.name_captures: (untyped source) -> untyped
+
+      def self.name_for: (untyped pattern) -> untyped
+
+      private
+
+      # : (String) { (String) -> boolish } -> String
+      def distinct: (String) { (String) -> boolish } -> String
+
+      def attachment_of: (untyped line) -> untyped
+
+      # What every feature line the pattern matches carries, or nil when no
+      # line matches or the lines disagree.
+      def attachment_in_features: (untyped pattern) -> untyped
+
+      def target_paths: (untyped target) -> untyped
+
+      def write: (untyped relative, untyped source) -> untyped
+    end
+  end
+end

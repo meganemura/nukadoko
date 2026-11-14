@@ -1,0 +1,85 @@
+# Generated from lib/nukadoko/command.rb with RBS::Inline
+
+# What a command-line scenario needs: scratch directories that live as long
+# as one scenario, and a way to run the program under test that keeps every
+# run for the step record. Both are engine-built, so a step never removes a
+# directory it made or forgets to note a process it started.
+module Nukadoko
+  # Runs a command and gives what it left: the exit code (nil when a signal
+  # ended it), the signal, stdout, and stderr. Inside a step the run is
+  # noted in the step record's processes, with what changed under `cwd`
+  # while it ran, which the result gives as `files` too; `files: true`
+  # measures that outside a step as well. `env` is added to the runner's
+  # environment. A run that `timeout` seconds stopped raises, since it has
+  # no exit code to read.
+  # : (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?, ?timeout: Numeric?, ?files: bool) -> Hash[Symbol, untyped]
+  def self.run_command: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?, ?timeout: Numeric?, ?files: bool) -> Hash[Symbol, untyped]
+
+  module Engine
+    # The processes the running step started, kept per thread so a step
+    # that calls run_command from a helper is still measured.
+    module Processes
+      def self.current: () -> untyped
+
+      # Fills `into` even when the step raises, so a failed step still names
+      # the processes it ran.
+      # : [T] (Array[untyped]) { () -> T } -> T
+      def self.collect: [T] (Array[untyped]) { () -> T } -> T
+
+      def self.groups?: () -> untyped
+
+      # Runs the command to its close, its stdin closed after `input`.
+      def self.spawn: (untyped env, untyped argv, untyped cwd, untyped input, untyped timeout, group: untyped) -> untyped
+
+      # `ended` when no process of the group still runs as the leader closed.
+      def self.group_state: (untyped pid) -> untyped
+
+      # The child's environment against the runner's: every name the step
+      # set, and a value only when it cannot be a credential.
+      def self.env_entry: (untyped env) -> untyped
+
+      def self.shown_value: (untyped value) -> untyped
+    end
+
+    # A directory's files as their identities, before and after something
+    # wrote there, and the difference as the record names it.
+    module FileWalk
+      SKIPPED: untyped
+
+      LIMIT: ::Integer
+
+      def self.snapshot: (untyped dir) -> untyped
+
+      def self.difference: (untyped before, untyped after) -> untyped
+    end
+
+    # The `scratch` fixture: `dir` makes a fresh directory, and the engine
+    # removes every one of them when the scenario ends, passed or failed.
+    class Scratch
+      def initialize: () -> untyped
+
+      # A directory under the system's temporary directory, named
+      # `<prefix>-` and six characters, as the TypeScript engine names it.
+      # : (?String) -> String
+      def dir: (?String) -> String
+
+      def dirs: () -> untyped
+
+      FILE_TEXT: untyped
+
+      STEP_TEXT: untyped
+
+      # Each scratch directory's paths as identities, to compare a step's
+      # start with its end.
+      def snapshot: () -> untyped
+
+      # What the step changed in the scratch directories, absolute and
+      # sorted, each file with its size and text after the step: a
+      # directory made during the step is compared with an empty one. The
+      # step reads at most 64 KiB of content in all, 8 KiB of each file.
+      def changes: (untyped before) -> untyped
+
+      def remove_all: () -> untyped
+    end
+  end
+end

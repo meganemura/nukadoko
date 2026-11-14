@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "socket"
 require "shellwords"
@@ -61,7 +62,10 @@ module Nukadoko
       end
 
       def start(environment, dir, project)
-        port = (TCPServer.open("127.0.0.1", 0) { _1.addr[1] } if @options[:serve])
+        port = if @options[:serve]
+          server = TCPServer.new("127.0.0.1", 0)
+          server.addr[1].tap { server.close }
+        end
         fill = ->(text) { placeholders(text.to_s, port, dir, environment) }
         # The world's env is what its program and the steps' env fixture get.
         env = (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, fill.(v)] }.freeze
@@ -93,7 +97,18 @@ module Nukadoko
 
     # A started program: where it answers, its env, the prefix of every
     # trace id its steps carry, and its log. `timings` gains stop_ms at its stop.
-    World = Data.define(:base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings) do
+    World = Data.define(
+      :base_url, #: String
+      :pid, #: Integer?
+      :log, #: File?
+      :env, #: Hash[String, String]
+      :trace_prefix, #: String
+      :log_path, #: String?
+      :commands, #: Array[Hash[Symbol, untyped]]
+      :timings, #: Hash[Symbol, Integer]
+    )
+
+    class World
       def wait_ready(path)
         uri = URI.join(base_url, path)
         deadline = Time.now + 30

@@ -1,0 +1,97 @@
+# Generated from lib/nukadoko/cli.rb with RBS::Inline
+
+# The `nuka` command. With --json it prints one envelope in the shape the
+# TypeScript engine prints, so an agent reads both engines the same way.
+module Nukadoko
+  class CLI
+    FLAGS: untyped
+
+    REPEATED: untyped
+
+    VALUED: untyped
+
+    def initialize: (untyped argv, ?project: untyped, ?out: untyped) -> untyped
+
+    def call: () -> untyped
+
+    private
+
+    # `--name value` and `--name=value` for the repeated options, bare
+    # flags, and every other word a target. An unknown `--name` is kept to
+    # refuse, so a typo never reads as a target or is silently ignored.
+    def parse: (untyped words) -> untyped
+
+    # A run checks the scenarios it selected, then runs them in each world
+    # it selected; a target or a world it cannot reach is refused first.
+    def run: (untyped steps) -> untyped
+
+    # `--repeat`, `--concurrency`, and `--proof-runs` take a whole number of 1 or more.
+    def count_flag: (untyped name) -> untyped
+
+    # One pass of a `--base` tree, in the tree's own directory: the plan
+    # names the world, the environment, and the rows at their place in this
+    # tree, and the result goes to the file it names.
+    def tree: (untyped steps) -> untyped
+
+    # `nuka do <step>`: one step alone, its args from --args and from the
+    # records --use names, in a world started for it. The step record goes
+    # to stdout and to .nukadoko/do/<id>/record.json, where a later
+    # `nuka do --use` reads it. A refusal goes to stderr, since stdout is
+    # the record's.
+    # Paths written go to stdout, notes and refusals to stderr.
+    def init: () -> untyped
+
+    # Writes stubs; their paths go to stdout, and notes and refusals to stderr.
+    def scaffold: (untyped steps, untyped scenarios) -> untyped
+
+    def run_one: (untyped check) -> untyped
+
+    # Each from key of the step, from the newest record --use names whose
+    # step gives it, and where it came from.
+    def used_args: (untyped step, untyped ids) -> untyped
+
+    # The record `nuka do` prints, in the TypeScript engine's shape.
+    def do_record: (untyped record, untyped id, untyped step, untyped given, untyped origins, untyped used, untyped environment) -> untyped
+
+    def meets?: (untyped scenario, untyped environments) -> untyped
+
+    # The `nuka check` that reports the same errors: the files the targets
+    # name, and each --env.
+    def check_command: () -> untyped
+
+    # Why --env left out every selected scenario, and the run that meets
+    # them: the run without --env when it does, else the first environment
+    # of the program file that meets each, or else one that meets some.
+    def left_out_stop: (untyped left_out, untyped program) -> untyped
+
+    # Removes what runs left in the state directory: each run directory,
+    # each `nuka do` record, the Allure results nukadoko wrote, and the
+    # directories an earlier release left. --dry-run lists them only.
+    def clean: () -> untyped
+
+    # Renders a finished run again from its run.json alone: the run a
+    # directory names, or the newest one.
+    def report: () -> untyped
+
+    def report_dir: () -> untyped
+
+    # Reads run.json files and git only, so it loads no step.
+    def verdict: () -> untyped
+
+    def refuse: (untyped refusal) -> untyped
+
+    def relative: (untyped finding) -> untyped
+
+    # Every envelope opens the same way, in the TypeScript engine's order.
+    def head: (untyped command, untyped verdict, untyped findings, **untyped more) -> untyped
+
+    def finish: (untyped command, untyped passed, findings: untyped, ?verdict: untyped, ?exit_code: untyped, **untyped rest) -> untyped
+
+    def emit: (untyped envelope, untyped findings, untyped command, ?io: untyped) -> untyped
+
+    # After the failed list, under --repeat, each scenario that failed at
+    # least once and how many of its executions passed. No verdict is
+    # named: one that fails every time is not flaky.
+    def repeat_tallies: (untyped scenarios, untyped io) -> untyped
+  end
+end

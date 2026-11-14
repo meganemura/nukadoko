@@ -1,0 +1,15 @@
+# Generated from lib/nukadoko/codes.rb with RBS::Inline
+
+# Every code a finding or a refusal can carry, with its description and
+# the edit that gets past it, as the TypeScript engine's registry holds
+# them (`bin/sync-codes` writes codes.json from it), so one code reads the
+# same in either engine. Data only.
+module Nukadoko
+  module Engine
+    module Codes
+      ALL: untyped
+
+      def self.fix: (untyped code) -> untyped
+    end
+  end
+end

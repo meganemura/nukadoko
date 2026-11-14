@@ -1,0 +1,97 @@
+# Generated from lib/nukadoko/features.rb with RBS::Inline
+
+# Feature files become pickles through the official gherkin gem. A pickle
+# from an outline is named by its Examples row's line, and its steps by the
+# outline's step lines, as the TypeScript engine names them.
+module Nukadoko
+  module Engine
+    # `keyword_line` is the Scenario keyword's own line, the same for every
+    # row of an outline, and `outline_name` the name as written, before a
+    # row fills it. A step from a Background has `background` set.
+    class Scenario < Data
+      attr_reader uri(): untyped
+
+      attr_reader line(): untyped
+
+      attr_reader keyword_line(): untyped
+
+      attr_reader name(): untyped
+
+      attr_reader tags(): untyped
+
+      attr_reader steps(): untyped
+
+      attr_reader tag_lines(): untyped
+
+      attr_reader columns(): untyped
+
+      attr_reader outline_name(): untyped
+
+      attr_reader serial(): untyped
+
+      def self.new: (untyped uri, untyped line, untyped keyword_line, untyped name, untyped tags, untyped steps, untyped tag_lines, untyped columns, untyped outline_name, untyped serial) -> instance
+                  | (uri: untyped, line: untyped, keyword_line: untyped, name: untyped, tags: untyped, steps: untyped, tag_lines: untyped, columns: untyped, outline_name: untyped, serial: untyped) -> instance
+
+      def self.members: () -> [ :uri, :line, :keyword_line, :name, :tags, :steps, :tag_lines, :columns, :outline_name, :serial ]
+
+      def members: () -> [ :uri, :line, :keyword_line, :name, :tags, :steps, :tag_lines, :columns, :outline_name, :serial ]
+    end
+
+    class PickleStep < Data
+      attr_reader text(): untyped
+
+      attr_reader line(): untyped
+
+      attr_reader kind(): untyped
+
+      attr_reader table(): untyped
+
+      attr_reader doc_string(): untyped
+
+      attr_reader background(): untyped
+
+      def self.new: (untyped text, untyped line, untyped kind, untyped table, untyped doc_string, untyped background) -> instance
+                  | (text: untyped, line: untyped, kind: untyped, table: untyped, doc_string: untyped, background: untyped) -> instance
+
+      def self.members: () -> [ :text, :line, :kind, :table, :doc_string, :background ]
+
+      def members: () -> [ :text, :line, :kind, :table, :doc_string, :background ]
+    end
+
+    # What makes a file, or a part of one, run nothing: a file that does
+    # not parse, or an outline with no row to run. `line` is nil for a file.
+    class FeatureProblem < Data
+      attr_reader code(): untyped
+
+      attr_reader uri(): untyped
+
+      attr_reader line(): untyped
+
+      attr_reader message(): untyped
+
+      def self.new: (untyped code, untyped uri, untyped line, untyped message) -> instance
+                  | (code: untyped, uri: untyped, line: untyped, message: untyped) -> instance
+
+      def self.members: () -> [ :code, :uri, :line, :message ]
+
+      def members: () -> [ :code, :uri, :line, :message ]
+    end
+
+    # A directory is every .feature file under it; a list is those files.
+    # What runs nothing goes into `problems`, for nuka check to report.
+    def self.load_features: (untyped dir_or_paths, ?problems: untyped) -> untyped
+
+    # The tag on a Feature line that runs the file while no other file runs.
+    SERIAL_TAG: ::String
+
+    # nuka run --concurrency reads the serial tag on the Feature line only,
+    # so on a scenario it would read as a rule in force while doing nothing.
+    def self.serial_tags_on_scenarios: (untyped doc) -> untyped
+
+    # An outline with no Examples runs its placeholder text as written, and
+    # an Examples table with no rows leaves the outline out of the run.
+    def self.outlines_that_do_not_run: (untyped doc) -> untyped
+
+    def self.collect_lines: (untyped node, untyped lines, untyped background, untyped headers, untyped names) -> untyped
+  end
+end

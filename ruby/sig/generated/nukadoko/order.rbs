@@ -1,0 +1,47 @@
+# Generated from lib/nukadoko/order.rb with RBS::Inline
+
+# The order `nuka run` plays its selection in, and the rerun line that plays
+# it again. File order is the order the targets select. A shuffled order
+# sorts the feature files, then each file's scenarios, by a key made from the
+# seed and each one's path or line. A file stays whole, so one seed names one
+# order at every concurrency. The key does not depend on what else was
+# selected, so any part of a selection runs in the order the whole gave it,
+# and a rerun line can name what ran before a failed scenario.
+#
+# The key is the TypeScript engine's, bit for bit: a seed names the same
+# order in either engine. It works on 32-bit words, and on the UTF-16 code
+# units of the text, as JavaScript's charCodeAt reads them.
+module Nukadoko
+  module Engine
+    module Order
+      MAX_SEED: ::Integer
+
+      MASK: ::Integer
+
+      FILE: untyped
+
+      # `--order`'s value read, or nil when it is none of file, shuffled,
+      # and shuffled:<seed>. shuffled alone draws its seed.
+      def self.read: (untyped value) -> untyped
+
+      def self.text: (untyped order) -> untyped
+
+      def self.flags: (untyped order) -> untyped
+
+      # The scenarios in the run's order: by file in the order the files
+      # first appear, or by the shuffled keys.
+      def self.arrange: (untyped scenarios, untyped order) -> untyped
+
+      # The targets that run, in a shuffled order, what ran before `scenario`
+      # in its pass and then `scenario`. A file whose every scenario of the
+      # pass is among them is named whole when the run named it whole.
+      def self.replay_targets: (untyped sequence, untyped whole_files, untyped scenario) -> untyped
+
+      # The seed is mixed before the text and the result after it, so two
+      # seeds a step apart give unrelated orders.
+      def self.key: (untyped seed, untyped text) -> untyped
+
+      def self.mix: (untyped value) -> untyped
+    end
+  end
+end

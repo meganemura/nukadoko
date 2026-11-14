@@ -1,0 +1,60 @@
+# The parts of the gems nukadoko uses that ship no signature, written as
+# far as nukadoko calls them. Not in the gem.
+module Gherkin
+  def self.from_paths: (Array[String], **untyped) -> Enumerable[untyped]
+
+  class Dialect
+    def self.for: (String) -> untyped
+  end
+end
+
+module Playwright
+  def self.create: (playwright_cli_executable_path: String) -> untyped
+end
+
+module Cucumber
+  module CucumberExpressions
+    class UndefinedParameterTypeError < StandardError
+    end
+
+    class ParameterTypeRegistry
+      def initialize: () -> void
+      def define_parameter_type: (untyped) -> void
+      def lookup_by_type_name: (String) -> untyped
+    end
+
+    class CucumberExpression
+      def initialize: (String, ParameterTypeRegistry) -> void
+      def match: (String) -> Array[untyped]?
+      def source: () -> String
+      def ast: () -> untyped
+    end
+
+    class CucumberExpressionGenerator
+      def initialize: (ParameterTypeRegistry) -> void
+      def generate_expressions: (String) -> Array[untyped]
+    end
+  end
+end
+
+# rbs ships no signature of rbconfig.
+module RbConfig
+  def self.ruby: () -> String
+end
+
+# rbs's Open3 and Process lack the options nukadoko passes (env first,
+# chdir:, err:, stdin_data:, pgroup:), so these overloads take them.
+module Open3
+  def self.capture2: (*untyped, **untyped) -> [String, Process::Status] | ...
+  def self.capture2e: (*untyped, **untyped) -> [String, Process::Status] | ...
+  def self.capture3: (*untyped, **untyped) -> [String, String, Process::Status] | ...
+end
+
+module Process
+  def self.spawn: (*untyped, **untyped) -> Integer
+end
+
+# rbs declares TCPServer.new with one argument; it takes a host and a port.
+class TCPServer
+  def initialize: (String, Integer) -> void | ...
+end

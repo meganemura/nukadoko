@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # The run's verdict table: a row per criterion (a scenario, or an Examples
 # row), a cell per environment. A cell is `required` where its environment
@@ -12,8 +13,12 @@ module Nukadoko
       # A run's --proof-runs, read by every judgment of the one run this
       # process makes.
       class << self
-        attr_writer :proof_runs
+        #: (Integer) -> Integer
+        def proof_runs=(count)
+          @proof_runs = count
+        end
 
+        #: () -> Integer
         def proof_runs = @proof_runs || PROOF_RUNS
       end
 

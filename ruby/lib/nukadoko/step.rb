@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 # A step is a class under features/steps/, one per file, named by its file.
 # Everything except the body is a class-level declaration, so check reads the
@@ -7,32 +8,51 @@
 module Nukadoko
   class Step
     class << self
-      attr_reader :file
+      #: () -> String
+      def file = @file
 
       def inherited(subclass)
         super
-        subclass.instance_variable_set(:@file, caller_locations(1, 1).first.absolute_path)
+        subclass.instance_variable_set(:@file, caller_locations(1, 1)&.first&.absolute_path)
         Step.registry << subclass
       end
 
       def registry = (@registry ||= [])
 
+      #: (String) -> String
+      #: () -> String?
       def pattern(text = nil) = text ? (@pattern = text) : @pattern
+      #: (String) -> String
+      #: () -> String?
       def description(text = nil) = text ? (@description = text) : @description
+      #: (bool) -> bool
+      #: () -> bool?
       def mutates(value = nil) = value.nil? ? @mutates : (@mutates = value)
+      #: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      #: () -> Array[Hash[Symbol, untyped]]?
       def claims(list = nil) = list ? (@claims = list) : @claims
+      #: (untyped) -> untyped
+      #: () -> untyped
       def poll(value = nil) = value.nil? ? @poll : (@poll = value)
 
       # The steps this one may run through the `call` fixture. A part with no
       # pattern exists only for calls.
+      #: (Array[singleton(Step)]) -> Array[singleton(Step)]
+      #: () -> Array[singleton(Step)]
       def parts(list = nil) = list ? (@parts = list.freeze) : (@parts || [])
 
+      #: () { () [self: Schema] -> void } -> Schema
+      #: () -> Schema
       def args(&block) = block ? (@args = Schema.build(&block)) : (@args ||= Schema.new)
+      #: () { () [self: Schema] -> void } -> Schema
+      #: () -> Schema?
       def returns(&block) = block ? (@returns = Schema.build(&block)) : @returns
 
       # Args an earlier step of the scenario returned, by key: one source as
       # `[Step, :field]`, or several as a list of them, where the nearest
       # earlier one that ran gives the value.
+      #: (Hash[Symbol | String, untyped]) -> Hash[String, Array[untyped]]
+      #: () -> Hash[String, Array[untyped]]
       def from(map = nil)
         return @from || {} unless map
 

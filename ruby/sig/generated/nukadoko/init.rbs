@@ -1,0 +1,45 @@
+# Generated from lib/nukadoko/init.rb with RBS::Inline
+
+# `nuka init`: the config file, the steps directory, and the .gitignore
+# entries, in the TypeScript engine's order and words. A config file
+# already there refuses the whole command before anything is written, so a
+# half-done init never looks like a finished one. It ends with a
+# self-check that loads the config and the steps as `nuka steps` does; a
+# failure there is reported and the files stay, so what init wrote can be
+# looked at and fixed.
+#
+# The TypeScript engine also adds a package.json script and tsconfig
+# entries; a Ruby project has neither, so the Gemfile is what init looks
+# at: a Gemfile that does not name nukadoko gets a line on stderr.
+module Nukadoko
+  module Engine
+    class Init
+      CONFIG: ::String
+
+      STEPS: untyped
+
+      # `.env` files are ignored since a committed one is configuration, not
+      # a secret source; `!.env.example` must follow `.env.*` to re-include it.
+      IGNORED: untyped
+
+      README: untyped
+
+      def initialize: (untyped project, out: untyped, err: untyped) -> untyped
+
+      # The exit code, or a Refusal when a config file exists.
+      def call: () -> untyped
+
+      private
+
+      # Appends each entry no line already ignores; true when it wrote.
+      def ignore_entries: () -> untyped
+
+      # A root directory entry is also ignored by `/name`, `name`, or `name/**`.
+      def covers?: (untyped line, untyped entry) -> untyped
+
+      def gemfile_note: () -> untyped
+
+      def self_check: () -> untyped
+    end
+  end
+end

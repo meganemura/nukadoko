@@ -1,0 +1,32 @@
+# Generated from lib/nukadoko/parts.rb with RBS::Inline
+
+# The `call` fixture: a step runs one of the parts it declares, with args it
+# supplies itself (a call never reads `from`). The part's args and returns
+# are checked as a scenario line's are, and each call lands under `calls` in
+# the calling step's record, nested when a part calls a part of its own.
+module Nukadoko
+  module Engine
+    class Caller
+      # Raised for a call the declaration does not allow, so the step fails
+      # as broken rather than as a claim that did not hold.
+      class Refused < StandardError
+      end
+
+      attr_reader calls: untyped
+
+      def initialize: (untyped step, untyped fixtures) -> untyped
+
+      def to_proc: () -> untyped
+
+      # A refused call starts nothing, so it records nothing. Every other
+      # call is recorded in the order it started, with its result or its
+      # error, as the TypeScript engine records it.
+      # : (singleton(Nukadoko::Step), ?Hash[String | Symbol, untyped], **untyped) -> untyped
+      def call: (singleton(Nukadoko::Step), ?Hash[String | Symbol, untyped], **untyped) -> untyped
+
+      private
+
+      def run: (untyped part, untyped args, untyped entry, untyped started) -> untyped
+    end
+  end
+end

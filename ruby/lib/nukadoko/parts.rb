@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "time"
 
@@ -28,6 +29,7 @@ module Nukadoko
       # A refused call starts nothing, so it records nothing. Every other
       # call is recorded in the order it started, with its result or its
       # error, as the TypeScript engine records it.
+      #: (singleton(Nukadoko::Step), ?Hash[String | Symbol, untyped], **untyped) -> untyped
       def call(part, args = {}, **keywords)
         caller = @stack.last
         unless part.is_a?(Class) && part < Step && caller.parts.include?(part)

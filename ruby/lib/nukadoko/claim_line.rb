@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "json"
 
@@ -52,6 +53,7 @@ module Nukadoko
 
       # The first place two JSON values differ: a path of keys and indexes,
       # and what each side holds there, :none for a side with nothing.
+      #: (untyped, untyped, Array[String]) -> [Array[String], untyped, untyped]?
       def difference_in(actual, expected, path)
         if actual.is_a?(Array) && expected.is_a?(Array)
           [actual.size, expected.size].max.times do |index|
@@ -241,7 +243,7 @@ module Nukadoko
 
         fit = TextFit.fit(actual, expected)
         return nil if fit[:fits]
-        return readings_difference(*fit[:readings]) if fit[:readings]
+        return readings_difference(fit[:readings][0], fit[:readings][1]) if fit[:readings]
         return "every expected line fits, and actual line #{fit[:at]} is left over: actual #{side_text(fit.fetch(:actual, :none))}" unless fit.key?(:expected)
 
         fitted = case fit[:fitted]

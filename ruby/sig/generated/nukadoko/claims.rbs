@@ -1,0 +1,93 @@
+# Generated from lib/nukadoko/claims.rb with RBS::Inline
+
+module Nukadoko
+  module Engine
+    module Claims
+      COMPARES: untyped
+
+      def self.unknown_compares: (untyped node) -> untyped
+
+      def self.judge: (untyped claims, untyped observed, untyped args) -> untyped
+
+      def self.judge_one: (untyped claim, untyped observed, untyped args) -> untyped
+
+      def self.judge_each: (untyped each, untyped items, untyped args) -> untyped
+
+      def self.expected_value: (untyped claim, untyped args) -> untyped
+
+      VIEWS: untyped
+
+      # A view reads a string as something else before `at` walks into it.
+      def self.view: (untyped name, untyped value) -> untyped
+
+      def self.read: (untyped hash, untyped key) -> untyped
+
+      def self.dig: (untyped value, untyped path) -> untyped
+
+      def self.same?: (untyped a, untyped b) -> untyped
+
+      def self.normal: (untyped value) -> untyped
+
+      # A pattern that backtracks gets this long before the claim is left unjudged.
+      PATTERN_TIMEOUT: ::Float
+
+      # What `is-a` names, as the TypeScript engine lists the kinds.
+      VALUE_KINDS: untyped
+
+      DATE: ::Regexp
+
+      # Seconds are required and a leap second refused, as a program's clock
+      # never prints 60; the separator and the offset take the spellings
+      # RFC 3339 and ISO 8601 allow.
+      TIMESTAMP: ::Regexp
+
+      UUID: ::Regexp
+
+      def self.calendar_day?: (untyped year, untyped month, untyped day) -> untyped
+
+      def self.date?: (untyped value) -> untyped
+
+      def self.timestamp?: (untyped value) -> untyped
+
+      # A text a URL parser accepts can still be no URL a program wrote, so
+      # the scheme needs "//" and no character a reader cannot see may appear.
+      def self.url?: (untyped value) -> untyped
+
+      KIND_TESTS: untyped
+
+      # The test of the kind `name` names, read trimmed and in any case.
+      def self.value_kind: (untyped name) -> untyped
+
+      def self.json_type: (untyped value) -> untyped
+
+      def self.article: (untyped type) -> untyped
+
+      # JavaScript's trim, which takes Unicode spaces and a byte order mark.
+      def self.blank?: (untyped text) -> untyped
+
+      # Structural equality over JSON values: key order does not count, and
+      # 1 equals 1.0, as JSON writes one number.
+      def self.deep_equal?: (untyped a, untyped b) -> untyped
+
+      # The same items, each as many times, in any order.
+      def self.same_items?: (untyped a, untyped b) -> untyped
+
+      # The first place `expected` does not fit `actual` under has-fields, or
+      # nil: an object fits one that holds each of its fields with a value
+      # that fits, an array one of its length whose items fit, and anything
+      # else an equal value.
+      def self.field_misfit: (untyped actual, untyped expected, ?untyped path) -> untyped
+
+      # The path of the first object with no field, at any depth, or nil.
+      def self.fieldless_object: (untyped value, ?untyped path) -> untyped
+
+      # { holds: } or { reason: } when the two sides cannot be compared, or
+      # { stopped: } when nothing judged them. A comparison across two JSON
+      # types never holds for the reason the claim states, so it breaks with
+      # both types named, and so does an expected value every actual holds.
+      def self.compare: (untyped compare, untyped actual, untyped expected) -> untyped
+
+      def self.holds?: (untyped compare, untyped actual, untyped expected) -> untyped
+    end
+  end
+end

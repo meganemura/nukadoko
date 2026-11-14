@@ -1,0 +1,95 @@
+# Generated from lib/nukadoko/step.rb with RBS::Inline
+
+# A step is a class under features/steps/, one per file, named by its file.
+# Everything except the body is a class-level declaration, so check reads the
+# contract without calling the body, and `Method#parameters` names the
+# fixtures the body asks for.
+module Nukadoko
+  class Step
+    # : () -> String
+    def self.file: () -> String
+
+    def self.inherited: (untyped subclass) -> untyped
+
+    def self.registry: () -> untyped
+
+    # : (String) -> String
+    # : () -> String?
+    def self.pattern: (String) -> String
+                    | () -> String?
+
+    # : (String) -> String
+    # : () -> String?
+    def self.description: (String) -> String
+                        | () -> String?
+
+    # : (bool) -> bool
+    # : () -> bool?
+    def self.mutates: (bool) -> bool
+                    | () -> bool?
+
+    # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+    # : () -> Array[Hash[Symbol, untyped]]?
+    def self.claims: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+                   | () -> Array[Hash[Symbol, untyped]]?
+
+    # : (untyped) -> untyped
+    # : () -> untyped
+    def self.poll: (untyped) -> untyped
+                 | () -> untyped
+
+    # The steps this one may run through the `call` fixture. A part with no
+    # pattern exists only for calls.
+    # : (Array[singleton(Step)]) -> Array[singleton(Step)]
+    # : () -> Array[singleton(Step)]
+    def self.parts: (Array[singleton(Step)]) -> Array[singleton(Step)]
+                  | () -> Array[singleton(Step)]
+
+    # : () { () [self: Schema] -> void } -> Schema
+    # : () -> Schema
+    def self.args: () { () [self: Schema] -> void } -> Schema
+                 | () -> Schema
+
+    # : () { () [self: Schema] -> void } -> Schema
+    # : () -> Schema?
+    def self.returns: () { () [self: Schema] -> void } -> Schema
+                    | () -> Schema?
+
+    # Args an earlier step of the scenario returned, by key: one source as
+    # `[Step, :field]`, or several as a list of them, where the nearest
+    # earlier one that ran gives the value.
+    # : (Hash[Symbol | String, untyped]) -> Hash[String, Array[untyped]]
+    # : () -> Hash[String, Array[untyped]]
+    def self.from: (Hash[Symbol | String, untyped]) -> Hash[String, Array[untyped]]
+                 | () -> Hash[String, Array[untyped]]
+
+    # observe never sees the args a claim compares with, so it cannot pick
+    # what to read by the answer it will be judged against.
+    def self.inputs: () -> untyped
+
+    def self.step_name: () -> untyped
+
+    # A step that runs code may change the world unless it says it does
+    # not; a claim step has no action, so it never does.
+    def self.mutating?: () -> untyped
+
+    def self.body: () -> untyped
+
+    def self.line: () -> untyped
+
+    def self.fixtures: () -> untyped
+
+    # The fixtures the engine builds before the body runs: the step's own,
+    # and those of every part it can reach, since the bag is closed before
+    # any call happens.
+    def self.bag: (?untyped seen) -> untyped
+
+    private def self.expected_keys: (untyped node) -> untyped
+
+    private def self.expected_key: (untyped value) -> untyped
+  end
+
+  # Each step file is registered for autoload under its class name first, so a
+  # step can name another in `from` or `field` whatever order the files load in.
+  def self.load_steps: (untyped dir) -> untyped
+end

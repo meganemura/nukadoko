@@ -1,0 +1,5 @@
+# Generated from lib/nukadoko/version.rb with RBS::Inline
+
+module Nukadoko
+  VERSION: ::String
+end

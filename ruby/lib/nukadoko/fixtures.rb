@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "net/http"
 require "json"
@@ -10,7 +11,13 @@ require "time"
 # step's http.jsonl as it was sent and answered.
 module Nukadoko
   module Engine
-    Response = Data.define(:status, :headers, :body) do
+    Response = Data.define(
+      :status, #: Integer
+      :headers, #: Hash[String, Array[String]]
+      :body, #: String
+    )
+
+    class Response
       def json = JSON.parse(body)
       def ok? = status.between?(200, 299)
     end
@@ -60,11 +67,11 @@ module Nukadoko
           entry = { method: verb.upcase, url: uri.to_s, **(path.to_s == uri.to_s ? {} : { declared_url: path.to_s }) }
           stamp = traceparent ? { traceparent: traceparent, traceparent_sent_to: [Trace.origin(uri)] } : {}
           begin
-            res = HttpRecording.unrecorded { Net::HTTP.start(uri.host, uri.port) { _1.request(req) } }
+            res = HttpRecording.unrecorded { Net::HTTP.start(uri.host.to_s, uri.port) { _1.request(req) } }
           rescue StandardError => e
             @log << entry.merge(status: 0, duration_ms: Request.since(started), via: "request", **stamp, **Request.body(:request_body, req.body),
                                 error: e.message.lines.first.to_s.chomp)
-            raise
+            ::Kernel.raise e
           end
           @log << entry.merge(status: res.code.to_i, duration_ms: Request.since(started), via: "request", **stamp,
                               **Request.body(:request_body, req.body), **Request.body(:response_body, res.body))
@@ -138,6 +145,7 @@ module Nukadoko
       end
 
       # Runs one reading of a claim step and keeps when it began and ended.
+      #: [T] () { () -> T } -> T
       def reading
         started = monotonic
         value = yield
@@ -169,7 +177,12 @@ module Nukadoko
       end
 
       def request_record(entry, step_record_id)
-        trace = (entry[:request].header_value("traceparent") if entry[:finished] || entry[:failed_at]) rescue nil
+        # @type var trace: String?
+        trace = begin
+          entry[:request].header_value("traceparent") if entry[:finished] || entry[:failed_at]
+        rescue StandardError
+          nil
+        end
         ids = trace&.match(/\A00-(\h{32})-(\h{16})-\h{2}\z/)
         during = if entry[:step].nil? then "pause"
                  elsif entry[:step][:step_record_id] == step_record_id then "this-step"

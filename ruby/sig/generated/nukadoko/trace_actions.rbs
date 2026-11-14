@@ -1,0 +1,36 @@
+# Generated from lib/nukadoko/trace_actions.rb with RBS::Inline
+
+# A step's trace.zip read back into the step record's `actions`: every
+# Playwright call the step made through its page, as the TypeScript engine
+# lists them. Only `trace.trace` inside the zip is read, by walking the
+# zip's central directory, so no zip library is needed. A trace that cannot
+# be read gives no actions rather than failing the step: measuring never
+# breaks the execution. A trace format version this build has not measured
+# gives none either, since guessing at its shape would turn an unread
+# format into a record.
+module Nukadoko
+  module Engine
+    module TraceActions
+      # Version 8 as the TypeScript engine measured it, and version 10 as
+      # Playwright 1.65.1 writes it for the Ruby client: the same `before`
+      # and `after` fields, with a number for `callId`.
+      KNOWN_VERSIONS: untyped
+
+      MAX_ACTIONS: ::Integer
+
+      INTERNAL_WAIT: ::String
+
+      JUDGED_VIEW_GROUP: ::String
+
+      # { actions:, truncated: } for the trace at `path`, or nil when there
+      # is none.
+      def self?.read: (untyped path) -> untyped
+
+      def self?.parse: (untyped text) -> untyped
+
+      def self?.action: (untyped before, untyped after, untyped header) -> untyped
+
+      def self?.zip_entry: (untyped bytes, untyped name) -> untyped
+    end
+  end
+end

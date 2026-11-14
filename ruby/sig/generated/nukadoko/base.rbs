@@ -1,0 +1,114 @@
+# Generated from lib/nukadoko/base.rb with RBS::Inline
+
+# `nuka run --base <ref>`: what changed since the ref, and the trees the
+# rows need to be judged against it. Two trees go in the run's own
+# directory, under trees/:
+#
+# - base: the ref's code with head's features/ and config, so a new or
+#   changed criterion runs where its behaviour should be absent. The ref's
+#   program file starts it, or head's when the ref has none.
+# - old: head's working tree with the ref's features/ and config, so an
+#   unchanged criterion over a changed mapping runs under the steps it was
+#   approved with.
+#
+# The mapping is every file under features/ but a .feature file, the config
+# file's bytes, and the program file's conditions and defaultEnvironments,
+# which decide where a criterion is required. Every git command runs with
+# hooks off, since a checkout's hook is the project's code and not the
+# run's. Both trees are removed when the run ends.
+module Nukadoko
+  module Engine
+    class Base
+      NO_HOOKS: untyped
+
+      FEATURES: ::String
+
+      CONFIG: ::String
+
+      PROGRAM: ::String
+
+      STATE: ::String
+
+      attr_reader ref: untyped
+
+      attr_reader commit: untyped
+
+      attr_reader changes: untyped
+
+      attr_reader removed: untyped
+
+      attr_reader mapping: untyped
+
+      attr_reader base_root: untyped
+
+      attr_reader old_root: untyped
+
+      attr_reader old_environments: untyped
+
+      attr_reader program_from_head: untyped
+
+      # The commit `ref` names, or a Refusal with the TypeScript engine's
+      # code: outside git, a shallow clone that lacks it, or no such commit.
+      def self.resolve: (untyped project, untyped ref) -> untyped
+
+      def self.git: (untyped dir, *untyped argv, ?strip: untyped) -> untyped
+
+      # `selected` is each selected scenario's [feature, line]; `targets` the
+      # run's targets without a line, or nil for the features directory.
+      def initialize: (project: untyped, ref: untyped, commit: untyped, run_dir: untyped, selected: untyped, targets: untyped, envs: untyped, head_program: untyped) -> untyped
+
+      def cleanup: () -> untyped
+
+      # The ref's place of an unchanged head row, and the head row a place
+      # at the ref is.
+      def at: (untyped key) -> untyped
+
+      def row_of: (untyped feature, untyped line) -> untyped
+
+      def mapping_changes: () -> untyped
+
+      private
+
+      def in_repo: (untyped path) -> untyped
+
+      def prepare: (untyped selected, untyped targets, untyped envs, untyped head_program) -> untyped
+
+      # The environments the old world runs in, with the conditions the ref's
+      # program file gives each; nil when the ref has no program file, so
+      # head's environments are the old world's too.
+      def old_environments_of: (untyped program, untyped envs) -> untyped
+
+      def feature_files: (untyped root, untyped targets) -> untyped
+
+      # Head's working tree as a copy holds it: tracked files and untracked
+      # ones git does not ignore, on disk, outside the state directory.
+      def working_tree_files: () -> untyped
+
+      def within?: (untyped file, untyped dir) -> untyped
+
+      def mapping?: (untyped file) -> untyped
+
+      def hash_of: (untyped file) -> untyped
+
+      def mapping_files: (untyped files, untyped top) -> untyped
+
+      # The ref's program file read in a process of its own, since loading
+      # it here would replace head's: its conditions and defaultEnvironments.
+      def read_program: (untyped root) -> untyped
+
+      def program_mapping: (untyped program) -> untyped
+
+      def compare_mapping: (untyped head_files, untyped ref_files, untyped base_project, untyped head_program, untyped ref_program) -> untyped
+
+      def copy: (untyped from, untyped to) -> untyped
+
+      # The ref's checkout loses the ref's mapping and gains head's; the
+      # ref's program file stays, or head's comes in when the ref has none.
+      def overlay_base_tree: (untyped head_files, untyped ref_files) -> untyped
+
+      # Head's working tree with the ref's mapping in place of its own,
+      # written before the base checkout is overlaid.
+      def write_old_tree: (untyped head_files, untyped ref_files) -> untyped
+    end
+  end
+end

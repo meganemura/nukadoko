@@ -1,0 +1,6 @@
+# The standard libraries this gem's signatures name, which a project that
+# loads them as a library needs too.
+dependencies:
+  - name: net-http
+  - name: uri
+  - name: json

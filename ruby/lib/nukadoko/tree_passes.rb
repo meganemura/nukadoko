@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+# rbs_inline: enabled
 
 require "json"
 require "open3"
@@ -15,8 +16,8 @@ require "rbconfig"
 module Nukadoko
   module Engine
     class TreePasses
-      EXE = File.expand_path("../../exe/nuka", __dir__)
-      LIB = File.expand_path("..", __dir__)
+      EXE = File.expand_path("../../exe/nuka", __dir__.to_s)
+      LIB = File.expand_path("..", __dir__.to_s)
 
       def initialize(base, scenarios, head_cells, environments, dir, out)
         @base = base
@@ -42,7 +43,7 @@ module Nukadoko
             rows = @scenarios.select { planned[_1][world.to_sym].include?(environment.name) }
             next if rows.empty?
 
-            outcome = root ? run_tree(world, root, environment, rows) : { not_run: "the #{world} world was not made" }
+            outcome = (root ? run_tree(world, root, environment, rows) : { not_run: "the #{world} world was not made" }) #: Hash[Symbol, untyped]
             @worlds.concat(outcome[:worlds] || [])
             rows.each do |scenario|
               result = outcome[:results]&.find { |entry| [entry[:feature], entry[:line]] == place(world, scenario) }
