@@ -156,6 +156,10 @@ npm パッケージの release が latest のまま残ります。
 
 一度だけ人が行う手順です。
 
+0. Ruby のワークフローが使う、GitHub 自身のものでない 2 つの action を、Settings、Actions、General の Actions permissions で許します。
+   `ruby/setup-ruby@*` と `rubygems/configure-rubygems-credentials@*` です。
+   このリポジトリは名前を挙げた action だけを許していて、ほかの action を使うワークフローは最初のジョブの前に失敗します(`startup_failure`)。
+   その失敗は再実行では直らず、新しい push でもう一度始まります。
 1. `meganemura/nukadoko` に GitHub Environment `rubygems` を作り、required reviewers を付け、`main` からのデプロイを許します。
 2. rubygems.org の https://rubygems.org/profile/oidc/pending_trusted_publishers で、pending trusted publisher を足します(gem はまだありません)。
    - Gem name: `nukadoko`

@@ -194,6 +194,13 @@ tags. Nobody pushes either tag by hand.
 
 These are human steps, done once.
 
+0. Allow the two actions the Ruby workflows use that are not GitHub's own,
+   under Settings, Actions, General, Actions permissions:
+   `ruby/setup-ruby@*` and `rubygems/configure-rubygems-credentials@*`.
+   This repository allows only the actions it names, and a workflow that
+   uses any other action fails before its first job starts
+   (`startup_failure`), which a re-run cannot fix: a new push starts it
+   again.
 1. Create the GitHub Environment `rubygems` in `meganemura/nukadoko`, with
    required reviewers, and allow deployments from `main`.
 2. On rubygems.org, add a pending trusted publisher (the gem does not
