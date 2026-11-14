@@ -1,0 +1,36 @@
+module Nukadoko
+  class Schema
+    def string: (Symbol, ?String) -> void
+    def boolean: (Symbol, ?String) -> void
+    def integer: (Symbol, ?String) -> void
+    def number: (Symbol, ?String) -> void
+    def strings: (Symbol, ?String) -> void
+    def table: (Symbol, ?String) -> void
+  end
+
+  class Step
+    def self.pattern: (String) -> String
+    def self.description: (String) -> String
+    def self.mutates: (bool) -> bool
+    def self.claims: (Array[Hash[Symbol, untyped]]) -> untyped
+    def self.poll: (untyped) -> untyped
+    def self.args: () { () [self: Schema] -> void } -> Schema
+    def self.returns: () { () [self: Schema] -> void } -> Schema
+  end
+
+  module Engine
+    class Response
+      attr_reader status: Integer
+      def json: () -> untyped
+      def ok?: () -> bool
+    end
+
+    class Request
+      def get: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
+      def post: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
+      def put: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
+      def patch: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
+      def delete: (String, ?data: untyped, ?headers: Hash[String, String]) -> Response
+    end
+  end
+end

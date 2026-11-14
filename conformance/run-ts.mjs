@@ -45,11 +45,16 @@ function finding(f) {
   return { severity: f.severity, code: f.code, ...(file ? { file, line: f.line } : {}), ...(step ? { step } : {}) };
 }
 
+function sortFindings(list) {
+  const key = (f) => [f.file ?? "", String(f.line ?? 0).padStart(8, "0"), f.code, f.step ?? ""].join("\u0000");
+  return list.toSorted((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+}
+
 function outcome(caseDir) {
   const dir = project(caseDir);
   try {
     const check = nuka(dir, ["check"]);
-    const result = { check: check.findings.map(finding) };
+    const result = { check: sortFindings(check.findings.map(finding)) };
     if (check.verdict === "passed") {
       const run = nuka(dir, ["run", "--no-check"]);
       result.scenarios = run.scenarios.map((s) => ({

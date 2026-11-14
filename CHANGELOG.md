@@ -9,6 +9,14 @@ just until 0.1.
 
 ### Added
 
+- **A Ruby engine has started, held to the TypeScript engine by shared
+  cases.** `ruby/` is the gem `nukadoko`, not yet released: steps written
+  as Ruby classes, `nuka check`, `nuka run`, and `nuka sig` for Steep.
+  `conformance/` holds cases whose feature files both engines read; the
+  TypeScript engine writes each case's `expected.json`, and
+  `conformance/run-ts.mjs` and `conformance/run-rb.rb` compare each
+  engine's findings and verdicts with it. The npm package is unchanged.
+
 - **The skill answers a reviewer's merge-risk questions from a run.**
   A common review rubric asks whether a change is verified, does only
   what it says, what it touches, how hard it is to undo, and whether its

@@ -1,0 +1,68 @@
+# frozen_string_literal: true
+
+require "net/http"
+require "json"
+
+# Fixtures are built by the engine, not the step, so what they record is
+# measured: every request a step sends goes through Request and lands in the
+# step's http.jsonl as it was sent and answered.
+module Nukadoko
+  module Engine
+    Response = Data.define(:status, :headers, :body) do
+      def json = JSON.parse(body)
+      def ok? = status.between?(200, 299)
+    end
+
+    class Request
+      attr_reader :log
+
+      def initialize(base_url)
+        @base = URI(base_url)
+        @log = []
+      end
+
+      %w[get post put patch delete].each do |verb|
+        define_method(verb) do |path, data: nil, headers: {}|
+          uri = URI.join(@base, path)
+          klass = Net::HTTP.const_get(verb.capitalize)
+          req = klass.new(uri, headers)
+          if data
+            req["content-type"] = "application/json"
+            req.body = JSON.generate(data)
+          end
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          res = Net::HTTP.start(uri.host, uri.port) { _1.request(req) }
+          @log << { method: verb.upcase, url: uri.to_s, request_body: req.body, status: res.code.to_i,
+                    response_body: res.body, ms: ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round(1) }
+          Response.new(res.code.to_i, res.to_hash, res.body.to_s)
+        end
+      end
+    end
+
+    # Opened only for a step whose body names page or context, as in the
+    # TypeScript engine. Requests the page sends are recorded by the engine's
+    # own listener, and each step gets a trace chunk.
+    class Browser
+      def initialize(base_url)
+        @base_url = base_url
+      end
+
+      def page_for(step_dir, log)
+        require "playwright"
+        @execution ||= Playwright.create(playwright_cli_executable_path: ENV.fetch("PLAYWRIGHT_CLI", "npx playwright"))
+        @browser ||= @execution.playwright.chromium.launch
+        @context ||= @browser.new_context(baseURL: @base_url).tap { _1.tracing.start(screenshots: true, snapshots: true) }
+        @page ||= @context.new_page
+        @context.tracing.start_chunk
+        listener = ->(req) { log << { method: req.method, url: req.url, from: "page" } }
+        @page.on("request", listener)
+        [@page, -> { @page.off("request", listener); @context.tracing.stop_chunk(path: File.join(step_dir, "trace.zip")) }]
+      end
+
+      def close
+        @browser&.close
+        @execution&.stop
+      end
+    end
+  end
+end

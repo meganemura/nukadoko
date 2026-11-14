@@ -22,3 +22,4 @@ Messages and timings are left out.
 - `node conformance/run-ts.mjs` runs every case under the TypeScript engine and compares the result with `expected.json`. It needs `npm run build` first.
 - `node conformance/run-ts.mjs --write` writes `expected.json` again. Read the diff before you commit it.
 - `node conformance/run-ts.mjs <name>...` runs only the named cases.
+- `ruby conformance/run-rb.rb [<name>...]` runs the cases under the Ruby engine and compares them with the same `expected.json`. Run `bundle install` in `ruby/` first.
