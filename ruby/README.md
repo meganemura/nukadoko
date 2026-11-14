@@ -3,7 +3,7 @@
 The Ruby engine of [nukadoko](../README.md): typed step contracts for Gherkin, written in Ruby, so a scenario can be told wrong before it runs.
 It reads the same feature files as the TypeScript engine and must judge them the same way; the cases in [`../conformance/`](../conformance/README.md) hold it to that.
 
-Status: an early core. It passes the ten cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, polling Then steps, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. It runs `--base`, `nuka do`, `nuka scaffold`, and `nuka init`. Much of what the TypeScript engine does is not here yet, such as most of what `nuka check` reports.
+Status: an early core. It passes the ten cases in `conformance/`: HTTP steps, browser steps, command-line steps, fixtures a project defines, steps made of parts, polling Then steps, `from`, docstrings, Scenario Outlines, environments with conditions, controls with proof runs, and the verdict table. It runs `--base`, `nuka do`, `nuka scaffold`, and `nuka init`. `nuka check` reports the pattern, position, tag, and outline findings the TypeScript engine reports, and its notes on unbound steps and scaffold descriptions. Much of what the TypeScript engine does is not here yet, such as `--concurrency` and the Allure emitter.
 
 ## Install
 

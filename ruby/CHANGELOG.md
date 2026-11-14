@@ -95,6 +95,15 @@ notes come from the section below whose heading starts with `## [<version>]`.
   self-check that loads the config and the steps.
 - `nuka check` reports `features-dir-missing` when there is no
   `features/`, and `no-step-files-found` when it holds no step file.
+- `nuka check` reports more of the TypeScript engine's findings, in its
+  words: a pattern that cannot be read (`unnamed-capture`,
+  `unterminated-capture`, `invalid-capture-key`, `duplicate-capture-key`,
+  `unknown-parameter-type`, `pattern-syntax-error`),
+  `capture-type-mismatch`, `duplicate-pattern`, `then-without-claims`,
+  `claims-outside-then`, `condition-tag-malformed`, `condition-unknown`,
+  `expects-tag-malformed`, `outline-rows-share-name`, and the vocabulary
+  half of `scenario-without-then`. A whole-project check adds the notes
+  `pattern-unbound` and `step-description-todo`.
 
 ### Changed
 

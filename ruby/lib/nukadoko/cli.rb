@@ -34,7 +34,8 @@ module Nukadoko
       end
       steps = Nukadoko.load_steps(File.join(@project, "features", "steps"))
       scenarios = Dir.chdir(@project) { Engine.load_features("features") }
-      check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")))
+      declared = (Nukadoko.program_options[:environments] || {}).values.flat_map { (_1[:conditions] || {}).keys.map(&:to_s) }
+      check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")), full: @command == "check", conditions: declared)
       findings = check.findings.map { relative(_1).to_h }
       case @command
       when "check" then finish("check", check.passed?, findings: findings)
