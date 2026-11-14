@@ -10,7 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
-const cli = path.join(root, "dist", "cli.js");
+// The TypeScript engine is the package under typescript/.
+const engine = path.join(root, "typescript");
+const cli = path.join(engine, "dist", "cli.js");
 const write = process.argv.includes("--write");
 const only = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 
@@ -31,7 +33,7 @@ function project(caseDir) {
   if (existsSync(path.join(caseDir, "files"))) cpSync(path.join(caseDir, "files"), dir, { recursive: true });
   writeFileSync(path.join(dir, "package.json"), '{ "type": "module" }\n');
   mkdirSync(path.join(dir, "node_modules"));
-  symlinkSync(root, path.join(dir, "node_modules", "nukadoko"), "dir");
+  symlinkSync(engine, path.join(dir, "node_modules", "nukadoko"), "dir");
   const browser = process.env.NUKADOKO_CHROMIUM ? `browser: { executablePath: ${JSON.stringify(process.env.NUKADOKO_CHROMIUM)} }` : "";
   const ownConfig = path.join(caseDir, "config.ts");
   // A case that declares fixtures brings its own config; the rest get one that only names the browser.

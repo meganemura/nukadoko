@@ -9,7 +9,7 @@ its own `package.json`); this door works there too, using `.mts` in place
 of `.ts` for both nukadoko's config and its step files (Stage 0 below). For
 a full worked example of every stage below, with real captured command
 output, see
-[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration).
+[examples/migration](https://github.com/meganemura/nukadoko/tree/main/typescript/examples/migration).
 
 Nothing below applies if there is no cucumber-js suite to begin with. A
 project already running Playwright Test directly, with no feature files and

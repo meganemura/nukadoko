@@ -911,7 +911,7 @@ message, if a project already has one under any name Allure auto-detects);
 without it, every nukadoko failure lands in Allure 3's one built-in
 "Product errors" category instead of one of the nine `error.kind` ones. A
 project not using `init` can copy
-[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs)
+[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs)
 by hand.
 
 Pass `--output` to each command. Allure defaults it to `allure-report/`
@@ -1075,7 +1075,7 @@ turning up later as a step nothing defined.
 
 See [docs/migration.md](docs/migration.md) for the step-by-step guide with
 the audit's findings, and
-[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration)
+[examples/migration](https://github.com/meganemura/nukadoko/tree/main/typescript/examples/migration)
 for a worked example running end to end.
 
 Already on Playwright Test, with no cucumber and no Gherkin? That is a

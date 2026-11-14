@@ -70,6 +70,18 @@ the nukadoko skill says how. M12 (concurrency) is in: `nuka run
 and `@nukadoko:serial` declares a feature that has to run alone. Still
 unimplemented: the AI-assisted glue converter.
 
+## Layout
+
+One engine per language, side by side: `typescript/` is the npm package
+(its `src/`, `tests/`, `scripts/`, `selftest-suite/`, `examples/`, and
+`package.json`; run `npm` there), and `ruby/` is the gem. What both
+engines follow stays at the root: `docs/` (the spec among them),
+`skills/`, `conformance/` (the cases both engines must judge the same
+way), the READMEs, `CHANGELOG.md`, and `llms.txt`. The npm package still
+ships those shared files: `npm run build` copies them into `typescript/`,
+where git ignores them. Edit the root's files; a change to a copy is lost
+on the next build.
+
 ## Naming rule
 
 The npm package, this repository, the config file (`nukadoko.config.ts`),

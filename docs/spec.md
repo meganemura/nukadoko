@@ -9269,7 +9269,7 @@ A wrong link is worse than no link, and every scheme tried produced one, so a st
 The `historyPath` setting makes the scenario history visible. It belongs in `allurerc.mjs`, which configures Allure 3, not nukadoko. Without this setting, Allure 3 does not build history for `generate`, `watch`, or `report`, even with a stable scenario `historyId`.
 A project with a perfectly stable identity and no `historyPath` still sees no trend, no regressed/fixed transition, no flaky detection, and nothing in the report itself points at a missing config key as the reason.
 `nuka init --allure` writes it unconditionally into the `allurerc.mjs` it generates, pointing at `.nukadoko/export/allure-history.jsonl`, kept beside the disposable `allure-results/` directory rather than inside it, so clearing results between runs never discards it.
-[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) carries the same field for a project not using `nuka init`.
+[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) carries the same field for a project not using `nuka init`.
 Setting `historyPath` never makes a step entry's own history visible: a step entry has no identity to build one from in the first place.
 
 A team that migrates an existing suite to nukadoko starts new Allure history, trends, and retry tracking. The previous tool computed history with a different `historyId` formula, which nukadoko deliberately does not reuse.
@@ -9330,7 +9330,7 @@ The two Allure generations turn that into a category by different paths, and the
   Dropped at a project's root it is picked up automatically (Allure 3 auto-detects `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory, no `--config` flag needed).
   `nuka init` checks all six extensions first and writes nothing, naming the file it found on stderr, when a project already has one.
   Without any of them, every nukadoko failure lands in Allure 3's one built-in "Product errors" category instead.
-  A project not using `nuka init` can still copy [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) by hand.
+  A project not using `nuka init` can still copy [`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) by hand.
 
 Before and After hooks share one scenario-scope Allure container.
 Each hook becomes a fixture with its trace, attachments, and child timeline.

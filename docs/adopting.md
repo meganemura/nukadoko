@@ -60,7 +60,7 @@ Decide the optional flags now. `nuka init` refuses to run again once
 
 - `--allure` writes `allurerc.mjs`, which sorts failures into Allure
   categories. Without it, copy
-  [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) by hand.
+  [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) by hand.
 
 A program under test that serves HTTP goes in a second file,
 `nukadoko.program.ts`, which `nuka init` does not write. See

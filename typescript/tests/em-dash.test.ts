@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { repoRoot } from "./helpers/fixtures.js";
+import { sharedRoot } from "./helpers/fixtures.js";
 
 // Responsibility: enforce the project's no-em-dash-in-prose rule (CLAUDE.md
 // "Hard rules") across the surfaces a reader outside this repository
@@ -26,7 +26,7 @@ import { repoRoot } from "./helpers/fixtures.js";
 const EM_DASH = "—";
 
 const targetDirs = ["docs", "skills"];
-const targetFiles = ["README.md", "README.ja.md", "CONTRIBUTING.md"];
+const targetFiles = ["README.md", "README.ja.md", "CONTRIBUTING.md", "ruby/README.md", "ruby/README.ja.md", "conformance/README.md"];
 
 async function listMarkdownFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true, recursive: true });
@@ -67,17 +67,17 @@ describe("no em-dash in prose", () => {
   it("finds none in docs/, skills/, README.md, README.ja.md, or CONTRIBUTING.md outside fenced code blocks", async () => {
     const files: string[] = [];
     for (const relDir of targetDirs) {
-      files.push(...(await listMarkdownFiles(path.join(repoRoot, relDir))));
+      files.push(...(await listMarkdownFiles(path.join(sharedRoot, relDir))));
     }
     for (const relFile of targetFiles) {
-      files.push(path.join(repoRoot, relFile));
+      files.push(path.join(sharedRoot, relFile));
     }
 
     const violations: Violation[] = [];
     for (const file of files) {
       const content = await readFile(file, "utf8");
       for (const { line, text } of findEmDashesOutsideFences(content)) {
-        violations.push({ file: path.relative(repoRoot, file), line, text });
+        violations.push({ file: path.relative(sharedRoot, file), line, text });
       }
     }
 

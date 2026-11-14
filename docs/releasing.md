@@ -1,5 +1,9 @@
 # Releasing
 
+The npm package is the directory `typescript/`. Every `package.json`
+on this page is `typescript/package.json`, and every `npm` command runs
+there. The gem is `ruby/`; its own section is at the end.
+
 nukadoko is already on npm. A release is the npm package and a git tag
 whose name is `v` plus the `package.json` version. A push to `main` that
 changes `package.json` runs

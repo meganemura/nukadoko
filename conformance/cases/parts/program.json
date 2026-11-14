@@ -1,1 +1,1 @@
-{ "serve": { "command": "node {root}/examples/todo/app/server.ts --port {port}", "ready": "/todos" } }
+{ "serve": { "command": "node {root}/typescript/examples/todo/app/server.ts --port {port}", "ready": "/todos" } }

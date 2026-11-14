@@ -464,7 +464,7 @@ This part does not change release to release.
 - **Three error kinds and three Allure categories are new.** A reader
   that switches on `error.kind` adds `claim_broken`, `unobserved`, and
   `claim_unjudged`. A project with an `allurerc.mjs` from an earlier
-  release copies the three new rules from [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs);
+  release copies the three new rules from [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs);
   without them, Allure 3 files these kinds under "Product errors".
   `nuka report --format allure` writes Allure 2's `categories.json` with
   all ten on its own.

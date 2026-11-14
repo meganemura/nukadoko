@@ -1,5 +1,5 @@
 {
-  "serve": { "command": "node {root}/examples/acceptance/http-api/src/server.ts", "ready": "/items" },
+  "serve": { "command": "node {root}/typescript/examples/acceptance/http-api/src/server.ts", "ready": "/items" },
   "env": { "PORT": "{port}", "ITEM_COUNT": "{condition.item_count}" },
   "environments": {
     "count-off": { "conditions": { "item_count": false } },

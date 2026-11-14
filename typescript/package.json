@@ -23,7 +23,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/guard-playwright-types.ts dist",
+    "build": "node scripts/stage-shared.ts && tsc -p tsconfig.build.json && node scripts/guard-playwright-types.ts dist",
     "typecheck": "npm run build && tsc -p tsconfig.json",
     "archstrict": "archstrict check",
     "test": "npm run build && vitest run",
@@ -50,7 +50,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/meganemura/nukadoko.git"
+    "url": "git+https://github.com/meganemura/nukadoko.git",
+    "directory": "typescript"
   },
   "homepage": "https://github.com/meganemura/nukadoko#readme",
   "author": "meganemura",

@@ -13,8 +13,9 @@ ROOT = File.dirname(HERE)
 NUKA = File.join(ROOT, "ruby", "exe", "nuka")
 GEMFILE = File.join(ROOT, "ruby", "Gemfile")
 
+# The Playwright driver is the one the TypeScript engine installed, so both engines drive the same browser build.
 def nuka(dir, *args)
-  env = { "BUNDLE_GEMFILE" => GEMFILE, "PLAYWRIGHT_CLI" => File.join(ROOT, "node_modules", ".bin", "playwright") }
+  env = { "BUNDLE_GEMFILE" => GEMFILE, "PLAYWRIGHT_CLI" => File.join(ROOT, "typescript", "node_modules", ".bin", "playwright") }
   out, _status = Open3.capture2(env, "bundle", "exec", "ruby", NUKA, *args, "--json", chdir: dir, err: File::NULL)
   JSON.parse(out, symbolize_names: true)
 end

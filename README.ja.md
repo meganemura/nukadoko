@@ -840,7 +840,7 @@ npx allure open .nukadoko/allure-report                  # serve one already gen
 
 `nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出します(Allure が自動検出するいずれかの名前で既にあれば、書かずにその旨を伝えます)。
 これを置かないと、nukadoko のあらゆる失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまい、9 個の `error.kind` のどれにも分類されません。
-`init` を使わないプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
+`init` を使わないプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
 
 各コマンドに `--output` を渡してください。
 Allure はこれを省くとカレントディレクトリの `allure-report/` を既定にし、`watch` もそこへ書き込みます。
@@ -981,7 +981,7 @@ glue をテキストとして読むことは、glue の中に見える障害を�
 これはファイル拡張子の話ではなく、モジュール形式の話です。
 `.js` や `.mjs` の glue は他と同じように読まれ、`.cjs` や `.cts` のファイルは、後になって何も定義していない step として現れる代わりに、`nuka check` がそれを名指しします。
 
-手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
+手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](docs/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/typescript/examples/migration) を参照してください。
 
 cucumber も Gherkin も無く、Playwright Test だけを使っている場合は別の扉になります。
 [docs/migration-playwright-test.ja.md](docs/migration-playwright-test.ja.md) がその道筋です。

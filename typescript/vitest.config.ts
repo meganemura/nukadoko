@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    globalSetup: ["tests/global-setup.ts"],
     // Node loads this file itself: its `import()` has to reach the resolve
     // hook it installs, and a transformed copy's import goes through
     // Vitest's own loader instead (the file's header).

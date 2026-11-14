@@ -366,7 +366,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 - **error kind と Allure の category が 3 つずつ増えました。**
   `error.kind` で分岐する読み手は、`claim_broken`、`unobserved`、`claim_unjudged` を加えます。
-  以前のリリースの `allurerc.mjs` を持つプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) から新しい 3 つの rule をコピーします。
+  以前のリリースの `allurerc.mjs` を持つプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) から新しい 3 つの rule をコピーします。
   それがないと、Allure 3 はこれらの kind を「Product errors」に入れます。
   Allure 2 の `categories.json` は、`nuka report --format allure` が 10 個すべてを含めて自分で書きます。
 

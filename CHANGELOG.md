@@ -196,6 +196,16 @@ just until 0.1.
 
 ### Changed
 
+- **The TypeScript engine moved to `typescript/`, beside `ruby/`.** The
+  repository holds one engine per language now: `typescript/` is the npm
+  package (`src/`, `tests/`, `scripts/`, `selftest-suite/`, `examples/`,
+  `package.json`), and `ruby/` is the gem. What both engines follow stays
+  at the root: `docs/`, `skills/`, `conformance/`, the READMEs, this
+  changelog, and `llms.txt`. `npm run build` copies those shared files into
+  `typescript/`, so the npm package ships the same 1478 files at the same
+  paths as before, and nothing changes for a project that installs it. A
+  contributor runs `npm` in `typescript/`.
+
 - **A scenario whose claims held over a failing program is no longer
   green.** Claims that held over a page that answered 500 said nothing
   about the criterion, and the row read `held`. A passed execution whose

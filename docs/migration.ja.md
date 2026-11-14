@@ -8,7 +8,7 @@
 既存のスイートは CommonJS のこともあります(自分の `package.json` に `"type": "module"` が無い場合)。
 この扉はそこでも動きます。
 nukadoko の設定と step ファイルの両方で、`.ts` の代わりに `.mts` を使います(下の Stage 0)。
-以下の各段階の実際に取得したコマンド出力を伴う完全な実例については、[examples/migration](https://github.com/meganemura/nukadoko/tree/main/examples/migration) を参照してください。
+以下の各段階の実際に取得したコマンド出力を伴う完全な実例については、[examples/migration](https://github.com/meganemura/nukadoko/tree/main/typescript/examples/migration) を参照してください。
 
 そもそも cucumber-js のスイートがなければ、以下はどれも当てはまりません。
 Playwright Test に対して直接書かれたプロジェクトで、feature ファイルも切り替える glue もない場合は、別の扉から始まります。

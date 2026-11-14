@@ -1,5 +1,9 @@
 # リリースする
 
+npm パッケージはディレクトリ `typescript/` です。
+このページの `package.json` はすべて `typescript/package.json` で、`npm` のコマンドはすべてそこで実行します。
+gem は `ruby/` で、その節は最後にあります。
+
 nukadoko はすでに npm にあります。
 リリースは npm パッケージと、`package.json` の version に `v` を付けた git tag です。
 `package.json` を変える `main` への push が [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) を走らせます。

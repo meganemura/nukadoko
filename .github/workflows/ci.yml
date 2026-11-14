@@ -28,6 +28,9 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -37,6 +40,7 @@ jobs:
           # and npm 10 cannot install from it. See CONTRIBUTING.md.
           node-version: 24
           cache: npm
+          cache-dependency-path: typescript/package-lock.json
 
       # `--ignore-scripts` is also set by this repository's .npmrc. It is
       # written here too because the line is where a reader looks.
@@ -64,6 +68,9 @@ jobs:
   # matrix release.
   packed-tarball:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: typescript
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -75,6 +82,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: typescript/package-lock.json
       - run: npm ci --ignore-scripts
       - run: npm run build
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -93,6 +101,9 @@ jobs:
   # escaping against it. The rest of the suite runs on ubuntu.
   windows-run-command:
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: typescript
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,6 +111,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: typescript/package-lock.json
       - run: npm ci --ignore-scripts
       - run: npx vitest run tests/windows-command.test.ts
 
@@ -116,9 +128,13 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: typescript/package-lock.json
       - run: npm ci --ignore-scripts
+        working-directory: typescript
       - run: npm run build
+        working-directory: typescript
       - run: npx playwright install --with-deps chromium
+        working-directory: typescript
       - uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           ruby-version: "3.4"

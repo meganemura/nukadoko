@@ -7174,7 +7174,7 @@ feature ファイルの冒頭にコメント行を 1 行足しただけで、す
 identity が完全に安定していて `historyPath` の無いプロジェクトは、trend も、regressed/fixed の遷移も、flaky の検出も一切見えず、レポート自身のどこにも、config のキーが欠けていることを指すものがありません。
 `nuka init --allure` は生成する `allurerc.mjs` にこれを無条件で書き込み、`.nukadoko/export/allure-history.jsonl` を指します。
 使い捨ての `allure-results/` ディレクトリの中ではなく、その隣に置かれるため、run のたびに result をクリアしても消えません。
-[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) は、`nuka init` を使わないプロジェクト向けに同じフィールドを持ちます。
+[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) は、`nuka init` を使わないプロジェクト向けに同じフィールドを持ちます。
 `historyPath` を設定しても、step entry 自身の history が見えるようになるわけではありません。
 step entry はそもそも、それを組み立てるための identity を持たないからです。
 
@@ -7266,7 +7266,7 @@ marker は、失敗した step の step record(hook が scenario を止めた場
   プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
   `nuka init` はこの 6 つの拡張子すべてを先にチェックし、プロジェクトに既にどれか 1 つあれば何も書かず、見つけたファイル名を stderr に出します。
   そのどれも置かないと、すべての nukadoko の失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまいます。
-  `nuka init` を使わないプロジェクトは、[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
+  `nuka init` を使わないプロジェクトは、[`examples/allure/allurerc.mjs`](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
 
 Before hook と After hook は scenario scope の 1 つの Allure container を共有します。
 各 hook は trace、attachment、子 timeline を持つ fixture になります。

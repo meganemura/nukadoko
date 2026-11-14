@@ -1,8 +1,22 @@
 # Contributing
 
+## Layout
+
+The repository holds one engine per language, side by side:
+`typescript/` is the npm package, and `ruby/` is the gem. What both
+engines follow stays at the root: `docs/` (the spec among them),
+`skills/`, `conformance/` (the cases both engines must judge the same
+way), the READMEs, `CHANGELOG.md`, and `llms.txt`. The npm package still
+ships `docs/`, `skills/`, the READMEs, `CHANGELOG.md`, and `llms.txt`:
+`npm run build` copies them from the root into `typescript/`, where they
+are gitignored. Edit the root's files, never the copies.
+
 ## Setup
 
+Run the commands on this page in `typescript/`.
+
 ```sh
+cd typescript
 npm ci
 npx playwright install chromium
 ```
@@ -40,7 +54,7 @@ build and the tests were measured without it.
 | `npm run typecheck` | Builds, then type-checks sources and tests together |
 | `npm run archstrict` | Checks module boundaries against the package exports |
 | `npm run coverage` | Builds, then runs the tests with coverage |
-| `npm run build` | Compiles `src/` to `dist/` |
+| `npm run build` | Copies the root's shared files in, then compiles `src/` to `dist/` |
 | `npm run skill-examples` | Builds, packs, and runs the nukadoko skill's worked examples from the tarball |
 
 Every command above that needs a build runs it in its own body rather than
@@ -57,7 +71,7 @@ resolve to.
 ## Releasing
 
 The publish path is [docs/releasing.md](docs/releasing.md). A commit
-that bumps the `package.json` version and lands on `main` through
+that bumps the `typescript/package.json` version and lands on `main` through
 `queue` runs `.github/workflows/publish.yml`, which publishes with
 GitHub Actions OIDC and then creates the `v<version>` tag and the
 GitHub release for that version. Do not push a release tag by hand,

@@ -14,6 +14,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export const testsDir = path.resolve(here, "..");
 export const repoRoot = path.resolve(testsDir, "..");
+// The repository root, above this package: where the files both engines
+// follow live (docs/, skills/, the READMEs, CONTRIBUTING.md). The package
+// holds build-time copies of most of them; a check of their prose reads
+// the originals.
+export const sharedRoot = path.resolve(repoRoot, "..");
 export const fixturesDir = path.join(testsDir, "fixtures");
 
 /** Node arguments that run a file from `src/` directly: `src/` imports its

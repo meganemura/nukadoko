@@ -60,7 +60,7 @@ next: read node_modules/nukadoko/llms.txt, written for an agent: the loop, every
 
 - `--allure` は `allurerc.mjs` を書きます。
   これは失敗を Allure のカテゴリに振り分けます。
-  付けなかった場合は、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーします。
+  付けなかった場合は、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) を手でコピーします。
 
 HTTP を提供するテスト対象のプログラムは、2 つ目のファイル `nukadoko.program.ts` に書きます。
 `nuka init` はこのファイルを書きません。
