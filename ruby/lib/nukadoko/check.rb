@@ -515,6 +515,7 @@ module Nukadoko
               check_fill(scenario, line, step, captures)
               check_position(scenario, line, step)
               check_kinds(scenario, line, step, captures)
+              check_poll(step)
             else
               findings << Finding.new("error", "ambiguous-step", scenario.uri, line.line, nil,
                                       %("#{line.text}" matches more than one step: #{matches.map { _1.first.step_name }.join(", ")}), Codes.fix("ambiguous-step"))
@@ -576,6 +577,71 @@ module Nukadoko
         end
       end
 
+      # A page between two renders can show any state for one frame, so a
+      # claim step whose observe reaches a page, directly or through a
+      # project fixture, has to say whether it reads once or until its
+      # claims hold. Reported once for each step.
+      #: (singleton(Step)) -> void
+      def check_poll(step)
+        return unless step.claims && step.method_defined?(:observe) && step.poll.nil?
+        return if (@poll_reported ||= {}).key?(step)
+
+        @poll_reported[step] = true
+        return unless reaches_browser?(step.bag)
+
+        findings << Finding.about_step("error", "claim-poll-unstated", step,
+                                       %(Step "#{step.step_name}" observes a browser page and does not state poll. ) +
+                                         "Write poll: { timeout_ms } to read until every claim holds on two consecutive readings, or poll: false to read once",
+                                       Codes.fix("claim-poll-unstated"))
+      end
+
+      #: (Array[Symbol]) -> bool
+      def reaches_browser?(names)
+        fixtures = Nukadoko.project_fixtures
+        seen = [] #: Array[Symbol]
+        pending = names.dup
+        while (name = pending.shift)
+          next if seen.include?(name)
+
+          seen << name
+          return true if Vocabulary::BROWSER.include?(name)
+
+          pending.concat(fixtures[name].dependencies) if fixtures.key?(name)
+        end
+        false
+      end
+
+      # The key a table or docstring fills is what the line states; a claim
+      # step that neither compares a claim with it nor observes checks
+      # nothing the line said.
+      #: (untyped, untyped, singleton(Step), String) -> void
+      def check_unread(scenario, line, step, key)
+        claims = step.claims
+        return unless claims && !step.method_defined?(:observe) && !claim_keys_read(claims).include?(key)
+
+        attached = line.doc_string ? "docstring" : "table"
+        findings << Finding.new("error", "claim-sentence-unread", scenario.uri, line.line, step.step_name,
+                                %(Step "#{step.step_name}": the #{attached} of the line fills args.#{key}, which no claim reads, and the step has no observe to receive it, so nothing checks the value the line states. Compare a claim with "#{key}", or take the #{attached} off the line),
+                                Codes.fix("claim-sentence-unread"))
+      end
+
+      # The args keys a step's claims read: the head of each actual path, a
+      # sentence key named as an expected value, and the head of a from
+      # expected path, in every claim and in each each's where and claims.
+      #: (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def claim_keys_read(claims)
+        head = ->(path) { path.to_s.split(".").first.to_s }
+        expected = lambda do |value|
+          if value.is_a?(String) then value
+          elsif value.is_a?(Hash) && value[:from] then head.(value[:from])
+          end
+        end
+        claims.flat_map do |claim|
+          items = claim[:each] ? [*(claim[:each][:where] || []), *claim[:each][:claims]] : [claim]
+          [head.(claim[:actual]), *items.map { expected.(_1[:expected]) }]
+        end.compact.uniq
+      end
+
       # The table or docstring fills the one required key no capture and no
       # from speaks for, so zero or two such keys, or a key of a type the
       # attachment can never be, fail binding with certainty.
@@ -586,8 +652,11 @@ module Nukadoko
             detail = missing.empty? ? "every args key is already consumed by named captures or declared from" : "#{missing.size} args keys are left unconsumed (#{missing.join(", ")}); exactly one is required"
             findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name,
                                     %(Step "#{step.step_name}" has a table/docstring attached but #{detail}), Codes.fix("table-docstring-key-mismatch"))
-          elsif (message = attachment_mismatch(step, missing.first, line))
-            findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name, message, Codes.fix("table-docstring-key-mismatch"))
+          else
+            check_unread(scenario, line, step, missing.first.to_s)
+            if (message = attachment_mismatch(step, missing.first, line))
+              findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name, message, Codes.fix("table-docstring-key-mismatch"))
+            end
           end
           return
         end

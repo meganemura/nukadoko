@@ -160,6 +160,28 @@ module Nukadoko
       # Then position are both mistakes.
       def check_position: (untyped scenario, untyped line, untyped step) -> untyped
 
+      # A page between two renders can show any state for one frame, so a
+      # claim step whose observe reaches a page, directly or through a
+      # project fixture, has to say whether it reads once or until its
+      # claims hold. Reported once for each step.
+      # : (singleton(Step)) -> void
+      def check_poll: (singleton(Step)) -> void
+
+      # : (Array[Symbol]) -> bool
+      def reaches_browser?: (Array[Symbol]) -> bool
+
+      # The key a table or docstring fills is what the line states; a claim
+      # step that neither compares a claim with it nor observes checks
+      # nothing the line said.
+      # : (untyped, untyped, singleton(Step), String) -> void
+      def check_unread: (untyped, untyped, singleton(Step), String) -> void
+
+      # The args keys a step's claims read: the head of each actual path, a
+      # sentence key named as an expected value, and the head of a from
+      # expected path, in every claim and in each each's where and claims.
+      # : (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def claim_keys_read: (Array[Hash[Symbol, untyped]]) -> Array[String]
+
       # The table or docstring fills the one required key no capture and no
       # from speaks for, so zero or two such keys, or a key of a type the
       # attachment can never be, fail binding with certainty.

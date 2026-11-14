@@ -222,6 +222,7 @@ notes come from the section below whose heading starts with `## [<version>]`.
   types as before, now from that signature, and `run_command` declares
   `timeout:` and `files:` too.
 - `nuka check` reads a claim step's claims against the step that fills each `from` value, as the TypeScript engine does: `claim-path-unknown` for a path its `returns` does not have, `claim-field-stripped` and `claim-args-dropped` for a lacks-field on a key an object schema drops, `claim-not-an-array` for an each on a value that is never an array, and `claim-compares-itself` when both sides read one place.
+- `nuka check` reports `claim-poll-unstated` for a claim step whose observe reaches a browser page, directly or through a project fixture, and does not state poll, and `claim-sentence-unread` for a table or docstring that fills a key no claim reads on a step with no observe.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.
