@@ -6,8 +6,9 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 [`../conformance/`](../conformance/README.md) のケースがそれを確かめます。
 
 状態: 初期の核です。
-todo の例を check して実行できます。
-TypeScript 版の機能の多くはまだありません。
+`conformance/` の 4 つのケースを通します。
+HTTP のステップ、ブラウザのステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
+`parts`、プロジェクトが定義するフィクスチャ、poll、`--base`、`nuka check` の指摘の多くなど、TypeScript 版の機能の多くはまだありません。
 
 ## ステップ
 
