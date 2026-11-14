@@ -147,8 +147,6 @@ workflow の形は `publish.yml` と同じです。
 `check` ジョブは gem のバージョンを読み、tag `ruby-v<version>` を探し、`ruby/CHANGELOG.md` の見出しが `## [<version>]` で始まる節を読みます。
 `test` ジョブは `ci.yml` の `ruby-engine` ジョブと同じチェックを実行します。
 `publish` ジョブは GitHub Environment `rubygems` を待ち、gem をビルドし、GitHub の OIDC トークンを RubyGems の資格情報に交換し、`gem push` を実行します。
-その交換では、gem を持つ RubyGems.org のアカウント(`RUBYGEMS_OWNER`)を名乗ります。
-pending trusted publisher から新しい gem を作るとき、RubyGems はそれを求めます。
 そのあと `release` ジョブが tag `ruby-v<version>` と、latest にしない GitHub release を作ります。
 npm パッケージの release が latest のまま残ります。
 `ruby-` の接頭辞で、gem の tag と npm パッケージの `v*` の tag を分けます。
@@ -171,6 +169,10 @@ npm パッケージの release が latest のまま残ります。
    - Workflow repository owner と name: 両方とも空にします(workflow はこのリポジトリにあり、ほかの場所の reusable workflow ではありません)。
 
    最初の push のあと、pending publisher はその gem の trusted publisher になります。
+3. 最初のバージョンは push ではなく Actions から出します。
+   `main` で `release-gem.yml` を実行し、入力 `rubygems-owner` に Pending Trusted Publishers のページに出る数字のアカウント ID を入れます(meganemura は `70209`)。
+   RubyGems は、トークンの交換で持ち主のアカウントを名乗ったときだけ新しい gem を作ります。
+   2 つ目からのバージョンは push で出し、入力は要りません。
 
 ### gem の各バージョン
 

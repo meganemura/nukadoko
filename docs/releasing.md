@@ -184,10 +184,7 @@ that version's section of `ruby/CHANGELOG.md`, whose heading starts with
 `## [<version>]`. The `test` job runs the checks of `ci.yml`'s
 `ruby-engine` job. The `publish` job waits for the GitHub Environment
 `rubygems`, builds the gem, exchanges the GitHub OIDC token for a
-RubyGems credential, and runs `gem push`. The exchange names the
-RubyGems.org account that will own the gem (`RUBYGEMS_OWNER`), which
-RubyGems requires before a pending trusted publisher can create a new
-gem. The `release` job then creates
+RubyGems credential, and runs `gem push`. The `release` job then creates
 the tag `ruby-v<version>` and a GitHub release that is not marked as
 the latest, so the npm package's release stays the latest one. The
 `ruby-` prefix keeps the gem's tags apart from the npm package's `v*`
@@ -218,6 +215,12 @@ These are human steps, done once.
 
    After the first push the pending publisher becomes the gem's trusted
    publisher.
+3. Publish the first version from Actions, not from a push: run
+   `release-gem.yml` on `main` with the input `rubygems-owner` set to the
+   numeric account id shown on the Pending Trusted Publishers page
+   (meganemura's is `70209`). RubyGems creates a new gem only when the
+   token exchange names the account that will own it. Every later
+   version is a push and needs no input.
 
 ### Each gem version
 
