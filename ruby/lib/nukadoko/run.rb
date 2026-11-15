@@ -823,7 +823,7 @@ module Nukadoko
           patterns = [step.pattern].compact
           record[:claim_records] = step.claims.zip(judged).map do |declared, result|
             if declared[:each]
-              RunRecord.each_claim(declared, observed, args, origins, texts, observed_from: observes && !from_values.key?(declared[:actual].to_s.split(".").first), patterns: patterns)
+              RunRecord.each_claim(declared, sides.(observed), origins, texts, patterns: patterns)
             else
               RunRecord.claim(declared, result, origins, texts, observed: observes && !from_values.key?(declared[:actual].to_s.split(".").first), patterns: patterns)
             end

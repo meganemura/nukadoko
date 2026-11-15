@@ -2,6 +2,7 @@ Feature: a claim reads its value as the TypeScript engine reads it
 
   A claim's actual is a path of dot-separated keys into what observe returned, and its at walks on from there.
   A path that finds nothing breaks the claim, naming where the walk stopped.
+  An each reads the same paths inside every item, and a where clause that implies the item claim breaks it.
   A claim judges a plain JSON copy of the value: an integer past Number.MAX_SAFE_INTEGER leaves it unjudged, a whole number is one number, and an object lists its index keys first, as JavaScript holds it.
 
   Scenario: a claim reads its value as the TypeScript engine reads it
@@ -11,7 +12,7 @@ Feature: a claim reads its value as the TypeScript engine reads it
     And the summary is
       """
       <!-- nukadoko:run -->
-      # nukadoko run failed: 6 criteria, 1 held, 5 failed
+      # nukadoko run failed: 9 criteria, 2 held, 7 failed
 
       | verdict | criterion | head default |
       | --- | --- | --- |
@@ -21,6 +22,9 @@ Feature: a claim reads its value as the TypeScript engine reads it
       | failed | `features/reads.feature:13` an at with nothing there | fail@14 |
       | failed | `features/reads.feature:16` a view of a value that is no text | fail@17 |
       | failed | `features/reads.feature:19` an integer JavaScript cannot hold exactly | broke@20 |
+      | held | `features/reads.feature:22` each reads a path inside every item | pass |
+      | failed | `features/reads.feature:25` an item whose path stops early | fail@26 |
+      | failed | `features/reads.feature:28` a where clause that implies the item claim | fail@29 |
 
       - `features/reads.feature:7` a path whose last key is missing: a claim broke at line 8 in default
         - step "the name-field of '{"user":{}}' is "aki"": `claim broken: observe:value.user.name equal "aki" (sentence:expected): observe:value.user.name is undefined`; record `steps/step-<id>`
@@ -32,6 +36,10 @@ Feature: a claim reads its value as the TypeScript engine reads it
         - step "the text-start of '{"a":1}' is "a"": `claim broken: observe:value as text starts-with-text "a" (sentence:expected): view text reads a string, and the value is an object`; record `steps/step-<id>`
       - `features/reads.feature:19` an integer JavaScript cannot hold exactly: stopped at line 20 in default before a claim there was judged
         - step "the whole-value of '[100000000000000000000]' is '[1]'": `claim unjudged: observe:value equal [1] (sentence:expected as json): observe:value.0 is the integer 100000000000000000000, beyond Number.MAX_SAFE_INTEGER, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads`; record `steps/step-<id>`
+      - `features/reads.feature:25` an item whose path stops early: a claim broke at line 26 in default
+        - step "every row of '{"rows":[{"user":{"name":"aki"}},{"user":{}}]}' names "aki"": `claim broken: each of observe:value.rows (2 items): user.name equal "aki" (sentence:expected)`; record `steps/step-<id>`
+      - `features/reads.feature:28` a where clause that implies the item claim: a claim broke at line 29 in default
+        - step "every row of '{"rows":[{"score":12}]}' with a score over 10 scores at least 5": `claim broken: each of observe:value.rows (1 item, 0 selected) where score greater-than 10 (literal:10): score at-least 5 (literal:5): each.where[0] selects the items whose score is greater-than 10, and every such item holds each.claims[0], at-least 5, whatever the data, so the claim measures nothing`; record `steps/step-<id>`
 
       ## What this run does not show
 
@@ -65,6 +73,12 @@ Feature: a claim reads its value as the TypeScript engine reads it
         - observe:value as text starts-with-text "a" (sentence:expected) broken: view text reads a string, and the value is an object; measured: none
       - `features/reads.feature:20` the whole-value of '[100000000000000000000]' is '[1]'
         - observe:value equal [1] (sentence:expected as json) unjudged: observe:value.0 is the integer 100000000000000000000, beyond Number.MAX_SAFE_INTEGER, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads; measured: none
+      - `features/reads.feature:23` every row of '{"rows":[{"user":{"name":"aki"}},{"user":{"name":"aki"}}]}' names "aki"
+        - each of observe:value.rows (2 items): user.name equal "aki" (sentence:expected) held; measured: none
+      - `features/reads.feature:26` every row of '{"rows":[{"user":{"name":"aki"}},{"user":{}}]}' names "aki"
+        - each of observe:value.rows (2 items): user.name equal "aki" (sentence:expected) broken; item 1: observe:value.rows.1.user.name equal "aki" (sentence:expected); measured: none
+      - `features/reads.feature:29` every row of '{"rows":[{"score":12}]}' with a score over 10 scores at least 5
+        - each of observe:value.rows (1 item, 0 selected) where score greater-than 10 (literal:10): score at-least 5 (literal:5) broken: each.where[0] selects the items whose score is greater-than 10, and every such item holds each.claims[0], at-least 5, whatever the data, so the claim measures nothing; measured: none
 
       ## Rerun a failed scenario
 
@@ -74,5 +88,7 @@ Feature: a claim reads its value as the TypeScript engine reads it
       nuka run features/reads.feature:13
       nuka run features/reads.feature:16
       nuka run features/reads.feature:19
+      nuka run features/reads.feature:25
+      nuka run features/reads.feature:28
       ```
       """

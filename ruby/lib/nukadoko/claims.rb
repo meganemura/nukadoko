@@ -113,11 +113,22 @@ module Nukadoko
       def self.judge(claims, observed, args, inputs = nil)
         claims.map do |claim|
           sided = !claim[:each] && claim[:compare] != "fits-aria-snapshot" && !(claim[:compare] == "judged-as" && aria_judged(claim, observed))
-          inputs && sided ? ClaimSides.judge(claim, inputs) : judge_one(claim, observed, args)
+next each_judged(claim, inputs) if inputs && claim[:each]
+
+inputs && sided ? ClaimSides.judge(claim, inputs) : judge_one(claim, observed, args)
         end
       end
 
-      # `top` is what observe returned, which an expected { observe } reads
+# An each judged as its record judges it, so a poll waits on the
+# outcome the record will hold.
+#: (Hash[Symbol, untyped], ClaimSides::Inputs) -> Hash[Symbol, untyped]
+def self.each_judged(claim, inputs)
+  record = RunRecord.each_claim(claim, inputs, {}, {})
+  { holds: record[:outcome] == "held", **(record[:reason] ? { reason: record[:reason] } : {}),
+    **(record[:outcome] == "unjudged" ? { unjudged: true } : {}) }
+end
+
+# `top` is what observe returned, which an expected { observe } reads
       # from inside an each as well. A claim on an item with no actual reads
       # the item itself.
       #: (Hash[Symbol, untyped], untyped, untyped, ?untyped) -> Hash[Symbol, untyped]

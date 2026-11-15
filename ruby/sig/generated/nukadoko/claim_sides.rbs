@@ -164,6 +164,44 @@ module Nukadoko
       # A top-level comparison claim, judged as Claims.judge_one reports one.
       # : (Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
       def self.judge: (Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
+
+      # One comparison on a side already read: a top-level claim's, or one
+      # item's under an each.
+      # : (Hash[Symbol, untyped], Side, Inputs, ?bool) -> Hash[Symbol, untyped]
+      def self.judge_comparison: (Hash[Symbol, untyped], Side, Inputs, ?bool) -> Hash[Symbol, untyped]
+
+      # : (Hash[Symbol, untyped], StandardError) -> Hash[Symbol, untyped]
+      def self.unjudgeable: (Hash[Symbol, untyped], StandardError) -> Hash[Symbol, untyped]
+
+      # The array an each reads, after its view and at.
+      # : (Hash[Symbol, untyped], Inputs) -> Side
+      def self.array_side: (Hash[Symbol, untyped], Inputs) -> Side
+
+      # The side an item claim reads: the item, or a path inside it. The item
+      # is part of a snapshot, so a read inside it finds a value or nothing.
+      # : (untyped, Place, Hash[Symbol, untyped]) -> Side
+      def self.item_side: (untyped, Place, Hash[Symbol, untyped]) -> Side
+
+      # What ends an each before any item: a declaration whose expected value
+      # observe received, or reads through what observe returned while observe
+      # received the array, does not depend on an item, and an empty array
+      # would hide it. Then a where clause that implies an item claim.
+      # : (Hash[Symbol, untyped], Place, Inputs) -> Hash[Symbol, String]?
+      def self.each_stop: (Hash[Symbol, untyped], Place, Inputs) -> Hash[Symbol, String]?
+
+      # The first where clause and item claim that read one value where the
+      # clause implies the claim whatever the value is, as the reason that
+      # breaks the each: the claim holds on every item where selects, so
+      # "every item" measures nothing.
+      # : (Hash[Symbol, untyped], Inputs) -> String?
+      def self.where_implication: (Hash[Symbol, untyped], Inputs) -> String?
+
+      # Whether every value a where clause selects holds an item claim on the
+      # same value: the same order direction with a bound at least as strict,
+      # not-equal against the same value, or an is-a whose kind is the one JSON
+      # type the clause can compare.
+      # : (String, untyped, String, untyped) -> bool
+      def self.where_implies?: (String, untyped, String, untyped) -> bool
     end
   end
 end

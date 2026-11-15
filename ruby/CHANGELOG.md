@@ -74,6 +74,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - `nuka run --no-check` refuses to start when a step's declaration is one
   the TypeScript engine's `defineStep` refuses as its file loads, naming
   the first such file, instead of leaving the step out.
+- An `each` claim reads its array and each item's paths as the TypeScript
+  engine does, with the same reasons when a read finds nothing. It breaks
+  when a declaration's expected value is one observe received, and when a
+  `where` clause implies an item claim whatever the data (`greater-than 10`
+  then `at-least 5`), as there. A poll waits on the outcome the record holds.
 
 ## [0.2.0] - 2026-11-15
 

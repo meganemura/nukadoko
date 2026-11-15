@@ -18,3 +18,12 @@ Feature: reads
 
   Scenario: an integer JavaScript cannot hold exactly
     Then the whole-value of '[100000000000000000000]' is '[1]'
+
+  Scenario: each reads a path inside every item
+    Then every row of '{"rows":[{"user":{"name":"aki"}},{"user":{"name":"aki"}}]}' names "aki"
+
+  Scenario: an item whose path stops early
+    Then every row of '{"rows":[{"user":{"name":"aki"}},{"user":{}}]}' names "aki"
+
+  Scenario: a where clause that implies the item claim
+    Then every row of '{"rows":[{"score":12}]}' with a score over 10 scores at least 5

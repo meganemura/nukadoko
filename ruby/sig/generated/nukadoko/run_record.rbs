@@ -59,14 +59,15 @@ module Nukadoko
       # and item claim as declared, how many items the list held and how
       # many `where` selected, and the judged items, the broken first, at
       # most 20, in index order.
-      # : (Hash[Symbol, untyped], untyped, untyped, Hash[String, String], Hash[String, String?], observed_from: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
-      def self?.each_claim: (Hash[Symbol, untyped], untyped, untyped, Hash[String, String], Hash[String, String?], observed_from: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
+      # : (Hash[Symbol, untyped], Engine::ClaimSides::Inputs, Hash[String, String], Hash[String, String?], ?patterns: Array[String]) -> Hash[Symbol, untyped]
+      def self?.each_claim: (Hash[Symbol, untyped], Engine::ClaimSides::Inputs, Hash[String, String], Hash[String, String?], ?patterns: Array[String]) -> Hash[Symbol, untyped]
 
       # : (Hash[Symbol, untyped], untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
       def self?.item_declaration: (Hash[Symbol, untyped], untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
 
-      # : (Hash[Symbol, untyped], untyped, String, untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
-      def self?.item_comparison: (Hash[Symbol, untyped], untyped, String, untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
+      # One where or item claim on one item, judged on the side the item gives.
+      # : (Hash[Symbol, untyped], Engine::ClaimSides::Side, Engine::ClaimSides::Inputs, Hash[String, String], Hash[String, String?], Array[String]) -> Hash[Symbol, untyped]
+      def self?.item_comparison: (Hash[Symbol, untyped], Engine::ClaimSides::Side, Engine::ClaimSides::Inputs, Hash[String, String], Hash[String, String?], Array[String]) -> Hash[Symbol, untyped]
 
       # The claims of a scenario's step records, counted by outcome, in the
       # fields run.json gives them.

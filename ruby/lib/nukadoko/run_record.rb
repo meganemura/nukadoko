@@ -143,42 +143,43 @@ module Nukadoko
       # and item claim as declared, how many items the list held and how
       # many `where` selected, and the judged items, the broken first, at
       # most 20, in index order.
-      #: (Hash[Symbol, untyped], untyped, untyped, Hash[String, String], Hash[String, String?], observed_from: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
-      def each_claim(declared, observed, args, origins, texts, observed_from:, patterns: [])
-        key = declared[:actual].to_s
-        actual_from = place(observed_from ? "observe:#{key}" : origins.fetch(key, "sentence:#{key}"), declared[:view], declared[:at])
+      #: (Hash[Symbol, untyped], Engine::ClaimSides::Inputs, Hash[String, String], Hash[String, String?], ?patterns: Array[String]) -> Hash[Symbol, untyped]
+      def each_claim(declared, inputs, origins, texts, patterns: [])
+        sides = Engine::ClaimSides
+        args = inputs.args
+        observed = inputs.observed
         each = declared[:each]
         where = each[:where] || []
         declarations = { **(where.empty? ? {} : { where: where.map { item_declaration(_1, args, origins, texts, patterns, observed) } }),
                          claims: each[:claims].map { item_declaration(_1, args, origins, texts, patterns, observed) } }
-        base = { actual_from: actual_from, view: declared[:view], at: declared[:at]&.to_s }.compact
-        value = begin
-          Claims.dig(Claims.view(declared[:view], Claims.read(observed, declared[:actual])), declared[:at])
-        rescue StandardError => e
-          unread = e
+        array = sides.array_side(declared, inputs)
+        base = { actual_from: array.place.label, view: declared[:view], at: declared[:at]&.to_s }.compact
+        value = array.found[:value]
+        count = value.is_a?(Array) ? value.size : 0
+        ended = lambda do |reason, results = [], outcome = "broken"|
+          base.merge(each: { **declarations, items: count, selected: 0, results: results }, outcome: outcome, reason: reason, measured: nil)
         end
-        ended = lambda do |reason, items = 0, results = [], outcome = "broken"|
-          base.merge(each: { **declarations, items: items, selected: 0, results: results }, outcome: outcome, reason: reason, measured: nil)
-        end
-        return ended.("#{actual_from} could not be read: #{unread.message}") if unread
+        stop = array.found.slice(:broken, :unjudged).then { _1.empty? ? nil : _1 } || sides.each_stop(declared, array.place, inputs)
+        return ended.(stop[:broken] || stop[:unjudged], [], stop[:unjudged] ? "unjudged" : "broken") if stop
         return ended.("each reads an array, and the value is #{article(json_type(value))}") unless value.is_a?(Array)
         return ended.("the array is empty, and a claim on every item of nothing measures nothing") if value.empty?
 
         judged = []
         value.each_with_index do |item, index|
-          at = "#{actual_from}.#{index}"
-          where_records = where.map { item_comparison(_1, item, at, args, origins, texts, patterns, observed) }
+          place = sides.place_at(array.place, index.to_s)
+          compare = ->(entry) { item_comparison(entry, sides.item_side(item, place, entry), inputs, origins, texts, patterns) }
+          where_records = where.map(&compare)
           # A where claim that could not compare says nothing about whether
           # the item belongs, so leaving it out would turn "every item" into
           # "the items that happen to compare".
           if (unjudgeable = where_records.find { _1[:reason] })
             outcome = unjudgeable[:outcome] == "unjudged" ? "unjudged" : "broken"
-            return ended.("where could not #{outcome == "unjudged" ? "judge" : "compare"} item #{index}: #{unjudgeable[:reason]}", value.size,
+            return ended.("where could not #{outcome == "unjudged" ? "judge" : "compare"} item #{index}: #{unjudgeable[:reason]}",
                           [{ index: index, selected: false, where: where_records }], outcome)
           end
           next judged << { index: index, selected: false, where: where_records } unless where_records.all? { _1[:outcome] == "held" }
 
-          claims = each[:claims].map { item_comparison(_1, item, at, args, origins, texts, patterns, observed) }
+          claims = each[:claims].map(&compare)
           outcome = claims.any? { _1[:outcome] == "broken" } ? "broken" : claims.any? { _1[:outcome] == "unjudged" } ? "unjudged" : "held"
           identity = outcome == "broken" && item.is_a?(Hash) && IDENTITY_FIELDS.lazy.filter_map do |field|
             v = item.transform_keys(&:to_s)[field]
@@ -213,12 +214,14 @@ module Nukadoko
                  expected_text: expected_text)
       end
 
-      #: (Hash[Symbol, untyped], untyped, String, untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
-      def item_comparison(entry, item, at, args, origins, texts, patterns, top)
-        judged = Claims.judge_one(entry, item, args, top)
+      # One where or item claim on one item, judged on the side the item gives.
+      #: (Hash[Symbol, untyped], Engine::ClaimSides::Side, Engine::ClaimSides::Inputs, Hash[String, String], Hash[String, String?], Array[String]) -> Hash[Symbol, untyped]
+      def item_comparison(entry, side, inputs, origins, texts, patterns)
+        sides = Engine::ClaimSides
+        judged = sides.judge_comparison(entry, side, inputs)
+        label = sides.place_counted(sides.place_at(sides.place_viewed(side.place, entry[:view]), entry[:at]&.to_s), entry[:count]).label
         expected_from, expected_text = expected_origin(entry, origins, texts, patterns)
-        { **judged.slice(:actual), actual_from: counted(place(entry[:actual] ? "#{at}.#{entry[:actual]}" : at, entry[:view], entry[:at]), entry[:count]),
-          **{ view: entry[:view], at: entry[:at]&.to_s, count: entry[:count] }.compact }
+        { **judged.slice(:actual), actual_from: label, **{ view: entry[:view], at: entry[:at]&.to_s, count: entry[:count] }.compact }
           .merge(compare: entry[:compare], **judged.slice(:expected), expected_from: expected_from,
                  **(entry[:expected_view] ? { expected_view: entry[:expected_view] } : {}), expected_text: expected_text,
                  **outcome(judged))

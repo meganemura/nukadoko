@@ -343,6 +343,15 @@ module Nukadoko
       #: (Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
       def self.judge(claim, inputs)
         raw, at_read = top_side(claim, inputs)
+        judge_comparison(claim, raw, inputs, at_read)
+      rescue StandardError => e
+        unjudgeable(claim, e)
+      end
+      
+      # One comparison on a side already read: a top-level claim's, or one
+      # item's under an each.
+      #: (Hash[Symbol, untyped], Side, Inputs, ?bool) -> Hash[Symbol, untyped]
+      def self.judge_comparison(claim, raw, inputs, at_read = false)
         expected, from_observe = expected_side(claim, inputs)
         actual = counted(shaped(raw, claim[:view], claim[:at], at_read), claim[:count])
         base = { **(actual.found.key?(:value) ? { actual: actual.found[:value] } : {}), compare: claim[:compare],
@@ -350,12 +359,110 @@ module Nukadoko
         stop = precondition(actual, expected, from_observe, inputs)
         return base.merge(holds: false, reason: stop[:broken] || stop[:unjudged], **(stop[:unjudged] ? { unjudged: true } : {})) if stop
         return base.merge(holds: true, for_judgment: true) if claim[:compare] == "judged-as"
-
+      
         result = Claims.compare(claim[:compare], actual.found[:value], expected.found[:value])
         base.merge(holds: result[:holds] == true, **(result[:reason] ? { reason: result[:reason] } : {}),
                    **(result[:stopped] ? { reason: result[:stopped], unjudged: true } : {}))
       rescue StandardError => e
-        { compare: claim[:compare], holds: false, reason: "nukadoko could not judge this claim: #{e.message}", unjudged: true }
+        unjudgeable(claim, e)
+      end
+      
+      #: (Hash[Symbol, untyped], StandardError) -> Hash[Symbol, untyped]
+      def self.unjudgeable(claim, error)
+        { compare: claim[:compare], holds: false, reason: "nukadoko could not judge this claim: #{error.message}", unjudged: true }
+      end
+      
+      # The array an each reads, after its view and at.
+      #: (Hash[Symbol, untyped], Inputs) -> Side
+      def self.array_side(claim, inputs)
+        raw, at_read = top_side(claim, inputs)
+        shaped(raw, claim[:view], claim[:at], at_read)
+      end
+      
+      # The side an item claim reads: the item, or a path inside it. The item
+      # is part of a snapshot, so a read inside it finds a value or nothing.
+      #: (untyped, Place, Hash[Symbol, untyped]) -> Side
+      def self.item_side(item, item_place, entry)
+        path = entry[:actual] ? segments(entry[:actual].to_s) : []
+        side_of(read_at(item, path), item_place, path, 0)
+      end
+      
+      # What ends an each before any item: a declaration whose expected value
+      # observe received, or reads through what observe returned while observe
+      # received the array, does not depend on an item, and an empty array
+      # would hide it. Then a where clause that implies an item claim.
+      #: (Hash[Symbol, untyped], Place, Inputs) -> Hash[Symbol, String]?
+      def self.each_stop(claim, array, inputs)
+        entries = (claim[:each][:where] || []).each_with_index.map { ["each.where[#{_2}]", _1] } +
+                  claim[:each][:claims].each_with_index.map { ["each.claims[#{_2}]", _1] }
+        entries.each do |label, entry|
+          expected, from_observe = expected_side(entry, inputs)
+          stop = observe_received(expected.place, inputs, "#{label}'s expected value reads")
+          stop ||= observe_received(array, inputs, "#{label} reads each item of") if from_observe
+          return stop if stop
+        end
+        implied = where_implication(claim, inputs)
+        implied ? { broken: implied } : nil
+      end
+      
+      # The first where clause and item claim that read one value where the
+      # clause implies the claim whatever the value is, as the reason that
+      # breaks the each: the claim holds on every item where selects, so
+      # "every item" measures nothing.
+      #: (Hash[Symbol, untyped], Inputs) -> String?
+      def self.where_implication(claim, inputs)
+        value_of = lambda do |entry|
+          side, = expected_side(entry, inputs)
+          side.found.key?(:value) ? side.found : nil
+        end
+        (claim[:each][:where] || []).each_with_index do |where, where_index|
+          next unless where[:compare] == "not-equal" || ClaimRules::ORDER_COMPARES.include?(where[:compare])
+      
+          path = where[:actual] ? segments(where[:actual].to_s) : []
+          path += where[:at].to_s.split(".") if where[:view].nil? && where[:at]
+          claim[:each][:claims].each_with_index do |entry, claim_index|
+            next unless ClaimRules.one_item_value?(where, entry)
+      
+            selects = value_of.(where)
+            holds = value_of.(entry)
+            next unless selects && holds && where_implies?(where[:compare], selects[:value], entry[:compare], holds[:value])
+      
+            viewed = where[:view] ? " as #{where[:view]}#{" at #{where[:at]}" if where[:at]}" : ""
+            what = "#{"count of " if where[:count] == true}#{path.empty? ? "value" : path.join(".")}#{viewed}"
+            return "each.where[#{where_index}] selects the items whose #{what} is #{where[:compare]} #{JSON.generate(selects[:value])}, " \
+                   "and every such item holds each.claims[#{claim_index}], #{entry[:compare]} #{JSON.generate(holds[:value])}, " \
+                   "whatever the data, so the claim measures nothing"
+          end
+        end
+        nil
+      end
+      
+      # Whether every value a where clause selects holds an item claim on the
+      # same value: the same order direction with a bound at least as strict,
+      # not-equal against the same value, or an is-a whose kind is the one JSON
+      # type the clause can compare.
+      #: (String, untyped, String, untyped) -> bool
+      def self.where_implies?(where, where_value, claim, claim_value)
+        if claim == "is-a"
+          kind = claim_value.is_a?(String) ? Spaces.trim(claim_value).downcase : nil
+          type = if where == "not-equal" then Claims.json_type(where_value)
+                 elsif ClaimRules::ORDER_COMPARES.include?(where) && where_value.is_a?(Numeric) then "number"
+                 end
+          return !kind.nil? && !type.nil? && ClaimRules::KIND_JSON_TYPES[kind] == type
+        end
+        if where == "not-equal"
+          return claim == "not-equal" && Claims.json_type(where_value) == Claims.json_type(claim_value) && Claims.deep_equal?(where_value, claim_value)
+        end
+        return false unless where_value.is_a?(Numeric) && claim_value.is_a?(Numeric)
+      
+        up = %w[greater-than at-least]
+        down = %w[less-than at-most]
+        strict = %w[greater-than less-than]
+        loose_to_strict = !strict.include?(where) && strict.include?(claim)
+        return loose_to_strict ? where_value > claim_value : where_value >= claim_value if up.include?(where) && up.include?(claim)
+        return loose_to_strict ? where_value < claim_value : where_value <= claim_value if down.include?(where) && down.include?(claim)
+      
+        false
       end
     end
   end

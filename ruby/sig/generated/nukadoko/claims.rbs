@@ -49,7 +49,11 @@ module Nukadoko
       # : (Array[Hash[Symbol, untyped]], untyped, untyped, ?ClaimSides::Inputs?) -> Array[Hash[Symbol, untyped]]
       def self.judge: (Array[Hash[Symbol, untyped]], untyped, untyped, ?ClaimSides::Inputs?) -> Array[Hash[Symbol, untyped]]
 
-      # `top` is what observe returned, which an expected { observe } reads
+      # An each judged as its record judges it, so a poll waits on the
+      # outcome the record will hold.
+      # : (Hash[Symbol, untyped], ClaimSides::Inputs) -> Hash[Symbol, untyped]
+      def self.each_judged: (Hash[Symbol, untyped], ClaimSides::Inputs) -> Hash[Symbol, untyped]
+
       # from inside an each as well. A claim on an item with no actual reads
       # the item itself.
       # : (Hash[Symbol, untyped], untyped, untyped, ?untyped) -> Hash[Symbol, untyped]
