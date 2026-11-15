@@ -196,6 +196,9 @@ just until 0.1.
 
 ### Changed
 
+- `llms.txt` has a "Ruby" section: how the gem writes a step, a Then step,
+  a fixture, the program file, and `sig`, and what the gem does not have
+  yet. The nukadoko skill points a Ruby project at it.
 - **The README is shorter, and its reference sections moved to
   `docs/guide.md`.** The README now reads in the order a new reader needs:
   what nukadoko is and why, the install for each engine, the first

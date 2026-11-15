@@ -25,7 +25,10 @@ module Nukadoko
       # a secret source; `!.env.example` must follow `.env.*` to re-include it.
       IGNORED: untyped
 
-      README: untyped
+      # The gem's copy is staged at release; a checkout has only the root's.
+      STAGED_LLMS: untyped
+
+      LLMS: untyped
 
       # The gem ships no docs/, so the config file points at the spec online.
       SPEC: ::String

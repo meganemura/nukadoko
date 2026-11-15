@@ -134,6 +134,9 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Changed
 
+- `nuka init` ends with `next:` naming the gem's `llms.txt`, as the
+  TypeScript engine names the package's, and `nuka --help` says its Ruby
+  section is how a Ruby step is written.
 - `nuka check`'s `undefined-step` reads "No step definition matches" and
   names `nuka scaffold --feature <file>` as its `do:`, as the TypeScript
   engine does, and a project whose every line is undefined no longer also

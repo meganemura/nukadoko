@@ -25,7 +25,9 @@ module Nukadoko
       # `.env` files are ignored since a committed one is configuration, not
       # a secret source; `!.env.example` must follow `.env.*` to re-include it.
       IGNORED = [".nukadoko/", ".env", ".env.*", "!.env.example"].freeze
-      README = File.expand_path("../../README.md", __dir__.to_s)
+      # The gem's copy is staged at release; a checkout has only the root's.
+      STAGED_LLMS = File.expand_path("../../llms.txt", __dir__.to_s)
+      LLMS = File.file?(STAGED_LLMS) ? STAGED_LLMS : File.expand_path("../../../llms.txt", __dir__.to_s)
       # The gem ships no docs/, so the config file points at the spec online.
       SPEC = "https://github.com/meganemura/nukadoko/blob/main/docs/spec.md"
       TASK = <<~RUBY
@@ -116,7 +118,7 @@ module Nukadoko
       def self_check
         load File.join(@project, CONFIG)
         Nukadoko.load_steps(File.join(@project, STEPS))
-        @err.puts "next: read #{README}: the steps, the commands, and the program file"
+        @err.puts "next: read #{LLMS}, written for an agent: the loop, every command, and every finding code; its Ruby section is how a Ruby step is written"
         0
       rescue StandardError, ScriptError => e
         @err.puts ["error", "unexpected-error", "-", "Self-check failed: #{e.message}"].join("\t")

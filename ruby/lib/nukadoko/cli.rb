@@ -70,6 +70,7 @@ module Nukadoko
 
       An agent starts at the llms.txt in the gem's directory, the one above what
       nuka skill path prints: the loop, every command, and every finding code.
+      Its Ruby section is how a Ruby step and the project files are written.
     TEXT
     COMMANDS = %w[init scaffold check run report verdict judge steps describe do step clean skill sig __tree].freeze
 
