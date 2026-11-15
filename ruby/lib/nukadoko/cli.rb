@@ -170,9 +170,11 @@ module Nukadoko
         raise Engine::Refusal.new("invalid-value", "--order must be file, shuffled, or shuffled:<seed> with a whole number from 0 to #{Engine::Order::MAX_SEED} (got #{JSON.generate(@options["--order"].last)}).")
       end
 
-      # Under --records stdout holds only the records, so the rest is stderr's.
+      # Progress is stderr's, so stdout holds only what was asked for: the
+      # records under --records, the envelope under --json. Under --json
+      # nothing else is written, and a warning is a finding in the envelope.
       records = @options.key?("--records") ? @out : nil
-      progress = @json || records ? $stderr : @out
+      progress = @json ? File.open(File::NULL, "w") : $stderr
       ref = @options["--base"].last
       if @walk && (repeat > 1 || ref)
         why = repeat > 1 ? "--repeat #{repeat} runs it #{repeat} times" : "--base runs it in more than one world"
@@ -246,10 +248,14 @@ module Nukadoko
       stopped = scenarios.find { _1[:stopped] }&.dig(:stopped)
       @walk&.end({ how: "finished", exit_code: passed ? 0 : 1, findings: findings, **(stopped ? { stopped: stopped } : {}) })
       unless @json
+        written = Dir.children(File.join(@project, result[:run_dir], "steps")).size
+        steps_dir = "#{File.join(result[:run_dir], "steps")}/"
+        progress.puts "steps     #{steps_dir.ljust([30, steps_dir.size + 2].max)}#{written}" if envelope[:counts][:scenarios].positive?
         progress.puts "summary   #{File.join(result[:run_dir], "summary.md")}"
         progress.puts "run       #{File.join(result[:run_dir], "run.json")}"
+        run_end(envelope, progress)
       end
-      emit(envelope, findings, "run", io: records ? $stderr : @out)
+      emit(envelope, findings, "run", io: progress)
       if limits.any? && !@json
         progress.puts "limits: #{limits.group_by { _1[:kind] }.map { |kind, group| "#{group.size} #{kind}" }.join(", ")} (run.json limits)"
       end
@@ -713,6 +719,45 @@ module Nukadoko
         end
         io.puts "ok: no issues found" if command == "check" && findings.empty?
       end
+    end
+
+    # The counts after where the run wrote, as the TypeScript engine prints
+    # them: the scenarios, then the control runs, then the criteria when a
+    # control or a base makes the scenario count no verdict count, then the
+    # criteria left out.
+    #: (Hash[Symbol, untyped], IO) -> void
+    def run_end(envelope, io)
+      counts = envelope[:counts] #: Hash[Symbol, Integer]
+      total = counts[:scenarios]
+      stopped = counts[:stopped]
+      io.puts "#{total} scenario#{total == 1 ? "" : "s"}: #{counts[:passed]} passed, #{total - counts[:passed] - stopped} failed" \
+              "#{stopped.positive? ? ", #{stopped} stopped" : ""}#{counts[:not_run].positive? ? ", #{counts[:not_run]} not run" : ""}" \
+              "  (#{duration(envelope[:started_at], envelope[:finished_at])})"
+      if counts[:controls].positive? || counts[:controls_not_run].positive?
+        not_run = counts[:controls_not_run].positive? ? ", #{counts[:controls_not_run]} not run" : ""
+        io.puts "#{counts[:controls]} control run#{counts[:controls] == 1 ? "" : "s"}#{not_run}"
+      end
+      table = envelope[:table] #: Hash[Symbol, untyped]
+      rows = table[:rows] #: Array[Hash[Symbol, untyped]]
+      based = !table[:base].nil?
+      if based || counts[:controls].positive?
+        count = ->(word) { rows.count { _1[:verdict] == word } }
+        extra = based ? ", #{count.("unproven")} unproven, #{count.("moved")} moved, #{count.("removed")} removed" : ""
+        io.puts "criteria: #{count.("held")} held, #{count.("proven")} proven, #{count.("failed")} failed#{extra}"
+      end
+      left_out = table[:left_out].to_i
+      return unless left_out.positive?
+
+      io.puts left_out == 1 ? "1 criterion not run: its conditions hold in no selected environment" : "#{left_out} criteria not run: their conditions hold in no selected environment"
+    end
+
+    # `1h 2m 3s`, the unit a whole run reads in.
+    #: (String, String) -> String
+    def duration(started_at, finished_at)
+      total = [(Time.iso8601(finished_at) - Time.iso8601(started_at)).round, 0].max
+      hours, rest = total.divmod(3600)
+      minutes, seconds = rest.divmod(60)
+      [*(hours.positive? ? ["#{hours}h"] : []), *(hours.positive? || minutes.positive? ? ["#{minutes}m"] : []), "#{seconds}s"].join(" ")
     end
 
     # After the failed list, under --repeat, each scenario that failed at

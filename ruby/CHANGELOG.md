@@ -134,6 +134,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Changed
 
+- `nuka run` prints its progress on stderr as the TypeScript engine does:
+  a `scenario i/n` line for each scenario, a `step i/n` line with its
+  status and time for each step, a failed step's first error line, the
+  producer it used, and its record, then the `steps` line, the counts,
+  the control runs, and the criteria. `--json` prints none of it.
 - A Then step whose `observe` raises records `unobserved` with each
   claim's `outcome: "unobserved"`, as the TypeScript engine does, instead
   of a `step_error`.

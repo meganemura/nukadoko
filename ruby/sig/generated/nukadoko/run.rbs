@@ -47,16 +47,16 @@ module Nukadoko
       # them, alone, and each round of proof runs is one worker of its own.
       # The parent keeps the world each worker reaches, and takes each
       # execution as it arrives.
-      # : (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void) -> void
-      def play_in_workers: (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void) -> void
+      # : (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void, Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> void
+      def play_in_workers: (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void, Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> void
 
       # Each list is one worker's scenarios in the order it plays them. A
       # worker sends each line it prints and each execution down a pipe of
       # its own, one Marshal frame at a time, so no line or record is ever
       # spliced from two workers. Returns the files a worker that failed
       # left without any execution.
-      # : (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void) -> Array[String]
-      def workers: (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void) -> Array[String]
+      # : (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void, ^(Scenario) -> String) -> Array[String]
+      def workers: (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void, ^(Scenario) -> String) -> Array[String]
 
       # : (Integer, Array[Scenario], Environment, Hash[Scenario, String], World, IO) -> Integer
       def play_as_worker: (Integer, Array[Scenario], Environment, Hash[Scenario, String], World, IO) -> Integer
@@ -126,6 +126,21 @@ module Nukadoko
 
       # : (Environment) -> Hash[Symbol, untyped]
       def environment_entry: (Environment) -> Hash[Symbol, untyped]
+
+      # The line before a scenario's execution, numbered across the run, in
+      # the TypeScript engine's words so a log reads the same from either.
+      # : (String, Integer, String, String) -> String
+      def boundary: (String, Integer, String, String) -> String
+
+      # The line before a control runs again for proof: which run of its cell
+      # this is, of how many --proof-runs asks.
+      # : (String, Integer, String, String, Integer) -> String
+      def proof_boundary: (String, Integer, String, String, Integer) -> String
+
+      # Why a step failed, one line each: its error's first line, each step
+      # it read from whose program exited nonzero, and where its record is.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def step_failure: (Hash[Symbol, untyped]) -> Array[String]
 
       # Where a scenario's run starts again: its line, and its environment
       # unless that is the only one a run without --env would start.

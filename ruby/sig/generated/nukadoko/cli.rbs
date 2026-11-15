@@ -151,6 +151,17 @@ module Nukadoko
     # : (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void
     def emit: (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void
 
+    # The counts after where the run wrote, as the TypeScript engine prints
+    # them: the scenarios, then the control runs, then the criteria when a
+    # control or a base makes the scenario count no verdict count, then the
+    # criteria left out.
+    # : (Hash[Symbol, untyped], IO) -> void
+    def run_end: (Hash[Symbol, untyped], IO) -> void
+
+    # `1h 2m 3s`, the unit a whole run reads in.
+    # : (String, String) -> String
+    def duration: (String, String) -> String
+
     # After the failed list, under --repeat, each scenario that failed at
     # least once and how many of its executions passed. No verdict is
     # named: one that fails every time is not flaky.

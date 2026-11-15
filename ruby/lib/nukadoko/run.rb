@@ -91,8 +91,16 @@ module Nukadoko
         @base_urls = {}
         executions = []
         cells = Hash.new { |h, k| h[k] = [] }
+        # Each scenario line is numbered across every environment and
+        # --repeat round, as the TypeScript engine numbers it; a proof run
+        # has a line of its own, so it is never one scenario more.
+        @played = 0
+        @to_play = @scenarios.size * @repeat * @environments.size
         @environments.each do |environment|
-          @out.puts @world == "head" ? "environment #{environment.name}" : "#{@world} #{environment.name}"
+          # One environment needs no line of its own: every scenario is in it.
+          if @world != "head" then @out.puts "#{@world} #{environment.name}"
+          elsif @environments.size > 1 then @out.puts "environment #{environment.name}"
+          end
           world_dir = File.join(@dir, "worlds", @world == "head" ? environment.name : "#{environment.name}@#{@world}")
           FileUtils.mkdir_p(world_dir)
           world = @program.start(environment, world_dir, @project)
@@ -110,16 +118,22 @@ module Nukadoko
           # times or a run disagrees.
           due = -> { @scenarios.select { proving?(roles[_1], runs[_1]) } }
           if @concurrency > 1
-            play_in_workers(environment, roles, world, due, ran)
+            play_in_workers(environment, roles, world, due, ran, runs)
           else
             @process_fixtures = FixtureCache.new
             @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
-            play_one = ->(scenario) { ran.(scenario, play(scenario, environment, roles[scenario], world)) }
+            play_one = lambda do |scenario|
+              @out.puts boundary(scenario.uri, scenario.line, scenario.name, roles[scenario])
+              ran.(scenario, play(scenario, environment, roles[scenario], world))
+            end
             # The whole selection once, then again, so a failure that depends
             # on what ran before it meets the same neighbours every round.
             @repeat.times { @scenarios.each(&play_one) }
             until (round = due.()).empty?
-              round.each(&play_one)
+              round.each do |scenario|
+                @out.puts proof_boundary(scenario.uri, scenario.line, scenario.name, environment.name, runs[scenario].size + 1)
+                ran.(scenario, play(scenario, environment, roles[scenario], world))
+              end
             end
           end
           @scenarios.each { cells[_1] << cell(runs[_1], environment, roles[_1], _1) }
@@ -160,17 +174,24 @@ module Nukadoko
       # them, alone, and each round of proof runs is one worker of its own.
       # The parent keeps the world each worker reaches, and takes each
       # execution as it arrives.
-      #: (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void) -> void
-      def play_in_workers(environment, roles, world, due, ran)
+      #: (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void, Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> void
+      def play_in_workers(environment, roles, world, due, ran, runs)
         files = @scenarios.group_by(&:uri).values
         parallel, serial = files.partition { !_1.first.serial }
         buckets = Array.new([@concurrency, parallel.size].min) { [] }
         parallel.each_with_index { |file, i| buckets[i % buckets.size] << file } unless buckets.empty?
         groups = buckets.map(&:flatten)
-        unplayed = workers(groups.map { |group| @repeat.times.flat_map { group } }, environment, roles, world, ran)
-        serial.each { |file| unplayed += workers([@repeat.times.flat_map { file }], environment, roles, world, ran) }
+        # The parent numbers a scenario's line when its execution arrives:
+        # the Nth to finish, since workers end in no fixed order.
+        line_for = lambda do |scenario, proof|
+          proof ? proof_boundary(scenario.uri, scenario.line, scenario.name, environment.name, runs[scenario].size + 1)
+                : boundary(scenario.uri, scenario.line, scenario.name, roles[scenario])
+        end
+        main = ->(scenario) { line_for.(scenario, false) }
+        unplayed = workers(groups.map { |group| @repeat.times.flat_map { group } }, environment, roles, world, ran, main)
+        serial.each { |file| unplayed += workers([@repeat.times.flat_map { file }], environment, roles, world, ran, main) }
         until (round = due.()).empty?
-          break unless workers([round], environment, roles, world, ran).empty?
+          break unless workers([round], environment, roles, world, ran, ->(scenario) { line_for.(scenario, true) }).empty?
         end
         return if unplayed.empty?
 
@@ -184,8 +205,8 @@ module Nukadoko
       # its own, one Marshal frame at a time, so no line or record is ever
       # spliced from two workers. Returns the files a worker that failed
       # left without any execution.
-      #: (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void) -> Array[String]
-      def workers(lists, environment, roles, world, ran)
+      #: (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void, ^(Scenario) -> String) -> Array[String]
+      def workers(lists, environment, roles, world, ran, line_for)
         live = lists.each_with_index.map do |list, index|
           reader, writer = IO.pipe
           pid = fork do
@@ -203,8 +224,9 @@ module Nukadoko
             kind, *value = Marshal.load(reader)
             if kind == :line then @out.puts value.first
             else
-              value[2].each { @out.puts _1 }
               scenario = by_key.fetch(value[0])
+              @out.puts line_for.(scenario)
+              value[2].each { @out.puts _1 }
               worker[:played] << scenario.uri
               ran.(scenario, value[1])
             end
@@ -420,6 +442,31 @@ module Nukadoko
           target_version: nil, base_url: @base_urls[environment.name] }.compact.merge(target_version: nil, base_url: @base_urls[environment.name])
       end
 
+      # The line before a scenario's execution, numbered across the run, in
+      # the TypeScript engine's words so a log reads the same from either.
+      #: (String, Integer, String, String) -> String
+      def boundary(uri, line, name, role)
+        @played += 1
+        "scenario #{@played}/#{@to_play}  #{uri}:#{line}  #{name}#{role == "control" ? "  (control)" : ""}"
+      end
+
+      # The line before a control runs again for proof: which run of its cell
+      # this is, of how many --proof-runs asks.
+      #: (String, Integer, String, String, Integer) -> String
+      def proof_boundary(uri, line, name, environment, run)
+        "proof run #{run}/#{Table.proof_runs}  #{uri}:#{line}  #{name}  (control in #{environment})"
+      end
+
+      # Why a step failed, one line each: its error's first line, each step
+      # it read from whose program exited nonzero, and where its record is.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def step_failure(record)
+        lines = [Summary.first_error_line(record[:error].to_s)]
+        Summary.exited_producers(record[:used]).each { |step, code, output| lines << "used    #{step}  exit #{code}  #{output}" }
+        lines << "record  #{File.join(".nukadoko", "runs", @id, "steps", record[:step_record_id])}" if record[:step_record_id]
+        lines
+      end
+
       # Where a scenario's run starts again: its line, and its environment
       # unless that is the only one a run without --env would start.
       # In a shuffled order what ran before a scenario is part of what it
@@ -444,9 +491,9 @@ module Nukadoko
 
       #: (Scenario, Environment, String, World) -> Hash[Symbol, untyped]
       def play(scenario, environment, role, world)
-        name = "#{scenario.uri}:#{scenario.line}  #{scenario.name}"
-        @out.puts "scenario start  worker #{@worker}  #{name}" if @worker
-        @out.puts "scenario  #{name}#{role == "control" ? "  (control)" : ""}"
+        # The numbered line is the caller's: a worker's goes out with its
+        # execution, numbered by the parent.
+        @out.puts "scenario start  worker #{@worker}  #{scenario.uri}:#{scenario.line}  #{scenario.name}" if @worker
         started_at = now
         results = []
         stopped = nil #: Array[untyped]?
@@ -463,10 +510,12 @@ module Nukadoko
                        scenario: { feature: scenario.uri, line: scenario.line, name: scenario.name, environment: environment.name },
                        world: world.base_url ? { url: world.base_url } : nil })
         records = scenario.steps.each_with_index.map do |line, index|
+          began = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           record = stopped || walk_stopped ? skipped(line) : play_step(line, results, world)
           stopped ||= [record[:outcome], line.line, record[:claim], record[:broken_actual]] if record[:status] == "failed"
-          @out.puts "  #{record[:status]}  #{line.text}"
-          @out.puts "      #{record[:error]}" if record[:error]
+          seconds = format("%.1f", Process.clock_gettime(Process::CLOCK_MONOTONIC) - began)
+          @out.puts "  step #{index + 1}/#{scenario.steps.size}  #{record[:status]}  #{seconds}s  #{line.text}"
+          step_failure(record).each { @out.puts "      #{_1}" } if record[:status] == "failed"
           # A step with a written record ran, so a walk pauses after it.
           if @walk && record[:step_record_id] && record[:status] != "skipped"
             remaining = stopped ? 0 : scenario.steps.size - index - 1
