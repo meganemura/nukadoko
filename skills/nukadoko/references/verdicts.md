@@ -27,7 +27,7 @@ run.json names the conditions its role came from. nukadoko trusts
 `conditions` and does not check them against the program, so derive the
 switch from them with `{condition.<name>}` (`references/program.md`).
 `nuka run` without `--env` runs every environment that declares `conditions`, or
-the ones the program file's `defaultEnvironments` names. Under `--env`,
+the ones the program's `defaultEnvironments` names. Under `--env`,
 a scenario no named environment meets is not run, and the summary's
 `left-out` entry counts it (`<n> criteria not run`). A control never turns the run red. Tag only what the criteria say depends
 on the switch, and write the Then so it would fail on the other side: a
@@ -51,7 +51,7 @@ evidence; turning the flag on is the person's call.
 
 ## Where no step looked
 
-`lists` in the program file (`references/program.md`, docs/spec.md
+`lists` in the program (`references/program.md`, docs/spec.md
 "Lists") names the routes and flags the program has, so run.json can
 name the places no step reached. With a routes list, `routes` has an
 entry per method and route a list or a head step's `request` line
@@ -88,7 +88,7 @@ config's fixtures or parameter types, an environment's conditions.
 - An `unchanged` row, when the mapping changed, its tags did
   (`retagged`), or its name or file did (`renamed_from`), also runs in the `old` world, your code under the base's feature file, steps, and conditions, and has to
   pass there. A rewritten step that now checks less is what this catches.
-- When both program files name `{events}`, the base also runs every row
+- When both programs name `{events}`, the base also runs every row
   head ran, once, for run.json's `paths` alone (`for_paths`, `(for paths)`
   on stderr; no cell, no proof runs), and `paths` pairs each environment's
   base with its head, step by step: "Changed paths" lists under

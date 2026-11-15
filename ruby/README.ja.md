@@ -98,7 +98,7 @@ gem が入れる実行ファイルには、`bundle binstubs <gem>` が `bin/<nam
 `--then` とキャプチャ 1 つと一緒に使うと、claim がその 2 つを比べるので、ステップは書き直さずに使えます。
 - ブラウザの起動設定は `nukadoko.config.rb` に `Nukadoko.config(browser: { executablePath: "..." })` と書きます。`page` を使うステップは、シナリオごとに自分のブラウザコンテキストを持ちます。ステップの記録には、ページが送ったリクエストとステップのトレースが残ります。
 - `scratch` を使うステップは `scratch.dir` で新しいディレクトリを得ます。シナリオが終わると消えます。`scratch.copy(source)` は、プロジェクトのファイルかディレクトリの写しを入れた新しいディレクトリを返します。`args:` キーワードを書かない本体は、args なしで呼ばれます。`Nukadoko.run_command(command, args, cwd:, env:, input:, timeout:, redact:)` はプログラムを実行し、`{ exitCode:, signal:, stdout:, stderr: }` を返します。ステップの記録には実行したプロセスが残り、`redact:` に渡した値は `{{secret.NAME}}` になります。
-- `Nukadoko.config(envFiles: [".env"])` は env ファイルを `env` フィクスチャに読み込みます。`nukadoko.program.rb` の環境は、その後ろに自分の `envFiles:` を足せます。git が追跡していないファイルと HEAD と違うファイルは秘密の出どころです。その 4 文字以上の値は、ステップの記録、`http.jsonl`、`nuka do` の出力で `{{secret.NAME}}` に置き換わります。ステップが表示したものは、秘密を伏せて stderr に出ます。`secrets: { public: [...], redact: [...] }` で、そのようなキーを平文のままにしたり、追跡しているファイルのキーを伏せたりできます。`nuka check` は、無いファイル、読み飛ばした行、どのファイルにもない `secrets` のキーを警告し、値は表示しません。
+- `Nukadoko.config(envFiles: [".env"])` は env ファイルを `env` フィクスチャに読み込みます。config の `program:` の環境は、その後ろに自分の `envFiles:` を足せます。git が追跡していないファイルと HEAD と違うファイルは秘密の出どころです。その 4 文字以上の値は、ステップの記録、`http.jsonl`、`nuka do` の出力で `{{secret.NAME}}` に置き換わります。ステップが表示したものは、秘密を伏せて stderr に出ます。`secrets: { public: [...], redact: [...] }` で、そのようなキーを平文のままにしたり、追跡しているファイルのキーを伏せたりできます。`nuka check` は、無いファイル、読み飛ばした行、どのファイルにもない `secrets` のキーを警告し、値は表示しません。
 - プロジェクトのフィクスチャは `nukadoko.config.rb` に書きます。ブロックは値を `use` に渡し、その後ろが後片付けです。例: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`。`scope: :process` にすると、環境ごとの実行全体で 1 つの値を使います。
 - `parts [CreateTodo, CompleteById]` で、ステップが呼べるステップを宣言します。`call.(CreateTodo, title: args.title)` で 1 つを実行し、args と返り値を確かめます。パターンのない part も書けます。呼び出しは、呼んだステップの記録の `calls` に残ります。`nuka check` は、`parts` の循環と、`mutates false` なのに `mutates true` の part を持つステップを報告します。
 - `poll timeout_ms: 3000` は、すべての claim が 2 回続けて成り立つか時間切れになるまで、100 ミリ秒おきに `observe` を読み直します。`settled:` には、一度なったら変わらない状態を書きます。2 回続けてその状態なら、壊れた claim を待つのをやめます。読んだ結果はすべてステップの記録に残ります。
@@ -107,10 +107,12 @@ gem が入れる実行ファイルには、`bundle binstubs <gem>` が `bin/<nam
 - 契約が宣言していない返り値のキーは、zod のオブジェクトと同じく捨てられます。ステップの記録の `returns_dropped` に、捨てたキーが残ります。
 - `nuka sig` は `sig/nukadoko/steps.rbs` を書きます。Steep を使うと、宣言していない args のキーを読む本体や、形のちがう値を返す本体がエラーになります。
 
-テストするプログラムは `nukadoko.program.rb` に書きます。
+テスト対象のプログラムは `nukadoko.config.rb` の `program:` に書きます。プログラムの起動のしかたを返すラムダです。
 
 ```ruby
-Nukadoko.program serve: { command: "bin/rails server -p {port}", ready: "/up" }
+Nukadoko.config(
+  program: -> { { serve: { command: "bin/rails server -p {port}", ready: "/up" } } },
+)
 ```
 
 ## 開発

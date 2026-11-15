@@ -62,7 +62,7 @@ next: read node_modules/nukadoko/llms.txt, written for an agent: the loop, every
   これは失敗を Allure のカテゴリに振り分けます。
   付けなかった場合は、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) を手でコピーします。
 
-HTTP を提供するテスト対象のプログラムは、2 つ目のファイル `nukadoko.program.ts` に書きます。
+HTTP を提供するテスト対象のプログラムは、同じファイルに `program` として書きます。
 `nuka init` はこのファイルを書きません。
 [An HTTP API](guide.ja.md#an-http-api) を参照してください。
 
@@ -163,7 +163,7 @@ run       .nukadoko/runs/run-20261018-232314-j5x1/run.json
 `nuka run` は先に `nuka check` を実行し、エラーがあれば止まります。
 scenario が失敗すると、stderr にその step、エラー、step record、そしてその scenario だけを再実行する `nuka run features/greet.feature:3` のような `do:` の行が出ます。
 
-`nuka run --env <name>` は、`nukadoko.program.ts` の `environments` が名付けた environment に対して実行します。
+`nuka run --env <name>` は、`nukadoko.config.ts` のプログラムの `environments` が名付けた environment に対して実行します。
 各 environment は自分の `url` または `serve`、`envFiles`、`policy` を持ちます。
 `policy: "read-only"` の environment は、`mutates: true` と宣言された step を実行前にすべて拒否します。
 `--command` の scaffold は `mutates: true` を書くので、プログラムが scratch ディレクトリの外を何も変えないなら `false` にします。

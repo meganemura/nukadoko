@@ -21,15 +21,18 @@ export default defineConfig({
 });
 ```
 
-The app under test goes in a second file, `nukadoko.program.ts`: how it
+The app under test goes in the same file, as `program`: how it
 starts, or the URL of one that already runs.
 
 ```ts
-import { defineProgram } from "nukadoko";
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "npm start", ready: "/" }, // the command webServer runs
-  env: { PORT: "{port}" },
+export default defineConfig({
+  featuresDir: "features",
+  program: () => ({
+    serve: { command: "npm start", ready: "/" }, // the command webServer runs
+    env: { PORT: "{port}" },
+  }),
 });
 ```
 
@@ -41,7 +44,7 @@ Node loads a `.ts` file only after it parses it again, with a
 
 Neither `nuka run` nor `nuka do` reads `playwright.config.ts` at all, so
 its `webServer` field and its `use.baseURL` mean nothing to nukadoko.
-`serve` in the program file does the job `webServer` does: nukadoko starts
+`serve` in the program does the job `webServer` does: nukadoko starts
 the app on a free port of its own, waits until `ready` answers, and makes
 that URL the base URL of `page` and `request`. The same command ends up
 written into both files. Nothing here removes that duplication; it is

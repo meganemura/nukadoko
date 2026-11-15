@@ -7,6 +7,79 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- **The program moves into the config.** `nukadoko.program.ts` and
+  `defineProgram` are gone: the program under test is `program` in
+  `nukadoko.config.ts`, a function that returns what `defineProgram`
+  took. One file now holds the whole project, and `nuka run --base`
+  judges a change as finely as before: the config's mapping is its text
+  with the source of `program` cut out, and the program's `conditions`
+  and `defaultEnvironments` are compared as they were. A change to how
+  the program builds or starts is still no change to any criterion, and a
+  change to an environment's conditions still is.
+
+  A project root that still holds `nukadoko.program.ts`,
+  `nukadoko.program.mts`, or `nukadoko.program.rb` stops every command
+  that reads the project, `nuka check` included, with exit code 2:
+
+  ```text
+  refused	program-file-moved	-	nukadoko.program.ts is no longer read: the program under test is part of nukadoko.config.ts now, so nukadoko does not start what nukadoko.program.ts describes.
+    fix: Move what nukadoko.program.ts describes into nukadoko.config.ts as its program, and delete nukadoko.program.ts; CHANGELOG.md, under "The program moves into the config", shows the move.
+  ```
+
+  A config that still imports `defineProgram` is refused with
+  `config-invalid`. To upgrade:
+
+  1. Move the object that `defineProgram` wrapped into the config, as
+     the value `program` returns. Before:
+
+     ```ts
+     // nukadoko.program.ts
+     import { defineProgram } from "nukadoko";
+
+     export default defineProgram({
+       serve: { command: "npm start", ready: "/" },
+       env: { PORT: "{port}" },
+     });
+     ```
+
+     After:
+
+     ```ts
+     // nukadoko.config.ts
+     import { defineConfig } from "nukadoko";
+
+     export default defineConfig({
+       featuresDir: "features",
+       program: () => ({
+         serve: { command: "npm start", ready: "/" },
+         env: { PORT: "{port}" },
+       }),
+     });
+     ```
+
+     A helper or a constant the program file declared moves with it, above
+     `defineConfig`. A `url` or `setup` function stays a function inside
+     the object.
+  2. Delete `nukadoko.program.ts`, and take it out of any `files`,
+     exclude list, or CI step that names it.
+  3. Run `nuka check` until it is green, then `nuka run`.
+
+  For the Ruby engine, `Nukadoko.program(**options)` in
+  `nukadoko.program.rb` becomes `program: -> { { ... } }` in
+  `Nukadoko.config`, and `nukadoko.program.rb` is deleted:
+
+  ```ruby
+  # nukadoko.config.rb
+  Nukadoko.config(
+    program: -> { { serve: { command: "bin/rails server -p {port}", ready: "/up" } } },
+  )
+  ```
+
+  A `--base` ref from before the move needs nothing: the run still reads
+  that ref's program file for its base world.
+
 ## 0.26.0 — 2026-11-15
 
 ### Added

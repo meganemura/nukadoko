@@ -33,17 +33,20 @@ export default defineConfig({
 });
 ```
 
-The app under test goes in a second file, `nukadoko.program.ts`. A suite
-that starts the app itself today (a `BeforeAll` hook, a shell script, a CI
+The app under test goes in the same file, as `program`. A suite that
+starts the app itself today (a `BeforeAll` hook, a shell script, a CI
 step) moves that recipe there, and nukadoko starts the app on a port of its
 own for each run and stops it after:
 
 ```ts
-import { defineProgram } from "nukadoko";
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "npm start", ready: "/" }, // how the app under test starts
-  env: { PORT: "{port}" },
+export default defineConfig({
+  featuresDir: "features",
+  program: () => ({
+    serve: { command: "npm start", ready: "/" }, // how the app under test starts
+    env: { PORT: "{port}" },
+  }),
 });
 ```
 
@@ -444,8 +447,8 @@ Facts a migration runs into:
   with the rules in docs/spec.md "Environments and secrets"). A line that
   is not a blank, a comment, or a binding is `env-file-skipped-line`. A
   suite that ran once per target (a shell loop, one CI job per profile)
-  becomes one run: name each target in `environments` in
-  `nukadoko.program.ts` and pass `nuka run --env a --env b`.
+  becomes one run: name each target in `environments` of the program
+  in `nukadoko.config.ts` and pass `nuka run --env a --env b`.
 - A `package.json` with no `"type"` loads a `.ts` file with a Node
   warning, and `nuka check` notes it as `package-type-missing`.
 - `nuka run` writes no report of its own. A formatter or a JUnit-based CI

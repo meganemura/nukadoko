@@ -316,8 +316,8 @@ Commit `features/` (the feature and its steps), `nukadoko.config.ts`, and
 the `package.json` change. Do not commit `.nukadoko/`: it holds the step
 records and the run summaries, and `nuka init` already ignores it.
 
-A program that is an HTTP server is described in `nukadoko.program.ts`,
-and nukadoko starts it for each run: [An HTTP API](docs/guide.md#an-http-api)
+A program that is an HTTP server is described by `program` in
+`nukadoko.config.ts`, and nukadoko starts it for each run: [An HTTP API](docs/guide.md#an-http-api)
 walks the same loop against one.
 
 ## How a run is judged
@@ -496,7 +496,7 @@ directory or wrote through `node:fs`, with their content), `program_log`
 (when nukadoko starts the program, the lines of its log that carry the
 step's trace id: each request to it carries a `traceparent` the program
 can write into its lines; `null` for a program at a `url`), `events`
-(when the program file names `{events}`, the program's own report of
+(when the program names `{events}`, the program's own report of
 what it did inside the step, one line per statement, job, or call, in
 the format of [docs/execution-events.md](docs/execution-events.md)), and
 `unmeasured`. That last one lists what nukadoko saw but cannot measure,

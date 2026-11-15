@@ -46,6 +46,41 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
+## 0.26.0 to 0.27.0
+
+- **The program moves into the config.** `nukadoko.program.ts` and
+  `defineProgram` are gone, and the program under test is `program` in
+  `nukadoko.config.ts`: a function that returns the object
+  `defineProgram` took. A project root that still holds
+  `nukadoko.program.ts` or `nukadoko.program.mts` stops every command,
+  `nuka check` included, with exit code 2:
+
+  ```text
+  refused	program-file-moved	-	nukadoko.program.ts is no longer read: the program under test is part of nukadoko.config.ts now, so nukadoko does not start what nukadoko.program.ts describes.
+    fix: Move what nukadoko.program.ts describes into nukadoko.config.ts as its program, and delete nukadoko.program.ts; CHANGELOG.md, under "The program moves into the config", shows the move.
+  ```
+
+  Move the object into the config, and delete the program file:
+
+  ```ts
+  // nukadoko.config.ts
+  import { defineConfig } from "nukadoko";
+
+  export default defineConfig({
+    featuresDir: "features",
+    program: () => ({
+      serve: { command: "npm start", ready: "/" },
+      env: { PORT: "{port}" },
+    }),
+  });
+  ```
+
+  A helper or a constant the program file declared moves above
+  `defineConfig`. A config that still imports `defineProgram` is
+  refused with `config-invalid`. A `--base` ref from before the move
+  needs nothing: the run still reads that ref's program file for its base
+  world. The upgrade is done when `nuka check` is green.
+
 ## 0.25.0 to 0.26.0
 
 - **A scenario whose claims held is `broke` when the program failed
@@ -606,7 +641,7 @@ This part does not change release to release.
   ```
 
   ```ts
-  // nukadoko.program.ts
+  // nukadoko.config.ts
   import { defineProgram } from "nukadoko";
 
   export default defineProgram({
@@ -645,7 +680,7 @@ This part does not change release to release.
   ```
 
   ```ts
-  // nukadoko.program.ts
+  // nukadoko.config.ts
   import { defineProgram } from "nukadoko";
 
   export default defineProgram({

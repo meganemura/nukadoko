@@ -38,6 +38,39 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   たとえば 0.13.0、0.13.1、0.14.0 のプロジェクトは、「0.14.0 から 0.14.1 へ」から読み始めます。
   0.18.0、0.19.0、0.20.0 のプロジェクトは、「0.20.0 から 0.21.0 へ」から読み始めます。
 
+## 0.26.0 から 0.27.0 へ
+
+- **プログラムは config に移ります。**
+  `nukadoko.program.ts` と `defineProgram` はなくなり、テスト対象のプログラムは `nukadoko.config.ts` の `program` になります。
+  `program` は、`defineProgram` に渡していたオブジェクトを返す関数です。
+  プロジェクトのルートに `nukadoko.program.ts` か `nukadoko.program.mts` が残っていると、`nuka check` を含むすべてのコマンドが終了コード 2 で止まります。
+
+  ```text
+  refused	program-file-moved	-	nukadoko.program.ts is no longer read: the program under test is part of nukadoko.config.ts now, so nukadoko does not start what nukadoko.program.ts describes.
+    fix: Move what nukadoko.program.ts describes into nukadoko.config.ts as its program, and delete nukadoko.program.ts; CHANGELOG.md, under "The program moves into the config", shows the move.
+  ```
+
+  オブジェクトを config に移し、プログラムのファイルを消します。
+
+  ```ts
+  // nukadoko.config.ts
+  import { defineConfig } from "nukadoko";
+
+  export default defineConfig({
+    featuresDir: "features",
+    program: () => ({
+      serve: { command: "npm start", ready: "/" },
+      env: { PORT: "{port}" },
+    }),
+  });
+  ```
+
+  プログラムのファイルに書いていたヘルパーや定数は、`defineConfig` の上に移します。
+  まだ `defineProgram` を import している config は `config-invalid` で止まります。
+  移す前の ref を `--base` に使うときは、何もしなくてかまいません。
+  基点の world には、その ref のプログラムのファイルを読みます。
+  `nuka check` が緑になれば、アップグレードは終わりです。
+
 ## 0.25.0 から 0.26.0 へ
 
 - **claim が成り立った scenario も、その下でプログラムが失敗したときは `broke` です。**
@@ -487,7 +520,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ```
 
   ```ts
-  // nukadoko.program.ts
+  // nukadoko.config.ts
   import { defineProgram } from "nukadoko";
 
   export default defineProgram({
@@ -523,7 +556,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ```
 
   ```ts
-  // nukadoko.program.ts
+  // nukadoko.config.ts
   import { defineProgram } from "nukadoko";
 
   export default defineProgram({

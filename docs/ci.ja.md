@@ -105,7 +105,7 @@ jobs:
       # libraries it needs to actually launch.
       - run: npx playwright install --with-deps chromium
       # No step starts the app under test: `nuka run` builds and starts
-      # it from nukadoko.program.ts, on a port of its own, waits until its
+      # it from the program in nukadoko.config.ts, on a port of its own, waits until its
       # ready path answers, and stops it after the scenarios
       # (docs/spec.md "Program"). `nuka run` never reads
       # playwright.config.ts, so its `webServer` field starts nothing.
@@ -132,7 +132,7 @@ jobs:
 `nuka run --base "$(git merge-base HEAD origin/main)"` です。
 ブランチを始めてから先へ進んだ基点のブランチの先端と比べると、そこで足された受け入れ基準は `removed` と読まれ、そこで変わった受け入れ基準はブランチが変えたものと読まれます。
 ブランチがどちらにも触れていなくても、そう読まれます。
-新しいか変わった受け入れ基準は基点のコードに対しても走り、run はそれを基点自身の `nukadoko.program.ts` から、run ディレクトリの下の tree で build します。
+新しいか変わった受け入れ基準は基点のコードに対しても走り、run はそれを基点自身の config から、run ディレクトリの下の tree で build します。
 変わっていない受け入れ基準は、step が変わったとき基点の step のもとで走ります。
 そのため job には基点の build に要るものが必要で、基点はこの checkout の `node_modules` からパッケージを解決します。
 base や old の world を要する行だけがそこで走るので、増える時間は 1 回の build と変わった scenario、そして step ファイルが変わったときは変わっていないすべての scenario です。
@@ -185,10 +185,10 @@ fetch が無ければ、`nuka run` は `base-shallow` で拒否し、同じ `git
   だから上のインストールコマンドはそれを明示的に名指しています。
   firefox と webkit もそれぞれ自分自身のバイナリを必要とします(docs/spec.ja.md の「Environment、secret」を参照)。
   `browserType`(や、それを渡り歩く test matrix)が実際に必要とするものを足してください。
-- **テスト対象のアプリは `webServer` ではなく `nukadoko.program.ts` から起動します。**
+- **テスト対象のアプリは `webServer` ではなく `nukadoko.config.ts` のプログラムから起動します。**
   `nuka run` と `nuka do` は `playwright.config.ts` を一切読みません([docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照)。
   だからその `webServer` フィールドは何も起動しません。
-  その役目はプログラムのファイルの `build`、`prepare`、`serve` が果たします。
+  その役目はプログラムの `build`、`prepare`、`serve` が果たします。
   起動しなかったプログラムは、`page` や `request` に触れる最初の step の `ECONNREFUSED` ではなく、`program-start-failed` とログの末尾で run を失敗させます(docs/spec.ja.md の「テスト対象のプログラム」を参照)。
 - **run が残すものには上限があり、それ以外にはありません。**
   `nuka run` は最新 `retention.runs` 回分の run を保ち、それより古い run を毎回の run の終わりに自分で消します(docs/spec.ja.md の「成果物」を参照)。
@@ -274,7 +274,7 @@ fetch が無ければ、`nuka run` は `base-shallow` で拒否し、同じ `git
   その `scenarios` のエントリは、各 scenario の status と、行、status、step record、エラーを持つ step を持ち、失敗した scenario はそれを再実行する `do` コマンドを持ちます(docs/spec.ja.md の「Scenario(スクリプト化された経路)」を参照)。
   その `table` は、受け入れ基準ごとの断定(`held`、`proven`、`failed`)とその理由を持ちます(docs/spec.ja.md の「断定」を参照)。
 - **matrix ではなく 1 つの job で、機能のスイッチの両側。**
-  フラグの値ごとに同じ job を走らせていたスイート(`CHECKOUT_V2: ["", "1"]` に対する `strategy.matrix`)は、代わりに各値を `nukadoko.program.ts` の environment として宣言し、その側を `conditions` に名指します(docs/spec.ja.md の「断定」を参照)。
+  フラグの値ごとに同じ job を走らせていたスイート(`CHECKOUT_V2: ["", "1"]` に対する `strategy.matrix`)は、代わりに各値を `nukadoko.config.ts` のプログラムの environment として宣言し、その側を `conditions` に名指します(docs/spec.ja.md の「断定」を参照)。
   step は `npx nuka run features/` のままです。
   `--env` の無い run がそれらの environment をそれぞれ 1 つの job の 1 回の run で走らせ、サマリの表が各 scenario を両側で示します。
   `@with:checkout_v2` の tag を付けた scenario は、フラグが入っているところで必須、切れているところで対照で、そこで Then が成り立たなければ、その行は `proven` です。

@@ -16,18 +16,20 @@ itself is in [spec.md](spec.md).
 
 ## An HTTP API
 
-The program under test is described in a file of its own,
-`nukadoko.program.ts`, beside the config. nukadoko starts it for each run
+The program under test is described by the config's `program`, a
+function that returns how the program starts. nukadoko starts it for each run
 on a free port of its own, waits until it answers, sends every step's
 requests there, and stops it after the scenarios:
 
 ```ts
-// nukadoko.program.ts
-import { defineProgram } from "nukadoko";
+// nukadoko.config.ts
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "node src/server.ts" },
-  env: { PORT: "{port}" },
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node src/server.ts" },
+    env: { PORT: "{port}" },
+  }),
 });
 ```
 
@@ -81,7 +83,7 @@ write semantics, so the author sets `false`.
 
 A step can call the program with `fetch` instead, which needs nothing
 installed. `baseURL` is the URL of the program nukadoko started, from the
-program file above:
+program above:
 
 ```ts
 // features/steps/get-greeting.ts
@@ -286,8 +288,8 @@ export default defineStep({
   `APIRequestContext` and `Page` objects, not a nukadoko wrapper, so
   existing Playwright knowledge and helpers carry over directly.
 - `request.post("/projects", ...)` above resolves that relative path
-  against the URL of the program `nukadoko.program.ts` starts or names
-  ([An HTTP API](#an-http-api)). Without a program file, only an absolute
+  against the URL of the program the config's `program` starts or names
+  ([An HTTP API](#an-http-api)). Without a program, only an absolute
   URL works.
 - `nuka do create-project --args '{"name":"acme"}'` runs this step by
   itself and prints its step record. This record is the unit of an agent's
@@ -686,7 +688,7 @@ BeforeAll and AfterAll, and process-scope fixtures. `run.json` holds the
 verdict table, one row per criterion and one cell per environment, and the
 summary opens with it. An environment can declare the switches of its
 program as `conditions`, and a run without `--env` runs every
-environment that declares them, or the ones the program file's
+environment that declares them, or the ones the program's
 `defaultEnvironments` names:
 
 ```ts
@@ -705,8 +707,8 @@ passes, the row is `held`, and that is the row to read: the Then does not
 see what the switch changes. A row is `failed`, and the exit code 1, when
 a required cell does not pass. `--env default` names the top-level
 environment, as `run.json` names it, so `--env default --env staging`
-runs both. An environment is still only configuration, in
-`nukadoko.program.ts`: what differs between `a` and `b` is whatever
+runs both. An environment is still only configuration, in the
+program: what differs between `a` and `b` is whatever
 their fields say. `conditions` sets nothing, and nukadoko does not check
 it against the program: `{condition.banner}` hands the program the side
 its environment declares, so the two cannot disagree.
@@ -726,7 +728,7 @@ an `unchanged` one also runs in the `old` world, head's code under the
 base's criteria and steps, and has to pass there; when it does not, the
 row is `moved`: the approved sentence no longer means what it meant.
 Each world runs in a tree under the run directory, built from that
-tree's program file, and resolves packages from head's project. The exit
+tree's program, and resolves packages from head's project. The exit
 code is 1 on a `failed`, `unproven`, or `moved` row, and a `removed`
 row quotes the criterion that went. In a shallow clone, fetch the base
 first; the refusal names the command.

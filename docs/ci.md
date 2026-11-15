@@ -117,7 +117,7 @@ jobs:
       # libraries it needs to actually launch.
       - run: npx playwright install --with-deps chromium
       # No step starts the app under test: `nuka run` builds and starts
-      # it from nukadoko.program.ts, on a port of its own, waits until its
+      # it from the program in nukadoko.config.ts, on a port of its own, waits until its
       # ready path answers, and stops it after the scenarios
       # (docs/spec.md "Program"). `nuka run` never reads
       # playwright.config.ts, so its `webServer` field starts nothing.
@@ -148,7 +148,7 @@ the tip of a base branch that moved on since the branch began, a
 criterion added there reads as `removed`, and one changed there reads as
 changed by the branch, although the branch never touched either. A
 new or changed criterion also runs against the base's code, which the run
-builds from the base's own `nukadoko.program.ts` in a tree under the run
+builds from the base's own config in a tree under the run
 directory, and an unchanged one runs under the base's steps when they
 changed. The job therefore needs what building the base needs; the base
 resolves packages from this checkout's `node_modules`. Only the rows that
@@ -218,11 +218,11 @@ of the above; these four are what changes.
   webkit each need their own binary too (see "Environments and
   secrets" in [docs/spec.md](spec.md)); add the ones `browserType` (or a
   test matrix across it) actually needs.
-- **The app under test starts from `nukadoko.program.ts`, not from
+- **The app under test starts from the program in `nukadoko.config.ts`, not from
   `webServer`.** `nuka run` and `nuka do` read `playwright.config.ts` for
   nothing at all (see
   [docs/migration-playwright-test.md](migration-playwright-test.md)), so
-  its `webServer` field starts nothing. The program file's `build`,
+  its `webServer` field starts nothing. The program's `build`,
   `prepare`, and `serve` do that job, and a program that does not start
   fails the run with `program-start-failed` and the end of its log, not
   with an `ECONNREFUSED` in the first step that touches `page` or
@@ -334,7 +334,7 @@ Five things the workflow above leaves to the team, each small.
 - **Both sides of a feature switch in one job, not a matrix.** A suite
   that ran the same job once per value of a flag (a `strategy.matrix`
   over `CHECKOUT_V2: ["", "1"]`) declares each value as an environment in
-  `nukadoko.program.ts` instead, naming its side in `conditions`
+  the program in `nukadoko.config.ts` instead, naming its side in `conditions`
   ("Verdicts" in [docs/spec.md](spec.md#verdicts)). The step stays
   `npx nuka run features/`: a run without `--env` runs each of those
   environments, in one job and one run, and the summary's table shows each

@@ -99,7 +99,7 @@ a question for the person. A table the program writes for its own
 bookkeeping (a telemetry row) or to run (a cache entry, a migration row) is
 the program's to declare: a `lists.tables` command prints
 `{"table":"events","holds":"bookkeeping"}` (or `"infrastructure"`) from
-where the program already says it, never from a list in the program file,
+where the program already says it, never from a list in the config,
 and a `db` count that names no `table` then leaves those lines out. The
 line ends `left out 1 line: db insert into events (bookkeeping)`, and
 `events_read.<key>.left_out` names each group. Otherwise the implementation

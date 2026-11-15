@@ -126,7 +126,7 @@ the project (a real service, a shared database, a file outside
 `scratch`), tell the user what it is about to change and get their
 go-ahead, once per step, not on every retry while fixing it, or
 trial-and-error stops being possible. A step that writes only under
-`scratch`, or to a server a fixture or `nukadoko.program.ts` started, needs no
+`scratch`, or to a server a fixture or the program in `nukadoko.config.ts` started, needs no
 go-ahead (`examples/http-api.md`), nor does a claim or `mutates: false` step.
 
 With nobody to ask mid-task, because the caller handed the task over

@@ -20,16 +20,19 @@
 
 **HTTP API**
 
-テスト対象のプログラムは、config の隣にある専用のファイル `nukadoko.program.ts` に書きます。
+テスト対象のプログラムは、config の `program` に書きます。
+プログラムの起動のしかたを返す関数です。
 nukadoko は run ごとに専用の空いているポートでそれを起動し、応答するまで待ち、すべての step の request をそこへ送り、シナリオの後に止めます:
 
 ```ts
-// nukadoko.program.ts
-import { defineProgram } from "nukadoko";
+// nukadoko.config.ts
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "node src/server.ts" },
-  env: { PORT: "{port}" },
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node src/server.ts" },
+    env: { PORT: "{port}" },
+  }),
 });
 ```
 
@@ -83,7 +86,7 @@ step は `mutates: true` を書きます。
 **fetch でプログラムを呼ぶ**
 
 step は代わりに `fetch` でプログラムを呼ぶこともでき、その場合は何もインストールする必要がありません。
-`baseURL` は、上の `nukadoko.program.ts` から nukadoko が起動したプログラムの URL です:
+`baseURL` は、上のプログラムから nukadoko が起動したプログラムの URL です:
 
 ```ts
 // features/steps/get-greeting.ts
@@ -270,8 +273,8 @@ export default defineStep({
   step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません(そうした step を持たないプロジェクトは、[Install](../README.ja.md#install) のとおり Playwright そのものをインストールしません)。
   どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。
   そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
-- 上の `request.post("/projects", ...)` は、その相対パスを、`nukadoko.program.ts` が起動するか名指すプログラムの URL に対して解決します([An HTTP API](#an-http-api))。
-  `nukadoko.program.ts` がなければ、絶対 URL しか通りません。
+- 上の `request.post("/projects", ...)` は、その相対パスを、config の `program` が起動するか名指すプログラムの URL に対して解決します([An HTTP API](#an-http-api))。
+  プログラムがなければ、絶対 URL しか通りません。
 - `nuka do create-project --args '{"name":"acme"}'` は、この step だけを実行して step record を出力します。
   この record は agent の探索ループを構成する単位であり、事前の準備は不要です。
 
@@ -612,7 +615,7 @@ seed は stderr、`run.json`、サマリに出て、`--order shuffled:<seed>` �
 それぞれの environment が、自分の env file、secret、version の probe、プログラム、BeforeAll と AfterAll、process スコープの fixture を持ちます。
 `run.json` は断定の表を持ちます。
 受け入れ基準ごとに 1 行、environment ごとに 1 つのセルで、サマリはこの表で始まります。
-environment はプログラムのスイッチを `conditions` として宣言でき、`--env` の無い run はそれを宣言するすべての environment、またはプログラムのファイルの `defaultEnvironments` が名指す environment を走らせます:
+environment はプログラムのスイッチを `conditions` として宣言でき、`--env` の無い run はそれを宣言するすべての environment、またはプログラムの `defaultEnvironments` が名指す environment を走らせます:
 
 ```ts
 env: { BANNER: "{condition.banner}" },
@@ -630,7 +633,7 @@ scenario がスイッチの 2 つの側を見分けるということです。
 Then はスイッチが変えるものを見ていません。
 必須のセルが通らなければ、行は `failed` で、終了コードは 1 です。
 `--env default` はトップレベルの environment を、`run.json` が名付けるとおりに名指すので、`--env default --env staging` は両方を実行します。
-environment はそれでも `nukadoko.program.ts` の設定にすぎません。
+environment はそれでもプログラムの設定にすぎません。
 `a` と `b` で何が違うかはそれぞれのフィールドが決めます。
 `conditions` は何も設定せず、nukadoko はそれをプログラムと照らし合わせません。
 `{condition.banner}` は environment が宣言する側をプログラムに渡すので、2 つは食い違いません。
@@ -643,7 +646,7 @@ environment はそれでも `nukadoko.program.ts` の設定にすぎません。
 対応づけ(features ディレクトリの下の step ファイルや補助、config の fixture や parameter type、environment の condition)が変わったときは、`unchanged` の受け入れ基準が `old` の world、つまり基点の受け入れ基準と step のもとでの head のコードでも走り、そこで通らなければなりません。
 通らなければ行は `moved` です。
 承認された文が、もう承認されたときの意味ではないということです。
-各 world は run ディレクトリの下の tree で、その tree のプログラムのファイルから build して走り、パッケージは head のプロジェクトから解決します。
+各 world は run ディレクトリの下の tree で、その tree のプログラムから build して走り、パッケージは head のプロジェクトから解決します。
 `failed`、`unproven`、`moved` の行があれば終了コードは 1 で、`removed` の行は消えた受け入れ基準を引用します。
 浅いクローンでは先に基点を取ってきます。
 拒否がそのコマンドを名指します。

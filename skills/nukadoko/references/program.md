@@ -1,20 +1,22 @@
 # The program under test
 
-## The program file
+## The program
 
-The config holds the criteria. `nukadoko.program.ts`, beside it, holds how a run
-gets the program the scenarios talk to: how to build it, prepare its state,
-start it, and the env its processes get. `nuka init` does not write it; write it
-from what the project's README or CI script already runs.
+The config holds the criteria, and its `program` holds how a run gets the
+program the scenarios talk to: how to build it, prepare its state, start it,
+and the env its processes get. `nuka init` does not write it: write it from
+what the README or CI script already runs.
 
 ```ts
-import { defineProgram } from "nukadoko";
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  build: ["npm run build"],              // once per run, in the tree's root
-  prepare: ["node dist/migrate.js"],     // once per world, with env below
-  serve: { command: "node dist/server.js", ready: "/health" },
-  env: { PORT: "{port}", DATABASE_PATH: "{dir}/app.sqlite3" },
+export default defineConfig({
+  program: () => ({
+    build: ["npm run build"],              // once per run, in the tree's root
+    prepare: ["node dist/migrate.js"],     // once per world, with env below
+    serve: { command: "node dist/server.js", ready: "/health" },
+    env: { PORT: "{port}", DATABASE_PATH: "{dir}/app.sqlite3" },
+  }),
 });
 ```
 
@@ -101,17 +103,16 @@ step's trace id by the time its record was written. Read the world's
 `unrecorded-log` entry in the summary, decided from the whole log once the
 world stopped: "carries no trace ids" means the program does not tag its
 lines; a late line is on its step's `after-record` entry. When the world's
-entry says none came in time, output buffered on a pipe is a
-possible cause: `STDOUT.sync = true` fixes it in Ruby and
-`PYTHONUNBUFFERED=1` in Python. For Rails, send the test log to stdout
-and tag it, in `config/environments/test.rb`:
+entry says none came in time, output buffered on a pipe is a possible cause:
+`STDOUT.sync = true` fixes it in Ruby and `PYTHONUNBUFFERED=1` in Python.
+For Rails, send the test log to stdout and tag it, in `config/environments/test.rb`:
 
 ```ruby
 config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?
 config.log_tags = [ ->(request) { request.headers["traceparent"] } ]
 ```
 
-with `RAILS_LOG_TO_STDOUT: "1"` in the program file's `env`. A Node
+with `RAILS_LOG_TO_STDOUT: "1"` in the program's `env`. A Node
 server prints `req.headers.traceparent` at the start of each line it
 writes for a request. A world at a `url` has no log nukadoko reads:
 `observed.program_log` is `null`, and the server's own log finds a
@@ -195,6 +196,5 @@ that runs elsewhere, such as a staging server, and starts nothing: give it
 `nuka run --base`, a `url` function receives `tree` and branches on it: one
 that answers the base world with head's URL leaves that world not run.
 
-A tree with no program file starts no world, which suits a command-line
-tool whose steps run commands with `runCommand`. "Program" in
-docs/spec.md has every field.
+A tree with no program starts no world, which suits a command-line tool whose
+steps run commands with `runCommand`. "Program" in docs/spec.md has every field.

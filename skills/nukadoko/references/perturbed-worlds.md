@@ -17,14 +17,14 @@ Four axes, and where each one lives:
   below. The program reads each value from its environment variables, so
   nothing new is needed in nukadoko.
 
-## The program file
+## The program
 
 Each environment declares its zone and its clock as `conditions`, and
 `env` hands the same values to the program through `{condition.<name>}`,
 so the column heading and the program cannot disagree:
 
 ```ts
-import { defineProgram } from "nukadoko";
+import { defineConfig } from "nukadoko";
 
 // Two zones by two pinned clocks. A combination left out is not run, and
 // nothing reports it, so the cross product is written once, here.
@@ -36,10 +36,12 @@ const environments = Object.fromEntries(
   ),
 );
 
-export default defineProgram({
-  serve: { command: "node src/server.ts", ready: "/health" },
-  env: { PORT: "{port}", TZ: "{condition.tz}", NOW: "{condition.now}" },
-  environments,
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node src/server.ts", ready: "/health" },
+    env: { PORT: "{port}", TZ: "{condition.tz}", NOW: "{condition.now}" },
+    environments,
+  }),
 });
 ```
 

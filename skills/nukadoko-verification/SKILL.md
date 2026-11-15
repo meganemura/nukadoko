@@ -104,7 +104,7 @@ How a step reaches the CLI's instance depends on its handle:
   turned off) with a scenario, since they do not survive a reconnect.
 
 Either way, run whole scenarios against the CLI's instance: read `url`
-in `nukadoko.program.ts` from an environment variable whose name no
+in the config's `program` from an environment variable whose name no
 production tool reads, and have the CLI's `scenario` command set it and
 run `nuka run --json`. A program each run may start fresh goes in `serve`
 there instead, with its state under `{dir}`.
@@ -129,7 +129,7 @@ program's log lines and execution events for them the step's.
 
 ## 4. Doctor and readiness
 
-`serve.ready` in `nukadoko.program.ts` treats a server as ready once one
+`serve.ready` in the config's `program` treats a server as ready once one
 path answers 2xx, and nothing more. Usable is the control CLI's `doctor`: the
 port is ours, the build is the expected one, the data is seeded. For a
 command-line tool, usable is the tool's own startup check (`--version`
@@ -192,7 +192,7 @@ has run.
    nothing red (`skills/nukadoko/references/done.md`).
 5. Link the scenario from the map's sub-feature.
 
-When the scenario and the program file live in the product's repository,
+When the scenario and the program live in the product's repository,
 `nuka run --base <the commit before the fix>` shows red before and green
 after in one run: the base world builds the base's code from its program
 file. When the scenario lives outside the product's repository, `--base`
@@ -205,7 +205,7 @@ by returning the product's `git rev-parse HEAD` from the environment's
 
 When the fix sits behind a switch the program reads (a flag, a setting),
 one run shows both sides instead: declare the switch in `conditions` on
-two environments of `nukadoko.program.ts` and tag the scenario
+two environments of the program in `nukadoko.config.ts` and tag the scenario
 `@with:<switch>`, so the side without the fix is a control. The verdict
 table reads `proven` when the Then breaks there at the same line in each
 of `--proof-runs` runs, and `held` when it passes there, which says what
@@ -245,12 +245,12 @@ the program did differently, step by step, on the side with the fix.
 - `nuka run --base <ref>`: which criteria changed since the map was last
   checked, and, when the steps changed, whether an unchanged one still
   means what it meant (a `moved` row says it does not).
-- `nuka run` with `lists` in the program file: the routes the program
+- `nuka run` with `lists` in the program: the routes the program
   has that no scenario requested ("Routes" in the summary, `routes` in
   run.json; `skills/nukadoko/references/verdicts.md`). A route no
   scenario requested is a place the map may be missing; a requested one
   is not yet a checked one.
-- `nuka run` with a `tables` list in the program file: a count of
+- `nuka run` with a `tables` list in the program: a count of
   writes that names no table counts the tables that hold state, and its
   line names the bookkeeping and infrastructure writes it left out; the
   note `undeclared-write` names a step declared `mutates: false` whose

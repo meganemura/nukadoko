@@ -22,15 +22,17 @@ export default defineConfig({
 });
 ```
 
-テスト対象のアプリは、2 つ目のファイル `nukadoko.program.ts` に書きます。
+テスト対象のアプリは、同じファイルに `program` として書きます。
 起動の仕方か、すでに動いているアプリの URL です。
 
 ```ts
-import { defineProgram } from "nukadoko";
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "npm start", ready: "/" }, // the command webServer runs
-  env: { PORT: "{port}" },
+export default defineConfig({
+  program: () => ({
+    serve: { command: "npm start", ready: "/" }, // the command webServer runs
+    env: { PORT: "{port}" },
+  }),
 });
 ```
 
@@ -40,7 +42,7 @@ export default defineProgram({
 `nuka init` はそれを stderr で伝えます。
 
 `nuka run` も `nuka do` も `playwright.config.ts` を一切読まないため、その `webServer` フィールドと `use.baseURL` は nukadoko にとって意味を持ちません。
-`webServer` の役目は、プログラムのファイルの `serve` が果たします。
+`webServer` の役目は、プログラムの `serve` が果たします。
 nukadoko は専用の空いているポートでアプリを起動し、`ready` が答えるまで待ち、その URL を `page` と `request` の base URL にします。
 同じコマンドを両方のファイルに書くことになります。
 ここではその重複を解消しません。

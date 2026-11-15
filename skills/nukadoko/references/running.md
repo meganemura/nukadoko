@@ -30,7 +30,7 @@ kept in the order given.
 
 ## The program under test
 
-`nukadoko.program.ts`, beside the config, builds, starts, and stops the
+The config's `program` builds, starts, and stops the
 program the scenarios talk to, once per run (`references/program.md`).
 
 ## Environments
@@ -39,7 +39,7 @@ program the scenarios talk to, once per run (`references/program.md`).
 file's `environments`, or `default`, which needs none. An entry overrides
 any program field, adds `envFiles` after the config's, and may set
 `policy: "read-only"` and `conditions`. `nuka run` without `--env` runs
-what the program file's `defaultEnvironments` names, or else every
+what the program's `defaultEnvironments` names, or else every
 environment that declares `conditions`, or `default` when none does;
 `nuka do` without `--env` uses `default`. `nuka run --env a --env
 b` runs every selected scenario in `a`, then in `b`, as one run: the

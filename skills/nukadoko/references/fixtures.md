@@ -68,7 +68,7 @@ fixture depending on a `scenario`-scope one, and a fixture that destructures
 fixture's own destructuring cannot be read, or names a fixture nukadoko
 does not know. The finding names the fixture.
 
-The program under test is not a fixture: `nukadoko.program.ts` builds it,
+The program under test is not a fixture: the program in `nukadoko.config.ts` builds it,
 starts it once per world on a port of its own, and stops it after the
 scenarios (`program.md`). A fixture that starts a server in-process
 gives a run no record of which program answered. A fixture that connects

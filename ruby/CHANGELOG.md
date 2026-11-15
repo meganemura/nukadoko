@@ -6,6 +6,45 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Changed
+
+- **The program moves into the config.** `nukadoko.program.rb` and
+  `Nukadoko.program` are gone: the program under test is `program:` in
+  `Nukadoko.config`, a lambda that returns the options
+  `Nukadoko.program` took, as the TypeScript engine's `program` is. A
+  `nuka run --base` compares the config with that lambda cut out, so a
+  change to how the program starts is no change to any criterion, and an
+  environment's `conditions` and `defaultEnvironments` are compared as
+  before. A project root that still holds `nukadoko.program.rb` stops
+  every command with `program-file-moved` (exit code 2):
+
+  ```text
+  refused	program-file-moved	-	nukadoko.program.rb is no longer read: the program under test is part of nukadoko.config.rb now, so nukadoko does not start what nukadoko.program.rb describes.
+    fix: Move what nukadoko.program.rb describes into nukadoko.config.rb as its program, and delete nukadoko.program.rb; CHANGELOG.md, under "The program moves into the config", shows the move.
+  ```
+
+  `Nukadoko.program` called from the config is refused with
+  `config-invalid`. To upgrade, move the options into the config and
+  delete `nukadoko.program.rb`. Before:
+
+  ```ruby
+  # nukadoko.program.rb
+  Nukadoko.program serve: { command: "bin/rails server -p {port}", ready: "/up" }
+  ```
+
+  After:
+
+  ```ruby
+  # nukadoko.config.rb
+  Nukadoko.config(
+    program: -> { { serve: { command: "bin/rails server -p {port}", ready: "/up" } } },
+  )
+  ```
+
+  Then run `nuka check` until it is green. A `--base` ref from before
+  the move needs nothing: the run still reads that ref's program file for
+  its base world.
+
 ### Fixed
 
 - An `is-a "url"` claim takes what the TypeScript engine's WHATWG URL

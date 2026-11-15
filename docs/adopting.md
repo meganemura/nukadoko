@@ -62,8 +62,8 @@ Decide the optional flags now. `nuka init` refuses to run again once
   categories. Without it, copy
   [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/typescript/examples/allure/allurerc.mjs) by hand.
 
-A program under test that serves HTTP goes in a second file,
-`nukadoko.program.ts`, which `nuka init` does not write. See
+A program under test that serves HTTP goes in the same file, as
+`program`, which `nuka init` does not write. See
 [An HTTP API](guide.md#an-http-api).
 
 A CommonJS project (no `"type": "module"`) gets `nukadoko.config.mts`
@@ -171,8 +171,8 @@ fails, stderr names the step, its error, its step record, and a `do:`
 line such as `nuka run features/greet.feature:3` that reruns that one
 scenario.
 
-`nuka run --env <name>` runs against an environment that
-`nukadoko.program.ts` names under `environments`, each with its own
+`nuka run --env <name>` runs against an environment that the
+program in `nukadoko.config.ts` names under `environments`, each with its own
 `url` or `serve`, `envFiles`, and `policy`. An environment with
 `policy: "read-only"` refuses every step declared `mutates: true`
 before it runs. The `--command` scaffold writes `mutates: true`; set

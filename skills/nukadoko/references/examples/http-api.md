@@ -1,9 +1,9 @@
 # Worked example: an HTTP API
 
 A finished project for an API on `node:http`, built with nukadoko 0.16.1
-on Node 24.22.0, with its Thens moved to claims and its server moved to
-`nukadoko.program.ts` in the release after 0.21.0, which also put the
-count behind a switch. Every output block below is copied from a real run of
+on Node 24.22.0, with its Thens moved to claims and its server moved to the program
+in the release after 0.21.0, which also put the count behind a switch,
+and that program moved into `nukadoko.config.ts` in the release after 0.26.0. Every output block below is copied from a real run of
 that project, which is `examples/acceptance/http-api/` in the nukadoko
 repository; CI runs it. The rules it follows are in
 `../scenario-rules.md`.
@@ -91,7 +91,7 @@ Feature: items API
 
 ## The steps and the program
 
-- `nukadoko.program.ts`: starts the API once for each environment, on a
+- `program` in `nukadoko.config.ts`: starts the API once for each environment, on a
   free port, waits until `GET /items` answers, and stops it after the
   scenarios. The steps read its URL from `baseURL`. Its two
   environments are the two sides of `ITEM_COUNT`, `count-off` and
@@ -123,12 +123,12 @@ Feature: items API
 
 The two steps that POST keep the default `mutates: true`: they change the
 API's state. They need no go-ahead before `nuka do`, because the only
-server they reach is the one the program file started.
+server they reach is the one the program started.
 
-`nukadoko.program.ts`:
+`nukadoko.config.ts`:
 
 ```ts
-import { defineProgram } from "nukadoko";
+import { defineConfig } from "nukadoko";
 
 // One API server for each environment of the run, on a port of its own.
 // It keeps its items in memory, so a scenario sees the items earlier
@@ -137,14 +137,17 @@ import { defineProgram } from "nukadoko";
 // its two sides, and conditions says which side each one is, so the
 // scenario tagged @with:item_count runs in count-off as a control.
 // ITEM_COUNT is the condition itself, so the switch the server reads and
-// the side a cell counts for cannot disagree.
-export default defineProgram({
-  serve: { command: "node src/server.ts", ready: "/items" },
-  env: { PORT: "{port}", ITEM_COUNT: "{condition.item_count}" },
-  environments: {
-    "count-off": { conditions: { item_count: false } },
-    "count-on": { conditions: { item_count: true } },
-  },
+// the side a cell counts for cannot disagree. No fixture starts the API:
+// the steps reach it through baseURL.
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node src/server.ts", ready: "/items" },
+    env: { PORT: "{port}", ITEM_COUNT: "{condition.item_count}" },
+    environments: {
+      "count-off": { conditions: { item_count: false } },
+      "count-on": { conditions: { item_count: true } },
+    },
+  }),
 });
 ```
 
@@ -331,7 +334,7 @@ control's 2 runs, and the summary opens with the table:
 | 2026-10-16 | The whole body against a docstring, or one claim per field | the whole body | the ticket names the body's fields; a scenario per field would repeat the request | none |
 | 2026-10-17 | Acting on `repeated-scenario-prefix` | not acted on | the shared Given writes state the scenario reads | S8 |
 | 2026-10-17 | `mutates` on the POST steps | the default `true`, no go-ahead | they change the API's state, but only on the server the fixture started | SKILL.md "Before the first command" |
-| 2026-10-24 | Where the API server runs | `nukadoko.program.ts`, one server for the run | the program file is how nukadoko starts a program, and its `program.log` and run.json's `worlds` say which program answered; a fixture that starts one in-process says neither | S8 |
+| 2026-10-24 | Where the API server runs | the program, one server for the run | the program is how nukadoko starts a program, and its `program.log` and run.json's `worlds` say which program answered; a fixture that starts one in-process says neither | S8 |
 | 2026-10-24 | Expected bodies against a shared server | claims on what the scenario created: the name it sent, an id of at least 1, the body its Given returned | the exact bodies broke as soon as an earlier scenario had created an item (measured above) | S8 |
 | 2026-10-24 | The unknown id | `0` | the API numbers items from 1, so no run reaches it; `42` exists once a run, or `--repeat`, has created 42 items | none |
 | 2026-10-24 | A criterion behind a switch | two environments, `count-off` and `count-on`, with `conditions`, and `@with:item_count` on the scenario | one run shows the scenario breaking where the switch is off, a control that proves it; a scenario that only ran with the switch on would say nothing about whether it notices the count | none |

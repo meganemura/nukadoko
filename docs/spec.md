@@ -557,12 +557,12 @@ The fixture names:
 - `request: APIRequestContext`: a Playwright APIRequestContext built from
   `config.requestContext`, with the world's base URL. As with `page` above, a base URL is optional. A suite that
   calls only absolute URLs across multiple hosts has no single base URL to
-  state. Nukadoko does not force a program file on it only to satisfy this fixture.
+  state. Nukadoko does not force a program on it only to satisfy this fixture.
   If there is no base URL and a step passes a relative path, Playwright produces
   the failure. Nukadoko does not re-implement Playwright's URL resolution to
   prevent that failure first.
 - `env`: read-only environment variables from the configured envFiles,
-  then the world's `env` from `nukadoko.program.ts` over them (see
+  then the world's `env` from the config's `program` over them (see
   "Program"). The file format is under "Environments and secrets". This fixture
   enforces determinism: the process environment is never merged. It
   also enforces secrets redaction: only values that nukadoko loaded are
@@ -587,7 +587,7 @@ The fixture names:
   That path is a plain object, so the library never sees the read.
 - `baseURL`: the world's base URL for the occasional URL assembled by hand,
   such as a `fetch` call. The common paths receive it as described above.
-  It is `undefined` when the tree has no program file, or when its world
+  It is `undefined` when the tree has no program, or when its world
   has neither `serve` nor `url`. This is valid for a suite that uses only
   absolute URLs. It is not an error state.
 - `resultOf(stepModule)`: returns the validated result from that step's most
@@ -1019,7 +1019,7 @@ An override can also add a dependency.
 A `request` override that destructures the builtin `request` and a
 project fixture builds that fixture before every step that sends a
 request, and hands back the builtin unchanged.
-The program under test is not such a fixture: `nukadoko.program.ts` starts
+The program under test is not such a fixture: the config's `program` starts
 it once per world, so a run can name which program answered (see
 "Program").
 
@@ -1161,7 +1161,7 @@ a `poll` call's `timeout` and `interval` (`InvalidPollOptionsError`), a
 `runCommand` `timeout` (a `RangeError` before the program starts), a compat
 step's or hook's `{ timeout }` and `setDefaultTimeout` (a throw while the
 glue registers it, where `-1` still means no limit), and each `timeout_ms`
-in `nukadoko.program.ts` (see "Limits" under "Program").
+in the config's `program` (see "Limits" under "Program").
 
 A key that is none of these options, such as `rationale`, which an earlier
 release read, is not refused, because it changes nothing at run time.
@@ -3585,33 +3585,34 @@ However, its location shows that the existing suite owns it.
 
 The criteria live in `nukadoko.config.ts`: the features, the steps, the
 fixtures, the parameter types, and the secrets.
-The program under test lives in a second file, `nukadoko.program.ts`.
-Its default export is the program, written with `defineProgram`:
-how nukadoko builds it, prepares its state, starts it or reaches it, and
-the environment variables its processes get.
+The program under test lives in the same file, as `program`: a function
+that returns how nukadoko builds the program, prepares its state, starts
+it or reaches it, and the environment variables its processes get.
 
 ```ts
-// nukadoko.program.ts
-import { defineProgram } from "nukadoko";
+// nukadoko.config.ts
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  build: ["npm run build"],
-  prepare: ["node dist/migrate.js"],
-  serve: { command: "node dist/server.js", ready: "/health" },
-  env: { PORT: "{port}", DATABASE_PATH: "{dir}/app.sqlite3" },
+export default defineConfig({
+  program: () => ({
+    build: ["npm run build"],
+    prepare: ["node dist/migrate.js"],
+    serve: { command: "node dist/server.js", ready: "/health" },
+    env: { PORT: "{port}", DATABASE_PATH: "{dir}/app.sqlite3" },
+  }),
 });
 ```
 
-The two files are apart because a run compares criteria across commits
-(`nuka run --base`, see "Verdicts").
-With the recipe in the config, a change to how the program builds counted
-as a change to every criterion, and a run that read an older tree's
-config found no recipe at all.
-nukadoko reads the program file from the tree it builds: the tree the run
+The program is apart from the criteria, although both are in one file,
+because a run compares criteria across commits (`nuka run --base`, see
+"Verdicts"), and the program goes with the code.
+The mapping that a run compares is the config without `program`: a
+change to how the program builds is not a change to any criterion.
+nukadoko reads the program from the tree it builds: the tree the run
 was started in, and under `--base` the base tree too, which builds the
-base's code from the base's program file.
+base's code from the base's config.
 
-A tree with no program file has no program to start.
+A config with no `program` has no program to start.
 The run starts no world, `run.json` holds `worlds: []`, and each step
 record's `world_name` is `null`.
 That is the right shape for a command-line tool whose steps run commands
@@ -3620,7 +3621,7 @@ steps run only files git tracks. Under `--base`, the base and old trees
 hold nothing git ignores, so a step that runs build output such as
 `dist/cli.js`, or a path it builds to `<root>/node_modules`, finds
 nothing there and breaks in that world, a cell that reads like a product
-result. Such a project needs a program file whose `build` makes that
+result. Such a project needs a program whose `build` makes that
 output in each tree (`build: ["npm run build"]`, no `serve`). When a
 step file imports that output, build it at head before `nuka run` too,
 since the check before a run loads head's step files before any build.
@@ -3643,7 +3644,7 @@ both trees sit inside.
 
 `serve` and `url` are two ways to reach the program, so writing both is
 refused.
-A program file with neither is valid: its world runs `build` and `prepare`
+A program with neither is valid: its world runs `build` and `prepare`
 and has no URL, for a tool whose steps run what `build` made.
 
 A command is an argv array, or a string split on whitespace.
@@ -3661,13 +3662,18 @@ the world before anything after it runs.
 An entry of `build` or `prepare` is a command, or `{ command, timeout_ms }`
 for a command that needs a limit other than the default (see "Limits").
 
-The file is `nukadoko.program.ts`, or `nukadoko.program.mts`.
-Both at once are refused, since nukadoko cannot tell which one to read.
-A file with no default export is refused, and so is a key the shape does
-not have; a key that differs from a real one only in case names the real
-one.
-Each refusal is `config-invalid`, names the file, and stops every command
-that reads it, `nuka check` included.
+`program` is a function, called once when the config loads, that
+returns the program; it is a function so that the program's values are
+not part of the config's mapping (see "Verdicts").
+A `program` that is not a function, that throws, or that returns a
+Promise is refused, and so is a key the shape does not have; a key that
+differs from a real one only in case names the real one.
+Each refusal is `config-invalid`, names the config, and stops every
+command that reads it, `nuka check` included.
+A program file of an earlier release (`nukadoko.program.ts`,
+`nukadoko.program.mts`, or `nukadoko.program.rb`) at the project root
+is refused with `program-file-moved`, so that a program it describes is
+never left unstarted without a word.
 
 ### serve
 
@@ -3780,18 +3786,22 @@ the terminal to say on what.
 | each `lists` command | 60,000 ms | `{ command, timeout_ms }` in place of the command |
 
 ```ts
-export default defineProgram({
-  build: [{ command: "bundle install", timeout_ms: 1_200_000 }],
-  prepare: ["bin/rails db:prepare"],
-  serve: { command: "bin/rails server -p {port}", ready: "/up" },
-  setup: { run: (world) => seedAdmin(world.url), timeout_ms: 120_000 },
+import { defineConfig } from "nukadoko";
+
+export default defineConfig({
+  program: () => ({
+    build: [{ command: "bundle install", timeout_ms: 1_200_000 }],
+    prepare: ["bin/rails db:prepare"],
+    serve: { command: "bin/rails server -p {port}", ready: "/up" },
+    setup: { run: (world) => seedAdmin(world.url), timeout_ms: 120_000 },
+  }),
 });
 ```
 
 Each `timeout_ms` is a whole number of milliseconds from 1 to
 2,147,483,647, the longest delay a Node.js timer keeps.
 A longer one would fire after 1 ms and fail its phase at once, so loading
-`nukadoko.program.ts` refuses it with `config-invalid`, naming the field
+the config refuses it with `config-invalid`, naming the field
 and the limit.
 
 A phase past its limit fails the world with `program-start-failed`, and
@@ -3997,7 +4007,7 @@ them:
 
 - `tree` is the tree the program was built from: `head`, the tree the run
   was started in, or under `--base`, `base` or `old` (see "Verdicts").
-  A base world whose ref has no program file, and was built and started
+  A base world whose ref has no program, and was built and started
   from head's, has `program_from_head: true`.
 - `commands` lists what the world ran, placeholders filled and redacted.
   A `build` appears in the first world that ran it.
@@ -4020,7 +4030,7 @@ them:
   none, those that did not read, and the lines of each kind the format
   does not define.
   It is `null` for a world at a `url`, and absent for a world whose
-  program file does not name `{events}` or that did not start.
+  program does not name `{events}` or that did not start.
 - `lists` holds each list the world read, by kind, with how many
   entries it holds or why it was not read (see "Lists").
 
@@ -4063,26 +4073,30 @@ replaces the top level's.
 with a `url` and no command to run writes `build: []` and `prepare: []`.
 `--env <name>` selects an environment. A run without `--env` runs the
 environments the top-level `defaultEnvironments` names, in its order,
-when the program file writes it; each is an environment of the file, or
+when the program writes it; each is an environment of the program, or
 `default`, and a name it does not define, a repeated name, or an empty
 list is refused when the file is read. Without it, a run without `--env`
 runs every environment that declares `conditions`, in the order the
-program file lists them, and the top level under the name `default` when
+program lists them, and the top level under the name `default` when
 none does. `defaultEnvironments` is how a deployment target declares the
 switches it runs with and still stays out of every local run.
 `--env` may repeat; each environment is a world of its own (see
 "Running").
 
 ```ts
-export default defineProgram({
-  serve: { command: "npm start", ready: "/health" },
-  env: { PORT: "{port}", CHECKOUT_V2: "{condition.checkout_v2}" },
-  defaultEnvironments: ["checkout-v1", "checkout-v2"],
-  environments: {
-    "checkout-v1": { conditions: { checkout_v2: false } },
-    "checkout-v2": { conditions: { checkout_v2: true } },
-    staging: { url: "https://staging.acme.example", policy: "read-only", conditions: { checkout_v2: true } },
-  },
+import { defineConfig } from "nukadoko";
+
+export default defineConfig({
+  program: () => ({
+    serve: { command: "npm start", ready: "/health" },
+    env: { PORT: "{port}", CHECKOUT_V2: "{condition.checkout_v2}" },
+    defaultEnvironments: ["checkout-v1", "checkout-v2"],
+    environments: {
+      "checkout-v1": { conditions: { checkout_v2: false } },
+      "checkout-v2": { conditions: { checkout_v2: true } },
+      staging: { url: "https://staging.acme.example", policy: "read-only", conditions: { checkout_v2: true } },
+    },
+  }),
 });
 ```
 
@@ -4385,7 +4399,7 @@ absent.
 
 A program tags its lines by reading the header of the request each line
 is about.
-Rails writes the test environment's log to a file, so the program file
+Rails writes the test environment's log to a file, so the program
 sends it to standard output, where nukadoko reads it, and tags each line
 with the request's `traceparent`:
 
@@ -4395,7 +4409,7 @@ config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_T
 config.log_tags = [ ->(request) { request.headers["traceparent"] } ]
 ```
 
-The program file's `env` sets `RAILS_LOG_TO_STDOUT: "1"` (below).
+The program's `env` sets `RAILS_LOG_TO_STDOUT: "1"` (below).
 A request with no `traceparent`, such as nukadoko's `ready` check or
 one from `bin/rails test`, gets no tag, since Rails leaves out a blank
 tag.
@@ -4453,17 +4467,19 @@ A Then can claim a count of them, on the lines the program wrote and
 never on a value step code returned (see "A claim on a count of
 events").
 
-The program file names the file with `{events}`.
+The program names the file with `{events}`.
 The examples use `EXECUTION_EVENTS`, the variable the same writer reads
-in production; the program file chooses the name:
+in production; the program chooses the name:
 
 ```ts
-// nukadoko.program.ts
-import { defineProgram } from "nukadoko";
+// nukadoko.config.ts
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "node server.js", ready: "/up" },
-  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node server.js", ready: "/up" },
+    env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+  }),
 });
 ```
 
@@ -4477,8 +4493,8 @@ export default defineProgram({
   Only redacted copies of its lines reach the run directory.
   The directory is removed when the world stops, and when nukadoko exits
   before that.
-- nukadoko sets no variable the program file does not name.
-  A world whose program file does not name `{events}` gets no file, and
+- nukadoko sets no variable the program does not name.
+  A world whose program does not name `{events}` gets no file, and
   its step records have no `observed.events`.
 - A world nukadoko does not serve has no such file: `{events}` in a world
   at a `url`, in a world with neither `serve` nor `url`, or in a `build`
@@ -4814,7 +4830,7 @@ person about to turn a change on for everyone reads what the program did
 differently on the other side.
 Under `nuka run --base`, each environment's base world and its head
 world are a pair, for the rows the base world ran there: where both
-program files name `{events}`, every row whose head cell there is
+programs name `{events}`, every row whose head cell there is
 required and ran (see "Verdicts").
 And when two environments of a run declare `conditions` that differ in
 exactly one condition, the two are a pair.
@@ -4953,7 +4969,7 @@ exactly one condition, the two are a pair.
   the base world did not run.
 - `unread` says why no criterion of the pair was compared, such as a
   side's world at a `url`, whose events nukadoko does not read, or, for
-  a base pair, `the base's program file names no {events}, so the base
+  a base pair, `the base's program names no {events}, so the base
   world wrote no execution events`, the usual reason when the change
   under review is the one that adds `{events}`.
   A base world that did not start in an environment, since no row ran
@@ -5054,7 +5070,7 @@ What this does not reach, in one list:
   port, which a test run picks as it runs.
   A comparison of paths reads a side from its cell's first execution,
   even when the executions of a side under `--repeat` disagree.
-- Against the base, a base whose program file names no `{events}` and
+- Against the base, a base whose program names no `{events}` and
   ran no row in an environment leaves no record that says so, so its
   criteria there read as not run at the base.
 
@@ -5246,19 +5262,19 @@ the events of place-score@4 are not whole (jobs-pending): job 3f2a9c4100000000 w
 A reading is not whole while the world has reported no line of the
 selected kind (`kind-unreported`): a program that does not report the
 kind would make an absence of it hold.
-A world at a `url` gives `world-unread`, and a program file that names
+A world at a `url` gives `world-unread`, and a program that names
 no `{events}` gives `inlet-unnamed`, and the claim is `unjudged` in
 both, with `were not read` in its reason.
 `nuka check` names both for the worlds a run with the same `--env`
 flags starts.
-A world nukadoko serves whose program file names no `{events}` is the
+A world nukadoko serves whose program names no `{events}` is the
 error `events-inlet-missing`, since the fix is in the project's own file.
 The base and old trees of `nuka run --base` do not stop on it: a
-tree's program file goes with the ref's code, so a ref from before the
+tree's program goes with the ref's code, so a ref from before the
 change that names `{events}` is the usual case, and there each claim on
 a count of execution events is `unjudged` with `inlet-unnamed` while
 the tree's other claims run.
-A world at a `url`, or a project with no program file, is the warning
+A world at a `url`, or a project with no program, is the warning
 `events-unread`: such a world is often one the project does not run,
 such as a shared staging server, and its other scenarios still run there.
 
@@ -5543,22 +5559,24 @@ A program has places a scenario can reach, such as its routes and its
 flags, and tables that hold different things.
 The execution events say which of them a step reached; only the program
 can say which it has, and what each of its tables holds.
-`lists` in the program file names one command per kind of place, and
+`lists` in the program names one command per kind of place, and
 each command prints the program's places of that kind, one JSON object
 per line:
 
 ```ts
-// nukadoko.program.ts
-import { defineProgram } from "nukadoko";
+// nukadoko.config.ts
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "node server.js", ready: "/up" },
-  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
-  lists: {
-    routes: "node scripts/routes.mjs",
-    flags: ["node", "scripts/flags.mjs", "{url}"],
-    tables: "node scripts/tables.mjs",
-  },
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node server.js", ready: "/up" },
+    env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+    lists: {
+      routes: "node scripts/routes.mjs",
+      flags: ["node", "scripts/flags.mjs", "{url}"],
+      tables: "node scripts/tables.mjs",
+    },
+  }),
 });
 ```
 
@@ -5603,7 +5621,7 @@ A route that answers more than one method has one line per method, and
 a mounted application, which has no controller, has no `handler`.
 
 Each command runs once per world, in a world nukadoko serves whose
-program file names `{events}`.
+program names `{events}`.
 The `routes` and `flags` commands run in the worlds of the tree the run
 was started in, and the `tables` command in such a world of every tree
 (see "What a table holds"):
@@ -5726,7 +5744,7 @@ program's own declaration:
 - `state`: what the program is for, such as its rooms, its scores, and
   the settings of its feature flags.
   A table the list does not name holds state, and so does every table
-  when the program file names no tables list.
+  when the program names no tables list.
 - `bookkeeping`: a record the program keeps of its own work, such as a
   telemetry table each page writes, or an audit trail.
 - `infrastructure`: what the program's frameworks keep in order to run
@@ -5761,7 +5779,7 @@ A list may print every table, or only the ones that hold something other
 than state.
 What a table holds is the program's to decide, so the command prints it
 from where the program already says it, never from a list kept in the
-program file.
+config.
 A Rails application that keeps its telemetry in the model `Event`
 prints:
 
@@ -5776,13 +5794,13 @@ end
 ```
 
 The tables list is read wherever a count of execution events is judged:
-in every world nukadoko serves whose program file names `{events}`, of
+in every world nukadoko serves whose program names `{events}`, of
 every tree, the base and old worlds of `nuka run --base` included, and
 in `nuka do`'s world when its step counts execution events.
 A claim judged at the base reads the base tree's own list, as head's
 reads head's, and a `--concurrency` worker reads its world's.
 
-- A tables list the program file names and the world did not read
+- A tables list the program names and the world did not read
   leaves what each table holds unknown, never state.
   A `db` line a selection that names no table would count may then be
   on a table the count leaves out, so it may match (`holds_unknown`),
@@ -5799,18 +5817,20 @@ The file is TypeScript, and the commands are whatever the project runs.
 A Rails application:
 
 ```ts
-// nukadoko.program.ts
-import { defineProgram } from "nukadoko";
+// nukadoko.config.ts
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  build: ["bundle install"],
-  prepare: ["bin/rails db:prepare"],
-  serve: { command: "bin/rails server -p {port} -P {dir}/server.pid", ready: "/up" },
-  env: {
-    RAILS_ENV: "test",
-    DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
-    RAILS_LOG_TO_STDOUT: "1",
-  },
+export default defineConfig({
+  program: () => ({
+    build: ["bundle install"],
+    prepare: ["bin/rails db:prepare"],
+    serve: { command: "bin/rails server -p {port} -P {dir}/server.pid", ready: "/up" },
+    env: {
+      RAILS_ENV: "test",
+      DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
+      RAILS_LOG_TO_STDOUT: "1",
+    },
+  }),
 });
 ```
 
@@ -6047,10 +6067,10 @@ the trees they run in, and the verdicts they lead to are under
 `run_id`, one `run.json`, one summary, and one exit code, that runs every
 selected scenario once in each environment. `default` is a name `--env`
 takes too, whether or not the config defines it: it is the environment a
-run without `--env` uses when the program file names no
+run without `--env` uses when the program names no
 `defaultEnvironments` and no environment declares `conditions`, and
 the one `nuka do` without `--env` uses (the top-level settings, or
-`environments.default` when the program file defines one), and the name
+`environments.default` when the program defines one), and the name
 `run.json` gives it, so
 `--env default --env staging` runs both. The environments run one after
 another in the order given, the whole selection in `a` and then the whole
@@ -6322,7 +6342,7 @@ to act on the run without opening another file:
   `target_version`; the summary's environment line names it too.
 - `worlds` lists each world the run started, in the order it started
   them, with what it ran, how long each phase took, and its log; it is
-  empty when the tree has no program file. The fields are under "Program".
+  empty when the tree has no program. The fields are under "Program".
 - `run_dir` is the run directory, relative to the project root with `/`
   separators, so a script passes it to `nuka report` without knowing the
   state directory's layout. The paths inside run.json stay relative to
@@ -6730,7 +6750,7 @@ up the way Gherkin tags do:
 - `@with:<condition>` needs the condition on: `true`, or any value.
 - `@with:<condition>=<value>` needs that value. `@with:x=true` and
   `@with:x=false` are malformed, since a value written as text is not
-  the boolean the program file declares: write `@with:x` or `@without:x`.
+  the boolean the program declares: write `@with:x` or `@without:x`.
 - `@without:<condition>` needs it off: `false`, or not declared.
 
 A condition name is letters, digits, `_`, `.`, and `-`, and a value has no
@@ -6759,7 +6779,7 @@ In a run of `banner-on` (`conditions: { banner: true }`) and `banner-off`
 count, and nukadoko does not check them against the program: a
 declaration that does not match the program makes a cell a control where
 it should be required, or required where it should be a control, and the
-row's verdict is read from that. A program file keeps the two the same by
+row's verdict is read from that. A program keeps the two the same by
 deriving the program's setting from the condition, as in `env: { BANNER:
 "{condition.banner}" }` (see "Placeholders"), so there is one value to
 edit. Each cell of `run.json`'s table names the conditions its role came
@@ -6768,7 +6788,7 @@ environment, so a reader sees what each column was declared to be.
 
 A run without `--env` selects the environments `defaultEnvironments`
 names, or, without it, every environment that declares `conditions`, in
-the order the program file lists them, and `default` when none does (see
+the order the program lists them, and `default` when none does (see
 "Environments"). An environment outside that selection, such as a
 deployment target, runs when `--env` names it. Under `--env`, a scenario
 no named environment meets is not run: its row is left out of the table,
@@ -6780,7 +6800,7 @@ environment runs what applies there, so a hook failure's `do:` line,
 which names one, runs as printed. When `--env` leaves out every selected
 scenario, nothing runs and the run fails with `nothing-selected`.
 Its fix says which environments a run without `--env` selects in this project.
-Its `do:` line is the same run without `--env` when those environments meet every selected scenario; otherwise it names `--env` with the first environment of the program file that meets every one, or else one that meets some, and there is no `do:` line when no environment meets any.
+Its `do:` line is the same run without `--env` when those environments meet every selected scenario; otherwise it names `--env` with the first environment of the program that meets every one, or else one that meets some, and there is no `do:` line when no environment meets any.
 `nuka check` reads the tags against
 the environments a run would select (the ones `nuka check --env` names,
 or the ones a run without `--env` selects), and reports three errors:
@@ -6793,7 +6813,7 @@ or the ones a run without `--env` selects), and reports three errors:
   when the code of its other side did.
 - `condition-unmet`: a scenario no selected environment meets, so every
   cell of it would be a control. It is reported for the default selection
-  alone, which the program file chose and is expected to cover; under
+  alone, which the program chose and is expected to cover; under
   `--env`, such a scenario is left out of the run instead.
 
 **Criteria and how they change.** `nuka run --base <ref>` compares each
@@ -6844,24 +6864,28 @@ A ref feature file that does not parse is a
 **The mapping.** The mapping is what turns a sentence into what runs:
 every file under the features directory except the `.feature` files (the
 step files, their helpers, support code, data), the whole config but
-`stateDir` and `retention`, and the program file's `conditions` on each
+`stateDir`, `retention`, and `program`, and the program's `conditions` on each
 environment and its `defaultEnvironments`, which decide which cells of a
-criterion are required. The two config fields left out cannot change what
-a step sends or sees: one says where the records are written, the other
-how many runs of them are kept. Every other field, the browser, the
+criterion are required. The first two config fields left out cannot change
+what a step sends or sees: one says where the records are written, the
+other how many runs of them are kept. `program` goes with the code, and
+only its conditions and default selection are mapping. Every other field, the browser, the
 timeouts, and the env files among them, can, so a field the config gains
 later is mapping too. The config is mapping as the file the user wrote:
 its loaded value, with a function compared by its source text, and the
-config file's own bytes, since a function closes over what the file
-declares beside it (a constant, a factory's argument), which neither its
-source text nor the value shows. A module the config file imports is not
+config file's own bytes with the source of `program` cut out, since a
+function closes over what the file declares beside it (a constant, a
+factory's argument), which neither its source text nor the value shows.
+The cut is made only when that source occurs in the file exactly once;
+otherwise the whole file is compared, which can only read as changed
+more often, never less. A module the config file imports is not
 followed, as a step file's import out of the features directory is not.
 So an edit to `stateDir` or `retention` alone reads as a mapping change
 too: the old world runs the unchanged rows, which costs a pass, and at
 worst a row the old world cannot run reads `moved`, never a false
 `held`. The mapping is compared as one
 unit: the run knows only that the mapping changed or that it did not,
-never which criterion a changed helper reaches. A config or program file
+never which criterion a changed helper reaches. A config or program
 that does not load at the ref counts as changed. Code outside the features
 directory is the program's, which the base world measures. A project whose
 `featuresDir` is the project root has no mapping apart from its code, and
@@ -6873,10 +6897,12 @@ ends:
 
 - `base` runs the ref's code under head's criteria and mapping. Its tree
   is a git worktree of the ref, with head's features directory and config
-  copied over the ref's. The program file goes with the code: the base
-  tree keeps the ref's, and takes head's only when the ref has none
-  (`program_from_head: true` on its world). The base world reads its
-  environments, their conditions included, from that file.
+  copied over the ref's. The program goes with the code: the base
+  tree keeps the ref's, read from the ref's config (or from the ref's
+  program file, for a ref of an earlier release), and takes head's only
+  when the ref has none (`program_from_head: true` on its world). The
+  base world reads its environments, their conditions included, from
+  that program.
 - `old` runs head's code under the ref's criteria and mapping. Its tree is
   a copy of head's working tree (its tracked files and the untracked files
   git does not ignore) with the ref's features directory and config over
@@ -6935,21 +6961,21 @@ head passed:
   the base can show the base has the behaviour.
 - An `unchanged` row runs in the old world when the mapping changed or
   the row is retagged or renamed, at the line the ref's feature file gives it. Which
-  environments is the ref's mapping too: the ones the ref's program file
+  environments is the ref's mapping too: the ones the ref's program
   selects (its `defaultEnvironments`, or every environment that declares
   `conditions`, or the run's `--env` names), and in each the role the
   conditions the ref gives it decide, so the row runs where it is
   required at the ref, with head's recipe of the environment of that
-  name. An environment the ref requires that head's program file no
+  name. An environment the ref requires that head's program no
   longer has is an old cell `·` with the reason, and the row is `moved`.
-  When the ref has no program file, the old world's environments are
+  When the ref has no program, the old world's environments are
   head's.
 - A row whose required head cell did not pass runs in neither.
 
 Paths are the one exception, since a code change under criteria that did
 not change is what a person most needs to see before it is turned on for
 everyone, and no cell shows it.
-Where head's program file and the base's both name `{events}` for an
+Where head's program and the base's both name `{events}` for an
 environment, the base world also runs, once, each row whose head cell
 there is required and ran, a failed one included, that no base cell runs,
 so that `run.json`'s `paths` compares it (see "Execution events").
@@ -6960,17 +6986,17 @@ It is a `scenarios` entry with `for_paths`, which says what it came to
 in a cell's words: `outcome`, and the `line` of one that did not pass.
 Its scenario line on stderr ends with `(for paths)`.
 It costs about one more pass of head's rows at the base, and a base whose
-program file names no `{events}` runs none of them, since its world has
+program names no `{events}` runs none of them, since its world has
 no path to compare.
 The base tree is made for this alone too: when no selected row is `new`
-or `changed` and head's program file names `{events}` in an
+or `changed` and head's program names `{events}` in an
 environment of the run, the run still checks out the base and starts its
 world in each such environment, so a refactor, whose criteria all stay
 `unchanged`, gets its paths compared.
 That is the cost of one more world per environment, its build and its
 start included, on a run that without `{events}` would run head alone.
-Head's program file decides, since the base's is read only from the
-tree: a base whose program file names no `{events}` then makes the tree
+Head's program decides, since the base's is read only from the
+tree: a base whose program names no `{events}` then makes the tree
 and runs nothing in it.
 
 **Cells.** A cell is what its executions came to:
@@ -7051,7 +7077,7 @@ Three are red:
   required cell, which only a run under `--no-check` without `--env`
   reaches, since `nuka check` reports `condition-unmet`. Such a row has
   a `criterion-without-required-cell` finding, whose `do:` line runs the
-  scenario in an environment of the program file that meets it, or runs
+  scenario in an environment of the program that meets it, or runs
   `nuka check` on its file when none does.
   When a required head cell is not `pass`, the reason names the first
   such cell, with every other required environment whose cell came to the
@@ -7826,7 +7852,7 @@ its scenario record's id, so either record leads to the other.
   channel: `processes`, `http`, `files`, and `unmeasured`, `mcp` when
   the step sent an MCP call through `measureMcp`, and, when the
   run has a world URL, `program_log`, and `events` when the world's
-  program file names `{events}` or the world is at a `url`. Every channel
+  program names `{events}` or the world is at a `url`. Every channel
   follows one rule: measure what can be measured exactly, mark what
   cannot, and never infer a write from a method. A channel the execution
   never reached is `null`, never `0`: "nothing was measured" and
@@ -8009,7 +8035,7 @@ its scenario record's id, so either record leads to the other.
   "stamped_spans", "unreadable", "unowned", "process_spans",
   "process_requests", "whole", "open" }`, with `"mcp_spans"` when the
   step sent an MCP call, or `null` for a world at a
-  `url`; it is absent when the world's program file does not name
+  `url`; it is absent when the world's program does not name
   `{events}` (see "Execution events").
 - `observed.mcp` counts the MCP calls and notifications the step sent
   through a transport `measureMcp` wrapped, each one line of the step's
@@ -8717,7 +8743,7 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 - **No state carries across calls.** Each scenario under `nuka run` and each
   `nuka do` call starts clean. A step that needs login state gets it from a
   fixture, or from a Given step its feature names.
-- **Environments** name deployment targets, in `nukadoko.program.ts` (see
+- **Environments** name deployment targets, in the config's `program` (see
   "Program"). Each environment can override how the program is reached,
   and define `envFiles`, `policy: "read-only"`, and an optional `version` probe.
   The read-only policy refuses mutating steps. Each step record stores the
@@ -8829,7 +8855,7 @@ missing file.
 | --- | --- |
 | `featuresDir` | feature files and step code, `nuka run`'s own unattended set (default `features`, Cucumber-style) |
 | `additionalFeatureDirs` | extra directories `nuka check` binds vocabulary against, without joining `featuresDir` (default `[]`, below) |
-| `envFiles` | env files every environment loads; an environment in `nukadoko.program.ts` appends its own (below) |
+| `envFiles` | env files every environment loads; an environment in the config's `program` appends its own (below) |
 | `stateDir` | where nukadoko writes at run time (default `.nukadoko`, see "The state directory") |
 | `retention` | how long measurement stays: `runs` (default 20) newest runs kept whole, `adHocDays` (default 7) for a record no run owns (see "Artifacts") |
 | `browserType` | which Playwright engine the `page` fixture launches: `chromium` (default), `firefox`, or `webkit` (below) |
@@ -8897,7 +8923,7 @@ keys follow the `browser` policy and use Playwright's type directly. This makes
 options such as `ignoreHTTPSErrors` available for local targets with a
 self-signed certificate. Previously, neither fixture could set that option.
 Both keys reject `baseURL` with an error that gives the reason:
-the world's URL, from `serve` or `url` in `nukadoko.program.ts`, is the
+the world's URL, from `serve` or `url` in the config's `program`, is the
 single source for the base URL, and a second one could disagree with it. `storageState` passes
 through to Playwright unchanged, so a project that keeps a login state file
 names it here.
@@ -8940,7 +8966,7 @@ beside the key would be a second source for one object, and the two could
 disagree. The value must be a plain object. An array, a string, or `null`
 fails config load, so a step never sees an empty object in its place.
 
-An environment is an entry of `environments` in `nukadoko.program.ts`
+An environment is an entry of `environments` in the config's `program`
 (see "Program"). Besides the program's own fields, it holds `envFiles`,
 `policy: "read-only"`, and `version: () => string | Promise<string>`.
 Its `envFiles` follow the config's `envFiles`, and later files win.
@@ -8960,7 +8986,7 @@ needs no entry, and so does `nuka run` when no environment declares
 is still allowed, and `policy: "read-only"` on it is what keeps a `nuka do`
 typed without `--env` from writing anywhere. An explicitly named
 environment must exist because its name asserts that it exists. The `version`
-probe is a function because the program file is executable TypeScript. A URL and
+probe is a function because the config is executable TypeScript. A URL and
 jsonPath DSL would only provide a more complex form of `fetch`. The tool calls
 the probe once per run with a 10-second budget. An exception or timeout removes
 only `target_version`; it does not stop the run.
@@ -8996,7 +9022,7 @@ finding names the file and the line number, never the text, because that
 text may be a secret. The run still loads every binding it could read.
 
 This example defines `envFiles` and `fixtures`; its environments are in
-`nukadoko.program.ts` (see "Program"):
+the config's `program` (see "Program"):
 
 ```ts
 export default defineConfig({
@@ -9671,7 +9697,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--tag <expres
                               control broke one claim at a Then line in each
                               of --proof-runs runs, default 2), or failed,
                               and the exit code is 1 when a row is failed.
-                              With nukadoko.program.ts, each environment's
+                              With a program, each environment's
                               world (build, prepare, serve, setup) starts
                               before its scenarios and stops after them;
                               run.json names it in worlds.
@@ -9847,7 +9873,7 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               A claim step reads its values, judges every
                               claim, and records them as in a run.
                               --env as on nuka run; each call starts clean,
-                              and with nukadoko.program.ts it starts that
+                              and with a program it starts that
                               environment's world for this one execution
                               and stops it after.
                               Text the step or its fixtures write through
@@ -10248,8 +10274,8 @@ nuka init [--allure]
                               allurerc.mjs and creates
                               .nukadoko/export/allure-results.
                               --server and --server-url are removed: the
-                              program under test is described in
-                              nukadoko.program.ts (see "Program").
+                              program under test is the config's
+                              program (see "Program").
                               After a passing self-check, its last
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project

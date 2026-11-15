@@ -29,16 +29,18 @@ export default defineConfig({
 });
 ```
 
-テスト対象のアプリは、2 つ目のファイル `nukadoko.program.ts` に書きます。
+テスト対象のアプリは、同じファイルに `program` として書きます。
 いまアプリを自分で起動しているスイート(`BeforeAll` の hook、シェルスクリプト、CI の step)は、その手順をここへ移します。
 nukadoko は run ごとに専用のポートでアプリを起動し、終わったら止めます:
 
 ```ts
-import { defineProgram } from "nukadoko";
+import { defineConfig } from "nukadoko";
 
-export default defineProgram({
-  serve: { command: "npm start", ready: "/" }, // how the app under test starts
-  env: { PORT: "{port}" },
+export default defineConfig({
+  program: () => ({
+    serve: { command: "npm start", ready: "/" }, // how the app under test starts
+    env: { PORT: "{port}" },
+  }),
 });
 ```
 
@@ -341,7 +343,7 @@ pattern の無い step も完全な語彙であり、`nuka do` で実行でき�
 - `envFiles` は、スイートがすでに持っている env ファイルを指します(`KEY=VALUE` で、規則は docs/spec.ja.md の「Environment、secret」にあります)。
   空行でもコメントでも束縛でもない行は `env-file-skipped-line` です。
   対象ごとに 1 回走らせていたスイート(シェルのループや、プロファイルごとの CI ジョブ)は、1 回の run になります。
-  各対象を `nukadoko.program.ts` の `environments` で名付け、`nuka run --env a --env b` を渡します。
+  各対象を `nukadoko.config.ts` のプログラムの `environments` で名付け、`nuka run --env a --env b` を渡します。
 - `"type"` の無い `package.json` の下では、`.ts` ファイルは Node の警告つきで読み込まれます。
   `nuka check` はそれを注記 `package-type-missing` として報告します。
 - `nuka run` は自分のレポートを書きません。
