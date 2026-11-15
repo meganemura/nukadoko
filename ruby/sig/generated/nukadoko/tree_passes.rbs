@@ -17,26 +17,32 @@ module Nukadoko
 
       # `judged_by` says why head's passing executions of a row judged no
       # claim in Then position (Run.then_judged_by).
-      def initialize: (untyped base, untyped scenarios, untyped head_cells, untyped environments, untyped dir, untyped out, ?untyped judged_by) -> untyped
+      # : (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped) -> void
+      def initialize: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped) -> void
 
       # The worlds each tree's passes started, as run.json names them.
       attr_reader worlds: untyped
 
       # Appends each tree execution to `executions`, and returns each row's
       # base and old cells by its scenario.
-      def call: (untyped executions) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> Hash[Scenario, Array[Hash[Symbol, untyped]]]
+      def call: (Array[Hash[Symbol, untyped]]) -> Hash[Scenario, Array[Hash[Symbol, untyped]]]
 
       private
 
-      def plan: (untyped scenario) -> untyped
+      # : (Scenario) -> Hash[Symbol, Array[String]]
+      def plan: (Scenario) -> Hash[Symbol, Array[String]]
 
       # Where a tree runs a head row: at its own place in the base tree,
       # which holds head's features, and at the ref's place in the old one.
-      def place: (untyped world, untyped scenario) -> untyped
+      # : (String, Scenario) -> Array[untyped]
+      def place: (String, Scenario) -> Array[untyped]
 
-      def cell: (untyped scenario, untyped world, untyped environment, untyped found) -> untyped
+      # : (Scenario, String, Environment, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def cell: (Scenario, String, Environment, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
-      def run_tree: (untyped world, untyped root, untyped environment, untyped rows) -> untyped
+      # : (String, String, Environment, Array[Scenario]) -> Hash[Symbol, untyped]
+      def run_tree: (String, String, Environment, Array[Scenario]) -> Hash[Symbol, untyped]
     end
   end
 end

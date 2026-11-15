@@ -22,26 +22,33 @@ module Nukadoko
 
       # `--order`'s value read, or nil when it is none of file, shuffled,
       # and shuffled:<seed>. shuffled alone draws its seed.
-      def self.read: (untyped value) -> untyped
+      # : (String?) -> Hash[Symbol, untyped]?
+      def self.read: (String?) -> Hash[Symbol, untyped]?
 
-      def self.text: (untyped order) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self.text: (Hash[Symbol, untyped]) -> String
 
-      def self.flags: (untyped order) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self.flags: (Hash[Symbol, untyped]) -> Array[String]
 
       # The scenarios in the run's order: by file in the order the files
       # first appear, or by the shuffled keys.
-      def self.arrange: (untyped scenarios, untyped order) -> untyped
+      # : (Array[Scenario], Hash[Symbol, untyped]) -> Array[Scenario]
+      def self.arrange: (Array[Scenario], Hash[Symbol, untyped]) -> Array[Scenario]
 
       # The targets that run, in a shuffled order, what ran before `scenario`
       # in its pass and then `scenario`. A file whose every scenario of the
       # pass is among them is named whole when the run named it whole.
-      def self.replay_targets: (untyped sequence, untyped whole_files, untyped scenario) -> untyped
+      # : (Array[Scenario], Array[String], Scenario) -> Array[String]
+      def self.replay_targets: (Array[Scenario], Array[String], Scenario) -> Array[String]
 
       # The seed is mixed before the text and the result after it, so two
       # seeds a step apart give unrelated orders.
-      def self.key: (untyped seed, untyped text) -> untyped
+      # : (Integer, String) -> Integer
+      def self.key: (Integer, String) -> Integer
 
-      def self.mix: (untyped value) -> untyped
+      # : (Integer) -> Integer
+      def self.mix: (Integer) -> Integer
     end
   end
 end

@@ -13,7 +13,8 @@ module Nukadoko
     class Poll
       INTERVAL: ::Float
 
-      def initialize: (untyped options, untyped claims, untyped args) -> untyped
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> void
+      def initialize: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> void
 
       # A reading whose observe raised is kept with the first line of the
       # error, and the poll reads again; only a last reading that raised
@@ -26,11 +27,14 @@ module Nukadoko
       # : (Integer) { () -> untyped } -> Hash[Symbol, untyped]
       def read: (Integer) { () -> untyped } -> Hash[Symbol, untyped]
 
-      def judge: (untyped value, untyped attempt) -> untyped
+      # : (untyped, Integer) -> Hash[Symbol, untyped]
+      def judge: (untyped, Integer) -> Hash[Symbol, untyped]
 
-      def stop_for: (untyped readings) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> String?
+      def stop_for: (Array[Hash[Symbol, untyped]]) -> String?
 
-      def monotonic: () -> untyped
+      # : () -> Float
+      def monotonic: () -> Float
     end
   end
 end

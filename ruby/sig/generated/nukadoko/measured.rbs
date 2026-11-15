@@ -17,20 +17,26 @@ module Nukadoko
       # Every channel of a step record, in record order: processes, then
       # HTTP responses, then files. A channel whose content is not on disk
       # whole is unknown.
-      def self?.channels: (untyped dir, untyped observed, untyped http) -> untyped
+      # : (String, Hash[Symbol, untyped], String?) -> Array[Hash[Symbol, untyped]]
+      def self?.channels: (String, Hash[Symbol, untyped], String?) -> Array[Hash[Symbol, untyped]]
 
-      def self?.kept: (untyped channel, untyped text) -> untyped
+      # : (String, untyped) -> Hash[Symbol, untyped]
+      def self?.kept: (String, untyped) -> Hash[Symbol, untyped]
 
-      def self?.read: (untyped path) -> untyped
+      # : (String) -> String?
+      def self?.read: (String) -> String?
 
       # The channel of `record_id` that holds `raw`, or nil; `skip` is a
       # channel the other side already matched.
-      def self?.channel_for: (untyped record_id, untyped raw, untyped channels_of, ?untyped skip) -> untyped
+      # : (String?, untyped, ^(String) -> Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]?
+      def self?.channel_for: (String?, untyped, ^(String) -> Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]?
 
-      def self?.same?: (untyped raw, untyped channel) -> untyped
+      # : (untyped, Hash[Symbol, untyped]) -> bool
+      def self?.same?: (untyped, Hash[Symbol, untyped]) -> bool
 
       # Whether a channel holds `n` as a number of its own, not as part of another.
-      def self?.holds_number?: (untyped channel, untyped number) -> untyped
+      # : (Hash[Symbol, untyped], Numeric) -> bool
+      def self?.holds_number?: (Hash[Symbol, untyped], Numeric) -> bool
     end
   end
 end

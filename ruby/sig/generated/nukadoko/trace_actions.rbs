@@ -24,13 +24,17 @@ module Nukadoko
 
       # { actions:, truncated: } for the trace at `path`, or nil when there
       # is none.
-      def self?.read: (untyped path) -> untyped
+      # : (String) -> Hash[Symbol, untyped]?
+      def self?.read: (String) -> Hash[Symbol, untyped]?
 
-      def self?.parse: (untyped text) -> untyped
+      # : (String) -> Hash[Symbol, untyped]
+      def self?.parse: (String) -> Hash[Symbol, untyped]
 
-      def self?.action: (untyped before, untyped after, untyped header) -> untyped
+      # : (Hash[String, untyped], Hash[String, untyped], Hash[String, untyped]) -> Hash[Symbol, untyped]
+      def self?.action: (Hash[String, untyped], Hash[String, untyped], Hash[String, untyped]) -> Hash[Symbol, untyped]
 
-      def self?.zip_entry: (untyped bytes, untyped name) -> untyped
+      # : (String, String) -> String?
+      def self?.zip_entry: (String, String) -> String?
     end
   end
 end

@@ -22,6 +22,7 @@ module Nukadoko
         def proof_runs = @proof_runs || PROOF_RUNS
       end
 
+      #: (Array[String], Hash[String, untyped]) -> String
       def self.role(tags, conditions)
         meets = tags.all? do |tag|
           case tag
@@ -37,6 +38,7 @@ module Nukadoko
       # What a cell's executions came to. An execution is `[:pass]`,
       # `[:fail, line, claim]`, `[:broke, line]`, or `[:stopped, line]`
       # for a walk a person stopped after that line.
+      #: (Array[Array[untyped]]) -> Hash[Symbol, untyped]
       def self.cell(executions)
         first = executions.first
         return { outcome: "not-run", runs: 0 } if first.nil?
@@ -49,6 +51,7 @@ module Nukadoko
         end.merge(runs: executions.size)
       end
 
+      #: (Array[Hash[Symbol, untyped]]) -> String
       def self.verdict(cells)
         required = cells.select { _1[:role] == "required" }
         return "failed" if required.empty? || required.any? { _1[:outcome] != "pass" }
@@ -57,15 +60,18 @@ module Nukadoko
         proven ? "proven" : "held"
       end
 
+      #: (Array[String]) -> Array[String]
       def self.condition_tags(tags) = tags.grep(/\A@with(out)?:/)
 
       # The tags a row lists: its condition tags and @held, as written.
-      def self.row_tags(tags) = [*condition_tags(tags), *("@held" if tags.include?("@held"))]
+      #: (Array[String]) -> Array[String]
+      def self.row_tags(tags) = [*condition_tags(tags), *(tags.include?("@held") ? ["@held"] : [])]
 
       # For each condition the tags name, the value the environment declares
       # for it, or nil: what a cell's role came from.
+      #: (Array[String], Hash[String, untyped]) -> Hash[String, untyped]
       def self.conditions_of(tags, conditions)
-        names = condition_tags(tags).map { _1[/\A@with(?:out)?:([\w.-]+)/, 1] }.uniq
+        names = condition_tags(tags).map { _1[/\A@with(?:out)?:([\w.-]+)/, 1].to_s }.uniq
         names.to_h { [_1, conditions.fetch(_1, nil)] }
       end
     end

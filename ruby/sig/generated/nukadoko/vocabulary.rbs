@@ -7,14 +7,19 @@ module Nukadoko
   module Vocabulary
     BROWSER: untyped
 
-    def self.entry: (untyped step, untyped project) -> untyped
+    # : (singleton(Step), String) -> Hash[Symbol, untyped]
+    def self.entry: (singleton(Step), String) -> Hash[Symbol, untyped]
 
-    def self.describe: (untyped step, untyped project) -> untyped
+    # : (singleton(Step), String) -> Hash[Symbol, untyped]
+    def self.describe: (singleton(Step), String) -> Hash[Symbol, untyped]
 
-    def self.from: (untyped step) -> untyped
+    # : (singleton(Step)) -> Hash[untyped, untyped]?
+    def self.from: (singleton(Step)) -> Hash[untyped, untyped]?
 
-    def self.text: (untyped step) -> untyped
+    # : (singleton(Step)) -> String
+    def self.text: (singleton(Step)) -> String
 
-    def self.claim_text: (untyped claim) -> untyped
+    # : (Hash[Symbol, untyped]) -> String
+    def self.claim_text: (Hash[Symbol, untyped]) -> String
   end
 end

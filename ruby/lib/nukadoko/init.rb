@@ -24,6 +24,7 @@ module Nukadoko
       IGNORED = [".nukadoko/", ".env", ".env.*", "!.env.example"].freeze
       README = File.expand_path("../../README.md", __dir__.to_s)
 
+      #: (String, out: IO, err: IO) -> void
       def initialize(project, out:, err:)
         @project = project
         @out = out
@@ -31,6 +32,7 @@ module Nukadoko
       end
 
       # The exit code, or a Refusal when a config file exists.
+      #: () -> (Integer | Refusal)
       def call
         config = File.join(@project, CONFIG)
         if File.exist?(config)
@@ -52,6 +54,7 @@ module Nukadoko
       private
 
       # Appends each entry no line already ignores; true when it wrote.
+      #: () -> bool
       def ignore_entries
         path = File.join(@project, ".gitignore")
         existing = File.exist?(path) ? File.read(path) : ""
@@ -65,6 +68,7 @@ module Nukadoko
       end
 
       # A root directory entry is also ignored by `/name`, `name`, or `name/**`.
+      #: (String, String) -> bool
       def covers?(line, entry)
         trimmed = line.strip
         return true if trimmed == entry
@@ -73,6 +77,7 @@ module Nukadoko
         trimmed.delete_prefix("/").sub(%r{/(\*\*)?\z}, "") == entry.delete_suffix("/")
       end
 
+      #: () -> void
       def gemfile_note
         gemfile = File.join(@project, "Gemfile")
         return unless File.exist?(gemfile)
@@ -81,6 +86,7 @@ module Nukadoko
         @err.puts %(note: the Gemfile names no nukadoko gem; add gem "nukadoko", group: :test so bundle exec nuka runs this version)
       end
 
+      #: () -> Integer
       def self_check
         load File.join(@project, CONFIG)
         Nukadoko.load_steps(File.join(@project, STEPS))

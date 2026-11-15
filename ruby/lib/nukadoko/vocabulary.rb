@@ -8,6 +8,7 @@ module Nukadoko
   module Vocabulary
     BROWSER = %i[page context pageAs].freeze
 
+    #: (singleton(Step), String) -> Hash[Symbol, untyped]
     def self.entry(step, project)
       {
         name: step.step_name, kind: "typed", file: step.file.delete_prefix("#{project}/"),
@@ -18,6 +19,7 @@ module Nukadoko
       }.compact
     end
 
+    #: (singleton(Step), String) -> Hash[Symbol, untyped]
     def self.describe(step, project)
       # A step with no returns returns an empty object, as zod's default says.
       returns = step.returns&.json_schema(output: true) || { "$schema": "https://json-schema.org/draft/2020-12/schema", default: {}, type: "object", properties: {}, additionalProperties: false }
@@ -25,6 +27,7 @@ module Nukadoko
     end
 
 
+    #: (singleton(Step)) -> Hash[untyped, untyped]?
     def self.from(step)
       return nil if step.from.empty?
 
@@ -34,6 +37,7 @@ module Nukadoko
       end
     end
 
+    #: (singleton(Step)) -> String
     def self.text(step)
       lines = ["#{step.step_name}  typed  #{step.claims ? "claims" : step.mutating? ? "mutates" : "read-only"}",
                "  #{step.pattern || "(no pattern)"}", "  #{step.description}"]
@@ -42,6 +46,7 @@ module Nukadoko
       lines.join("\n")
     end
 
+    #: (Hash[Symbol, untyped]) -> String
     def self.claim_text(claim)
       return "each #{claim[:actual]}" if claim[:each]
 

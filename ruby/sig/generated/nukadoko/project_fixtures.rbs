@@ -24,27 +24,34 @@ module Nukadoko
   end
 
   class Fixture
-    def dependencies: () -> untyped
+    # : () -> Array[Symbol]
+    def dependencies: () -> Array[Symbol]
   end
 
   # : (Symbol | String, ?scope: :scenario | :process) { (^(untyped) -> void, **untyped) -> void } -> Fixture
   def self.fixture: (Symbol | String, ?scope: :scenario | :process) { (^(untyped) -> void, **untyped) -> void } -> Fixture
 
-  def self.project_fixtures: () -> untyped
+  # : () -> Hash[Symbol, Fixture]
+  def self.project_fixtures: () -> Hash[Symbol, Fixture]
 
   module Engine
     # One scope's built fixtures, torn down in reverse build order.
     class FixtureCache
-      def initialize: () -> untyped
+      # : () -> void
+      def initialize: () -> void
 
-      def key?: (untyped name) -> untyped
+      # : (Symbol) -> bool
+      def key?: (Symbol) -> bool
 
-      def []: (untyped name) -> untyped
+      # : (Symbol) -> untyped
+      def []: (Symbol) -> untyped
 
-      def build: (untyped fixture, untyped deps) -> untyped
+      # : (Fixture, Hash[Symbol, untyped]) -> untyped
+      def build: (Fixture, Hash[Symbol, untyped]) -> untyped
 
       # Every teardown runs; the first failure is raised after the rest.
-      def teardown: () -> untyped
+      # : () -> void
+      def teardown: () -> void
     end
   end
 end

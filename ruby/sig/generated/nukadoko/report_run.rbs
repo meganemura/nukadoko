@@ -83,16 +83,20 @@ module Nukadoko
 
       private
 
-      def inside?: (untyped file) -> untyped
+      # : (String) -> bool
+      def inside?: (String) -> bool
 
-      def read_features: () -> untyped
+      # : () -> Array[Feature]
+      def read_features: () -> Array[Feature]
 
       # An execution of the base or the old world is a cell of the table,
       # not a test result, so the formats render head's executions alone.
-      def read_scenarios: () -> untyped
+      # : () -> Array[Scenario]
+      def read_scenarios: () -> Array[Scenario]
 
       # What the verdict table says of an execution's row and cell.
-      def verdict_of: (untyped scenario) -> untyped
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def verdict_of: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
     end
   end
 end

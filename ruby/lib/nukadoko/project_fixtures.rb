@@ -16,6 +16,7 @@ module Nukadoko
   )
 
   class Fixture
+    #: () -> Array[Symbol]
     def dependencies = block.parameters.filter_map { |kind, n| n if kind == :keyreq }
   end
 
@@ -26,19 +27,24 @@ module Nukadoko
     project_fixtures[name.to_sym] = Fixture.new(name.to_sym, scope, block)
   end
 
+  #: () -> Hash[Symbol, Fixture]
   def self.project_fixtures = (@project_fixtures ||= {})
 
   module Engine
     # One scope's built fixtures, torn down in reverse build order.
     class FixtureCache
+      #: () -> void
       def initialize
         @values = {}
         @fibers = []
       end
 
+      #: (Symbol) -> bool
       def key?(name) = @values.key?(name)
+      #: (Symbol) -> untyped
       def [](name) = @values.fetch(name)
 
+      #: (Fixture, Hash[Symbol, untyped]) -> untyped
       def build(fixture, deps)
         fiber = Fiber.new do
           fixture.block.call(->(value) { Fiber.yield(value) }, **deps)
@@ -52,6 +58,7 @@ module Nukadoko
       end
 
       # Every teardown runs; the first failure is raised after the rest.
+      #: () -> void
       def teardown
         failure = nil #: StandardError?
         @fibers.reverse_each do |fiber|

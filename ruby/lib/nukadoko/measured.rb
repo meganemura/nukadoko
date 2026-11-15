@@ -20,6 +20,7 @@ module Nukadoko
       # Every channel of a step record, in record order: processes, then
       # HTTP responses, then files. A channel whose content is not on disk
       # whole is unknown.
+      #: (String, Hash[Symbol, untyped], String?) -> Array[Hash[Symbol, untyped]]
       def channels(dir, observed, http)
         list = []
         (observed[:processes] || []).each_with_index do |process, index|
@@ -48,12 +49,14 @@ module Nukadoko
         list
       end
 
+      #: (String, untyped) -> Hash[Symbol, untyped]
       def kept(channel, text)
         text = { text: text } if text.is_a?(String)
         whole = text[:text] && !text[:truncated] && !text[:incomplete]
         whole ? { channel: channel, text: text[:text] } : { channel: channel, unknown: true }
       end
 
+      #: (String) -> String?
       def read(path)
         File.read(path, encoding: "UTF-8")
       rescue SystemCallError
@@ -62,6 +65,7 @@ module Nukadoko
 
       # The channel of `record_id` that holds `raw`, or nil; `skip` is a
       # channel the other side already matched.
+      #: (String?, untyped, ^(String) -> Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]?
       def channel_for(record_id, raw, channels_of, skip = nil)
         return nil unless record_id
 
@@ -75,6 +79,7 @@ module Nukadoko
         { step_record_id: record_id, channel: match[:channel] }
       end
 
+      #: (untyped, Hash[Symbol, untyped]) -> bool
       def same?(raw, channel)
         return false if channel[:unknown]
         return raw.is_a?(Numeric) && raw == channel[:number] if channel.key?(:number)
@@ -87,6 +92,7 @@ module Nukadoko
       end
 
       # Whether a channel holds `n` as a number of its own, not as part of another.
+      #: (Hash[Symbol, untyped], Numeric) -> bool
       def holds_number?(channel, number)
         return false if channel[:unknown]
         return channel[:number] == number if channel.key?(:number)

@@ -28,6 +28,7 @@ module Nukadoko
 
       # { actions:, truncated: } for the trace at `path`, or nil when there
       # is none.
+      #: (String) -> Hash[Symbol, untyped]?
       def read(path)
         return nil unless File.exist?(path)
 
@@ -37,6 +38,7 @@ module Nukadoko
         { actions: [] }
       end
 
+      #: (String) -> Hash[Symbol, untyped]
       def parse(text)
         header = nil #: Hash[String, untyped]?
         pending = {}
@@ -72,6 +74,7 @@ module Nukadoko
         { actions: actions, **(total > MAX_ACTIONS ? { truncated: total } : {}) }
       end
 
+      #: (Hash[String, untyped], Hash[String, untyped], Hash[String, untyped]) -> Hash[Symbol, untyped]
       def action(before, after, header)
         params = before["params"].is_a?(Hash) ? before["params"] : {}
         at = Time.at((header["wallTime"] + (before["startTime"] - header["monotonicTime"])) / 1000.0).utc.iso8601(3)
@@ -84,23 +87,27 @@ module Nukadoko
           ms: (after["endTime"] - before["startTime"]).round, outcome: after.key?("error") ? "failed" : "passed", at: at }
       end
 
+      #: (String, String) -> String?
       def zip_entry(bytes, name)
         eocd = bytes.rindex([0x06054b50].pack("V")) or return nil
-        size, offset = bytes.byteslice(eocd + 12, 8).unpack("VV")
-        stop = offset + size
+        # A cut past the end reads as empty, which fails the checks below.
+        cut = ->(at, length) { bytes.byteslice(at, length).to_s }
+        u16 = ->(at) { cut.(at, 2).unpack1("v").to_i }
+        u32 = ->(at) { cut.(at, 4).unpack1("V").to_i }
+        offset = u32.(eocd + 16)
+        stop = offset + u32.(eocd + 12)
         while offset < stop
-          return nil unless bytes.byteslice(offset, 4).unpack1("V") == 0x02014b50
+          return nil unless u32.(offset) == 0x02014b50
 
-          method = bytes.byteslice(offset + 10, 2).unpack1("v")
-          compressed = bytes.byteslice(offset + 20, 4).unpack1("V")
-          name_size, extra_size, comment_size = bytes.byteslice(offset + 28, 6).unpack("vvv")
-          local = bytes.byteslice(offset + 42, 4).unpack1("V")
-          if bytes.byteslice(offset + 46, name_size) == name
-            local_name, local_extra = bytes.byteslice(local + 26, 4).unpack("vv")
-            data = bytes.byteslice(local + 30 + local_name + local_extra, compressed)
+          method = u16.(offset + 10)
+          compressed = u32.(offset + 20)
+          name_size = u16.(offset + 28)
+          local = u32.(offset + 42)
+          if cut.(offset + 46, name_size) == name
+            data = cut.(local + 30 + u16.(local + 26) + u16.(local + 28), compressed)
             return method.zero? ? data : Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate(data)
           end
-          offset += 46 + name_size + extra_size + comment_size
+          offset += 46 + name_size + u16.(offset + 30) + u16.(offset + 32)
         end
         nil
       end

@@ -21,6 +21,7 @@ module Nukadoko
 
       # `--order`'s value read, or nil when it is none of file, shuffled,
       # and shuffled:<seed>. shuffled alone draws its seed.
+      #: (String?) -> Hash[Symbol, untyped]?
       def self.read(value)
         return FILE if value.nil? || value == "file"
         return { kind: "shuffled", seed: SecureRandom.random_number(MAX_SEED + 1) } if value == "shuffled"
@@ -29,11 +30,14 @@ module Nukadoko
         seed && seed <= MAX_SEED ? { kind: "shuffled", seed: seed } : nil
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def self.text(order) = order[:kind] == "file" ? "file" : "shuffled:#{order[:seed]}"
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def self.flags(order) = order[:kind] == "file" ? [] : ["--order", text(order)]
 
       # The scenarios in the run's order: by file in the order the files
       # first appear, or by the shuffled keys.
+      #: (Array[Scenario], Hash[Symbol, untyped]) -> Array[Scenario]
       def self.arrange(scenarios, order)
         files = scenarios.group_by(&:uri)
         return files.values.flatten if order[:kind] == "file"
@@ -47,6 +51,7 @@ module Nukadoko
       # The targets that run, in a shuffled order, what ran before `scenario`
       # in its pass and then `scenario`. A file whose every scenario of the
       # pass is among them is named whole when the run named it whole.
+      #: (Array[Scenario], Array[String], Scenario) -> Array[String]
       def self.replay_targets(sequence, whole_files, scenario)
         at = sequence.index { _1.uri == scenario.uri && _1.line == scenario.line }
         ran = at ? sequence.first(at + 1) : [scenario]
@@ -59,12 +64,15 @@ module Nukadoko
 
       # The seed is mixed before the text and the result after it, so two
       # seeds a step apart give unrelated orders.
+      #: (Integer, String) -> Integer
       def self.key(seed, text)
         hash = mix(seed ^ 0x9e37_79b9)
-        text.encode("UTF-16LE").unpack("v*").each { |unit| hash = ((hash ^ unit) * 0x0100_0193) & MASK }
+        units = text.encode("UTF-16LE").unpack("v*") #: Array[Integer]
+        units.each { |unit| hash = ((hash ^ unit) * 0x0100_0193) & MASK }
         mix(hash)
       end
 
+      #: (Integer) -> Integer
       def self.mix(value)
         hash = value & MASK
         hash = ((hash ^ (hash >> 16)) * 0x85eb_ca6b) & MASK

@@ -24,22 +24,28 @@ module Nukadoko
 
       README: untyped
 
-      def initialize: (untyped project, out: untyped, err: untyped) -> untyped
+      # : (String, out: IO, err: IO) -> void
+      def initialize: (String, out: IO, err: IO) -> void
 
       # The exit code, or a Refusal when a config file exists.
-      def call: () -> untyped
+      # : () -> (Integer | Refusal)
+      def call: () -> (Integer | Refusal)
 
       private
 
       # Appends each entry no line already ignores; true when it wrote.
-      def ignore_entries: () -> untyped
+      # : () -> bool
+      def ignore_entries: () -> bool
 
       # A root directory entry is also ignored by `/name`, `name`, or `name/**`.
-      def covers?: (untyped line, untyped entry) -> untyped
+      # : (String, String) -> bool
+      def covers?: (String, String) -> bool
 
-      def gemfile_note: () -> untyped
+      # : () -> void
+      def gemfile_note: () -> void
 
-      def self_check: () -> untyped
+      # : () -> Integer
+      def self_check: () -> Integer
     end
   end
 end

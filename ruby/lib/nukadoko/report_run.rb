@@ -90,11 +90,13 @@ module Nukadoko
 
       private
 
+      #: (String) -> bool
       def inside?(file)
         real = File.exist?(file) ? File.realpath(file) : File.expand_path(file)
         real == @root || real.start_with?("#{@root}/")
       end
 
+      #: () -> Array[Feature]
       def read_features
         sources = File.join(@dir, "sources.json")
         id = @document[:run_id]
@@ -128,6 +130,7 @@ module Nukadoko
 
       # An execution of the base or the old world is a cell of the table,
       # not a test result, so the formats render head's executions alone.
+      #: () -> Array[Scenario]
       def read_scenarios
         pickles = @features.flat_map { |feature| feature.pickles.map { [[feature.path, _1.dig("location", "line")], [feature, _1]] } }.to_h
         @document[:scenarios].filter_map do |scenario|
@@ -155,6 +158,7 @@ module Nukadoko
       end
 
       # What the verdict table says of an execution's row and cell.
+      #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
       def verdict_of(scenario)
         row = @document.dig(:table, :rows)&.find { _1[:feature] == scenario[:feature] && _1[:line] == scenario[:line] }
         cell = row && row[:cells].find { _1[:world] == "head" && _1[:environment] == scenario[:environment] }

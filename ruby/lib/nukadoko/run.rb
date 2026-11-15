@@ -759,7 +759,7 @@ module Nukadoko
           cache[id] ||= begin
             found = [File.join(@dir, "steps", id), File.join(@project, ".nukadoko", "do", id)].find { File.exist?(File.join(_1, "record.json")) }
             other = found && JSON.parse(File.read(File.join(found, "record.json")), symbolize_names: true)
-            other ? Measured.channels(found, other[:observed] || {}, other.dig(:evidence, :http)) : [{ channel: "record", unknown: true }]
+            other && found ? Measured.channels(found, other[:observed] || {}, other.dig(:evidence, :http)) : [{ channel: "record", unknown: true }]
           end
         end
         from_of = ->(key) { (origin = (record[:args_origin] || {})[key.to_s.split(".").first]).is_a?(Hash) ? origin.dig(:from, :step_record_id) : nil }

@@ -79,19 +79,23 @@ module Nukadoko
 
     # A directory is every .feature file under it; a list is those files.
     # What runs nothing goes into `problems`, for nuka check to report.
-    def self.load_features: (untyped dir_or_paths, ?problems: untyped) -> untyped
+    # : (String | Array[String], ?problems: Array[FeatureProblem]) -> Array[Scenario]
+    def self.load_features: (String | Array[String], ?problems: Array[FeatureProblem]) -> Array[Scenario]
 
     # The tag on a Feature line that runs the file while no other file runs.
     SERIAL_TAG: ::String
 
     # nuka run --concurrency reads the serial tag on the Feature line only,
     # so on a scenario it would read as a rule in force while doing nothing.
-    def self.serial_tags_on_scenarios: (untyped doc) -> untyped
+    # : (untyped) -> Array[FeatureProblem]
+    def self.serial_tags_on_scenarios: (untyped) -> Array[FeatureProblem]
 
     # An outline with no Examples runs its placeholder text as written, and
     # an Examples table with no rows leaves the outline out of the run.
-    def self.outlines_that_do_not_run: (untyped doc) -> untyped
+    # : (untyped) -> Array[FeatureProblem]
+    def self.outlines_that_do_not_run: (untyped) -> Array[FeatureProblem]
 
-    def self.collect_lines: (untyped node, untyped lines, untyped background, untyped headers, untyped names) -> untyped
+    # : (untyped, Hash[String, Integer], Hash[String, bool], Hash[String, Array[String]], Hash[String, String]) -> void
+    def self.collect_lines: (untyped, Hash[String, Integer], Hash[String, bool], Hash[String, Array[String]], Hash[String, String]) -> void
   end
 end

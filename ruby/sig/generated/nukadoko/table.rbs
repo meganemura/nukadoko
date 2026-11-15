@@ -15,23 +15,29 @@ module Nukadoko
       # : () -> Integer
       def self.proof_runs: () -> Integer
 
-      def self.role: (untyped tags, untyped conditions) -> untyped
+      # : (Array[String], Hash[String, untyped]) -> String
+      def self.role: (Array[String], Hash[String, untyped]) -> String
 
       # What a cell's executions came to. An execution is `[:pass]`,
       # `[:fail, line, claim]`, `[:broke, line]`, or `[:stopped, line]`
       # for a walk a person stopped after that line.
-      def self.cell: (untyped executions) -> untyped
+      # : (Array[Array[untyped]]) -> Hash[Symbol, untyped]
+      def self.cell: (Array[Array[untyped]]) -> Hash[Symbol, untyped]
 
-      def self.verdict: (untyped cells) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self.verdict: (Array[Hash[Symbol, untyped]]) -> String
 
-      def self.condition_tags: (untyped tags) -> untyped
+      # : (Array[String]) -> Array[String]
+      def self.condition_tags: (Array[String]) -> Array[String]
 
       # The tags a row lists: its condition tags and @held, as written.
-      def self.row_tags: (untyped tags) -> untyped
+      # : (Array[String]) -> Array[String]
+      def self.row_tags: (Array[String]) -> Array[String]
 
       # For each condition the tags name, the value the environment declares
       # for it, or nil: what a cell's role came from.
-      def self.conditions_of: (untyped tags, untyped conditions) -> untyped
+      # : (Array[String], Hash[String, untyped]) -> Hash[String, untyped]
+      def self.conditions_of: (Array[String], Hash[String, untyped]) -> Hash[String, untyped]
     end
   end
 end

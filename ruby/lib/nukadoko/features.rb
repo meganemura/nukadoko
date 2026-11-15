@@ -19,6 +19,7 @@ module Nukadoko
 
     # A directory is every .feature file under it; a list is those files.
     # What runs nothing goes into `problems`, for nuka check to report.
+    #: (String | Array[String], ?problems: Array[FeatureProblem]) -> Array[Scenario]
     def self.load_features(dir_or_paths, problems: [])
       paths = dir_or_paths.is_a?(Array) ? dir_or_paths : Dir.glob(File.join(dir_or_paths, "**/*.feature")).sort
       return [] if paths.empty?
@@ -62,6 +63,7 @@ module Nukadoko
 
     # nuka run --concurrency reads the serial tag on the Feature line only,
     # so on a scenario it would read as a rule in force while doing nothing.
+    #: (untyped) -> Array[FeatureProblem]
     def self.serial_tags_on_scenarios(doc)
       scenarios = doc.feature.children.flat_map { |child| child.rule ? child.rule.children.filter_map(&:scenario) : [child.scenario].compact }
       scenarios.select { |scenario| scenario.tags.any? { _1.name == SERIAL_TAG } }.map do |scenario|
@@ -72,6 +74,7 @@ module Nukadoko
 
     # An outline with no Examples runs its placeholder text as written, and
     # an Examples table with no rows leaves the outline out of the run.
+    #: (untyped) -> Array[FeatureProblem]
     def self.outlines_that_do_not_run(doc)
       outline = Gherkin::Dialect.for(doc.feature.language).scenario_outline_keywords
       scenarios = doc.feature.children.flat_map { |child| child.rule ? child.rule.children.filter_map(&:scenario) : [child.scenario].compact }
@@ -89,6 +92,7 @@ module Nukadoko
       end
     end
 
+    #: (untyped, Hash[String, Integer], Hash[String, bool], Hash[String, Array[String]], Hash[String, String]) -> void
     def self.collect_lines(node, lines, background, headers, names)
       node.tags&.each { lines[_1.id] = _1.location.line }
       node.children.each do |child|

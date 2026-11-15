@@ -21,6 +21,7 @@ module Nukadoko
 
       # `judged_by` says why head's passing executions of a row judged no
       # claim in Then position (Run.then_judged_by).
+      #: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped) -> void
       def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {})
         @judged_by = judged_by
         @base = base
@@ -38,6 +39,7 @@ module Nukadoko
 
       # Appends each tree execution to `executions`, and returns each row's
       # base and old cells by its scenario.
+      #: (Array[Hash[Symbol, untyped]]) -> Hash[Scenario, Array[Hash[Symbol, untyped]]]
       def call(executions)
         planned = @scenarios.to_h { [_1, plan(_1)] }
         found = {}
@@ -69,6 +71,7 @@ module Nukadoko
 
       private
 
+      #: (Scenario) -> Hash[Symbol, Array[String]]
       def plan(scenario)
         change = @base.changes[Criteria.key(scenario.uri, scenario.line)]
         context = change && { change: change[:change], held: scenario.tags.include?(Criteria::HELD), mapping_changed: @base.mapping[:changed],
@@ -80,12 +83,14 @@ module Nukadoko
 
       # Where a tree runs a head row: at its own place in the base tree,
       # which holds head's features, and at the ref's place in the old one.
+      #: (String, Scenario) -> Array[untyped]
       def place(world, scenario)
         return [scenario.uri, scenario.line] if world == "base"
 
         @base.at(Criteria.key(scenario.uri, scenario.line)).values_at(:feature, :line)
       end
 
+      #: (Scenario, String, Environment, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def cell(scenario, world, environment, found)
         role = world == "base" ? (@head_cells[scenario].find { _1[:environment] == environment.name }&.dig(:role) || "required") : "required"
         conditions = Table.conditions_of(scenario.tags, environment.conditions)
@@ -95,6 +100,7 @@ module Nukadoko
         { **own, world: world, environment: environment.name, role: role, conditions: conditions }
       end
 
+      #: (String, String, Environment, Array[Scenario]) -> Hash[Symbol, untyped]
       def run_tree(world, root, environment, rows)
         plan = File.join(@dir, "trees", "#{world}-#{environment.name}.plan.json")
         result = File.join(@dir, "trees", "#{world}-#{environment.name}.result.json")

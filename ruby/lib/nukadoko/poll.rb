@@ -16,6 +16,7 @@ module Nukadoko
     class Poll
       INTERVAL = 0.1
 
+      #: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> void
       def initialize(options, claims, args)
         @timeout = options.fetch(:timeout_ms) / 1000.0
         @settled = options[:settled] || []
@@ -57,6 +58,7 @@ module Nukadoko
         { attempt: attempt, at: Time.now.utc.iso8601(3), holds: false, error: "#{e.class}: #{e.message.lines.first&.chomp}", raised: e }
       end
 
+      #: (untyped, Integer) -> Hash[Symbol, untyped]
       def judge(value, attempt)
         judged = Claims.judge(@claims, value, @args)
         reading = { attempt: attempt, at: Time.now.utc.iso8601(3), holds: judged.all? { _1[:holds] }, actuals: judged.map { _1[:actual] }, value: value,
@@ -65,9 +67,10 @@ module Nukadoko
         reading
       end
 
+      #: (Array[Hash[Symbol, untyped]]) -> String?
       def stop_for(readings)
-        last, before = readings.last(2).reverse
-        return nil unless before
+        before = readings[-2] or return nil
+        last = readings.last #: Hash[Symbol, untyped]
         # A value read for a judgment holds a poll only once two readings
         # read it the same: a judge judges the last reading, and a page
         # still changing would hand them a frame it then left.
@@ -76,6 +79,7 @@ module Nukadoko
         "settled" if last[:settled] && before[:settled]
       end
 
+      #: () -> Float
       def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     end
   end
