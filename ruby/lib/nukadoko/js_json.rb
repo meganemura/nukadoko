@@ -30,9 +30,32 @@ module Nukadoko
       failure = Walk.new(text).failure
       raise Error, failure if failure
 
-      JSON.parse(text)
+      begin
+        JSON.parse(text)
+      rescue JSON::ParserError => e
+        # JSON.parse keeps a lone surrogate escape (\ud800) in its string; a
+        # Ruby string has no way to hold one, so the text is refused here.
+        raise Error, "the text holds an unpaired surrogate escape, which a Ruby string cannot hold" if e.message.include?("surrogate")
+
+        raise
+      end
     end
 
+    # A value as JavaScript's JSON.stringify writes it: a whole float is the
+    # integer its one number type holds (2.0 is 2), a float its shortest digits
+    # (1e20 is 100000000000000000000), and NaN or Infinity null, so a reason that
+    # quotes a value reads as the TypeScript engine's does.
+    #: (untyped) -> String
+    def self.generate(value)
+      case value
+      when Hash then "{#{value.map { |key, item| "#{JSON.generate(key.to_s)}:#{generate(item)}" }.join(",")}}"
+      when Array then "[#{value.map { generate(_1) }.join(",")}]"
+      when Float then value.finite? ? Engine::AriaSnapshot.js_number(value) : "null"
+      when Symbol then JSON.generate(value.to_s)
+      else JSON.generate(value)
+      end
+    end
+    
     # Walks the text once and gives V8's message for the first place it is
     # no JSON, or nil.
     class Walk

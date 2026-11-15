@@ -84,6 +84,12 @@ notes come from the section below whose heading starts with `## [<version>]`.
   valid JSON`, `Expected ',' or '}' after property value in JSON at position
   6 (line 1 column 7)`) instead of Ruby's. A text Ruby's parser takes and
   JavaScript's refuses, such as one with a comment, is refused.
+- A refusal or a claim reason quotes a value as JavaScript's
+  `JSON.stringify` writes it: a literal written `2.0` reads `2`, and
+  `1e20` reads `100000000000000000000`, as in the TypeScript engine's
+  text. A json view of a text that holds an unpaired surrogate escape
+  (`"\ud800"`), which JavaScript reads and a Ruby string cannot hold, is
+  refused with that reason instead of the parser's.
 
 ## [0.2.0] - 2026-11-15
 

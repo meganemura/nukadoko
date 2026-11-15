@@ -44,6 +44,25 @@ class JsJsonTest < Minitest::Test
     end
   end
 
+# What JSON.stringify writes in Node 24 for each value.
+  STRINGIFIED = [
+    [2.0, "2"], [1e20, "100000000000000000000"], [1e21, "1e+21"], [0.1, "0.1"], [1.5e-7, "1.5e-7"],
+    [-0.0, "0"], [Float::NAN, "null"], [Float::INFINITY, "null"], [:x, "\"x\""],
+    [{ a: [1, 2.5, nil, true] }, "{\"a\":[1,2.5,null,true]}"]
+  ].freeze
+  
+  def test_a_value_is_written_as_json_stringify_writes_it
+    STRINGIFIED.each { |value, text| assert_equal text, J.generate(value), value.inspect }
+  end
+  
+  def test_a_written_value_reads_back_as_itself
+    check do |tc|
+      value = json_value(tc)
+      # Ruby's == takes 2 and 2.0 for one number, as JavaScript holds them.
+    assert JSON.parse(J.generate(value)) == value, value.inspect
+    end
+  end
+  
   def check(&) = Hegel.test(test_cases: 300, verbosity: :quiet, &)
 
   def json_value(tc, depth = 0)

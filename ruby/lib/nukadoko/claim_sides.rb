@@ -429,8 +429,8 @@ module Nukadoko
       
             viewed = where[:view] ? " as #{where[:view]}#{" at #{where[:at]}" if where[:at]}" : ""
             what = "#{"count of " if where[:count] == true}#{path.empty? ? "value" : path.join(".")}#{viewed}"
-            return "each.where[#{where_index}] selects the items whose #{what} is #{where[:compare]} #{JSON.generate(selects[:value])}, " \
-                   "and every such item holds each.claims[#{claim_index}], #{entry[:compare]} #{JSON.generate(holds[:value])}, " \
+            return "each.where[#{where_index}] selects the items whose #{what} is #{where[:compare]} #{JsJson.generate(selects[:value])}, " \
+                   "and every such item holds each.claims[#{claim_index}], #{entry[:compare]} #{JsJson.generate(holds[:value])}, " \
                    "whatever the data, so the claim measures nothing"
           end
         end

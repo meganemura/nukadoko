@@ -60,7 +60,7 @@ module Nukadoko
 
       #: (untyped) -> String
       def describe(value)
-        value.is_a?(Symbol) ? JSON.generate(value.to_s) : JSON.generate(value)
+        JsJson.generate(value)
       rescue StandardError
         value.inspect
       end
