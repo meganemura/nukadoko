@@ -65,7 +65,7 @@ module Nukadoko
         @stack << part
         @into << nested
         begin
-          value = part.new.run(**@fixtures.slice(*part.fixtures), args: part.inputs.load(args))
+          value = part.new.run(**part.keywords(@fixtures.slice(*part.fixtures), part.inputs.load(args)))
         rescue StandardError => e
           fail_with.("step_error", e.message) unless entry[:error]
           raise

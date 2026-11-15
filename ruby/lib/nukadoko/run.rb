@@ -497,7 +497,7 @@ module Nukadoko
         started_at = now
         results = []
         stopped = nil #: Array[untyped]?
-        @scratch = Scratch.new
+        @scratch = Scratch.new(@project)
         @scenario_fixtures = FixtureCache.new
         scenario_record_id = new_id("scn")
         @step_file = lambda do |record|
@@ -653,7 +653,7 @@ module Nukadoko
         FileUtils.mkdir_p(@dir)
         world = @program.start(environment, @dir, @project)
         @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
-        @scratch = Scratch.new
+        @scratch = Scratch.new(@project)
         @scenario_fixtures = FixtureCache.new
         @process_fixtures = FixtureCache.new
         @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
@@ -761,7 +761,7 @@ module Nukadoko
           read = lambda do
             next args unless observes
 
-            observed = step.new.observe(**own, args: step.inputs.load(args))
+            observed = step.new.observe(**step.keywords(own, step.inputs.load(args)))
             observed = observed.is_a?(Hash) ? observed.transform_keys(&:to_s).merge(from_values) : observed
             Claims.take_aria_snapshots(step.claims, observed)
           end
@@ -809,7 +809,7 @@ module Nukadoko
           record.merge!(status: "failed", outcome: then_line ? :fail : :broke, claim: broken,
                         broken_actual: judged[broken][:actual], error_kind: "claim_broken", error: message)
         else
-          value = step.new.run(**fixtures.slice(*step.fixtures), args: step.inputs.load(args))
+          value = step.new.run(**step.keywords(fixtures.slice(*step.fixtures), step.inputs.load(args)))
           problems = step.returns ? step.returns.problems(value) : []
           if problems.any?
             record[:error_kind] = "result_invalid"

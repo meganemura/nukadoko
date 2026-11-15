@@ -64,13 +64,22 @@ module Nukadoko
     # The `scratch` fixture: `dir` makes a fresh directory, and the engine
     # removes every one of them when the scenario ends, passed or failed.
     class Scratch
-      # : () -> void
-      def initialize: () -> void
+      # `root` is what a relative `copy` source resolves against: the
+      # project's directory.
+      # : (?String) -> void
+      def initialize: (?String) -> void
 
       # A directory under the system's temporary directory, named
       # `<prefix>-` and six characters, as the TypeScript engine names it.
       # : (?String) -> String
       def dir: (?String) -> String
+
+      # A fresh scratch directory holding a copy of `source`: a directory's
+      # contents, or a file under its own name. The source is read before
+      # the directory is made, so a missing one raises without leaving an
+      # empty directory in the step record.
+      # : (String) -> String
+      def copy: (String) -> String
 
       # : () -> Array[String]
       def dirs: () -> Array[String]

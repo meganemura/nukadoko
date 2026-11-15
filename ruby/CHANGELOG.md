@@ -8,6 +8,12 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- `scratch.copy(source)` gives a step a fresh scratch directory that holds
+  a copy of a file or directory of the project, as the TypeScript engine's
+  does. A missing source raises before any directory is made.
+- A step body that names no `args:` keyword (`def run(scratch:)`) is called
+  without them, as a TypeScript step that does not read its args; it used
+  to fail with `unknown keyword: :args`.
 - `nuka run` takes targets: feature files, `file:line` selections (a
   Scenario line or an Examples row), and directories, walked for `.feature`
   files. With none it runs `features/`. A file named twice runs once.

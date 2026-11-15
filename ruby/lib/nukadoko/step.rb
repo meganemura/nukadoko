@@ -88,6 +88,16 @@ module Nukadoko
         instance_method(body).parameters.filter_map { |kind, name| name if kind == :keyreq && name != :args }
       end
 
+      # The keywords the body is called with: `args` only when it names
+      # them, as a TypeScript step that does not destructure `args` never
+      # sees them, so `def run(scratch:)` is a whole step.
+      #: (Hash[Symbol, untyped], untyped) -> Hash[Symbol, untyped]
+      def keywords(fixtures, args)
+        params = method_defined?(body) ? instance_method(body).parameters : []
+        takes = params.any? { |kind, name| kind == :keyrest || (name == :args && %i[key keyreq].include?(kind)) }
+        takes ? fixtures.merge(args: args) : fixtures
+      end
+
       # The fixtures the engine builds before the body runs: the step's own,
       # and those of every part it can reach, since the bag is closed before
       # any call happens.

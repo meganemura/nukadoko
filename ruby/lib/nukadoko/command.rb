@@ -171,8 +171,11 @@ module Nukadoko
     # The `scratch` fixture: `dir` makes a fresh directory, and the engine
     # removes every one of them when the scenario ends, passed or failed.
     class Scratch
-      #: () -> void
-      def initialize
+      # `root` is what a relative `copy` source resolves against: the
+      # project's directory.
+      #: (?String) -> void
+      def initialize(root = Dir.pwd)
+        @root = root
         @dirs = []
       end
 
@@ -188,6 +191,21 @@ module Nukadoko
         path
       rescue Errno::EEXIST
         retry
+      end
+
+      # A fresh scratch directory holding a copy of `source`: a directory's
+      # contents, or a file under its own name. The source is read before
+      # the directory is made, so a missing one raises without leaving an
+      # empty directory in the step record.
+      #: (String) -> String
+      def copy(source)
+        from = File.expand_path(source, @root)
+        file = File.file?(from)
+        raise Errno::ENOENT, from unless file || File.directory?(from)
+
+        target = dir
+        FileUtils.cp_r(file ? from : File.join(from, "."), target)
+        target
       end
 
       #: () -> Array[String]
