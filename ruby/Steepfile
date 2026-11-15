@@ -10,7 +10,7 @@ target :lib do
   check "lib"
   signature "sig", "sig-deps"
 
-  library "digest", "fileutils", "json", "net-http", "open3", "pathname", "securerandom", "shellwords", "socket",
+  library "digest", "fileutils", "ipaddr", "json", "net-http", "open3", "pathname", "securerandom", "shellwords", "socket",
           "time", "timeout", "tmpdir", "uri", "zlib", "prism"
 
   # Most values here are JSON a step returned, so an empty [] or {} has no

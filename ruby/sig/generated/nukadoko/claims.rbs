@@ -112,8 +112,44 @@ module Nukadoko
 
       # A text a URL parser accepts can still be no URL a program wrote, so
       # the scheme needs "//" and no character a reader cannot see may appear.
+      # The rest is what the WHATWG URL parser, which the TypeScript engine
+      # uses, refuses for http and https: a missing host, a port that is not
+      # a number up to 65535, a host with a character no domain may hold, and
+      # an IPv4 or IPv6 address that does not parse. A path, a query, and a
+      # fragment can hold anything, as a browser takes them.
       # : (untyped) -> bool
       def self.url?: (untyped) -> bool
+
+      # The host and the port of `host:port`, a colon inside brackets kept.
+      # : (String) -> [String?, String?]
+      def self.split_host_port: (String) -> [ String?, String? ]
+
+      # : (String) -> bool
+      def self.ipv6?: (String) -> bool
+
+      FORBIDDEN_DOMAIN: ::Regexp
+
+      # A host percent-decoded and mapped as UTS #46 maps it (NFKC, then
+      # lower case), which holds no character a domain may not, and whose
+      # last label, when it reads as a number, is an IPv4 address.
+      # : (String) -> bool
+      def self.domain?: (String) -> bool
+
+      # Whether a label written as `xn--` decodes, under RFC 3492, to a
+      # label UTS #46 keeps: one with a character outside ASCII, no control,
+      # joiner, or unassigned character, and already in its mapped form.
+      # : (String) -> bool
+      def self.punycode_label?: (String) -> bool
+
+      # RFC 3492's decoder, or nil for a text that does not decode.
+      # : (String) -> String?
+      def self.punycode_decode: (String) -> String?
+
+      # The WHATWG IPv4 parser: up to four parts, each decimal, octal with a
+      # leading 0, or hex with 0x, every part but the last below 256 and the
+      # last below what the parts before it leave.
+      # : (Array[String]) -> bool
+      def self.ipv4?: (Array[String]) -> bool
 
       KIND_TESTS: untyped
 

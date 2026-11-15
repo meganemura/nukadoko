@@ -6,6 +6,14 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Fixed
+
+- An `is-a "url"` claim takes what the TypeScript engine's WHATWG URL
+  parser takes: a host or a path in any script (`http://例え.jp/`), `{`, `}`,
+  and `|` in a path or a fragment, and extra slashes after the scheme. It
+  refuses a port past 65535 and a label that decodes to no letter, which
+  Ruby's URI took. Both engines now judge the same texts the same way.
+
 ## [0.2.0] - 2026-11-15
 
 ### Added

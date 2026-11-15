@@ -7,7 +7,7 @@
 # key, `{ literal: v }`, or `{ from: key }` for an args key an earlier step
 # filled. The judge returns every comparison it made, so a broken claim shows
 # what was read.
-require "uri"
+require "ipaddr"
 require_relative "text_fit"
 
 module Nukadoko
@@ -270,14 +270,157 @@ module Nukadoko
 
       # A text a URL parser accepts can still be no URL a program wrote, so
       # the scheme needs "//" and no character a reader cannot see may appear.
+      # The rest is what the WHATWG URL parser, which the TypeScript engine
+      # uses, refuses for http and https: a missing host, a port that is not
+      # a number up to 65535, a host with a character no domain may hold, and
+      # an IPv4 or IPv6 address that does not parse. A path, a query, and a
+      # fragment can hold anything, as a browser takes them.
       #: (untyped) -> bool
       def self.url?(value)
         return false unless value.is_a?(String) && value.match?(%r{\Ahttps?://}i) && !value.match?(/[\s\p{Cc}\p{Cf}]/)
 
-        uri = URI.parse(value)
-        %w[http https].include?(uri.scheme&.downcase) && !uri.host.to_s.empty?
-      rescue URI::Error
+        rest = value.sub(%r{\Ahttps?:[/\\]*}i, "")
+        authority = rest[%r{\A[^/\\?#]*}].to_s
+        at = authority.rindex("@")
+        host_port = at ? authority[(at + 1)..].to_s : authority
+        host, port = split_host_port(host_port)
+        return false if host.nil? || host.empty?
+        return false unless port.nil? || (port.match?(/\A\d*\z/) && port.to_i <= 65_535)
+
+        host.start_with?("[") ? ipv6?(host[1...-1].to_s) : domain?(host)
+      end
+
+      # The host and the port of `host:port`, a colon inside brackets kept.
+      #: (String) -> [String?, String?]
+      def self.split_host_port(text)
+        if text.start_with?("[")
+          close = text.index("]")
+          return [nil, nil] unless close
+
+          after = text[(close + 1)..].to_s
+          return [nil, nil] unless after.empty? || after.start_with?(":")
+
+          return [text[0..close], after.empty? ? nil : after[1..]]
+        end
+        colon = text.index(":")
+        colon ? [text[0...colon], text[(colon + 1)..]] : [text, nil]
+      end
+
+      #: (String) -> bool
+      def self.ipv6?(text)
+        return false if text.empty? || text.include?("%")
+
+        IPAddr.new(text).ipv6?
+      rescue IPAddr::Error
         false
+      end
+
+      FORBIDDEN_DOMAIN = /[\u0000- #%\/:<>?@\[\\\]^|\u007f]/
+
+      # A host percent-decoded and mapped as UTS #46 maps it (NFKC, then
+      # lower case), which holds no character a domain may not, and whose
+      # last label, when it reads as a number, is an IPv4 address.
+      #: (String) -> bool
+      def self.domain?(host)
+        decoded = host.b.gsub(/%(\h\h)/n) { Regexp.last_match(1).to_s.hex.chr }.force_encoding("UTF-8")
+        return false unless decoded.valid_encoding?
+
+        mapped = decoded.unicode_normalize(:nfkc).downcase.tr("。．｡", "...")
+        return false if mapped.empty? || mapped.match?(FORBIDDEN_DOMAIN) || mapped.include?("�")
+
+        labels = mapped.split(".", -1)
+        # Node checks an xn-- label only in a host that is not all ASCII.
+        return false if !decoded.ascii_only? && labels.any? { _1.start_with?("xn--") && !punycode_label?(_1) }
+        last = labels.last == "" && labels.size > 1 ? labels[-2] : labels.last
+        return true unless last.to_s.match?(/\A(?:\d+|0[xX]\h*)\z/)
+
+        ipv4?(labels)
+      end
+
+      # Whether a label written as `xn--` decodes, under RFC 3492, to a
+      # label UTS #46 keeps: one with a character outside ASCII, no control,
+      # joiner, or unassigned character, and already in its mapped form.
+      #: (String) -> bool
+      def self.punycode_label?(label)
+        decoded = punycode_decode(label[4..].to_s)
+        !decoded.nil? && !decoded.ascii_only? && !decoded.match?(/[\p{Cc}\p{Cf}\p{Cn}\p{Co}\p{Cs}]/) && decoded == decoded.unicode_normalize(:nfkc).downcase
+      end
+
+      # RFC 3492's decoder, or nil for a text that does not decode.
+      #: (String) -> String?
+      def self.punycode_decode(text)
+        return nil if text.empty?
+
+        base, damp, tmin, tmax, skew = 36, 700, 1, 26, 38
+        cut = text.rindex("-")
+        output = cut ? text[0...cut].to_s.codepoints : []
+        return nil unless output.all? { _1 < 0x80 }
+
+        n = 128
+        i = 0
+        bias = 72
+        index = cut ? cut + 1 : 0
+        while index < text.length
+          old = i
+          w = 1
+          k = base
+          loop do
+            return nil if index >= text.length
+
+            char = text[index].to_s.downcase
+            index += 1
+            digit = if char.match?(/[a-z]/) then char.ord - 97
+                    elsif char.match?(/[0-9]/) then char.ord - 22
+                    else return nil
+                    end
+            i += digit * w
+            t = if k <= bias then tmin elsif k >= bias + tmax then tmax else k - bias end
+            break if digit < t
+
+            w *= base - t
+            k += base
+          end
+          length = output.size + 1
+          delta = old.zero? ? (i - old) / damp : (i - old) / 2
+          delta += delta / length
+          k = 0
+          while delta > ((base - tmin) * tmax) / 2
+            delta /= base - tmin
+            k += base
+          end
+          bias = k + (((base - tmin + 1) * delta) / (delta + skew))
+          n += i / length
+          i %= length
+          return nil if n > 0x10FFFF || n.between?(0xD800, 0xDFFF)
+
+          output.insert(i, n)
+          i += 1
+        end
+        output.pack("U*")
+      end
+
+      # The WHATWG IPv4 parser: up to four parts, each decimal, octal with a
+      # leading 0, or hex with 0x, every part but the last below 256 and the
+      # last below what the parts before it leave.
+      #: (Array[String]) -> bool
+      def self.ipv4?(labels)
+        parts = labels.last == "" ? labels[0...-1].to_a : labels
+        return false if parts.empty? || parts.size > 4
+
+        numbers = parts.map do |part|
+          number = case part
+                   when /\A0[xX]\h*\z/ then part[2..].to_s.empty? ? 0 : part[2..].to_s.hex
+                   when /\A0[0-7]+\z/ then part.to_i(8)
+                   when /\A0\d+\z/ then nil
+                   when /\A\d+\z/ then part.to_i
+                   end
+          return false unless number
+
+          number
+        end
+        return false if numbers[0...-1].to_a.any? { _1 > 255 }
+
+        numbers.last.to_i < 256**(5 - numbers.size)
       end
 
       KIND_TESTS = {
