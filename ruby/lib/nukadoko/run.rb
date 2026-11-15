@@ -788,10 +788,15 @@ module Nukadoko
             observed = observed.is_a?(Hash) ? observed.transform_keys(&:to_s).merge(from_values) : observed
             Claims.take_aria_snapshots(step.claims, observed)
           end
+          sides = lambda do |observed|
+            ClaimSides::Inputs.new(observed: observed, args: args, observes: observes, from_keys: step.from.keys.map(&:to_s),
+                                   labels: ->(key) { origins.fetch(key, "sentence:#{key}") },
+                                   received: observes ? step.inputs.fields.map { _1.name.to_s } : [])
+          end
           # A reading with a page open is timed, so the record can say what the page had received by then.
           read = (plain = read; -> { @browser.reading(&plain) }) if own[:page]
           observed = begin
-            step.poll ? Poll.new(step.poll, step.claims, args).call(record, &read) : read.()
+            step.poll ? Poll.new(step.poll, step.claims, args, sides).call(record, &read) : read.()
           rescue StandardError => e
             raise unless observes && !step.poll
 
@@ -801,7 +806,7 @@ module Nukadoko
             record[:error_kind] = "unobserved"
             raise e.class, "the step observed nothing, so no claim was judged: #{e.message}"
           end
-          judged = Claims.judge(step.claims, observed, args)
+          judged = Claims.judge(step.claims, observed, args, sides.(observed))
           record[:claims] = judged
           # The value each claim read before its view, for `measured`.
           record[:raw_actuals] = step.claims.map do |declared|
@@ -829,8 +834,11 @@ module Nukadoko
           message = RunRecord.broken_message(record[:claim_records])
           first, *rest = message.split("\n", -1)
           message = ["#{first}#{RunRecord.poll_end(step, record)}", *rest].join("\n")
-          record.merge!(status: "failed", outcome: then_line ? :fail : :broke, claim: broken,
-                        broken_actual: judged[broken][:actual], error_kind: "claim_broken", error: message)
+          # A claim nukadoko could not judge is never the criterion failing, so
+          # it decides the kind even when another claim broke.
+          unjudged = record[:claim_records].any? { _1[:outcome] == "unjudged" }
+          record.merge!(status: "failed", outcome: then_line && !unjudged ? :fail : :broke, claim: broken,
+                        broken_actual: judged[broken][:actual], error_kind: unjudged ? "claim_unjudged" : "claim_broken", error: message)
         else
           value, problems = step.returned(step.new.run(**step.keywords(fixtures.slice(*step.fixtures), step.inputs.load(args))))
           if problems.any?

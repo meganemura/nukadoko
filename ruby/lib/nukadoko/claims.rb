@@ -106,9 +106,15 @@ module Nukadoko
         taken[:text] ? taken : taken.transform_values { "observe:#{path} #{_1}" }
       end
 
-      #: (Array[Hash[Symbol, untyped]], untyped, untyped) -> Array[Hash[Symbol, untyped]]
-      def self.judge(claims, observed, args)
-        claims.map { judge_one(_1, observed, args) }
+      # `inputs` says where each side sits, so a top-level comparison is read
+      # as the TypeScript engine reads it (ClaimSides); without it, a claim
+      # reads `observed` as the value of each key.
+      #: (Array[Hash[Symbol, untyped]], untyped, untyped, ?ClaimSides::Inputs?) -> Array[Hash[Symbol, untyped]]
+      def self.judge(claims, observed, args, inputs = nil)
+        claims.map do |claim|
+          sided = !claim[:each] && claim[:compare] != "fits-aria-snapshot" && !(claim[:compare] == "judged-as" && aria_judged(claim, observed))
+          inputs && sided ? ClaimSides.judge(claim, inputs) : judge_one(claim, observed, args)
+        end
       end
 
       # `top` is what observe returned, which an expected { observe } reads

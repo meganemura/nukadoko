@@ -261,6 +261,14 @@ module Nukadoko
       declared = program.declared.values.flat_map { (_1[:conditions] || {}).keys.map(&:to_s) }
       check = Engine::Check.new(steps, default ? selection.scenarios : kept, conditions: declared,
                                 environments: (environments if default), problems: selection.problems, config: env_findings)
+      # The TypeScript engine refuses a declaration as its step file loads, so
+      # such a step file stops its run even under --no-check, naming the
+      # first one.
+      if @no_check && (failed = check.findings.find { _1.code == "step-file-import-failed" })
+        failed = relative(failed)
+        stop = { severity: "refused", code: failed.code, message: "#{failed.file}: #{failed.message}", fix: failed.fix, do: "nuka check" }
+        return finish("run", false, findings: [stop], verdict: "refused", exit_code: 2)
+      end
       # Only the check's errors hold a run back, so only they are reported.
       findings = @no_check ? [] : check.findings.map { relative(_1).to_h }.select { _1[:severity] == "error" }
       unless @no_check || check.passed?

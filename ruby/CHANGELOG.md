@@ -56,6 +56,24 @@ notes come from the section below whose heading starts with `## [<version>]`.
   whose `run` gave back nil says so. An arg that is NaN no longer stops the
   run while its step record is written: JSON has no NaN, so the record
   holds null, as JavaScript writes it.
+- A claim reads its value as the TypeScript engine reads it. A dotted
+  `actual` (`body.user.name`) is a path into what observe returned, not
+  one key, and a path that finds nothing breaks the claim with where the
+  walk stopped (`observe:value.user.name is undefined, since observe:value
+  has nothing at user`) instead of failing the step. A view of a value that
+  is no text, and an `at` with nothing there, break the claim with the
+  TypeScript engine's reason. A claim that compares a value with itself, or
+  with one observe received or computed as a boolean, breaks as there.
+- A claim judges a plain JSON copy of each side, as the TypeScript engine
+  does: a whole float is the integer JavaScript holds (`2500.0` reads and
+  shows as `2500`), an object lists its index keys first, and NaN,
+  Infinity, an integer past `Number.MAX_SAFE_INTEGER`, a value of another
+  class, a value that holds itself, or one nested past 256 levels leaves
+  the claim unjudged with the reason. A step with an unjudged claim fails
+  as `claim_unjudged`, as there.
+- `nuka run --no-check` refuses to start when a step's declaration is one
+  the TypeScript engine's `defineStep` refuses as its file loads, naming
+  the first such file, instead of leaving the step out.
 
 ## [0.2.0] - 2026-11-15
 

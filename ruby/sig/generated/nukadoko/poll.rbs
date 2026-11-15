@@ -13,8 +13,9 @@ module Nukadoko
     class Poll
       INTERVAL: ::Float
 
-      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> void
-      def initialize: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> void
+      # `sides` gives the claim inputs of one reading (Claims.judge).
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], ?(^(untyped) -> ClaimSides::Inputs)?) -> void
+      def initialize: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], ?(^(untyped) -> ClaimSides::Inputs)?) -> void
 
       # A reading whose observe raised is kept with the first line of the
       # error, and the poll reads again; only a last reading that raised

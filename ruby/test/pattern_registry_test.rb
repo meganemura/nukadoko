@@ -30,7 +30,7 @@ class PatternRegistryTest < Minitest::Test
       expression = Cucumber::CucumberExpressions::CucumberExpression.new(source, Nukadoko::Engine::Pattern::REGISTRY)
       read = expression.match(text)&.map { _1.value(nil) }
       read = read&.map { _1.is_a?(Float) && _1.nan? ? :nan : _1 }
-      assert_equal values, read, "#{source} on #{text.inspect}"
+      values.nil? ? assert_nil(read, "#{source} on #{text.inspect}") : assert_equal(values, read, "#{source} on #{text.inspect}")
     end
   end
 

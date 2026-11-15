@@ -1,0 +1,169 @@
+# Generated from lib/nukadoko/claim_sides.rb with RBS::Inline
+
+# Responsibility: the two sides of a top-level comparison claim, read as the
+# TypeScript engine reads them: where each value sits (its place, whose
+# label a reason names), the plain JSON copy a claim judges, and what stops
+# a claim before any compare runs (a value that is undefined, one that is
+# not plain JSON, a view that cannot read it, a claim that compares a value
+# with itself or with one observe could have returned). It reads; the
+# compares stay in Claims.compare. A claim on each item of a list is read
+# elsewhere.
+module Nukadoko
+  module Engine
+    module ClaimSides
+      class Place < Data
+        attr_reader origin(): String
+
+        attr_reader segments(): Array[String]
+
+        attr_reader label(): String
+
+        attr_reader open(): bool
+
+        def self.new: (String origin, Array[String] segments, String label, bool open) -> instance
+                    | (origin: String, segments: Array[String], label: String, open: bool) -> instance
+
+        def self.members: () -> [ :origin, :segments, :label, :open ]
+
+        def members: () -> [ :origin, :segments, :label, :open ]
+      end
+
+      # What one side read: a value, or why the claim breaks or is not judged.
+      class Side < Data
+        attr_reader place(): Place
+
+        attr_reader found(): Hash[Symbol, untyped]
+
+        def self.new: (Place place, Hash[Symbol, untyped] found) -> instance
+                    | (place: Place, found: Hash[Symbol, untyped]) -> instance
+
+        def self.members: () -> [ :place, :found ]
+
+        def members: () -> [ :place, :found ]
+      end
+
+      OBSERVE: untyped
+
+      LITERAL: untyped
+
+      SAFE: untyped
+
+      MAX_DEPTH: ::Integer
+
+      INDEX: ::Regexp
+
+      # Where a claim reads from: what observe returned with the from values
+      # merged in, the args, whether the step observes, its from keys, the
+      # label of each args key's origin, and the args keys observe received.
+      class Inputs < Data
+        attr_reader observed(): untyped
+
+        attr_reader args(): untyped
+
+        attr_reader observes(): bool
+
+        attr_reader from_keys(): Array[String]
+
+        attr_reader labels(): ^(String) -> String
+
+        attr_reader received(): Array[String]
+
+        def self.new: (untyped observed, untyped args, bool observes, Array[String] from_keys, ^(String) -> String labels, Array[String] received) -> instance
+                    | (observed: untyped, args: untyped, observes: bool, from_keys: Array[String], labels: ^(String) -> String, received: Array[String]) -> instance
+
+        def self.members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received ]
+
+        def members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received ]
+      end
+
+      # : (Place, String?) -> Place
+      def self.place_at: (Place, String?) -> Place
+
+      # : (Place, String?) -> Place
+      def self.place_viewed: (Place, String?) -> Place
+
+      # : (Place, bool?) -> Place
+      def self.place_counted: (Place, bool?) -> Place
+
+      # : (Place, Place) -> bool
+      def self.same_place?: (Place, Place) -> bool
+
+      # : (Place, Place) -> bool
+      def self.overlap?: (Place, Place) -> bool
+
+      # : (String, Inputs) -> Place
+      def self.arg_place: (String, Inputs) -> Place
+
+      # : (String) -> Array[String]
+      def self.segments: (String) -> Array[String]
+
+      # The value at `segments` inside `root`, or the index of the first
+      # segment that finds nothing. nil is JSON's null, which is a value.
+      # : (untyped, Array[String]) -> Hash[Symbol, untyped]
+      def self.value_at: (untyped, Array[String]) -> Hash[Symbol, untyped]
+
+      # : (untyped, Array[String]) -> Hash[Symbol, untyped]
+      def self.read_at: (untyped, Array[String]) -> Hash[Symbol, untyped]
+
+      # : (String) -> String
+      def self.article: (String) -> String
+
+      # The plain JSON copy a claim judges, as JavaScript holds it, or where
+      # the first part that is not plain JSON sits and what it is. A whole
+      # float is the integer JavaScript's one number type would hold, so
+      # 2500.0 is judged and shown as 2500; a symbol is its name.
+      # : (untyped, ?Integer) -> Hash[Symbol, untyped]
+      def self.snapshot: (untyped, ?Integer) -> Hash[Symbol, untyped]
+
+      # A JavaScript object lists its array-index keys first, in ascending
+      # order, then its other keys in the order they were added.
+      # : (Hash[String, untyped]) -> Hash[String, untyped]
+      def self.js_order: (Hash[String, untyped]) -> Hash[String, untyped]
+
+      # : (Place) -> String
+      def self.name_of: (Place) -> String
+
+      # : (Place, Hash[Symbol, untyped]) -> String
+      def self.refusal_reason: (Place, Hash[Symbol, untyped]) -> String
+
+      # : (Integer, Place, Array[String]) -> String
+      def self.first_missing: (Integer, Place, Array[String]) -> String
+
+      # : (Hash[Symbol, untyped], Place, Array[String], Integer, ?^(Place) -> String) -> Side
+      def self.side_of: (Hash[Symbol, untyped], Place, Array[String], Integer, ?^(Place) -> String) -> Side
+
+      # : (Array[String], Inputs, ?^(Place) -> String) -> Side
+      def self.arg_side: (Array[String], Inputs, ?^(Place) -> String) -> Side
+
+      # The side a claim's actual names, read at its path and, with no
+      # view, at its at too; `at_read` says the at was read here.
+      # : (Hash[Symbol, untyped], Inputs) -> [Side, bool]
+      def self.top_side: (Hash[Symbol, untyped], Inputs) -> [ Side, bool ]
+
+      # The value after a view, or why the view could not read it.
+      # : (String?, untyped) -> Hash[Symbol, untyped]
+      def self.apply_view: (String?, untyped) -> Hash[Symbol, untyped]
+
+      # : (Side, String?, String?, ?bool) -> Side
+      def self.shaped: (Side, String?, String?, ?bool) -> Side
+
+      # : (Side, bool?) -> Side
+      def self.counted: (Side, bool?) -> Side
+
+      # The expected side, and whether observe gave it.
+      # : (Hash[Symbol, untyped], Inputs) -> [Side, bool]
+      def self.expected_side: (Hash[Symbol, untyped], Inputs) -> [ Side, bool ]
+
+      # What stops a claim before any compare runs, or nil.
+      # : (Side, Side, bool, Inputs) -> Hash[Symbol, String]?
+      def self.precondition: (Side, Side, bool, Inputs) -> Hash[Symbol, String]?
+
+      # : (Place, Inputs, String) -> Hash[Symbol, String]?
+      def self.observe_received: (Place, Inputs, String) -> Hash[Symbol, String]?
+
+      # A top-level comparison claim, judged as Claims.judge_one reports one.
+      # : (Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
+      def self.judge: (Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
+    end
+  end
+end

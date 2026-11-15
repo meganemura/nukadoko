@@ -16,12 +16,14 @@ module Nukadoko
     class Poll
       INTERVAL = 0.1
 
-      #: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> void
-      def initialize(options, claims, args)
+      # `sides` gives the claim inputs of one reading (Claims.judge).
+      #: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], ?(^(untyped) -> ClaimSides::Inputs)?) -> void
+      def initialize(options, claims, args, sides = nil)
         @timeout = options.fetch(:timeout_ms) / 1000.0
         @settled = options[:settled] || []
         @claims = claims
         @args = args
+        @sides = sides
       end
 
       # A reading whose observe raised is kept with the first line of the
@@ -60,7 +62,7 @@ module Nukadoko
 
       #: (untyped, Integer) -> Hash[Symbol, untyped]
       def judge(value, attempt)
-        judged = Claims.judge(@claims, value, @args)
+        judged = Claims.judge(@claims, value, @args, @sides&.(value))
         reading = { attempt: attempt, at: Time.now.utc.iso8601(3), holds: judged.all? { _1[:holds] }, actuals: judged.map { _1[:actual] }, value: value,
                     judged_now: judged.select { _1[:for_judgment] }.map { _1[:actual] } }
         reading[:settled] = @settled.all? { Claims.judge_one(_1, value, {})[:holds] } if @settled.any?
