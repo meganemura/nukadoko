@@ -73,6 +73,21 @@ module Nukadoko
     # directory names, or the newest one.
     def report: () -> untyped
 
+    # Why a report cannot go to `target`, or nil when it can.
+    def out_problem: (untyped target, untyped kind, untyped label) -> untyped
+
+    def shown_path: (untyped absolute) -> untyped
+
+    # The files this project's own run noted in its exports manifest under
+    # the export directory, so a render of the same run replaces what the
+    # last one wrote there and retention removes them with the run. A run
+    # that is not one of this project's own notes nothing.
+    def own_exports: (untyped dir, untyped run_id, untyped problems) -> untyped
+
+    def replace_own_exports: (untyped exports, untyped target, untyped kind) -> untyped
+
+    def note_own_exports: (untyped exports, untyped files) -> untyped
+
     def report_dir: () -> untyped
 
     # Reads run.json files and git only, so it loads no step.

@@ -105,7 +105,11 @@ module Nukadoko
       # nil when it opened none.
       def scenario_browser: () -> untyped
 
-      def end_scenario: () -> untyped
+      # Closes the scenario's context, and returns the screenshot of its
+      # page as the scenario ended, `final.png` in `dir`, when it opened
+      # one. A page a failed step left unusable has none, and that costs
+      # the screenshot only.
+      def end_scenario: (?untyped dir) -> untyped
 
       def close: () -> untyped
     end

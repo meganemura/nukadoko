@@ -44,9 +44,10 @@ module Nukadoko
       attr_reader :problems #: Array[String]
 
       # The run in `dir`, or a Refusal that says why it cannot be read.
-      #: (String) -> void
-      def initialize(dir)
+      #: (String, ?project_root: String) -> void
+      def initialize(dir, project_root: Dir.pwd)
         @dir = dir
+        @project_root = project_root
         @root = File.realpath(dir)
         run_json = File.join(dir, "run.json")
         raise Refusal.new("run-not-found", "#{dir} holds no run.json that nuka run wrote") unless File.file?(run_json)
@@ -69,6 +70,20 @@ module Nukadoko
       def resolve(relative)
         file = File.join(@dir, relative)
         raise ArgumentError, "#{relative} resolves outside the run directory, so it is not read" unless inside?(file)
+
+        file
+      end
+
+      # Where a path a record names is on disk: one under `runs/<run id>/`
+      # is under the run directory wherever the directory now is, and any
+      # other is under the project. Raises for one that resolves outside
+      # the run directory.
+      #: (String) -> String
+      def resolve_recorded(recorded)
+        segments = recorded.split(%r{[\\/]})
+        at = (0...(segments.size - 1)).find { segments[_1] == "runs" && segments[_1 + 1] == @document[:run_id] }
+        file = at ? File.join(@dir, *segments[(at + 2)..].to_a) : File.expand_path(recorded, @project_root)
+        raise ArgumentError, "#{recorded} resolves outside the run directory, so it is not read" unless inside?(file)
 
         file
       end

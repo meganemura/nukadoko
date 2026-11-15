@@ -437,7 +437,7 @@ module Nukadoko
           record
         end
         browser = @browser.scenario_browser
-        @browser.end_scenario
+        final = @browser.end_scenario(File.join(@dir, "scenarios", scenario_record_id))
         @scenario_fixtures.teardown
         @scratch.remove_all
         execution = stopped ? stopped[0, 3].to_a.compact : [:pass]
@@ -445,6 +445,7 @@ module Nukadoko
         json = { scenario_record_id: scenario_record_id, feature: scenario.uri, line: scenario.line, scenario: scenario.name,
                  environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
+        json[:evidence] = { dir: File.join("scenarios", scenario_record_id), screenshots: final } if final.any?
         json[:do] = again(scenario, environment) if failed && role != "control"
         json[:claims] = RunRecord.claim_counts(records)
         # A scenario in which no claim on a Then line was judged says so,

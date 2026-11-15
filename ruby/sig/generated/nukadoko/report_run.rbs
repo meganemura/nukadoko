@@ -66,13 +66,20 @@ module Nukadoko
       attr_reader problems: Array[String]
 
       # The run in `dir`, or a Refusal that says why it cannot be read.
-      # : (String) -> void
-      def initialize: (String) -> void
+      # : (String, ?project_root: String) -> void
+      def initialize: (String, ?project_root: String) -> void
 
       # Where a path inside the run directory is on disk; raises for one
       # that resolves outside it.
       # : (String) -> String
       def resolve: (String) -> String
+
+      # Where a path a record names is on disk: one under `runs/<run id>/`
+      # is under the run directory wherever the directory now is, and any
+      # other is under the project. Raises for one that resolves outside
+      # the run directory.
+      # : (String) -> String
+      def resolve_recorded: (String) -> String
 
       private
 

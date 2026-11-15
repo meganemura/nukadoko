@@ -10,7 +10,7 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-`--step` や Allure の出力など、TypeScript 版の機能の多くはまだありません。
+`--step` など、TypeScript 版の機能の多くはまだありません。
 
 ## インストール
 
@@ -64,12 +64,15 @@ run は始めません。
 - `nuka judge <feature>:<line> [--run <id>] [--json]` は、Then が判断を求める基準(`judged-as` の claim)について、run が読んだ値を見せます。
 `--meets` か `--misses` に `--by <who>` と `--because <一文>` を付けると、その値の判断を `judgments/<feature>.json` に記録します。
 次の run は、この記録と照らして基準を読みます。
-- `nuka report [run] --format markdown|messages [--out <file>] [--json]` は、run を run ディレクトリだけからもう一度書きます。
+- `nuka report [run] --format markdown|messages|allure [--out <path>] [--json]` は、run を run ディレクトリだけからもう一度書きます。
 run を名指ししなければ、いちばん新しい run を使います。
 `markdown` は run の `summary.md` です。
 `messages` は cucumber-messages の stream で、1 行に 1 つの envelope を書きます。
 cucumber のプロトコルを読む formatter や JUnit のステップは、そのまま動きます。
 claim のステップの claims と、各基準の判定は attachment として載ります。
+`allure` は Allure の結果のディレクトリで、`--out` で別の場所を指定しなければ `.nukadoko/export/allure-results` に書きます。
+1 回の実行が 1 つの結果になり、各 claim はその Then の子ステップになります。
+history id は、同じシナリオについて TypeScript 版が書く結果と同じです。
 - `nuka clean [--dry-run] [--json]` は、`.nukadoko/` の下の run ディレクトリを消します。
 - `nuka do <step> [--args <json>] [--use <step-id>]...` は、シナリオの外で 1 つのステップを実行し、ステップの記録を出します。
 `--use` は、前の記録(`do` のものでも run のものでも)から、ステップの `from` の args を埋めます。

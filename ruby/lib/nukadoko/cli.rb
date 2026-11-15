@@ -423,47 +423,117 @@ module Nukadoko
       unless %w[markdown allure messages].include?(format)
         raise Engine::Refusal.new("invalid-arguments", %(Invalid values:;   Argument: format, Given: #{JSON.generate(format)}, Choices: "markdown", "allure", "messages"))
       end
-      unless %w[markdown messages].include?(format)
-        raise Engine::Refusal.new("invalid-value", "nuka report --format #{format} is not in the Ruby engine yet: it renders --format markdown and messages",
-                                  fix: "Pass --format markdown or --format messages.")
-      end
-      if @json && !out
+      if @json && !out && format != "allure"
         raise Engine::Refusal.new("invalid-arguments", "nuka report --json needs --out for --format #{format}, since the #{format} output itself would go to stdout",
                                   fix: "Add --out <path>.")
       end
 
       dir = report_dir
+      kind = format == "allure" ? :dir : :file
+      target = out ? File.expand_path(out, @project) : (File.join(@project, ".nukadoko", "export", "allure-results") if kind == :dir)
+      label = out ? "--out #{out}" : "the default allure directory #{target && shown_path(target)}"
+      if target && (problem = out_problem(target, kind, label))
+        raise Engine::Refusal.new("report-out-invalid", problem)
+      end
+
       problems = [] #: Array[String]
       if format == "markdown"
         doc = JSON.parse(File.read(File.join(dir, "run.json"), encoding: "UTF-8"), symbolize_names: true)
         text = Engine::Summary.render(doc)
       else
-        run = Engine::ReportRun.new(dir)
+        run = Engine::ReportRun.new(dir, project_root: @project)
         doc = run.document
-        text = Engine::ReportMessages.render(run)
-        problems = run.problems
+        text = Engine::ReportMessages.render(run) if format == "messages"
+        problems = run.problems.dup
       end
       # A part of the run the render left out is a failed finding of its
       # own, and the rest is still written.
-      findings = problems.map { { severity: "failed", code: "report-incomplete", message: _1 } }
-      exit_code = findings.empty? ? 0 : 1
-      unless out
-        emit({}, findings, "report", io: $stderr)
+      findings = -> { problems.map { { severity: "failed", code: "report-incomplete", message: _1 } } }
+      unless target
+        emit({}, findings.(), "report", io: $stderr)
         @out.write(text)
-        return exit_code
+        return problems.empty? ? 0 : 1
       end
 
-      target = File.expand_path(out, @project)
-      FileUtils.mkdir_p(File.dirname(target))
-      File.write(target, text)
+      exports = own_exports(dir, doc[:run_id], problems)
+      replace_own_exports(exports, target, kind)
+      FileUtils.mkdir_p(kind == :dir ? target : File.dirname(target))
+      if run && format == "allure"
+        files = Engine::ReportAllure.write(run, target, ->(message) { problems << message })
+      else
+        File.write(target, text)
+        files = [target]
+      end
+      note_own_exports(exports, files)
       written = Pathname.new(target).relative_path_from(Pathname.new(@project)).to_s
-      return finish("report", findings.empty?, findings: findings, run_id: doc[:run_id], format: format, written: [written]) if @json
+      return finish("report", problems.empty?, findings: findings.(), run_id: doc[:run_id], format: format, written: [written]) if @json
 
-      emit({}, findings, "report", io: $stderr)
-      $stderr.puts "#{format.ljust(10)}#{written}"
-      exit_code
+      emit({}, findings.(), "report", io: $stderr)
+      if kind == :dir
+        count = files.count { _1.end_with?("-result.json") }
+        $stderr.puts "#{format.ljust(10)}#{"#{written}/".then { _1.ljust([30, _1.size + 2].max) }}#{count}"
+      else
+        $stderr.puts "#{format.ljust(10)}#{written}"
+      end
+      problems.empty? ? 0 : 1
     rescue Engine::Refusal => e
       refuse(e)
+    end
+
+    # Why a report cannot go to `target`, or nil when it can.
+    def out_problem(target, kind, label)
+      if File.exist?(target)
+        return "#{label} is a directory; markdown and messages write one file" if kind == :file && File.directory?(target)
+        return "#{label} is not a regular file (a FIFO, a socket, or a device), so it is not written" if kind == :file && !File.file?(target)
+        return "#{label} is not a directory; allure writes a directory of results" if kind == :dir && !File.directory?(target)
+
+        return nil
+      end
+      parent = File.dirname(target)
+      parent = File.dirname(parent) until File.exist?(parent) || File.dirname(parent) == parent
+      File.directory?(parent) ? nil : "#{label} lies under #{shown_path(parent)}, which is not a directory"
+    end
+
+    def shown_path(absolute)
+      relative = Pathname.new(absolute).relative_path_from(Pathname.new(@project)).to_s
+      relative == ".." || relative.start_with?("../") ? absolute : relative
+    end
+
+    # The files this project's own run noted in its exports manifest under
+    # the export directory, so a render of the same run replaces what the
+    # last one wrote there and retention removes them with the run. A run
+    # that is not one of this project's own notes nothing.
+    def own_exports(dir, run_id, problems)
+      runs = File.join(@project, ".nukadoko", "runs")
+      return nil unless File.expand_path(dir) == File.join(runs, run_id.to_s) && !File.symlink?(dir)
+
+      manifest = File.join(dir, "exports")
+      if File.symlink?(manifest)
+        problems << "exports of run #{run_id} resolves outside the run directory, so this render is not noted in it"
+        return nil
+      end
+      export = File.join(@project, ".nukadoko", "export")
+      lines = File.exist?(manifest) ? File.readlines(manifest, chomp: true).reject(&:empty?).uniq : []
+      files = lines.map { [_1, File.expand_path(_1, @project)] }.select { |_, file| file.start_with?("#{export}/") && File.basename(file).casecmp("allure-history.jsonl") != 0 }
+      { manifest: manifest, export: export, files: files }
+    end
+
+    def replace_own_exports(exports, target, kind)
+      return unless exports
+
+      gone = exports[:files].select { |_, file| kind == :file ? file == target : file.start_with?("#{target}/") }
+      return if gone.empty?
+
+      gone.each { |_, file| FileUtils.rm_f(file) }
+      kept = File.readlines(exports[:manifest], chomp: true).reject { |entry| entry.empty? || gone.any? { |line, _| line == entry } }
+      File.write(exports[:manifest], kept.map { "#{_1}\n" }.join)
+    end
+
+    def note_own_exports(exports, files)
+      return unless exports
+
+      noted = files.select { _1.start_with?("#{exports[:export]}/") }
+      File.open(exports[:manifest], "a") { |io| noted.each { io.puts Pathname.new(_1).relative_path_from(Pathname.new(@project)).to_s } } if noted.any?
     end
 
     def report_dir

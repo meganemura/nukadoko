@@ -273,10 +273,25 @@ module Nukadoko
         @context && @browser ? { type: "chromium", version: @browser.version } : nil
       end
 
-      def end_scenario
+      # Closes the scenario's context, and returns the screenshot of its
+      # page as the scenario ended, `final.png` in `dir`, when it opened
+      # one. A page a failed step left unusable has none, and that costs
+      # the screenshot only.
+      def end_scenario(dir = nil)
+        shots = [] #: Array[Hash[Symbol, untyped]]
+        if dir && @page
+          begin
+            FileUtils.mkdir_p(dir)
+            @page.screenshot(path: File.join(dir, "final.png"))
+            shots << { file: "final.png", at: Time.now.utc.iso8601(3) }
+          rescue StandardError
+            nil
+          end
+        end
         @context&.tracing&.stop
         @context&.close
         @context = @page = nil
+        shots
       end
 
       def close
