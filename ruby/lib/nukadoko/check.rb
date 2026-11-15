@@ -15,6 +15,8 @@ module Nukadoko
       :step, #: String?
       :message, #: String
       :fix, #: String?
+      # The command that is the next step, printed as `do:`; most findings have none.
+      :run, #: String?
     )
 
     # A Data block's methods are its own, but rbs-inline reads only a class
@@ -22,11 +24,15 @@ module Nukadoko
     class Finding
       #: (String, String, singleton(Step), String, String?) -> Finding
       def self.about_step(severity, code, step, message, fix)
-        new(severity, code, step.file, step.line, step.step_name, message, fix)
+        new(severity, code, step.file, step.line, step.step_name, message, fix, nil)
       end
 
       #: () -> Hash[Symbol, untyped]
-      def to_h = super.compact
+      def to_h
+        hash = super.compact
+        hash[:do] = hash.delete(:run) if hash.key?(:run)
+        hash
+      end
     end
 
     FIXTURES = %w[baseURL call context env evidence page pageAs poll request requireEnv result scratch].freeze
@@ -48,10 +54,10 @@ module Nukadoko
         # as undefined; one finding says why instead.
         if !features
           @findings << Finding.new("error", "features-dir-missing", "nukadoko.config.rb", nil, nil, %(featuresDir "features" does not exist),
-                                   "Create features/steps for the step files, or correct featuresDir in nukadoko.config.rb.")
+                                   "Create features/steps for the step files, or correct featuresDir in nukadoko.config.rb.", nil)
         elsif steps.empty?
           @findings << Finding.new("error", "no-step-files-found", "features", nil, nil,
-                                   %(no .rb step file was found while scanning "features"; no step can ever be registered), Codes.fix("no-step-files-found"))
+                                   %(no .rb step file was found while scanning "features"; no step can ever be registered), Codes.fix("no-step-files-found"), nil)
         end
         @usable = steps.reject { definition_broken?(_1) }
         @usable.each { check_contract(_1) }
@@ -60,9 +66,13 @@ module Nukadoko
         check_shapes
         check_tags(conditions)
         check_lines
+        # One finding per cause: each undefined line already names the
+        # scaffold command for its file, so the missing step files would be
+        # said a second time.
+        @findings.reject! { _1.code == "no-step-files-found" } if steps.empty? && @findings.any? { _1.code == "undefined-step" }
         check_fixtures(full)
         check_conditions_met(environments) if environments
-        problems.each { |problem| findings << Finding.new("error", problem.code, problem.uri, problem.line, nil, problem.message, Codes.fix(problem.code)) }
+        problems.each { |problem| findings << Finding.new("error", problem.code, problem.uri, problem.line, nil, problem.message, Codes.fix(problem.code), nil) }
         if full
           check_unbound
           check_from_unused
@@ -81,7 +91,7 @@ module Nukadoko
       #: (singleton(Step)) -> bool
       def definition_broken?(step)
         if (pattern = pattern_problem(step))
-          findings << Finding.new("error", pattern[0], step.file, nil, step.step_name, pattern[1], Codes.fix(pattern[0]))
+          findings << Finding.new("error", pattern[0], step.file, nil, step.step_name, pattern[1], Codes.fix(pattern[0]), nil)
           return true
         end
         problems = Definition.new(step).problems
@@ -168,7 +178,7 @@ module Nukadoko
         capture_mismatches(step).each do |key, type, captured, held|
           findings << Finding.new("error", "capture-type-mismatch", step.file, nil, step.step_name,
                                   %(Step "#{step.step_name}" pattern "#{step.pattern}" binds key "#{key}" as {#{type}} (a #{captured}), but args declares "#{key}" as a #{held}),
-                                  "Make the capture type and the args field type agree: change the {key:type} in the pattern, or declare the field with the type the capture gives.")
+                                  "Make the capture type and the args field type agree: change the {key:type} in the pattern, or declare the field with the type the capture gives.", nil)
         end
         known = FIXTURES + Nukadoko.project_fixtures.keys.map(&:to_s)
         (step.fixtures.map(&:to_s) - known).each do |name|
@@ -188,7 +198,7 @@ module Nukadoko
           sorted = group.sort_by(&:file)
           findings << Finding.new("error", "duplicate-pattern", sorted.last.file, nil, nil,
                                   %(Multiple patterns normalize to the same text "#{text}": #{sorted.map { %(#{_1.step_name} ("#{_1.pattern}")) }.join(", ")}),
-                                  Codes.fix("duplicate-pattern"))
+                                  Codes.fix("duplicate-pattern"), nil)
         end
       end
 
@@ -202,12 +212,12 @@ module Nukadoko
         @steps.select(&:pattern).reject { bound.include?(_1) || unread.include?(_1.step_name) }.sort_by(&:file).each do |step|
           findings << Finding.new("note", "pattern-unbound", step.file, nil, step.step_name,
                                   %(Step "#{step.step_name}" declares a pattern, but no feature line under the scanned directories (features) binds it. It has no place in any scenario right now.),
-                                  Codes.fix("pattern-unbound"))
+                                  Codes.fix("pattern-unbound"), nil)
         end
         @usable.select { _1.description.to_s == "TODO: describe #{_1.step_name}" }.sort_by(&:file).each do |step|
           findings << Finding.new("note", "step-description-todo", step.file, nil, step.step_name,
                                   %(Step "#{step.step_name}" still has the description nuka scaffold wrote ("#{step.description}"); nuka steps and nuka describe show it to whoever picks a step, so say what the step does.),
-                                  Codes.fix("step-description-todo"))
+                                  Codes.fix("step-description-todo"), nil)
         end
       end
 
@@ -225,7 +235,7 @@ module Nukadoko
 
             findings << Finding.new("note", "from-unused", step.file, nil, step.step_name,
                                     %(Step "#{step.step_name}"'s from.#{key} declares a producer, but every bound occurrence of this step already fills "#{key}" from a pattern capture. That producer has never supplied it. Still reachable through `nuka do --use`; this is a fact, not a verdict on whether to remove it.),
-                                    Codes.fix("from-unused"))
+                                    Codes.fix("from-unused"), nil)
           end
         end
       end
@@ -256,7 +266,7 @@ module Nukadoko
               quoted = before.map { %("#{_1}") }.join(", ")
               findings << Finding.new("error", "from-order-violation", scenario.uri, line.line, step.step_name,
                                       %(Step "#{step.step_name}"'s from.#{key} has more than one of its candidate producers bound earlier in this scenario (#{quoted}): from's candidates are mutually exclusive by design (docs/spec.md "Chaining steps"), so the feature file, not the tool, must make exactly one of them win),
-                                      "Remove or move lines so that exactly one of steps #{quoted} runs before this line.")
+                                      "Remove or move lines so that exactly one of steps #{quoted} runs before this line.", nil)
               next
             end
             undefined = scenario.steps.first(index).each_index.select { Engine.matches(@usable, scenario.steps[_1].text).empty? }
@@ -265,7 +275,7 @@ module Nukadoko
 
             findings << Finding.new("error", "from-order-violation", scenario.uri, line.line, step.step_name,
                                     from_missing_message(step.step_name, key, names, resolved),
-                                    from_order_fix(issue))
+                                    from_order_fix(issue), nil)
           end
         end
         hold_from_order(scenario, held) if held.any?
@@ -279,7 +289,7 @@ module Nukadoko
         lines = scenario.steps.map(&:line)
         resolved.each_index do |index|
           ClaimCheck.issues(resolved, lines, index).each do |code, message|
-            findings << Finding.new("error", code, scenario.uri, lines[index], resolved[index]&.first&.step_name, message, Codes.fix(code))
+            findings << Finding.new("error", code, scenario.uri, lines[index], resolved[index]&.first&.step_name, message, Codes.fix(code), nil)
           end
         end
       end
@@ -317,7 +327,7 @@ module Nukadoko
         count = held.size == 1 ? "1 from-order-violation finding" : "#{held.size} from-order-violation findings"
         findings << Finding.new("warning", "from-order-check-suppressed", scenario.uri, scenario.steps[undefined.first].line, nil,
                                 "Held back #{count} while #{lines.join(", ")} #{lines.size == 1 ? "matches" : "match"} no step, because such a line may be meant to run the producer they need: #{consumers.join("; ")}",
-                                "If #{which} is meant to run #{steps_phrase.(held.flat_map { _1[:candidates] }.uniq)}, reword that line to match that step's pattern. Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.")
+                                "If #{which} is meant to run #{steps_phrase.(held.flat_map { _1[:candidates] }.uniq)}, reword that line to match that step's pattern. Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.", nil)
       end
 
       SCENARIO_ONLY = FIXTURES - %w[env requireEnv baseURL]
@@ -339,7 +349,7 @@ module Nukadoko
 
             if state[dep] == :gray
               cycle = [*stack.drop(stack.index(dep)), dep]
-              findings << Finding.new("error", "fixture-cycle", config, nil, nil, "fixture dependency cycle: #{cycle.join(" -> ")}", Codes.fix("fixture-cycle"))
+              findings << Finding.new("error", "fixture-cycle", config, nil, nil, "fixture dependency cycle: #{cycle.join(" -> ")}", Codes.fix("fixture-cycle"), nil)
             elsif state[dep] == :white
               visit.(dep, stack)
             end
@@ -358,7 +368,7 @@ module Nukadoko
 
             findings << Finding.new("error", "fixture-scope-violation", config, nil, nil,
                                     %(fixture "#{fixture.name}" has scope "process" but depends on "#{dep}", which is scope "scenario": a "process"-scope fixture is built once for the whole run and can outlive any single scenario's own resources, so it cannot depend on something rebuilt per scenario),
-                                    Codes.fix("fixture-scope-violation"))
+                                    Codes.fix("fixture-scope-violation"), nil)
           end
         end
         return unless full
@@ -375,7 +385,7 @@ module Nukadoko
         (fixtures.keys - reachable).each do |name|
           findings << Finding.new("note", "fixture-unused", config, nil, nil,
                                   %(Fixture "#{name}" is declared under nukadoko.config.rb's own `fixtures`, but no typed step requires it, directly or through another fixture. Still reachable through `nuka do`; this is a fact, not a verdict on whether to remove it.),
-                                  Codes.fix("fixture-unused"))
+                                  Codes.fix("fixture-unused"), nil)
         end
       end
 
@@ -395,7 +405,7 @@ module Nukadoko
 
           findings << Finding.new("error", "condition-unmet", scenario.uri, scenario.line, nil,
                                   %(Scenario "#{scenario.name}" needs #{tags.join(" ")}, and no selected environment meets #{tags.size == 1 ? "it" : "all of them"}: #{described}. Its cells would all be controls, so nothing would show that it holds),
-                                  Codes.fix("condition-unmet"))
+                                  Codes.fix("condition-unmet"), nil)
         end
       end
 
@@ -445,7 +455,7 @@ module Nukadoko
         @scenarios.flat_map { |scenario| scenario.tag_lines.map { |tag, line| [scenario.uri, line, tag] } }.uniq.each do |uri, line, tag|
           if tag.start_with?("@expects:")
             problem = Check.expects_problem(tag)
-            findings << Finding.new("error", "expects-tag-malformed", uri, line, nil, problem, Codes.fix("expects-tag-malformed")) if problem
+            findings << Finding.new("error", "expects-tag-malformed", uri, line, nil, problem, Codes.fix("expects-tag-malformed"), nil) if problem
             next
           end
           next unless tag.start_with?("@with:", "@without:")
@@ -458,13 +468,13 @@ module Nukadoko
                       else
                         "#{tag} does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition"
                       end
-            findings << Finding.new("error", "condition-tag-malformed", uri, line, nil, message, Codes.fix("condition-tag-malformed"))
+            findings << Finding.new("error", "condition-tag-malformed", uri, line, nil, message, Codes.fix("condition-tag-malformed"), nil)
           elsif conditions && !conditions.include?(name)
             on, off = tag.start_with?("@without:") ? %w[off on] : %w[on off]
             findings << Finding.new("error", "condition-unknown", uri, line, nil,
                                     %(#{tag} names the condition "#{name}", and no environment in nukadoko.program.rb declares it under conditions. ) +
                                       "If #{name} was removed and its #{on} side kept, remove the tag, so the scenario holds everywhere; if its #{off} side was kept, delete the scenario.",
-                                    Codes.fix("condition-unknown"))
+                                    Codes.fix("condition-unknown"), nil)
           end
         end
       end
@@ -521,7 +531,7 @@ module Nukadoko
           if rows.size > 1 && scenario.columns.none? { scenario.outline_name.include?("<#{_1}>") }
             findings << Finding.new("warning", "outline-rows-share-name", scenario.uri, scenario.keyword_line, nil,
                                     %(Scenario outline "#{scenario.name}" has #{rows.size} Examples rows, and its name uses none of the columns (#{scenario.columns.map { "<#{_1}>" }.join(", ")}), so every row is reported under the same name.),
-                                    "Add a column to the name, such as: #{scenario.name} <#{scenario.columns.first}>")
+                                    "Add a column to the name, such as: #{scenario.name} <#{scenario.columns.first}>", nil)
           end
           own = scenario.steps.reject(&:background)
           next if own.empty? || scenario.steps.any? { _1.kind.to_s == "Outcome" }
@@ -531,7 +541,7 @@ module Nukadoko
                     else
                       %(Scenario "#{scenario.name}" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.)
                     end
-          findings << Finding.new("warning", "scenario-without-then", scenario.uri, scenario.keyword_line, nil, message, Codes.fix("scenario-without-then"))
+          findings << Finding.new("warning", "scenario-without-then", scenario.uri, scenario.keyword_line, nil, message, Codes.fix("scenario-without-then"), nil)
         end
       end
 
@@ -552,7 +562,7 @@ module Nukadoko
               check_poll(step)
             else
               findings << Finding.new("error", "ambiguous-step", scenario.uri, line.line, nil,
-                                      %("#{line.text}" matches more than one step: #{matches.map { _1.first.step_name }.join(", ")}), Codes.fix("ambiguous-step"))
+                                      %("#{line.text}" matches more than one step: #{matches.map { _1.first.step_name }.join(", ")}), Codes.fix("ambiguous-step"), nil)
             end
           end
         end
@@ -575,7 +585,7 @@ module Nukadoko
 
         findings << Finding.new("warning", "scenario-without-then", scenario.uri, thens.first.line, nil,
                                 %(Scenario "#{scenario.name}" judges no claim: none of its Then lines binds a claim step, so it passes whenever its steps run without an error.),
-                                Codes.fix("scenario-without-then"))
+                                Codes.fix("scenario-without-then"), nil)
       end
 
       # While a step definition is broken, a line it would have matched looks
@@ -592,7 +602,7 @@ module Nukadoko
         end
         undefined.each do |scenario, line|
           findings << Finding.new("error", "undefined-step", scenario.uri, line.line, nil,
-                                  %(No step matches "#{line.text}"), "Add a step whose pattern matches the line.")
+                                  %(No step definition matches "#{line.text}"), nil, "nuka scaffold --feature #{Selection.shell_word(scenario.uri)}")
         end
       end
 
@@ -606,11 +616,11 @@ module Nukadoko
         if then_line && !step.claims
           findings << Finding.new("error", "then-without-claims", scenario.uri, line.line, step.step_name,
                                   %(Step "#{step.step_name}" is bound in Then position and runs instead of declaring claims. A Then judges through claims (docs/spec.md "Claims"); a step that only reads or records a value belongs in a Given or When),
-                                  Codes.fix("then-without-claims"))
+                                  Codes.fix("then-without-claims"), nil)
         elsif !then_line && step.claims
           findings << Finding.new("error", "claims-outside-then", scenario.uri, line.line, step.step_name,
                                   %(Step "#{step.step_name}" declares claims and is bound in #{KEYWORD.fetch(line.kind.to_s, "*")} position. Only a Then judges, so a broken claim here would read as a setup that broke (docs/spec.md "Claims")),
-                                  Codes.fix("claims-outside-then"))
+                                  Codes.fix("claims-outside-then"), nil)
         end
       end
 
@@ -659,7 +669,7 @@ module Nukadoko
         attached = line.doc_string ? "docstring" : "table"
         findings << Finding.new("error", "claim-sentence-unread", scenario.uri, line.line, step.step_name,
                                 %(Step "#{step.step_name}": the #{attached} of the line fills args.#{key}, which no claim reads, and the step has no observe to receive it, so nothing checks the value the line states. Compare a claim with "#{key}", or take the #{attached} off the line),
-                                Codes.fix("claim-sentence-unread"))
+                                Codes.fix("claim-sentence-unread"), nil)
       end
 
       # The args keys a step's claims read: the head of each actual path, a
@@ -689,11 +699,11 @@ module Nukadoko
           if missing.size != 1
             detail = missing.empty? ? "every args key is already consumed by named captures or declared from" : "#{missing.size} args keys are left unconsumed (#{missing.join(", ")}); exactly one is required"
             findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name,
-                                    %(Step "#{step.step_name}" has a table/docstring attached but #{detail}), Codes.fix("table-docstring-key-mismatch"))
+                                    %(Step "#{step.step_name}" has a table/docstring attached but #{detail}), Codes.fix("table-docstring-key-mismatch"), nil)
           else
             check_unread(scenario, line, step, missing.first.to_s)
             if (message = attachment_mismatch(step, missing.first, line))
-              findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name, message, Codes.fix("table-docstring-key-mismatch"))
+              findings << Finding.new("error", "table-docstring-key-mismatch", scenario.uri, line.line, step.step_name, message, Codes.fix("table-docstring-key-mismatch"), nil)
             end
           end
           return
@@ -701,7 +711,7 @@ module Nukadoko
         missing.each do |key|
           findings << Finding.new("error", "unfillable-required-key", scenario.uri, line.line, step.step_name,
                                   %(Step "#{step.step_name}"'s args key "#{key}" is required, but nothing on this line can fill it: no named capture in the matched pattern binds it, there is no table/docstring attachment that resolves to filling it, and it has no declared from.#{key}. This line would fail args validation with certainty. Fix one of: add a named capture for "#{key}" to the step's pattern; attach a table/docstring that fills it; declare from.#{key}; or make "#{key}" optional in the step's args schema),
-                                  Codes.fix("unfillable-required-key"))
+                                  Codes.fix("unfillable-required-key"), nil)
         end
       end
 
@@ -727,7 +737,7 @@ module Nukadoko
 
             findings << Finding.new("error", "claim-kind-unknown", scenario.uri, line.line, step.step_name,
                                     %(Step "#{step.step_name}"'s #{entry_label}.expected is args.#{key}, which this line fills with #{JSON.generate(named)}, and is-a names one of the kinds #{Claims::VALUE_KINDS.join(", ")}, so the claim would always break),
-                                    Codes.fix("claim-kind-unknown"))
+                                    Codes.fix("claim-kind-unknown"), nil)
           end
         end
       end
@@ -752,7 +762,7 @@ module Nukadoko
           code = problem.first == :unreadable ? "claim-aria-snapshot-unreadable" : "claim-aria-snapshot-names-nothing"
           findings << Finding.new("error", code, scenario.uri, line.line, step.step_name,
                                   %(Step "#{step.step_name}"'s claims[#{index}].expected is args.#{key}, which this line's #{captured ? "capture" : "docstring"} fills, and #{AriaSnapshot.problem_reason(problem)}, so the claim would break whatever the page shows),
-                                  Codes.fix(code))
+                                  Codes.fix(code), nil)
         end
       end
 

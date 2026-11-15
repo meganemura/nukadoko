@@ -21,12 +21,14 @@ module Nukadoko
 
       attr_reader fix(): String?
 
-      def self.new: (String severity, String code, String? file, Integer? line, String? step, String message, String? fix) -> instance
-                  | (severity: String, code: String, file: String?, line: Integer?, step: String?, message: String, fix: String?) -> instance
+      attr_reader run(): String?
 
-      def self.members: () -> [ :severity, :code, :file, :line, :step, :message, :fix ]
+      def self.new: (String severity, String code, String? file, Integer? line, String? step, String message, String? fix, String? run) -> instance
+                  | (severity: String, code: String, file: String?, line: Integer?, step: String?, message: String, fix: String?, run: String?) -> instance
 
-      def members: () -> [ :severity, :code, :file, :line, :step, :message, :fix ]
+      def self.members: () -> [ :severity, :code, :file, :line, :step, :message, :fix, :run ]
+
+      def members: () -> [ :severity, :code, :file, :line, :step, :message, :fix, :run ]
     end
 
     # A Data block's methods are its own, but rbs-inline reads only a class

@@ -134,6 +134,10 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Changed
 
+- `nuka check`'s `undefined-step` reads "No step definition matches" and
+  names `nuka scaffold --feature <file>` as its `do:`, as the TypeScript
+  engine does, and a project whose every line is undefined no longer also
+  gets `no-step-files-found`.
 - `nuka init` adds a `scenarios` task that runs `bundle exec nuka run` to
   a Rakefile that has none, and the config file it writes points at the
   spec online, since the gem ships no `docs/`.

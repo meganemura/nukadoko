@@ -61,3 +61,15 @@ Feature: nuka check says what is wrong before anything runs
       note fixture-unused nukadoko.config.* Fixture "shared" is declared under nukadoko.config.*'s own `fixtures`, but no typed step requires it, directly or through another fixture. Still reachable through `nuka do`; this is a fact, not a verdict on whether to remove it.
       note from-unused features/steps/halve.* Step "halve"'s from.doubled declares a producer, but every bound occurrence of this step already fills "doubled" from a pattern capture. That producer has never supplied it. Still reachable through `nuka do --use`; this is a fact, not a verdict on whether to remove it.
       """
+
+  Scenario: a line no step matches names the command that scaffolds it
+    Given the project "scaffold-command"
+    When nuka runs "check"
+    Then it exits with 1
+    And it prints
+      """
+      error	undefined-step	features/greet.feature:4	No step definition matches "I run greet with "Ada""
+        do: nuka scaffold --feature features/greet.feature
+      error	undefined-step	features/greet.feature:5	No step definition matches "the output says "Hello, Ada!""
+        do: nuka scaffold --feature features/greet.feature
+      """

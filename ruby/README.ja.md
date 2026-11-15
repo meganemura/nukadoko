@@ -92,6 +92,7 @@ npm パッケージに入っているものと同じスキルです。
 `nuka scaffold --feature <path>` は、どのステップにも合わない行ごとに 1 つ書き、パターンは行から読みます。
 `--command <entry point>` は、プログラムを Ruby で scratch ディレクトリの中で実行し、`exitCode`、`stdout`、`stderr` を返すステップを書きます。
 `--cwd <key>` は args のキーが持つディレクトリで実行し、`--argv <key>` は 1 つのキャプチャを空白で分けて引数にします。
+gem が入れる実行ファイルには、`bundle binstubs <gem>` が `bin/<name>` を書くので、それを `--command` に渡せます。
 `--request "<METHOD> <path>"` は、リクエストを 1 つ送り、`status` と `body` を返すステップを書きます(`--body <key>` はその args のキーを送ります)。
 `--from <step>.<key>` は、前のステップの returns から args のキーを埋めます。
 `--then` とキャプチャ 1 つと一緒に使うと、claim がその 2 つを比べるので、ステップは書き直さずに使えます。
