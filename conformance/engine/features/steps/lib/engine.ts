@@ -87,3 +87,11 @@ export function stepFile(file: string): string {
 export function sameStepFiles(text: string): string {
   return text.replace(/features\/steps\/([a-z0-9_-]+)\.(ts|rb)\b/g, (_whole, name: string) => `features/steps/${name.replaceAll("_", "-")}.*`);
 }
+
+// A program the scenario names as `<path>.*`, outside features/steps: the
+// file each engine's `--command` step runs, `.mjs` under node for the
+// TypeScript engine and `.rb` under ruby for the Ruby one.
+export function programFile(word: string): string {
+  if (word.startsWith("features/steps/") || !/^[\w./-]+\.\*$/.test(word)) return word;
+  return `${word.slice(0, -2)}.${engine() === "typescript" ? "mjs" : "rb"}`;
+}

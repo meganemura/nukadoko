@@ -8,10 +8,16 @@
 # "not implemented: <name>" until someone writes it, so a run of it fails
 # instead of passing.
 #
-# The Ruby engine has no `--command`, `--request`, or `--from` stub yet, so
-# it refuses them rather than writing a stub that silently lacks them. A
-# step's class name comes from its file name (how `load_steps` autoloads
-# it), so a name whose class would not be a new Ruby constant is refused.
+# `--command <entry point>` writes a When step that runs the program under
+# Ruby in an empty scratch directory and returns its exitCode, stdout, and
+# stderr; `--request "<METHOD> <path>"` one that sends a request through the
+# `request` fixture and returns its status and body; and `--from
+# <step>.<key>` the chain to an earlier step's returns, read from that
+# step's own declaration so the two cannot drift apart. A Then step with one
+# stated and one chained value gets a whole claim, so a feature about a
+# program runs green with no hand edit. A step's class name comes from its
+# file name (how `load_steps` autoloads it), so a name whose class would not
+# be a new Ruby constant is refused.
 module Nukadoko
   module Engine
     class Scaffold
@@ -38,8 +44,6 @@ module Nukadoko
       LITERAL_FIX: ::String
 
       REDO_HEADER: ::String
-
-      UNPORTED: untyped
 
       class Capture < Data
         attr_reader key(): String
@@ -71,33 +75,144 @@ module Nukadoko
       # : (String) -> String
       def self.file_of: (String) -> String
 
+      ENTRY_POINT_PLACEHOLDER: ::String
+
+      SENT_METHODS: untyped
+
+      # Neither a capture nor a docstring can end with the newline a program
+      # prints last, so a claim on one of these compares its text view.
+      OUTPUT_STREAMS: untyped
+
+      # One args key the template writes: `kind` is the class of the value
+      # it holds ("string", "number", or "other") and `json` its JSON type
+      # ("string", "number", "array", or nil when that is not known).
+      class Field < Data
+        attr_reader key(): String
+
+        attr_reader kind(): String
+
+        attr_reader json(): String?
+
+        def self.new: (String key, String kind, String? json) -> instance
+                    | (key: String, kind: String, json: String?) -> instance
+
+        def self.members: () -> [ :key, :kind, :json ]
+
+        def members: () -> [ :key, :kind, :json ]
+      end
+
+      # One args key `from` fills, with every step that can give it, by
+      # class name, and the type the first of them declares.
+      class Chained < Data
+        attr_reader key(): String
+
+        attr_reader producers(): Array[String]
+
+        attr_reader type(): untyped
+
+        def self.new: (String key, Array[String] producers, untyped type) -> instance
+                    | (key: String, producers: Array[String], type: untyped) -> instance
+
+        def self.members: () -> [ :key, :producers, :type ]
+
+        def members: () -> [ :key, :producers, :type ]
+      end
+
       # : (String) -> String
       def self.ruby: (String) -> String
 
       # : (Capture) -> String
       def self.field_line: (Capture) -> String
 
-      # : (name: String, pattern: String?, captures: Array[Capture], then_step: bool, attachment: String?, description: String?) -> String
-      def self.template: (name: String, pattern: String?, captures: Array[Capture], then_step: bool, attachment: String?, description: String?) -> String
+      # : (Capture) -> Field
+      def self.capture_field: (Capture) -> Field
+
+      # : (String) -> Field
+      def self.attachment_field: (String) -> Field
+
+      # Only a bare string or number counts as one: a nullable one may hold
+      # no value of that type at all.
+      # : (Chained) -> Field
+      def self.chained_field: (Chained) -> Field
+
+      # `<METHOD> <path>` as [method, segments], each segment a String sent
+      # as it is or a Symbol naming an args key; nil when it is neither.
+      # : (String) -> [String, Array[String | Symbol]]?
+      def self.read_request: (String) -> [ String, Array[String | Symbol] ]?
+
+      # : ([String, Array[String | Symbol]]) -> String
+      def self.request_text: ([ String, Array[String | Symbol] ]) -> String
+
+      # The path as a Ruby string literal, each key's value put in its place.
+      # : (Array[String | Symbol]) -> String
+      def self.path_literal: (Array[String | Symbol]) -> String
+
+      # : (name: String, pattern: String?, captures: Array[Capture], then_step: bool, attachment: String?, description: String?, ?variant: String?, ?entry: String?, ?cwd: String?, ?argv: String?, ?request: [String, Array[String | Symbol]]?, ?body: String?, ?chained: Array[Chained]) -> String
+      def self.template: (name: String, pattern: String?, captures: Array[Capture], then_step: bool, attachment: String?, description: String?, ?variant: String?, ?entry: String?, ?cwd: String?, ?argv: String?, ?request: [ String, Array[String | Symbol] ]?, ?body: String?, ?chained: Array[Chained]) -> String
+
+      # Stands for the 1-based number of the line that holds it, filled in
+      # once the whole file is assembled.
+      LINE_MARKER: ::String
+
+      # : (String, String?, String?, String?, [String, Array[String | Symbol]]?) -> String
+      def self.default_description: (String, String?, String?, String?, [ String, Array[String | Symbol] ]?) -> String
 
       # : (String, Array[String]) -> Array[String]
       def self.when_lines: (String, Array[String]) -> Array[String]
 
-      # The expected value is the first one the line states; observe raises
-      # until someone writes the reading, so the step records as unobserved
-      # instead of passing.
-      # : (String, Array[String]) -> Array[String]
-      def self.then_lines: (String, Array[String]) -> Array[String]
+      # The guard a step raises while a value has nowhere to go yet. The
+      # values are in its message, so the first failed run shows what was
+      # bound.
+      # : (String, Array[Field], String) -> Array[String]
+      def self.unplaced_guard: (String, Array[Field], String) -> Array[String]
+
+      # : (String, String?, String?, String?, Array[Field], Array[Field]) -> Array[String]
+      def self.command_lines: (String, String?, String?, String?, Array[Field], Array[Field]) -> Array[String]
+
+      # A text the request sends as it is; anything else as JSON.
+      # : (String, [String, Array[String | Symbol]], String?, Array[Field]) -> Array[String]
+      def self.request_lines: (String, [ String, Array[String | Symbol] ], String?, Array[Field]) -> Array[String]
+
+      # A Then step's claims. One stated value and one chained value make a
+      # whole claim: the chained value is the actual, the stated one the
+      # expected. A line that states its value with a word compares the one
+      # chained value with that word's literal. Otherwise the first stated
+      # value is the expected one, and observe raises until someone writes
+      # the reading, so the step records as unobserved instead of passing.
+      # : (String, String?, Array[String], Array[Field], Array[Field]) -> Array[String]
+      def self.then_lines: (String, String?, Array[String], Array[Field], Array[Field]) -> Array[String]
+
+      # : (untyped) -> String
+      def self.ruby_literal: (untyped) -> String
+
+      # The first word's literal of `json`, and the compare it takes (not-equal
+      # right after a fixed `not`); nil when no word fixes a value of it.
+      # : (String?, String?) -> [String, untyped, String]?
+      def self.word_literal: (String?, String?) -> [ String, untyped, String ]?
+
+      # : (untyped) -> String?
+      def self.json_of: (untyped) -> String?
 
       # Whether `source` is a stub this command writes for `name`: some
-      # reading of its own pattern and description draws it byte for byte.
-      # : (String, String) -> bool
-      def self.unedited?: (String, String) -> bool
+      # reading of its own lines draws it byte for byte. `type_of` gives the
+      # type a step, by class name, returns under a key, or nil.
+      # : (String, String, ?^(String, String) -> untyped) -> bool
+      def self.unedited?: (String, String, ?^(String, String) -> untyped) -> bool
 
       # The string a `  <call> "..."` line passes, nil when there is no such
       # line, false when the line holds something else.
-      # : (String, String) -> (String | false | nil)
-      def self.literal: (String, String) -> (String | false | nil)
+      # : (String, String, ?parenthesized: bool) -> (String | false | nil)
+      def self.literal: (String, String, ?parenthesized: bool) -> (String | false | nil)
+
+      # The request a `--request` stub sends, as [request, body key], nil
+      # when it sends none, false when the line is not one scaffold writes.
+      # : (String) -> ([[String, Array[String | Symbol]], String?] | false | nil)
+      def self.sent_request: (String) -> ([ [ String, Array[String | Symbol] ], String? ] | false | nil)
+
+      # The `from` a stub declares, each key's producers by class name and
+      # the type the first returns; nil when a producer's type is unknown.
+      # : (String, ^(String, String) -> untyped) -> Array[Chained]?
+      def self.chained_in: (String, ^(String, String) -> untyped) -> Array[Chained]?
 
       # : (String?) -> Array[String]
       def self.words: (String?) -> Array[String]
@@ -109,9 +224,20 @@ module Nukadoko
       # : (String?, Array[Capture], String?) -> bool
       def self.states_value?: (String?, Array[Capture], String?) -> bool
 
-      # Without a chained value no word's literal has a JSON type to pick.
-      # : (String?, Array[Capture], String?) -> String?
-      def self.literal_refusal: (String?, Array[Capture], String?) -> String?
+      # A word's values differ in JSON type (`no` fixes 0, "", or []), so the
+      # claim needs exactly one chained value whose type the word fixes.
+      # : (String?, Array[Capture], String?, ?Array[Field]) -> String?
+      def self.literal_refusal: (String?, Array[Capture], String?, ?Array[Field]) -> String?
+
+      # : (String) -> String
+      def self.with_article: (String) -> String
+
+      TYPE_FIX: ::String
+
+      # A claim across two JSON types never holds, so a line that states one
+      # value and chains one of another type is refused.
+      # : (String?, Array[Capture], Array[Field], Array[Field]) -> String?
+      def self.type_refusal: (String?, Array[Capture], Array[Field], Array[Field]) -> String?
 
       # : (String, Hash[String, Array[String]], Array[String], Array[singleton(Step)], Array[Scenario]) -> void
       def initialize: (String, Hash[String, Array[String]], Array[String], Array[singleton(Step)], Array[Scenario]) -> void
@@ -123,8 +249,37 @@ module Nukadoko
       # : () -> ([Array[String], Array[String]] | Refusal)
       def single: () -> ([ Array[String], Array[String] ] | Refusal)
 
+      # : (String) -> String
+      def self.command_took_the_name: (String) -> String
+
       # The command line after `nuka scaffold`, as typed, for a refusal's do.
       attr_writer argv_words: Array[String]
+
+      # Whether `--command <value>` came before the name, so a name typed
+      # right after the flag was read as its value.
+      attr_writer command_before_name: bool
+
+      private
+
+      # Each `--from` as [step, key], or the reason one cannot be.
+      # : (Array[Capture]) -> (Array[[String, String]] | Refusal)
+      def from_links: (Array[Capture]) -> (Array[[ String, String ]] | Refusal)
+
+      # The type a step, by class name, declares for a returns key.
+      # : () -> ^(String, String) -> untyped
+      def type_of: () -> ^(String, String) -> untyped
+
+      # Each `--from` resolved against the project's steps, grouped by key,
+      # or the first producer that cannot give its key.
+      # : (Array[[String, String]]) -> (Array[Chained] | Refusal)
+      def chain: (Array[[ String, String ]]) -> (Array[Chained] | Refusal)
+
+      # Why `--argv <key>` cannot split that key, or nil when it is a string
+      # capture that stays in argv.
+      # : (String, bool, String?, Array[Capture]) -> Refusal?
+      def argv_refusal: (String, bool, String?, Array[Capture]) -> Refusal?
+
+      public
 
       # : (String) -> ([Array[String], Array[String]] | Refusal)
       def feature: (String) -> ([ Array[String], Array[String] ] | Refusal)

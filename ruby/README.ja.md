@@ -11,7 +11,7 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`--step`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-`nuka scaffold --command`、`--request`、`--from` など、TypeScript 版の機能の一部はまだありません。
+`nuka init --allure` など、TypeScript 版の機能の一部はまだありません。
 
 ## インストール
 
@@ -90,7 +90,11 @@ npm パッケージに入っているものと同じスキルです。
 - `nuka scaffold <name> [--pattern <p>] [--then] [--description <text>] [--replace]` は、`features/steps/<name>.rb` を書きます。
 本体は、だれかが書くまで `not implemented` で失敗します。
 `nuka scaffold --feature <path>` は、どのステップにも合わない行ごとに 1 つ書き、パターンは行から読みます。
-`--command`、`--request`、`--from` はまだありません。
+`--command <entry point>` は、プログラムを Ruby で scratch ディレクトリの中で実行し、`exitCode`、`stdout`、`stderr` を返すステップを書きます。
+`--cwd <key>` は args のキーが持つディレクトリで実行し、`--argv <key>` は 1 つのキャプチャを空白で分けて引数にします。
+`--request "<METHOD> <path>"` は、リクエストを 1 つ送り、`status` と `body` を返すステップを書きます(`--body <key>` はその args のキーを送ります)。
+`--from <step>.<key>` は、前のステップの returns から args のキーを埋めます。
+`--then` とキャプチャ 1 つと一緒に使うと、claim がその 2 つを比べるので、ステップは書き直さずに使えます。
 - ブラウザの起動設定は `nukadoko.config.rb` に `Nukadoko.config(browser: { executablePath: "..." })` と書きます。`page` を使うステップは、シナリオごとに自分のブラウザコンテキストを持ちます。ステップの記録には、ページが送ったリクエストとステップのトレースが残ります。
 - `scratch` を使うステップは `scratch.dir` で新しいディレクトリを得ます。シナリオが終わると消えます。`Nukadoko.run_command(command, args, cwd:)` はプログラムを実行し、`{ exitCode:, stdout:, stderr: }` を返します。ステップの記録には実行したプロセスが残ります。
 - プロジェクトのフィクスチャは `nukadoko.config.rb` に書きます。ブロックは値を `use` に渡し、その後ろが後片付けです。例: `Nukadoko.fixture(:store) { |use| use.(Store.new) }`。`scope: :process` にすると、環境ごとの実行全体で 1 つの値を使います。

@@ -140,6 +140,12 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - A step definition `nuka check` refuses is named by the step's class
   (`CountMatches claims[0] ...`) instead of `defineStep`, which a Ruby
   step does not have.
+- `nuka scaffold` takes `--command [<entry point>]`, `--cwd`, `--argv`,
+  `--request "<METHOD> <path>"`, `--body`, and `--from <step>.<key>`, as
+  the TypeScript engine does, instead of refusing them. A `--command` step
+  runs the program under Ruby in a scratch directory; a `--request` step
+  sends through the `request` fixture; a `--then --from` step with one
+  capture gets a whole claim. `--replace` knows each of these stubs again.
 - `nuka run` prints its progress on stderr as the TypeScript engine does:
   a `scenario i/n` line for each scenario, a `step i/n` line with its
   status and time for each step, a failed step's first error line, the

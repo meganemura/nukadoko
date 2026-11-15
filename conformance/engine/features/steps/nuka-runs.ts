@@ -1,7 +1,7 @@
 import { defineStep, z } from "nukadoko";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { nuka, sameStepFiles } from "./lib/engine.ts";
+import { nuka, programFile, sameStepFiles } from "./lib/engine.ts";
 import theProject from "./the-project.ts";
 import theProjectInGit from "./the-project-in-a-git-repository.ts";
 
@@ -49,7 +49,7 @@ export default defineStep({
   description: "Run this world's engine's nuka with these arguments in the project an earlier step built",
   pattern: "nuka runs {argv:string}",
   args: z.object({
-    argv: z.string().describe("Arguments after `nuka`, split on spaces; a word in single quotes keeps its spaces, and the word <last-step-record> is the id of the newest record nuka do wrote"),
+    argv: z.string().describe("Arguments after `nuka`, split on spaces; a word in single quotes keeps its spaces, and the word <last-step-record> is the id of the newest record nuka do wrote, and a word <path>.* outside features/steps is the program this engine's --command step runs (.mjs or .rb)"),
     dir: theProject.returns.shape.dir,
   }),
   from: { dir: [[theProject, "dir"], [theProjectInGit, "dir"]] },
@@ -71,7 +71,7 @@ export default defineStep({
   // nuka writes its run directory inside the scratch project only.
   mutates: false,
   async run({}, { argv, dir }) {
-    const ran = await nuka(dir, words(argv).map((word) => (word === "<last-step-record>" ? lastStepRecord(dir) : word)));
+    const ran = await nuka(dir, words(argv).map((word) => (word === "<last-step-record>" ? lastStepRecord(dir) : programFile(word))));
     const parsed = envelope(ran.stdout);
     parsed.findings ??= textFindings(ran.stderr);
     const scenarios = (parsed.scenarios ?? []).map((s) => `${s.feature}:${s.line} ${s.environment} ${s.status}`).join("\n");

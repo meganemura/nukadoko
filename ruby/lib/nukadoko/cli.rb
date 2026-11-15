@@ -94,6 +94,10 @@ module Nukadoko
         name, value = word.split("=", 2)
         name = name.to_s
         if REPEATED.include?(name) || VALUED.include?(name)
+          # `--command` alone leaves the entry point a TODO, so a flag after
+          # it is the next option, not its value.
+          value ||= "" if name == "--command" && (words.empty? || words.first.start_with?("--"))
+          @command_before_name = @rest.empty? if name == "--command" && !word.include?("=")
           value ||= words.shift
           next @unknown << name.delete_prefix("--") if value.nil?
 
@@ -321,11 +325,15 @@ module Nukadoko
       @out = $stderr
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
       if @rest.empty? && !@options.key?("--feature")
-        return refuse(Engine::Refusal.new("invalid-arguments", "Missing required argument: name (or --feature <path>)"))
+        missing = "Missing required argument: name (or --feature <path>)"
+        took = @options.fetch("--command", []).last.to_s
+        missing += "\n#{Engine::Scaffold.command_took_the_name(took)}" if took.match?(Engine::Scaffold::VALID_NAME)
+        return refuse(Engine::Refusal.new("invalid-arguments", missing))
       end
 
       scaffold = Engine::Scaffold.new(@project, @options, @rest, steps, scenarios)
       scaffold.argv_words = @words.map { Engine::Selection.shell_word(_1) }
+      scaffold.command_before_name = @command_before_name || false
       result = scaffold.call
       return refuse(result) if result.is_a?(Engine::Refusal)
 
