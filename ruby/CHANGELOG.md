@@ -134,6 +134,9 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Changed
 
+- A step definition `nuka check` refuses is named by the step's class
+  (`CountMatches claims[0] ...`) instead of `defineStep`, which a Ruby
+  step does not have.
 - `nuka run` prints its progress on stderr as the TypeScript engine does:
   a `scenario i/n` line for each scenario, a `step i/n` line with its
   status and time for each step, a failed step's first error line, the

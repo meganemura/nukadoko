@@ -25,7 +25,8 @@ module Nukadoko
         return [] unless claims
 
         problem = ClaimRules.first_problem(claims, shape) || poll_problem
-        problem ? ["defineStep #{problem}."] : []
+        # Named by the class, as the TypeScript engine names its defineStep call.
+        problem ? ["#{@step.name} #{problem}."] : []
       end
 
       private
