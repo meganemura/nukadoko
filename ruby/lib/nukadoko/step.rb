@@ -96,7 +96,13 @@ module Nukadoko
       #: (untyped) -> [untyped, Array[String]]
       def returned(value)
         schema = returns
-        return [value, schema.problems(value)] if schema
+        # nil is a body that gave back nothing, which zod's "(root): expected
+        # object" would leave without its cause or either fix.
+        if schema
+          nothing = "this step declares returns, but run returned nothing; return a value that matches returns, " \
+                    "or delete returns if no later step reads from this one"
+          return [value, value.nil? ? [nothing] : schema.problems(value)]
+        end
         return [{}, []] unless value.is_a?(Hash)
         return [value, []] if value.empty?
 

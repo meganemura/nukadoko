@@ -679,6 +679,19 @@ module Nukadoko
 
       private
 
+      # A value as a record stores it: JSON has no NaN or Infinity, and
+      # JavaScript writes either as null, so an arg a {float} read as "-"
+      # reaches the record the TypeScript engine writes.
+      #: (untyped) -> untyped
+      def stored(value)
+        case value
+        when Float then value.finite? ? value : nil
+        when Hash then value.transform_values { stored(_1) }
+        when Array then value.map { stored(_1) }
+        else value
+        end
+      end
+
       # Runs one step whose args the block binds, and writes its record and
       # HTTP log into `dir`.
       #: (singleton(Step), Hash[Symbol, untyped], String, World, then_line: bool, at_line: Integer?, results: Array[untyped], origins: Hash[String, String]) { () -> [Hash[String, untyped], Hash[String, String]] } -> Hash[Symbol, untyped]
@@ -695,11 +708,11 @@ module Nukadoko
         begin
           record[:mutates] = step.mutating?
           args, texts = yield
-          record[:args] = args
-          problems = step.args.problems(args)
+          record[:args] = stored(args)
+          problems = step.args.problems(args, strict: true)
           if problems.any?
             record[:error_kind] = "args_invalid"
-            raise TypeError, "args: #{problems.join("; ")}"
+            raise TypeError, "args validation failed: #{problems.join("; ")}"
           end
 
           @browser&.step = { step_record_id: record[:step_record_id], step: record[:step], line: at_line }

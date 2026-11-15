@@ -189,6 +189,12 @@ module Nukadoko
 
       private
 
+      # A value as a record stores it: JSON has no NaN or Infinity, and
+      # JavaScript writes either as null, so an arg a {float} read as "-"
+      # reaches the record the TypeScript engine writes.
+      # : (untyped) -> untyped
+      def stored: (untyped) -> untyped
+
       # Runs one step whose args the block binds, and writes its record and
       # HTTP log into `dir`.
       # : (singleton(Step), Hash[Symbol, untyped], String, World, then_line: bool, at_line: Integer?, results: Array[untyped], origins: Hash[String, String]) { () -> [Hash[String, untyped], Hash[String, String]] } -> Hash[Symbol, untyped]

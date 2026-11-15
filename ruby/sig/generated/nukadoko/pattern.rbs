@@ -6,6 +6,40 @@
 module Nukadoko
   module Engine
     class Pattern
+      CE: untyped
+
+      # The built-in parameter types as the JavaScript package defines them.
+      # The gem's own differ: its \s takes no Unicode space, so {word} read
+      # "a<no-break space>b" as one word, and its float takes no "1." prefix
+      # or the lookahead JavaScript's does, so a line bound to one step in
+      # one engine and to none in the other. A value is what the JavaScript
+      # transformer gives: Number for an integer (a double past 2**53),
+      # parseFloat for a float, and the matched text for a bigdecimal.
+      class Registry < Cucumber::CucumberExpressions::ParameterTypeRegistry
+        INTEGER: untyped
+
+        FLOAT: ::Regexp
+
+        WORD: ::Regexp
+
+        STRING: untyped
+
+        ANONYMOUS: ::Regexp
+
+        DECIMAL: ::Regexp
+
+        # JavaScript's Number of a text of digits.
+        # : (String?) -> Numeric?
+        def self.number: (String?) -> Numeric?
+
+        # JavaScript's parseFloat: the longest number at the start, or NaN.
+        # : (String?) -> Float?
+        def self.parse_float: (String?) -> Float?
+
+        # : () -> void
+        def initialize: () -> void
+      end
+
       NAMED: ::Regexp
 
       REGISTRY: untyped

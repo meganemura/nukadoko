@@ -41,6 +41,21 @@ notes come from the section below whose heading starts with `## [<version>]`.
   none of them of the expected value's type, breaks with the reason that
   no item is of that type, as the TypeScript engine says, instead of
   simply breaking.
+- A step pattern reads its built-in parameter types as the JavaScript
+  cucumber-expressions package does, as the TypeScript engine does. A
+  `{word}` ends at any Unicode space, so a no-break space no longer joins
+  two words. A `{float}` or `{double}` takes the JavaScript pattern and
+  reads as `parseFloat` reads it (`1E3` is 1000, a lone sign is NaN). An
+  `{int}` past 2**53 is the nearest double, and a `{bigdecimal}` is the
+  text as written, not a `BigDecimal`.
+- Args and returns that do not fit their schema fail with zod's words, as
+  the TypeScript engine's do: `args validation failed: n: Invalid input:
+  expected number, received NaN`. Args refuse a key the schema does not
+  declare (`(root): Unrecognized key: "x"`), an `unknown` field may be
+  missing, an `integer` past 2**53 is too big, and a step with `returns`
+  whose `run` gave back nil says so. An arg that is NaN no longer stops the
+  run while its step record is written: JSON has no NaN, so the record
+  holds null, as JavaScript writes it.
 
 ## [0.2.0] - 2026-11-15
 

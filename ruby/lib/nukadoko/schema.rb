@@ -68,18 +68,27 @@ module Nukadoko
       data_class.new(**fields.to_h { [_1.name, hash.fetch(_1.name.to_s)] })
     end
 
-    # Every way `value` departs from the schema, as `path: problem` lines.
+    # Every way `value` departs from the schema, as `path: problem` lines in
+    # zod's words, so a step fails with the text the TypeScript engine gives.
     # A key the schema does not declare is no problem: as a zod object does,
-    # the schema drops it (`strip`), and `dropped` names where.
-    #: (untyped, ?String?) -> Array[String]
-    def problems(value, path = nil)
-      return ["#{path || "value"} must be an object, got #{value.inspect}"] unless value.is_a?(Hash)
+    # the schema drops it (`strip`), and `dropped` names where. `strict`
+    # refuses one at the root instead, as the TypeScript engine's args do.
+    #: (untyped, ?String?, ?strict: bool) -> Array[String]
+    def problems(value, path = nil, strict: false)
+      return ["#{path || "(root)"}: #{Schema.invalid("object", value)}"] unless value.is_a?(Hash)
 
       hash = value.transform_keys(&:to_s)
-      fields.flat_map do |field|
+      found = fields.flat_map do |field|
         key = join(path, field.name)
-        hash.key?(field.name.to_s) ? Schema.type_problems(field.type, hash[field.name.to_s], key) : ["#{key} is missing"]
+        if hash.key?(field.name.to_s) then Schema.type_problems(field.type, hash[field.name.to_s], key)
+        elsif field.type == :unknown then []
+        else Schema.type_problems(field.type, MISSING, key)
+        end
       end
+      extra = hash.keys - fields.map { _1.name.to_s }
+      return found unless strict && extra.any?
+
+      found + ["#{path || "(root)"}: Unrecognized key#{"s" if extra.size > 1}: #{extra.map { JSON.generate(_1) }.join(", ")}"]
     end
 
     # The value with every key the schema does not declare left out, at any
@@ -142,24 +151,57 @@ module Nukadoko
       end
     end
 
+    # A key the value does not hold, which zod reads as undefined.
+    MISSING = Object.new.freeze
+    SAFE = 2**53 - 1
+
+    # What zod calls a value's type in "received ...".
+    #: (untyped) -> String
+    def self.received(value)
+      case value
+      when MISSING then "undefined"
+      when nil then "null"
+      when String then "string"
+      when true, false then "boolean"
+      when Float then value.nan? ? "NaN" : "number"
+      when Numeric then "number"
+      when Array then "array"
+      else "object"
+      end
+    end
+
+    #: (String, untyped) -> String
+    def self.invalid(expected, value) = "Invalid input: expected #{expected}, received #{received(value)}"
+
     #: (untyped, untyped, String) -> Array[String]
     def self.type_problems(type, value, path)
-      ok =
+      problem =
         case type
-        in :string then value.is_a?(String)
-        in :boolean then [true, false].include?(value)
-        in :integer then value.is_a?(Integer)
-        in :number then value.is_a?(Numeric)
-        in :unknown then true
+        in :string then invalid("string", value) unless value.is_a?(String)
+        in :boolean then invalid("boolean", value) unless [true, false].include?(value)
+        in :number then invalid("number", value) unless value.is_a?(Numeric) && value.finite?
+        in :integer then integer_problem(value)
+        in :unknown then nil
         in [:nullable, inner] then return value.nil? ? [] : type_problems(inner, value, path)
-        in [:enum, values] then values.include?(value.is_a?(Symbol) ? value.to_s : value)
+        in [:enum, values]
+          "Invalid option: expected one of #{values.map { JSON.generate(_1) }.join("|")}" unless values.include?(value.is_a?(Symbol) ? value.to_s : value)
         in [:array, item]
-          return ["#{path} must be an array, got #{value.inspect}"] unless value.is_a?(Array)
+          return ["#{path}: #{invalid("array", value)}"] unless value.is_a?(Array)
 
-          return value.each_with_index.flat_map { |v, i| type_problems(item, v, "#{path}[#{i}]") }
-        in Schema then return type.problems(value, path)
+          return value.each_with_index.flat_map { |v, i| type_problems(item, v, "#{path}.#{i}") }
+        in Schema then return value.is_a?(Hash) ? type.problems(value, path) : ["#{path}: #{invalid("object", value)}"]
         end
-      ok ? [] : ["#{path} must be #{type}, got #{value.inspect}"]
+      problem ? ["#{path}: #{problem}"] : []
+    end
+
+    # zod's int: a finite whole number within Number.MAX_SAFE_INTEGER.
+    #: (untyped) -> String?
+    def self.integer_problem(value)
+      return invalid("number", value) unless value.is_a?(Numeric) && value.finite?
+      return "Invalid input: expected int, received number" unless value == value.floor
+      return "Too big: expected int to be <=#{SAFE}" if value > SAFE
+
+      "Too small: expected int to be >=-#{SAFE}" if value < -SAFE
     end
 
     # The JSON Schema `nuka describe` prints, as zod's own conversion gives it:

@@ -55,7 +55,7 @@ module Nukadoko
         fail_with = lambda do |kind, message|
           entry.merge!(error: { message: message, kind: kind }, started_at: started, finished_at: Time.now.utc.iso8601(3), **(nested.any? ? { calls: nested } : {}))
         end
-        problems = part.args.problems(args)
+        problems = part.args.problems(args, strict: true)
         if problems.any?
           message = "args validation failed: #{problems.join("; ")}"
           fail_with.("args_invalid", message)

@@ -74,11 +74,13 @@ module Nukadoko
     # : (Hash[String, untyped]) -> untyped
     def load: (Hash[String, untyped]) -> untyped
 
-    # Every way `value` departs from the schema, as `path: problem` lines.
+    # Every way `value` departs from the schema, as `path: problem` lines in
+    # zod's words, so a step fails with the text the TypeScript engine gives.
     # A key the schema does not declare is no problem: as a zod object does,
-    # the schema drops it (`strip`), and `dropped` names where.
-    # : (untyped, ?String?) -> Array[String]
-    def problems: (untyped, ?String?) -> Array[String]
+    # the schema drops it (`strip`), and `dropped` names where. `strict`
+    # refuses one at the root instead, as the TypeScript engine's args do.
+    # : (untyped, ?String?, ?strict: bool) -> Array[String]
+    def problems: (untyped, ?String?, ?strict: bool) -> Array[String]
 
     # The value with every key the schema does not declare left out, at any
     # depth, with string keys. Assumes `problems` found none.
@@ -105,8 +107,24 @@ module Nukadoko
     # : (untyped, untyped, String) -> Array[String]
     def self.dropped_type: (untyped, untyped, String) -> Array[String]
 
+    # A key the value does not hold, which zod reads as undefined.
+    MISSING: untyped
+
+    SAFE: untyped
+
+    # What zod calls a value's type in "received ...".
+    # : (untyped) -> String
+    def self.received: (untyped) -> String
+
+    # : (String, untyped) -> String
+    def self.invalid: (String, untyped) -> String
+
     # : (untyped, untyped, String) -> Array[String]
     def self.type_problems: (untyped, untyped, String) -> Array[String]
+
+    # zod's int: a finite whole number within Number.MAX_SAFE_INTEGER.
+    # : (untyped) -> String?
+    def self.integer_problem: (untyped) -> String?
 
     # The JSON Schema `nuka describe` prints, as zod's own conversion gives it:
     # the root is closed, and an inner object is closed only on the output
