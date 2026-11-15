@@ -16,8 +16,9 @@ module Nukadoko
 
     #: () -> String
     def dir
-      staged = File.expand_path("../../skills", __dir__)
-      File.directory?(staged) ? staged : File.expand_path("../../../skills", __dir__)
+      here = __dir__.to_s
+      staged = File.expand_path("../../skills", here)
+      File.directory?(staged) ? staged : File.expand_path("../../../skills", here)
     end
 
     #: (IO, IO) -> Integer
