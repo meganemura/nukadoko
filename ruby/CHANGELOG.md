@@ -6,6 +6,8 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-16
+
 ### Changed
 
 - **The program moves into the config.** `nukadoko.program.rb` and
