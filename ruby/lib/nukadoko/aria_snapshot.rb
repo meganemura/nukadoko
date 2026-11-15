@@ -36,8 +36,8 @@ module Nukadoko
     module AriaSnapshot
       FRAGMENT = "fragment"
       # JavaScript's \s, which the TypeScript engine's texts are cut by.
-      SPACE = Spaces::CLASS
-      WS = Spaces::SPACE
+      SPACE = Spaces::CLASS #: String
+      WS = Spaces::SPACE #: Regexp
       # YAML's indicators: a plain scalar may not start with one, since
       # YAML reads it as structure.
       PLAIN_START_REFUSED = [",", "[", "]", "{", "}", "&", "*", "!", "|", ">", "%", "@", "`"].freeze

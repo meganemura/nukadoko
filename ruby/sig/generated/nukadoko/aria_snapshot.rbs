@@ -33,9 +33,9 @@ module Nukadoko
       FRAGMENT: ::String
 
       # JavaScript's \s, which the TypeScript engine's texts are cut by.
-      SPACE: ::String
+      SPACE: String
 
-      WS: ::Regexp
+      WS: Regexp
 
       # YAML's indicators: a plain scalar may not start with one, since
       # YAML reads it as structure.
