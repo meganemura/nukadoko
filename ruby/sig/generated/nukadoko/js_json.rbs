@@ -1,0 +1,102 @@
+# Generated from lib/nukadoko/js_json.rb with RBS::Inline
+
+# JSON text read as JavaScript's JSON.parse reads it, and refused in V8's
+# words. A claim's json view reports why a text is no JSON, and that reason
+# is part of the record both engines write, so the Ruby engine walks the
+# grammar V8 walks and names the same place. Ruby's own parser accepts
+# what JSON.parse refuses (comments, a NaN under some options), so the walk
+# also decides what is valid; Ruby's parser only builds the value after it.
+# Positions count UTF-16 code units, as a JavaScript string does.
+module Nukadoko
+  module JsJson
+    class Error < JSON::ParserError
+    end
+
+    # Texts V8 names whole, since they are what a JavaScript value turns
+    # into when it is passed as text by mistake.
+    SPECIAL: untyped
+
+    CONTEXT: ::Integer
+
+    WHITESPACE: untyped
+
+    ESCAPES: untyped
+
+    HEX: untyped
+
+    # A Failure carries where the walk stopped and what V8 says there.
+    class Failure < Data
+      attr_reader pos(): untyped
+
+      attr_reader message(): untyped
+
+      def self.new: (untyped pos, untyped message) -> instance
+                  | (pos: untyped, message: untyped) -> instance
+
+      def self.members: () -> [ :pos, :message ]
+
+      def members: () -> [ :pos, :message ]
+    end
+
+    # : (String) -> untyped
+    def self.parse: (String) -> untyped
+
+    # Walks the text once and gives V8's message for the first place it is
+    # no JSON, or nil.
+    class Walk
+      # : (String) -> void
+      def initialize: (String) -> void
+
+      # : () -> String?
+      def failure: () -> String?
+
+      private
+
+      class Stop < StandardError
+      end
+
+      # : () -> Integer?
+      def peek: () -> Integer?
+
+      # : () -> void
+      def space: () -> void
+
+      # : (String) -> String
+      def located: (String) -> String
+
+      # : (?String?) -> bot
+      def stop: (?String?) -> bot
+
+      # V8's message for a character no rule expected: the text itself when
+      # it is short, else ten units on each side of the character.
+      # : () -> String
+      def unexpected: () -> String
+
+      # A run of UTF-16 units as text; half of a pair, which a UTF-8 string
+      # cannot hold, is the replacement character.
+      # : (Array[Integer]) -> String
+      def text_of: (Array[Integer]) -> String
+
+      # : () -> void
+      def value: () -> void
+
+      # : (String) -> void
+      def literal: (String) -> void
+
+      # : () -> void
+      def object: () -> void
+
+      # : () -> void
+      def array: () -> void
+
+      # : () -> void
+      def string: () -> void
+
+      # : () -> void
+      def number: () -> void
+
+      # : () -> bool
+      def digit?: () -> bool
+    end
+  end
+end

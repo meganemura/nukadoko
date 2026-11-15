@@ -79,6 +79,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
   when a declaration's expected value is one observe received, and when a
   `where` clause implies an item claim whatever the data (`greater-than 10`
   then `at-least 5`), as there. A poll waits on the outcome the record holds.
+- A json view reads its text as JavaScript's `JSON.parse` does and, when
+  the text is no JSON, gives V8's reason (`Unexpected token 'a', "a" is not
+  valid JSON`, `Expected ',' or '}' after property value in JSON at position
+  6 (line 1 column 7)`) instead of Ruby's. A text Ruby's parser takes and
+  JavaScript's refuses, such as one with a comment, is refused.
 
 ## [0.2.0] - 2026-11-15
 

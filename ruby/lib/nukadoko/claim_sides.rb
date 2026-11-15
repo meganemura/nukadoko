@@ -257,7 +257,7 @@ module Nukadoko
         return { value: Claims.view(view, value) } unless view == "json"
 
         parsed = begin
-          JSON.parse(value)
+          JsJson.parse(value)
         rescue JSON::ParserError => e
           return { reason: "view json could not parse the value: #{e.message.lines.first.to_s.strip}" }
         end

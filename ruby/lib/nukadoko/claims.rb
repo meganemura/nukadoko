@@ -195,7 +195,7 @@ end
           in { from: String => key } then read(args, key)
           in { observe: String => path } then dig(read(top, path.split(".").first), path.split(".").drop(1).join(".").then { _1.empty? ? nil : _1 })
           end
-        claim[:expected_view] == "json" ? JSON.parse(value) : value
+        claim[:expected_view] == "json" ? JsJson.parse(value) : value
       end
 
       VIEWS = %w[text lines comma-list json].freeze
@@ -210,7 +210,7 @@ end
         when "text" then Spaces.trim_end(value)
         when "lines" then (text = Spaces.trim_end(value)).empty? ? [] : text.split(/\r?\n/, -1)
         when "comma-list" then (text = Spaces.trim(value)).empty? ? [] : text.split(",", -1).map { Spaces.trim(_1) }
-        when "json" then JSON.parse(value)
+        when "json" then JsJson.parse(value)
         else raise ArgumentError, "unknown view #{name}"
         end
       end
