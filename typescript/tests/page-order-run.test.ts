@@ -108,7 +108,19 @@ describe.skipIf(!chromiumAvailable)("what the page had received when a Then read
     // Broken while the answer was in flight, held once the page had it.
     expect(seen[0]).toEqual([false, true, false]);
     expect(seen.at(-1)).toEqual([true, false, true]);
-    expect(seen.every(([holds, inFlight, last]: boolean[]) => holds === last && inFlight === !last)).toBe(true);
+    // last_response is what had finished before a reading began, and
+    // in_flight what was in flight at some moment of it, so a reading the
+    // answer finished during names it in flight and may already hold, and
+    // one that began after it names it last and may not have drawn it yet.
+    // What the record must keep is the order: in flight or last, never
+    // both, and last from the first reading that names it so on. The
+    // readings that break it are listed whole, so a failure shows them.
+    const firstLast = seen.findIndex(([, , last]: boolean[]) => last);
+    const breaking = record.readings.filter((_: unknown, index: number) => {
+      const [, inFlight, last] = seen[index] as boolean[];
+      return inFlight === last || (firstLast > -1 && index > firstLast && !last);
+    });
+    expect(breaking).toEqual([]);
     expect(record.pages).toEqual(record.readings.at(-1).pages);
     expect(summary).toMatch(new RegExp(`- \`features/room\\.feature:15\` the room comes to show "refreshed", ${record.attempts} readings; seen: `));
   });
