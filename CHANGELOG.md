@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.27.0 — 2026-11-16
+
 ### Changed
 
 - **The program moves into the config.** `nukadoko.program.ts` and
