@@ -35,6 +35,7 @@ module Nukadoko
       # connection was not started, so only the outermost call records.
       # @rbs module-self Net::HTTP
       module Patch
+        #: (Net::HTTPGenericRequest, ?String?) ?{ (Net::HTTPResponse) -> void } -> Net::HTTPResponse
         def request(req, body = nil, &block)
           log = Thread.current[:nukadoko_http]
           return super if log.nil? || Thread.current[:nukadoko_http_off] || Thread.current[:nukadoko_http_inside]

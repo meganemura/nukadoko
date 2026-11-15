@@ -13,27 +13,33 @@ module Nukadoko
       # run's order, which every round of every pass keeps; `records`, when
       # given, gets each scenario's run.json entry as one line as it ends,
       # and `rerun` is what a shuffled run's rerun lines name.
-      def initialize: (untyped project, untyped steps, untyped scenarios, untyped program, ?environments: untyped, ?left_out: untyped, ?out: untyped, ?world: untyped, ?dir: untyped, ?base: untyped, ?env_flags: untyped, ?repeat: untyped, ?concurrency: untyped, ?order: untyped, ?records: untyped, ?rerun: untyped, ?walk: untyped) -> untyped
+      # : (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?) -> void
+      def initialize: (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?) -> void
 
-      def call: () -> untyped
+      # : () -> Hash[Symbol, untyped]
+      def call: () -> Hash[Symbol, untyped]
 
       # One pass of a tree: each scenario in the one environment, as base or
       # old, its executions and its cell.
-      def tree_pass: () -> untyped
+      # : () -> Array[Hash[Symbol, untyped]]
+      def tree_pass: () -> Array[Hash[Symbol, untyped]]
 
       # Each world this run started, as run.json's worlds holds it.
-      attr_reader world_entries: untyped
+      attr_reader world_entries: Array[Hash[Symbol, untyped]]
 
-      def role_of: (untyped scenario, untyped environment) -> untyped
+      # : (Scenario, Environment) -> String
+      def role_of: (Scenario, Environment) -> String
 
       private
 
-      def pass: () -> untyped
+      # : () -> [Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]]]
+      def pass: () -> [ Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]] ]
 
       # A stopped world as run.json names it. The lines of the program's log
       # that came after their step's record was read go beside that record,
       # and its run.json entry names them.
-      def world_entry: (untyped environment, untyped world, untyped world_dir, untyped executions) -> untyped
+      # : (Environment, World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+      def world_entry: (Environment, World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
 
       # Under --concurrency the files go to worker processes in the run's
       # order, round-robin, and each worker plays its own files --repeat
@@ -41,70 +47,85 @@ module Nukadoko
       # them, alone, and each round of proof runs is one worker of its own.
       # The parent keeps the world each worker reaches, and takes each
       # execution as it arrives.
-      def play_in_workers: (untyped environment, untyped roles, untyped world, untyped due, untyped ran) -> untyped
+      # : (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void) -> void
+      def play_in_workers: (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void) -> void
 
       # Each list is one worker's scenarios in the order it plays them. A
       # worker sends each line it prints and each execution down a pipe of
       # its own, one Marshal frame at a time, so no line or record is ever
       # spliced from two workers. Returns the files a worker that failed
       # left without any execution.
-      def workers: (untyped lists, untyped environment, untyped roles, untyped world, untyped ran) -> untyped
+      # : (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void) -> Array[String]
+      def workers: (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void) -> Array[String]
 
-      def play_as_worker: (untyped number, untyped list, untyped environment, untyped roles, untyped world, untyped pipe) -> untyped
+      # : (Integer, Array[Scenario], Environment, Hash[Scenario, String], World, IO) -> Integer
+      def play_as_worker: (Integer, Array[Scenario], Environment, Hash[Scenario, String], World, IO) -> Integer
 
       # A worker's progress: the line that a scenario starts goes to the
       # parent at once, and the scenario's other lines go with its
       # execution, so one scenario's lines are never split by another's.
       class WorkerOut
-        def initialize: (untyped pipe) -> untyped
+        # : (IO) -> void
+        def initialize: (IO) -> void
 
-        def puts: (?untyped text) -> untyped
+        # : (?untyped) -> void
+        def puts: (?untyped) -> void
 
-        def take: () -> untyped
+        # : () -> Array[String]
+        def take: () -> Array[String]
       end
 
       # A head control and a base cell stand where the behaviour is absent,
       # so a Then failing there the same way in each proof run is proof.
-      def proving?: (untyped role, untyped runs) -> untyped
+      # : (String, Array[Hash[Symbol, untyped]]) -> bool
+      def proving?: (String, Array[Hash[Symbol, untyped]]) -> bool
 
       # A cell is what one scenario's executions in one environment came to;
       # a cell whose first execution broke a claim names it and what it read.
       # Its conditions are the ones the row's tags name, as the environment
       # gives them.
-      def cell: (untyped runs, untyped environment, untyped role, untyped scenario) -> untyped
+      # : (Array[Hash[Symbol, untyped]], Environment, String, Scenario) -> Hash[Symbol, untyped]
+      def cell: (Array[Hash[Symbol, untyped]], Environment, String, Scenario) -> Hash[Symbol, untyped]
 
       # run.json is the --json envelope as a file: the commit and worlds the
       # run judged, the counts, each execution, and the verdict table.
       # `tree_cells` holds each row's base and old cells, by its scenario,
       # under `--base`; each row is judged with what changed since the base.
-      def finish: (untyped executions, untyped cells, ?untyped tree_cells) -> untyped
+      # : (Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]], ?Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> Hash[Symbol, untyped]
+      def finish: (Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]], ?Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> Hash[Symbol, untyped]
 
       # What `--base` knows of one row: its change, whether it carries
       # @held, whether the mapping changed, whether its tags or its name or
       # file changed, and whether its passing executions judged no claim in
       # Then position.
-      def context_of: (untyped scenario, untyped change, untyped executions) -> untyped
+      # : (Scenario, Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
+      def context_of: (Scenario, Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
 
       # sources.json: the feature text this run parsed its scenarios from,
       # so `nuka report` renders the scenarios as they ran, long after the
       # files moved on. The project name rides along: it is part of an
       # Allure result's full name, and a copied run directory has no
       # package.json beside it.
-      def write_sources: () -> untyped
+      # : () -> void
+      def write_sources: () -> void
 
       # Why head's passing required executions of a row judged no claim in
       # Then position, from the first that says: `nothing`, or `judgment`
       # when its only claims there are judged-as claims.
-      def self.then_judged_by: (untyped scenario, untyped executions) -> untyped
+      # : (Scenario, Array[Hash[Symbol, untyped]]) -> untyped
+      def self.then_judged_by: (Scenario, Array[Hash[Symbol, untyped]]) -> untyped
 
-      def removed_rows: () -> untyped
+      # : () -> Array[Hash[Symbol, untyped]]
+      def removed_rows: () -> Array[Hash[Symbol, untyped]]
 
       # A finding for each unproven and moved row, which has no failed
       # execution to carry one, with the command that judges it again
       # against the commit the run compared with.
-      def judged_findings: (untyped rows) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def judged_findings: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
 
-      def environment_entry: (untyped environment) -> untyped
+      # : (Environment) -> Hash[Symbol, untyped]
+      def environment_entry: (Environment) -> Hash[Symbol, untyped]
 
       # Where a scenario's run starts again: its line, and its environment
       # unless that is the only one a run without --env would start.
@@ -112,9 +133,11 @@ module Nukadoko
       # met, so the line names those scenarios, then it, with the order and
       # the run's --env flags. Under --repeat no one part of the order ran
       # before it, so the line is the run's own targets and flags.
-      def again: (untyped scenario, untyped environment) -> untyped
+      # : (Scenario, Environment) -> String
+      def again: (Scenario, Environment) -> String
 
-      def play: (untyped scenario, untyped environment, untyped role, untyped world) -> untyped
+      # : (Scenario, Environment, String, World) -> Hash[Symbol, untyped]
+      def play: (Scenario, Environment, String, World) -> Hash[Symbol, untyped]
 
       # The pause after the step that ran `number`th, under --step. Before
       # the walk waits, the open page's traffic moves to the pause's own
@@ -122,14 +145,18 @@ module Nukadoko
       # step's work, and the step's record is already written. After a
       # failure nothing runs on `next` either, so nothing remains and a
       # `stop` there stops nothing.
-      def pause: (untyped record, untyped line, untyped number, untyped of, untyped remaining) -> untyped
+      # : (Hash[Symbol, untyped], PickleStep, Integer, Integer, Integer) -> String?
+      def pause: (Hash[Symbol, untyped], PickleStep, Integer, Integer, Integer) -> String?
 
       # One step as run.json's scenarios[].steps[] holds it.
-      def step_entry: (untyped line, untyped record) -> untyped
+      # : (PickleStep, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def step_entry: (PickleStep, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
-      def skipped: (untyped line) -> untyped
+      # : (PickleStep) -> Hash[Symbol, untyped]
+      def skipped: (PickleStep) -> Hash[Symbol, untyped]
 
-      def play_step: (untyped line, untyped results, untyped world) -> untyped
+      # : (PickleStep, Array[untyped], World) -> Hash[Symbol, untyped]
+      def play_step: (PickleStep, Array[untyped], World) -> Hash[Symbol, untyped]
 
       public
 
@@ -137,7 +164,8 @@ module Nukadoko
       # line or by earlier records (`origins` says which), in a world
       # started for this one execution, its evidence in this run's
       # directory, which is the record's own.
-      def do_step: (untyped step, untyped args, untyped origins, untyped texts, untyped environment) -> untyped
+      # : (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
+      def do_step: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
 
       private
 
@@ -148,7 +176,9 @@ module Nukadoko
 
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
-      def body: (untyped step, untyped fixtures, untyped args, untyped position, untyped record, untyped results, untyped origins, untyped texts) -> untyped
+      # `step` is a step class whose observe or run its own file defines.
+      # : (untyped, Hash[Symbol, untyped], untyped, [bool, Integer?], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?]) -> void
+      def body: (untyped, Hash[Symbol, untyped], untyped, [ bool, Integer? ], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?]) -> void
 
       # Captures first, then each `from` key from the nearest earlier step that
       # gave it, then a table or docstring for the one required key still open.
@@ -157,29 +187,38 @@ module Nukadoko
       # Each claim record's `measured`: the channel that holds the raw value
       # it read, in the record of the step a `from` value came from, or in
       # its own; and an expected value an earlier step gave, the same way.
-      def measure: (untyped step, untyped record, untyped dir) -> untyped
+      # : (singleton(Step), Hash[Symbol, untyped], String) -> void
+      def measure: (singleton(Step), Hash[Symbol, untyped], String) -> void
 
-      def bind_args: (untyped step, untyped captures, untyped line, untyped results, untyped origins, untyped record) -> untyped
+      # : (singleton(Step), Hash[String, untyped], PickleStep, Array[untyped], Hash[String, String], Hash[Symbol, untyped]) -> Hash[String, untyped]
+      def bind_args: (singleton(Step), Hash[String, untyped], PickleStep, Array[untyped], Hash[String, String], Hash[Symbol, untyped]) -> Hash[String, untyped]
 
       # The docstring or table a line attaches is the sentence's own text
       # for the one key it fills.
-      def attachment_texts: (untyped step, untyped captures, untyped line) -> untyped
+      # : (singleton(Step), Hash[String, untyped], PickleStep) -> Hash[String, String]
+      def attachment_texts: (singleton(Step), Hash[String, untyped], PickleStep) -> Hash[String, String]
 
-      def line_kind: (untyped line) -> untyped
+      # : (PickleStep) -> Symbol
+      def line_kind: (PickleStep) -> Symbol
 
       # A project fixture is built the first time a step of its scope names
       # it, directly or through another fixture, and kept until the scope ends.
-      def project_fixture: (untyped name, untyped world, untyped chain) -> untyped
+      # : (Symbol, World, Array[Symbol]) -> untyped
+      def project_fixture: (Symbol, World, Array[Symbol]) -> untyped
 
       # Each project fixture a step's bag touched, once, as the step record
       # lists it: built here with its setup time, or reused from its scope.
-      def note_fixture: (untyped name, untyped scope, untyped setup_ms, untyped at) -> untyped
+      # : (Symbol, Symbol, Integer?, String?) -> void
+      def note_fixture: (Symbol, Symbol, Integer?, String?) -> void
 
-      def build_fixtures: (untyped step, untyped dir, untyped log, untyped world, untyped record) -> untyped
+      # : (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
+      def build_fixtures: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [ Hash[Symbol, untyped], (^() -> void)? ]
 
-      def new_id: (untyped kind) -> untyped
+      # : (String) -> String
+      def new_id: (String) -> String
 
-      def now: () -> untyped
+      # : () -> String
+      def now: () -> String
     end
   end
 end

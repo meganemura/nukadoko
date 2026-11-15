@@ -21,7 +21,8 @@ module Nukadoko
       # connection was not started, so only the outermost call records.
       # @rbs module-self Net::HTTP
       module Patch : Net::HTTP
-        def request: (untyped req, ?untyped body) ?{ (?) -> untyped } -> untyped
+        # : (Net::HTTPGenericRequest, ?String?) ?{ (Net::HTTPResponse) -> void } -> Net::HTTPResponse
+        def request: (Net::HTTPGenericRequest, ?String?) ?{ (Net::HTTPResponse) -> void } -> Net::HTTPResponse
       end
     end
   end

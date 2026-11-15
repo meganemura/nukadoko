@@ -43,6 +43,7 @@ module Nukadoko
 
       module_function
 
+      #: (Hash[Symbol, untyped]) -> String
       def render(doc)
         lines = [MARKER, *title(doc), *table(doc), *reasons(doc), *limits_section(doc), *condition(doc),
                  *removed(doc), *claims(doc), *findings(doc), *rerun(doc)]
@@ -52,9 +53,11 @@ module Nukadoko
       # Text outside a code span: `\` doubled first, so the `\` before a
       # `|` survives both the table parser and the inline one, and `<`
       # never opens a tag.
+      #: (untyped) -> String
       def cell_text(text) = text.to_s.gsub("\\", "\\\\\\\\").gsub("|", "\\|").gsub("<", "&lt;")
 
       # A code span longer than any backtick run inside it.
+      #: (untyped) -> String
       def code_span(text)
         text = text.to_s
         fence = "`" * ((text.scan(/`+/).map(&:size).max || 0) + 1)
@@ -62,10 +65,13 @@ module Nukadoko
         "#{fence}#{padded}#{fence}"
       end
 
+      #: (untyped) -> String
       def cell_code(text) = code_span(text).gsub("|", "\\|")
 
+      #: (Integer, String, String) -> String
       def count_of(count, one, many) = "#{count} #{count == 1 ? one : many}"
 
+      #: (Integer) -> String
       def duration(ms)
         total = (([ms, 0].max) / 1000.0).round
         hours, rest = total.divmod(3600)
@@ -77,6 +83,7 @@ module Nukadoko
         parts.join(" ")
       end
 
+      #: (untyped) -> String
       def value_text(value)
         text = JSON.generate(value)
         text.length > VALUE_TEXT_LIMIT ? "#{text[0, VALUE_TEXT_LIMIT]}..." : text
@@ -85,6 +92,7 @@ module Nukadoko
       # The first line with text in it; a Node throw location with its
       # source line and carets is skipped, and a line that ends in a colon
       # takes the next line after it.
+      #: (untyped, ?bool) -> String?
       def first_visible_line(text, join = true)
         lines = text.to_s.gsub(ANSI, "").split(/\r\n?|[\n\u2028\u2029]/)
         first = lines.index { !_1.strip.empty? }
@@ -103,8 +111,10 @@ module Nukadoko
         line
       end
 
+      #: (untyped) -> String
       def first_error_line(message) = first_visible_line(message) || "(no message)"
 
+      #: (Hash[Symbol, untyped]) -> String
       def cell_word(cell)
         case cell[:outcome]
         when "not-run" then "·"
@@ -113,14 +123,17 @@ module Nukadoko
         end
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
       def head_scenarios(doc) = doc[:scenarios].reject { _1[:world] }
 
+      #: (Hash[untyped, untyped]) -> String
       def conditions_text(conditions)
         return "none" if conditions.empty?
 
         conditions.map { |name, value| "#{name}: #{value.is_a?(String) ? JSON.generate(value) : value}" }.join(", ")
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def title(doc)
         rows = doc[:table][:rows]
         count = ->(verdict) { rows.count { _1[:verdict] == verdict } }
@@ -151,11 +164,13 @@ module Nukadoko
         lines
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def table_cell(cell)
         notes = [*("control" if cell[:role] == "control"), *("#{cell[:runs]} runs" if cell[:runs].to_i > 1)]
         "#{cell_word(cell)}#{notes.empty? ? "" : " (#{notes.join(", ")})"}"
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def table(doc)
         worlds = doc[:table][:worlds]
         rows = doc[:table][:rows]
@@ -163,7 +178,7 @@ module Nukadoko
         return [] if rows.empty?
 
         heading = lambda do |column|
-          declared = (doc[:environments].find { _1[:name] == column[:environment] }&.dig(:conditions) if column[:world] == "head")
+          declared = column[:world] == "head" ? doc[:environments].find { _1[:name] == column[:environment] }&.dig(:conditions) : nil #: Hash[untyped, untyped]?
           "#{column[:world]} #{column[:environment]}#{declared ? " (#{conditions_text(declared)})" : ""}"
         end
         change = lambda do |row|
@@ -197,6 +212,7 @@ module Nukadoko
       # how many criteria changed, and whether the mapping changed and what
       # in it, since an unchanged criterion over a changed mapping is what
       # the old world was run for.
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def base_line(doc)
         base = doc[:table][:base] or return []
         rows = doc[:table][:rows]
@@ -234,6 +250,7 @@ module Nukadoko
 
       # Each criterion the base holds and head does not, with its sentences
       # at the base, so a reader approving the change sees what it drops.
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def removed(doc)
         rows = doc[:table][:rows].select { _1[:verdict] == "removed" }
         return [] if rows.empty?
@@ -256,6 +273,7 @@ module Nukadoko
       # right after the reading its claims were judged on, its screenshot
       # before its ARIA snapshot, or, for a Then that read no page, the
       # requests its own step sent. Each link is [label, href, after_ms].
+      #: (Hash[Symbol, untyped]) -> Array[Array[untyped]]
       def seen_links(step)
         pages = step.dig(:judged_view, :pages) || []
         links = pages.flat_map do |page|
@@ -273,6 +291,7 @@ module Nukadoko
         [["responses", "#{step[:record].sub(%r{/+\z}, "")}/http.jsonl"]]
       end
 
+      #: (String, String) -> String
       def markdown_link(label, href)
         text = label.gsub(/[\r\n]/, " ").gsub(/[\\\[\]]/) { "\\#{_1}" }
         return "#{text} `#{href.gsub(/[\r\n]/, " ").tr("`", "'")}`" if href.match?(/[<>\n\r]/)
@@ -280,8 +299,10 @@ module Nukadoko
         "[#{text}](<#{href}>)"
       end
 
+      #: (Array[Array[untyped]]) -> String
       def seen_text(links) = links.map { |label, href, after| "#{markdown_link(label, href)}#{after && after >= LATE_VIEW_MS ? " (taken #{after} ms after the reading)" : ""}" }.join(", ")
 
+      #: (Hash[Symbol, untyped]) -> (^(Hash[Symbol, untyped]) -> String)?
       def seen_column(doc)
         chosen = {}
         head_scenarios(doc).each do |scenario|
@@ -302,6 +323,7 @@ module Nukadoko
         ->(row) { (scenario = chosen[[row[:feature], row[:line]]]) ? links_of.(scenario).join(" ") : "" }
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def reasons(doc)
         red = doc[:table][:rows].select { RED.include?(_1[:verdict]) }
         # A row the judgments leave red says why on a line of its own, before
@@ -333,6 +355,7 @@ module Nukadoko
       # Where an execution stopped: the step, the error's first line, the
       # producers that exited nonzero, the last command that did, the
       # record, and where the Then can be seen.
+      #: (Hash[Symbol, untyped]) -> String?
       def describe_failure(scenario)
         if scenario[:status] == "stopped" && scenario[:stopped]
           last = scenario[:steps][scenario[:stopped][:after_step] - 1] || {}
@@ -355,6 +378,7 @@ module Nukadoko
         parts.join("; ")
       end
 
+      #: (Array[Hash[Symbol, untyped]]?) -> Array[[untyped, Integer, String]]
       def exited_producers(used)
         (used || []).filter_map do |entry|
           result = entry[:result]
@@ -368,6 +392,7 @@ module Nukadoko
         end
       end
 
+      #: (String) -> String?
       def stdout_line(stdout)
         text = stdout.gsub(ANSI, "").strip
         return nil if text.empty?
@@ -380,6 +405,7 @@ module Nukadoko
 
       # The gaps a green verdict does not cover, computed again from
       # run.json's other fields, never read from a stored list.
+      #: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
       def limits(doc)
         head = head_scenarios(doc)
         rows = doc[:table][:rows]
@@ -417,6 +443,7 @@ module Nukadoko
       # value is the one judged, and nothing of the judgment itself. A value
       # judged as an ARIA snapshot names what that leaves out: a change only
       # to how the page looks keeps the snapshot, and so the judgment.
+      #: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
       def judgment_limits(rows)
         rows.filter_map do |row|
           judgment = row[:judgment]
@@ -429,6 +456,7 @@ module Nukadoko
         end
       end
 
+      #: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
       def control_limit(row, head)
         controls = row[:cells].select { _1[:world] == "head" && _1[:role] == "control" }
         return nil if controls.empty?
@@ -447,8 +475,10 @@ module Nukadoko
           record: record, fix: fix }.compact
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def closer_text(limit) = [*("do: #{code_span(limit[:do])}" if limit[:do]), *("fix: #{limit[:fix]}" if limit[:fix])].join("; ")
 
+      #: (Hash[Symbol, untyped], bool) -> String
       def limit_place(limit, named)
         return "" unless limit[:feature]
 
@@ -456,6 +486,7 @@ module Nukadoko
         "#{code_span("#{limit[:feature]}:#{limit[:line]}")}#{limit[:text] ? " #{cell_text(limit[:text])}" : ""}#{environment}"
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def limits_section(doc)
         list = limits(doc)
         return [] if list.empty?
@@ -485,8 +516,10 @@ module Nukadoko
         lines
       end
 
+      #: (Array[String]) -> String
       def tag_flags(expressions) = code_span(expressions.map { "--tag #{JSON.generate(_1)}" }.join(" "))
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def condition(doc)
         commit = doc[:commit]
         commit_line = if commit.nil? then "- commit: unknown (no git state was readable when the run started)"
@@ -525,8 +558,10 @@ module Nukadoko
       # The claim as ClaimLine writes it, then where its values were
       # measured: a value no recorded channel holds is what a constant in
       # step code looks like, so the line says `measured: none`.
+      #: (Hash[Symbol, untyped], String?) -> String
       def claim_line(claim, own) = "#{ClaimLine.line(claim)}#{measured_text(claim, own)}"
 
+      #: (Hash[Symbol, untyped], String?) -> String
       def measured_text(claim, own)
         return "" if claim[:outcome] == "unobserved"
 
@@ -538,12 +573,14 @@ module Nukadoko
         declared.empty? ? actual : "#{actual}; expected measured: #{declared.join(", ")}"
       end
 
+      #: (Hash[Symbol, untyped]?, String?) -> String
       def channel_text(measured, own)
         return "none" unless measured
 
         measured[:step_record_id] == own ? measured[:channel] : "#{measured[:channel]} of #{measured[:step_record_id]}"
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def claims(doc)
         named = doc[:environments].size > 1
         any_control = false
@@ -577,12 +614,14 @@ module Nukadoko
         ["", "## Claims", "", lead, "", *entries.values.each_with_index.sort_by { |(place, _), index| [*place, index] }.flat_map { _1.first.last }]
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def where_of(finding)
         return finding[:line] ? "#{finding[:file]}:#{finding[:line]}" : finding[:file] if finding[:file]
 
         finding[:step] || "-"
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def findings(doc)
         list = doc[:findings].reject { TABLE_CODES.include?(_1[:code]) }
         return [] if list.empty?
@@ -593,6 +632,7 @@ module Nukadoko
       # The heading names what the commands under it rerun: a stopped walk
       # did not fail, so a heading that called it failed would state
       # something false.
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def rerun(doc)
         named = head_scenarios(doc).select { _1[:do] }
         commands = named.map { _1[:do] }.uniq
@@ -611,6 +651,7 @@ module Nukadoko
       # verdicts were measured, but between steps the world and the browser
       # were open to anything, which no record covers. The longest pause
       # says how long that was.
+      #: (Hash[Symbol, untyped]) -> String
       def walk_sentence(walk)
         longest = [0, *walk[:pauses].map { ((Time.iso8601(_1[:answered_at]) - Time.iso8601(_1[:paused_at])) * 1000).round }].max
         "Walked one step at a time (`nuka run --step`): #{count_of(walk[:pauses].size, "pause", "pauses")}, the longest #{duration(longest)}. " \

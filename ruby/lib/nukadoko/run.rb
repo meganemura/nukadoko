@@ -18,6 +18,7 @@ module Nukadoko
       # run's order, which every round of every pass keeps; `records`, when
       # given, gets each scenario's run.json entry as one line as it ends,
       # and `rerun` is what a shuffled run's rerun lines name.
+      #: (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?) -> void
       def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout, world: "head", dir: nil, base: nil, env_flags: [],
                      repeat: 1, concurrency: 1, order: Order::FILE, records: nil, rerun: nil, walk: nil)
         @project = project
@@ -43,6 +44,7 @@ module Nukadoko
         @dir = dir || File.join(project, ".nukadoko", "runs", @id)
       end
 
+      #: () -> Hash[Symbol, untyped]
       def call
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         @started_at = now
@@ -66,6 +68,7 @@ module Nukadoko
 
       # One pass of a tree: each scenario in the one environment, as base or
       # old, its executions and its cell.
+      #: () -> Array[Hash[Symbol, untyped]]
       def tree_pass
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         executions, cells = pass
@@ -76,12 +79,14 @@ module Nukadoko
       end
 
       # Each world this run started, as run.json's worlds holds it.
-      attr_reader :world_entries
+      attr_reader :world_entries #: Array[Hash[Symbol, untyped]]
 
+      #: (Scenario, Environment) -> String
       def role_of(scenario, environment) = Table.role(Table.condition_tags(scenario.tags), environment.conditions)
 
       private
 
+      #: () -> [Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]]]
       def pass
         @base_urls = {}
         executions = []
@@ -131,6 +136,7 @@ module Nukadoko
       # A stopped world as run.json names it. The lines of the program's log
       # that came after their step's record was read go beside that record,
       # and its run.json entry names them.
+      #: (Environment, World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
       def world_entry(environment, world, world_dir, executions)
         entry = { name: environment.name, tree: @world, url: world.base_url, commands: world.commands, timings: world.timings,
                   log: world.log_path && File.join("worlds", File.basename(world_dir), "program.log"), error: nil }
@@ -154,6 +160,7 @@ module Nukadoko
       # them, alone, and each round of proof runs is one worker of its own.
       # The parent keeps the world each worker reaches, and takes each
       # execution as it arrives.
+      #: (Environment, Hash[Scenario, String], World, ^() -> Array[Scenario], ^(Scenario, Hash[Symbol, untyped]) -> void) -> void
       def play_in_workers(environment, roles, world, due, ran)
         files = @scenarios.group_by(&:uri).values
         parallel, serial = files.partition { !_1.first.serial }
@@ -177,6 +184,7 @@ module Nukadoko
       # its own, one Marshal frame at a time, so no line or record is ever
       # spliced from two workers. Returns the files a worker that failed
       # left without any execution.
+      #: (Array[Array[Scenario]], Environment, Hash[Scenario, String], World, ^(Scenario, Hash[Symbol, untyped]) -> void) -> Array[String]
       def workers(lists, environment, roles, world, ran)
         live = lists.each_with_index.map do |list, index|
           reader, writer = IO.pipe
@@ -185,12 +193,13 @@ module Nukadoko
             exit!(play_as_worker(index + 1, list, environment, roles, world, writer))
           end
           writer.close
-          { pid: pid, reader: reader, list: list, played: Set.new }
+          worker = { pid: pid, reader: reader, list: list, played: Set.new } #: Hash[Symbol, untyped]
+          worker
         end
         by_key = @scenarios.to_h { [[_1.uri, _1.line], _1] }
         until (open = live.reject { _1[:done] }).empty?
-          IO.select(open.map { _1[:reader] })[0].each do |reader|
-            worker = open.find { _1[:reader] == reader }
+          IO.select(open.map { _1[:reader] })&.first.to_a.each do |reader|
+            worker = open.find { _1[:reader] == reader } #: Hash[Symbol, untyped]
             kind, *value = Marshal.load(reader)
             if kind == :line then @out.puts value.first
             else
@@ -201,13 +210,15 @@ module Nukadoko
             end
           rescue EOFError
             reader.close
-            worker[:done] = true
-            worker[:status] = Process.wait2(worker[:pid])[1]
+            ended = open.find { _1[:reader] == reader } #: Hash[Symbol, untyped]
+            ended[:done] = true
+            ended[:status] = Process.wait2(ended[:pid])[1]
           end
         end
         live.reject { _1[:status].success? }.flat_map { |worker| worker[:list].map(&:uri).uniq - worker[:played].to_a }
       end
 
+      #: (Integer, Array[Scenario], Environment, Hash[Scenario, String], World, IO) -> Integer
       def play_as_worker(number, list, environment, roles, world, pipe)
         @worker = number
         @out = WorkerOut.new(pipe)
@@ -232,21 +243,25 @@ module Nukadoko
       # parent at once, and the scenario's other lines go with its
       # execution, so one scenario's lines are never split by another's.
       class WorkerOut
+        #: (IO) -> void
         def initialize(pipe)
           @pipe = pipe
           @held = []
         end
 
+        #: (?untyped) -> void
         def puts(text = "")
           text = text.to_s
           text.start_with?("scenario start  ") ? Marshal.dump([:line, text], @pipe) : @held << text
         end
 
+        #: () -> Array[String]
         def take = @held.slice!(0..)
       end
 
       # A head control and a base cell stand where the behaviour is absent,
       # so a Then failing there the same way in each proof run is proof.
+      #: (String, Array[Hash[Symbol, untyped]]) -> bool
       def proving?(role, runs)
         absent = @world == "base" || (@world == "head" && role == "control")
         absent && runs.size < Table.proof_runs && runs.all? { _1[:execution].first == :fail } && runs.map { _1[:execution] }.uniq.size == 1
@@ -256,6 +271,7 @@ module Nukadoko
       # a cell whose first execution broke a claim names it and what it read.
       # Its conditions are the ones the row's tags name, as the environment
       # gives them.
+      #: (Array[Hash[Symbol, untyped]], Environment, String, Scenario) -> Hash[Symbol, untyped]
       def cell(runs, environment, role, scenario)
         executions = runs.map { _1[:execution] }
         cell = Table.cell(executions)
@@ -272,6 +288,7 @@ module Nukadoko
       # run judged, the counts, each execution, and the verdict table.
       # `tree_cells` holds each row's base and old cells, by its scenario,
       # under `--base`; each row is judged with what changed since the base.
+      #: (Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]], ?Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> Hash[Symbol, untyped]
       def finish(executions, cells, tree_cells = {})
         rows = @scenarios.map do |scenario|
           change = @base&.changes&.[](Criteria.key(scenario.uri, scenario.line))
@@ -334,6 +351,7 @@ module Nukadoko
       # @held, whether the mapping changed, whether its tags or its name or
       # file changed, and whether its passing executions judged no claim in
       # Then position.
+      #: (Scenario, Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
       def context_of(scenario, change, executions)
         return nil unless change
 
@@ -347,6 +365,7 @@ module Nukadoko
       # files moved on. The project name rides along: it is part of an
       # Allure result's full name, and a copied run directory has no
       # package.json beside it.
+      #: () -> void
       def write_sources
         package = File.join(@project, "package.json")
         name = begin
@@ -365,12 +384,14 @@ module Nukadoko
       # Why head's passing required executions of a row judged no claim in
       # Then position, from the first that says: `nothing`, or `judgment`
       # when its only claims there are judged-as claims.
+      #: (Scenario, Array[Hash[Symbol, untyped]]) -> untyped
       def self.then_judged_by(scenario, executions)
         executions.lazy.map { _1[:json] }.filter_map do |json|
           json[:judged_by] if json[:feature] == scenario.uri && json[:line] == scenario.line && !json[:world] && json[:role] == "required" && json[:status] == "passed"
         end.first
       end
 
+      #: () -> Array[Hash[Symbol, untyped]]
       def removed_rows
         @base.removed.sort_by { [_1.feature, _1.line] }.map do |criterion|
           { feature: criterion.feature, line: criterion.line, name: criterion.name, change: "removed",
@@ -382,6 +403,7 @@ module Nukadoko
       # A finding for each unproven and moved row, which has no failed
       # execution to carry one, with the command that judges it again
       # against the commit the run compared with.
+      #: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
       def judged_findings(rows)
         rows.filter_map do |row|
           next unless %w[unproven moved].include?(row[:verdict])
@@ -392,6 +414,7 @@ module Nukadoko
         end
       end
 
+      #: (Environment) -> Hash[Symbol, untyped]
       def environment_entry(environment)
         { name: environment.name, conditions: environment.conditions.empty? ? nil : environment.conditions,
           target_version: nil, base_url: @base_urls[environment.name] }.compact.merge(target_version: nil, base_url: @base_urls[environment.name])
@@ -403,6 +426,7 @@ module Nukadoko
       # met, so the line names those scenarios, then it, with the order and
       # the run's --env flags. Under --repeat no one part of the order ran
       # before it, so the line is the run's own targets and flags.
+      #: (Scenario, Environment) -> String
       def again(scenario, environment)
         if @order[:kind] == "file"
           env = @environments.map(&:name) == ["default"] ? "" : " --env #{environment.name}"
@@ -418,6 +442,7 @@ module Nukadoko
         ["nuka", "run", *words].map { Selection.shell_word(_1) }.join(" ")
       end
 
+      #: (Scenario, Environment, String, World) -> Hash[Symbol, untyped]
       def play(scenario, environment, role, world)
         name = "#{scenario.uri}:#{scenario.line}  #{scenario.name}"
         @out.puts "scenario start  worker #{@worker}  #{name}" if @worker
@@ -497,6 +522,7 @@ module Nukadoko
       # step's work, and the step's record is already written. After a
       # failure nothing runs on `next` either, so nothing remains and a
       # `stop` there stops nothing.
+      #: (Hash[Symbol, untyped], PickleStep, Integer, Integer, Integer) -> String?
       def pause(record, line, number, of, remaining)
         facts = { step: number, of: of, line: line.line, text: line.text, step_name: record[:step], status: record[:status] == "passed" ? "passed" : "failed",
                   step_record_id: record[:step_record_id], record: "steps/#{record[:step_record_id]}",
@@ -507,6 +533,7 @@ module Nukadoko
       end
 
       # One step as run.json's scenarios[].steps[] holds it.
+      #: (PickleStep, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def step_entry(line, record)
         # A line no step matches is `undefined`, and one more than one step
         # matches is `ambiguous`, as cucumber names them, so a messages
@@ -535,10 +562,12 @@ module Nukadoko
         entry
       end
 
+      #: (PickleStep) -> Hash[Symbol, untyped]
       def skipped(line)
         { step: Engine.matches(@steps, line.text).first&.first&.step_name, status: "skipped", step_record_id: nil }
       end
 
+      #: (PickleStep, Array[untyped], World) -> Hash[Symbol, untyped]
       def play_step(line, results, world)
         matched = Engine.matches(@steps, line.text)
         step, captures = matched.first
@@ -570,6 +599,7 @@ module Nukadoko
       # line or by earlier records (`origins` says which), in a world
       # started for this one execution, its evidence in this run's
       # directory, which is the record's own.
+      #: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
       def do_step(step, args, origins, texts, environment)
         FileUtils.mkdir_p(@dir)
         world = @program.start(environment, @dir, @project)
@@ -668,6 +698,8 @@ module Nukadoko
 
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
+      # `step` is a step class whose observe or run its own file defines.
+      #: (untyped, Hash[Symbol, untyped], untyped, [bool, Integer?], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?]) -> void
       def body(step, fixtures, args, position, record, results, origins, texts)
         then_line, at_line = position
         if step.claims
@@ -749,6 +781,7 @@ module Nukadoko
       # Each claim record's `measured`: the channel that holds the raw value
       # it read, in the record of the step a `from` value came from, or in
       # its own; and an expected value an earlier step gave, the same way.
+      #: (singleton(Step), Hash[Symbol, untyped], String) -> void
       def measure(step, record, dir)
         own = record[:step_record_id]
         own_channels = Measured.channels(dir, { processes: record[:processes], files: record[:files] }, record[:http_count].to_i.positive? ? "http.jsonl" : nil)
@@ -763,7 +796,7 @@ module Nukadoko
           end
         end
         from_of = ->(key) { (origin = (record[:args_origin] || {})[key.to_s.split(".").first]).is_a?(Hash) ? origin.dig(:from, :step_record_id) : nil }
-        step.claims.zip(record[:claim_records], record[:raw_actuals] || []).each do |declared, claim, raw|
+        (step.claims || []).zip(record[:claim_records], record[:raw_actuals] || []).each do |declared, claim, raw|
           next if claim.nil? || claim[:outcome] == "unobserved" || declared[:each]
           # A tree nukadoko took is a measurement of the page, not a value a channel carried.
           next claim[:measured] = nil if declared[:compare] == "fits-aria-snapshot" || claim[:actual_from].to_s.start_with?(Judgments::ARIA_LABEL)
@@ -781,6 +814,7 @@ module Nukadoko
         record.delete(:raw_actuals)
       end
 
+      #: (singleton(Step), Hash[String, untyped], PickleStep, Array[untyped], Hash[String, String], Hash[Symbol, untyped]) -> Hash[String, untyped]
       def bind_args(step, captures, line, results, origins, record)
         args = captures.dup
         record[:args_origin] = captures.keys.to_h { [_1, "capture"] }
@@ -813,6 +847,7 @@ module Nukadoko
 
       # The docstring or table a line attaches is the sentence's own text
       # for the one key it fills.
+      #: (singleton(Step), Hash[String, untyped], PickleStep) -> Hash[String, String]
       def attachment_texts(step, captures, line)
         open = step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys
         return {} if open.empty?
@@ -822,10 +857,12 @@ module Nukadoko
         {}
       end
 
+      #: (PickleStep) -> Symbol
       def line_kind(line) = line.kind == "Outcome" ? :then : :other
 
       # A project fixture is built the first time a step of its scope names
       # it, directly or through another fixture, and kept until the scope ends.
+      #: (Symbol, World, Array[Symbol]) -> untyped
       def project_fixture(name, world, chain)
         fixture = Nukadoko.project_fixtures[name] or raise ArgumentError, "the Ruby engine has no fixture #{name} yet"
         raise ArgumentError, "fixtures depend on each other in a cycle: #{[*chain, name].join(" -> ")}" if chain.include?(name)
@@ -847,12 +884,14 @@ module Nukadoko
 
       # Each project fixture a step's bag touched, once, as the step record
       # lists it: built here with its setup time, or reused from its scope.
+      #: (Symbol, Symbol, Integer?, String?) -> void
       def note_fixture(name, scope, setup_ms, at)
         return if @fixture_usage.nil? || @fixture_usage.any? { _1[:name] == name.to_s }
 
         @fixture_usage << { name: name.to_s, scope: scope.to_s, reused: setup_ms.nil?, setup_ms: setup_ms, at: at }.compact
       end
 
+      #: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
       def build_fixtures(step, dir, log, world, record)
         finish = nil
         @fixture_usage = []
@@ -875,8 +914,10 @@ module Nukadoko
         [fixtures, finish]
       end
 
+      #: (String) -> String
       def new_id(kind) = "#{kind}-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}"
 
+      #: () -> String
       def now = Time.now.utc.iso8601(3)
     end
   end

@@ -10,6 +10,7 @@ module Nukadoko
     VALUED = %w[--format --out --base --repeat --concurrency --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv
                 --run --by --because --walk --timeout].freeze
 
+    #: (Array[String], ?project: String, ?out: IO) -> void
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
       @words = rest.dup
@@ -23,6 +24,7 @@ module Nukadoko
       @out = out
     end
 
+    #: () -> Integer
     def call
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: #{@unknown.first}")) if @unknown.any?
       return verdict if @command == "verdict"
@@ -85,10 +87,12 @@ module Nukadoko
     # `--name value` and `--name=value` for the repeated options, bare
     # flags, and every other word a target. An unknown `--name` is kept to
     # refuse, so a typo never reads as a target or is silently ignored.
+    #: (Array[String]) -> void
     def parse(words)
       until words.empty?
         word = words.shift
         name, value = word.split("=", 2)
+        name = name.to_s
         if REPEATED.include?(name) || VALUED.include?(name)
           value ||= words.shift
           next @unknown << name.delete_prefix("--") if value.nil?
@@ -107,6 +111,7 @@ module Nukadoko
     # refusal or nothing selected ends it as not run, with what the run
     # printed; a signal, which is what ends a pause nobody answers, as
     # interrupted; an exception as an error.
+    #: (Array[singleton(Step)]) -> Integer
     def walk(steps)
       targets = @rest.empty? ? ["features"] : @rest
       @walk_target = [*targets, *@options["--env"].flat_map { ["--env", _1] }].map { Engine::Selection.shell_word(_1) }.join(" ")
@@ -135,6 +140,7 @@ module Nukadoko
     # Why a walk cannot walk this run, raised as step-needs-one-scenario: a
     # walk is one execution of one scenario, in one environment, where its
     # conditions hold, since a control would run again for its proof.
+    #: (Array[Engine::Scenario], Array[Engine::Environment]) -> void
     def one_execution(kept, environments)
       first = kept.first
       at = Engine::Selection.shell_word("#{first.uri}:#{first.line}")
@@ -154,6 +160,7 @@ module Nukadoko
 
     # A run checks the scenarios it selected, then runs them in each world
     # it selected; a target or a world it cannot reach is refused first.
+    #: (Array[singleton(Step)]) -> Integer
     def run(steps)
       repeat = count_flag("--repeat")
       concurrency = count_flag("--concurrency")
@@ -222,7 +229,7 @@ module Nukadoko
       started = result.slice(:run_id, :run_dir, :started_at, :finished_at, :commit, :environments, :worlds)
       rest = result.except(*started.keys)
       envelope = { **head("run", passed ? "passed" : "failed", findings, check: @no_check ? "skipped" : "ran"),
-                   **started, selection: selection.selection, tag_selection: selection.tag_selection, **rest }
+                   **started, selection: selection.selection, tag_selection: selection.tag_selection, **rest } #: Hash[Symbol, untyped]
       envelope.delete(:tag_selection) unless envelope[:tag_selection]
       # The limits restate the fields above, so they are read from them,
       # and a run with none has no field.
@@ -246,13 +253,14 @@ module Nukadoko
       if limits.any? && !@json
         progress.puts "limits: #{limits.group_by { _1[:kind] }.map { |kind, group| "#{group.size} #{kind}" }.join(", ")} (run.json limits)"
       end
-      repeat_tallies(envelope[:scenarios], progress) if repeat > 1 && !@json
+      repeat_tallies(scenarios, progress) if repeat > 1 && !@json
       passed ? 0 : 1
     rescue Engine::Refusal => e
       refuse(e)
     end
 
     # `--repeat`, `--concurrency`, and `--proof-runs` take a whole number of 1 or more.
+    #: (String) -> Integer
     def count_flag(name)
       value = @options[name].last
       return 1 if value.nil? && name != "--proof-runs"
@@ -267,6 +275,7 @@ module Nukadoko
     # One pass of a `--base` tree, in the tree's own directory: the plan
     # names the world, the environment, and the rows at their place in this
     # tree, and the result goes to the file it names.
+    #: (Array[singleton(Step)]) -> Integer
     def tree(steps)
       plan = JSON.parse(File.read(@rest.first), symbolize_names: true)
       found = Dir.chdir(@project) { Engine.load_features(plan[:targets].map { _1[:feature] }.uniq) }
@@ -290,6 +299,7 @@ module Nukadoko
     # `nuka do --use` reads it. A refusal goes to stderr, since stdout is
     # the record's.
     # Paths written go to stdout, notes and refusals to stderr.
+    #: () -> Integer
     def init
       @out = $stderr
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
@@ -300,6 +310,7 @@ module Nukadoko
     end
 
     # Writes stubs; their paths go to stdout, and notes and refusals to stderr.
+    #: (Array[singleton(Step)], Array[Engine::Scenario]) -> Integer
     def scaffold(steps, scenarios)
       @out = $stderr
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
@@ -318,6 +329,7 @@ module Nukadoko
       0
     end
 
+    #: (Engine::Check) -> Integer
     def run_one(check)
       @out = $stderr
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: json")) if @json
@@ -360,6 +372,7 @@ module Nukadoko
 
     # Each from key of the step, from the newest record --use names whose
     # step gives it, and where it came from.
+    #: (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]]]
     def used_args(step, ids)
       records = ids.map do |id|
         path = [File.join(@project, ".nukadoko", "do", id, "record.json"), *Dir.glob(File.join(@project, ".nukadoko", "runs", "*", "steps", id, "record.json"))].find { File.exist?(_1) }
@@ -387,12 +400,13 @@ module Nukadoko
     end
 
     # The record `nuka do` prints, in the TypeScript engine's shape.
+    #: (Hash[Symbol, untyped], String, singleton(Step), Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], Engine::Environment) -> Hash[Symbol, untyped]
     def do_record(record, id, step, given, origins, used, environment)
       args_origin = (record[:args] || {}).keys.to_h do |key|
         origin = origins[key]
         if origin&.start_with?("from:")
           step_name, rest = origin.delete_prefix("from:").split("@", 2)
-          record_id, source_key = rest.split(".", 2)
+          record_id, source_key = rest.to_s.split(".", 2)
           [key, { from: { step_record_id: record_id, step: step_name, key: source_key } }]
         else [key, "command_line"]
         end
@@ -410,6 +424,7 @@ module Nukadoko
         **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }
     end
 
+    #: (Engine::Scenario, Array[Engine::Environment]) -> bool
     def meets?(scenario, environments)
       tags = Engine::Table.condition_tags(scenario.tags)
       environments.any? { Engine::Table.role(tags, _1.conditions) == "required" }
@@ -417,6 +432,7 @@ module Nukadoko
 
     # The `nuka check` that reports the same errors: the files the targets
     # name, and each --env.
+    #: () -> String
     def check_command
       files = @rest.map { _1.sub(/:\d+\z/, "") }.uniq
       ["nuka check", *files.map { Engine::Selection.shell_word(_1) }, *@options["--env"].flat_map { ["--env", Engine::Selection.shell_word(_1)] }].join(" ")
@@ -425,6 +441,7 @@ module Nukadoko
     # Why --env left out every selected scenario, and the run that meets
     # them: the run without --env when it does, else the first environment
     # of the program file that meets each, or else one that meets some.
+    #: (Array[Engine::Scenario], Engine::Program) -> Hash[Symbol, String]
     def left_out_stop(left_out, program)
       envs = @options["--env"]
       count = left_out.size
@@ -437,7 +454,7 @@ module Nukadoko
       finding = { severity: "failed", code: "nothing-selected", message: message }
       return finding.merge(fix: "#{without}, which meets #{them}.", do: rerun.([])) if meets_each.(defaults)
 
-      candidates = [*program.declared.keys, *("default" unless program.declared.key?("default"))] - envs
+      candidates = [*program.declared.keys, *(program.declared.key?("default") ? [] : ["default"])] - envs
       other = candidates.find { meets_each.([_1]) } || candidates.find { |name| left_out.any? { meets?(_1, [program.environment(name)]) } }
       unless other
         return finding.merge(fix: "#{without}, which does not meet #{them} either, and no environment of nukadoko.program.rb meets #{them}. " \
@@ -451,6 +468,7 @@ module Nukadoko
     # Removes what runs left in the state directory: each run directory,
     # each `nuka do` record, the Allure results nukadoko wrote, and the
     # directories an earlier release left. --dry-run lists them only.
+    #: () -> Integer
     def clean
       state = File.join(@project, ".nukadoko")
       listed = ->(dir) { Dir.children(File.join(state, dir)).select { File.directory?(File.join(state, dir, _1)) }.sort.map { ".nukadoko/#{dir}/#{_1}" } rescue [] }
@@ -494,6 +512,7 @@ module Nukadoko
     end
 
     # `nuka skill path`, the one verb, as the TypeScript engine has it.
+    #: () -> Integer
     def skill
       verb = @rest.first
       return Skill.print_path(@out, $stderr) if verb == "path" && @rest.size == 1
@@ -504,6 +523,7 @@ module Nukadoko
 
     # Renders a finished run again from its run.json alone: the run a
     # directory names, or the newest one.
+    #: () -> Integer
     def report
       format = @options["--format"].last
       out = @options["--out"].last
@@ -569,6 +589,7 @@ module Nukadoko
     end
 
     # Why a report cannot go to `target`, or nil when it can.
+    #: (String, Symbol, String) -> String?
     def out_problem(target, kind, label)
       if File.exist?(target)
         return "#{label} is a directory; markdown and messages write one file" if kind == :file && File.directory?(target)
@@ -582,6 +603,7 @@ module Nukadoko
       File.directory?(parent) ? nil : "#{label} lies under #{shown_path(parent)}, which is not a directory"
     end
 
+    #: (String) -> String
     def shown_path(absolute)
       relative = Pathname.new(absolute).relative_path_from(Pathname.new(@project)).to_s
       relative == ".." || relative.start_with?("../") ? absolute : relative
@@ -591,6 +613,7 @@ module Nukadoko
     # the export directory, so a render of the same run replaces what the
     # last one wrote there and retention removes them with the run. A run
     # that is not one of this project's own notes nothing.
+    #: (String, untyped, Array[String]) -> Hash[Symbol, untyped]?
     def own_exports(dir, run_id, problems)
       runs = File.join(@project, ".nukadoko", "runs")
       return nil unless File.expand_path(dir) == File.join(runs, run_id.to_s) && !File.symlink?(dir)
@@ -606,6 +629,7 @@ module Nukadoko
       { manifest: manifest, export: export, files: files }
     end
 
+    #: (Hash[Symbol, untyped]?, String, Symbol) -> void
     def replace_own_exports(exports, target, kind)
       return unless exports
 
@@ -617,6 +641,7 @@ module Nukadoko
       File.write(exports[:manifest], kept.map { "#{_1}\n" }.join)
     end
 
+    #: (Hash[Symbol, untyped]?, Array[String]) -> void
     def note_own_exports(exports, files)
       return unless exports
 
@@ -624,6 +649,7 @@ module Nukadoko
       File.open(exports[:manifest], "a") { |io| noted.each { io.puts Pathname.new(_1).relative_path_from(Pathname.new(@project)).to_s } } if noted.any?
     end
 
+    #: () -> String
     def report_dir
       if (named = @rest.first)
         dir = File.expand_path(named, @project)
@@ -639,6 +665,7 @@ module Nukadoko
     end
 
     # Reads run.json files and git only, so it loads no step.
+    #: () -> Integer
     def verdict
       answer = Engine::Verdict.new(@project)
       if @json
@@ -650,19 +677,23 @@ module Nukadoko
       answer.open? ? 1 : 0
     end
 
+    #: (Engine::Refusal) -> Integer
     def refuse(refusal)
       finish(@command, false, findings: [refusal.to_h(@command)], verdict: refusal.severity, exit_code: refusal.exit_code)
     end
 
+    #: (Engine::Finding) -> Engine::Finding
     def relative(finding)
       finding.with(file: finding.file&.delete_prefix("#{@project}/"))
     end
 
     # Every envelope opens the same way, in the TypeScript engine's order.
+    #: (String?, String, Array[untyped], **untyped) -> Hash[Symbol, untyped]
     def head(command, verdict, findings, **more)
       { schema_version: Engine::RunRecord::SCHEMA_VERSION, nukadoko: VERSION, command: command, **more, verdict: verdict, findings: findings }
     end
 
+    #: (String?, bool, findings: Array[untyped], ?verdict: String, ?exit_code: Integer, **untyped) -> Integer
     def finish(command, passed, findings:, verdict: passed ? "passed" : "failed", exit_code: passed ? 0 : 1, **rest)
       # What a walk that stops here ends with.
       @stopped_with = findings
@@ -670,6 +701,7 @@ module Nukadoko
       exit_code
     end
 
+    #: (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void
     def emit(envelope, findings, command, io: @out)
       if @json
         @out.puts JSON.pretty_generate(envelope)
@@ -686,6 +718,7 @@ module Nukadoko
     # After the failed list, under --repeat, each scenario that failed at
     # least once and how many of its executions passed. No verdict is
     # named: one that fails every time is not flaky.
+    #: (Array[Hash[Symbol, untyped]], IO) -> void
     def repeat_tallies(scenarios, io)
       named = @options["--env"].size > 1
       scenarios.reject { _1[:world] }.group_by { _1.values_at(:feature, :line, :environment) }.each_value do |runs|

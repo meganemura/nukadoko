@@ -197,7 +197,7 @@ module Nukadoko
         # Once the world stopped: how many lines carry a trace id of the
         # world, and each step's lines that its slice did not read, written
         # beside its record. `steps` maps a trace id to [lines read, dir].
-        #: (Hash[String, [Integer, String]]) -> Hash[Symbol, untyped]
+        #: (Hash[String, Array[untyped]]) -> Hash[Symbol, untyped]
         def late(steps)
           tagged = 0
           seen = Hash.new(0)

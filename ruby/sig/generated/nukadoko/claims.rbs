@@ -15,57 +15,76 @@ module Nukadoko
       # Takes the ARIA snapshot of the locator or page at each path a
       # fits-aria-snapshot claim reads, once per reading. One path's failure
       # is that path's read, so taking them never raises.
-      def self.take_aria_snapshots: (untyped claims, untyped observed) -> untyped
+      # : (Array[Hash[Symbol, untyped]], untyped) -> untyped
+      def self.take_aria_snapshots: (Array[Hash[Symbol, untyped]], untyped) -> untyped
 
       # The path a judged-as claim reads: its actual and, with no view, its at.
-      def self.judged_path: (untyped claim) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self.judged_path: (Hash[Symbol, untyped]) -> String
 
-      def self.aria_snapshot_at: (untyped root, untyped segments) -> untyped
+      # : (untyped, Array[String]) -> Hash[Symbol, String]
+      def self.aria_snapshot_at: (untyped, Array[String]) -> Hash[Symbol, String]
 
       # Only Playwright's own locator and page: a value step code wrote with
       # a method of that name would be a tree written in code.
-      def self.aria_snapshot_taker?: (untyped value) -> untyped
+      # : (untyped) -> bool
+      def self.aria_snapshot_taker?: (untyped) -> bool
 
       # The phrase for a value that is not a locator or a page, as the
       # TypeScript engine names it.
-      def self.aria_value_kind: (untyped value) -> untyped
+      # : (untyped) -> String
+      def self.aria_value_kind: (untyped) -> String
 
-      def self.article_of: (untyped word) -> untyped
+      # : (String) -> String
+      def self.article_of: (String) -> String
 
       # The side a fits-aria-snapshot claim reads: the text of the snapshot
       # taken of the value at its actual path.
-      def self.aria_side: (untyped claim, untyped observed) -> untyped
+      # : (Hash[Symbol, untyped], untyped) -> Hash[Symbol, String]
+      def self.aria_side: (Hash[Symbol, untyped], untyped) -> Hash[Symbol, String]
 
-      def self.judge: (untyped claims, untyped observed, untyped args) -> untyped
+      # : (Array[Hash[Symbol, untyped]], untyped, untyped) -> Array[Hash[Symbol, untyped]]
+      def self.judge: (Array[Hash[Symbol, untyped]], untyped, untyped) -> Array[Hash[Symbol, untyped]]
 
       # `top` is what observe returned, which an expected { observe } reads
       # from inside an each as well. A claim on an item with no actual reads
       # the item itself.
-      def self.judge_one: (untyped claim, untyped observed, untyped args, ?untyped top) -> untyped
+      # : (Hash[Symbol, untyped], untyped, untyped, ?untyped) -> Hash[Symbol, untyped]
+      def self.judge_one: (Hash[Symbol, untyped], untyped, untyped, ?untyped) -> Hash[Symbol, untyped]
 
-      def self.judge_aria: (untyped claim, untyped observed, untyped args, untyped top) -> untyped
+      # : (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
+      def self.judge_aria: (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
 
       # The tree nukadoko took of a judged value that is a locator or a page.
-      def self.aria_judged: (untyped claim, untyped observed) -> untyped
+      # : (Hash[Symbol, untyped], untyped) -> Hash[Symbol, String]?
+      def self.aria_judged: (Hash[Symbol, untyped], untyped) -> Hash[Symbol, String]?
 
-      def self.judge_judged: (untyped claim, untyped observed, untyped args, untyped top) -> untyped
+      # : (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
+      def self.judge_judged: (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
 
-      def self.judge_each: (untyped each, untyped items, untyped args, untyped top) -> untyped
+      # : (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
+      def self.judge_each: (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
 
-      def self.expected_value: (untyped claim, untyped args, ?untyped top) -> untyped
+      # : (Hash[Symbol, untyped], untyped, ?untyped) -> untyped
+      def self.expected_value: (Hash[Symbol, untyped], untyped, ?untyped) -> untyped
 
       VIEWS: untyped
 
       # A view reads a string as something else before `at` walks into it.
-      def self.view: (untyped name, untyped value) -> untyped
+      # : (String?, untyped) -> untyped
+      def self.view: (String?, untyped) -> untyped
 
-      def self.read: (untyped hash, untyped key) -> untyped
+      # : (untyped, String | Symbol) -> untyped
+      def self.read: (untyped, String | Symbol) -> untyped
 
-      def self.dig: (untyped value, untyped path) -> untyped
+      # : (untyped, untyped) -> untyped
+      def self.dig: (untyped, untyped) -> untyped
 
-      def self.same?: (untyped a, untyped b) -> untyped
+      # : (untyped, untyped) -> bool
+      def self.same?: (untyped, untyped) -> bool
 
-      def self.normal: (untyped value) -> untyped
+      # : (untyped) -> untyped
+      def self.normal: (untyped) -> untyped
 
       # A pattern that backtracks gets this long before the claim is left unjudged.
       PATTERN_TIMEOUT: ::Float
@@ -82,51 +101,65 @@ module Nukadoko
 
       UUID: ::Regexp
 
-      def self.calendar_day?: (untyped year, untyped month, untyped day) -> untyped
+      # : (Integer, Integer, Integer) -> bool
+      def self.calendar_day?: (Integer, Integer, Integer) -> bool
 
-      def self.date?: (untyped value) -> untyped
+      # : (untyped) -> bool
+      def self.date?: (untyped) -> bool
 
-      def self.timestamp?: (untyped value) -> untyped
+      # : (untyped) -> bool
+      def self.timestamp?: (untyped) -> bool
 
       # A text a URL parser accepts can still be no URL a program wrote, so
       # the scheme needs "//" and no character a reader cannot see may appear.
-      def self.url?: (untyped value) -> untyped
+      # : (untyped) -> bool
+      def self.url?: (untyped) -> bool
 
       KIND_TESTS: untyped
 
       # The test of the kind `name` names, read trimmed and in any case.
-      def self.value_kind: (untyped name) -> untyped
+      # : (String) -> untyped
+      def self.value_kind: (String) -> untyped
 
-      def self.json_type: (untyped value) -> untyped
+      # : (untyped) -> String
+      def self.json_type: (untyped) -> String
 
-      def self.article: (untyped type) -> untyped
+      # : (String) -> String
+      def self.article: (String) -> String
 
       # JavaScript's trim, which takes Unicode spaces and a byte order mark.
-      def self.blank?: (untyped text) -> untyped
+      # : (String) -> bool
+      def self.blank?: (String) -> bool
 
       # Structural equality over JSON values: key order does not count, and
       # 1 equals 1.0, as JSON writes one number.
-      def self.deep_equal?: (untyped a, untyped b) -> untyped
+      # : (untyped, untyped) -> bool
+      def self.deep_equal?: (untyped, untyped) -> bool
 
       # The same items, each as many times, in any order.
-      def self.same_items?: (untyped a, untyped b) -> untyped
+      # : (Array[untyped], Array[untyped]) -> bool
+      def self.same_items?: (Array[untyped], Array[untyped]) -> bool
 
       # The first place `expected` does not fit `actual` under has-fields, or
       # nil: an object fits one that holds each of its fields with a value
       # that fits, an array one of its length whose items fit, and anything
       # else an equal value.
-      def self.field_misfit: (untyped actual, untyped expected, ?untyped path) -> untyped
+      # : (untyped, untyped, ?Array[String | Integer]) -> Hash[Symbol, untyped]?
+      def self.field_misfit: (untyped, untyped, ?Array[String | Integer]) -> Hash[Symbol, untyped]?
 
       # The path of the first object with no field, at any depth, or nil.
-      def self.fieldless_object: (untyped value, ?untyped path) -> untyped
+      # : (untyped, ?Array[String | Integer]) -> Array[String | Integer]?
+      def self.fieldless_object: (untyped, ?Array[String | Integer]) -> Array[String | Integer]?
 
       # { holds: } or { reason: } when the two sides cannot be compared, or
       # { stopped: } when nothing judged them. A comparison across two JSON
       # types never holds for the reason the claim states, so it breaks with
       # both types named, and so does an expected value every actual holds.
-      def self.compare: (untyped compare, untyped actual, untyped expected) -> untyped
+      # : (String, untyped, untyped) -> Hash[Symbol, untyped]
+      def self.compare: (String, untyped, untyped) -> Hash[Symbol, untyped]
 
-      def self.holds?: (untyped compare, untyped actual, untyped expected) -> untyped
+      # : (String, untyped, untyped) -> bool
+      def self.holds?: (String, untyped, untyped) -> bool
     end
   end
 end

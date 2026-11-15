@@ -36,52 +36,69 @@ module Nukadoko
 
       LIMIT_HEADINGS: untyped
 
-      def self?.render: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.render: (Hash[Symbol, untyped]) -> String
 
       # Text outside a code span: `\` doubled first, so the `\` before a
       # `|` survives both the table parser and the inline one, and `<`
       # never opens a tag.
-      def self?.cell_text: (untyped text) -> untyped
+      # : (untyped) -> String
+      def self?.cell_text: (untyped) -> String
 
       # A code span longer than any backtick run inside it.
-      def self?.code_span: (untyped text) -> untyped
+      # : (untyped) -> String
+      def self?.code_span: (untyped) -> String
 
-      def self?.cell_code: (untyped text) -> untyped
+      # : (untyped) -> String
+      def self?.cell_code: (untyped) -> String
 
-      def self?.count_of: (untyped count, untyped one, untyped many) -> untyped
+      # : (Integer, String, String) -> String
+      def self?.count_of: (Integer, String, String) -> String
 
-      def self?.duration: (untyped ms) -> untyped
+      # : (Integer) -> String
+      def self?.duration: (Integer) -> String
 
-      def self?.value_text: (untyped value) -> untyped
+      # : (untyped) -> String
+      def self?.value_text: (untyped) -> String
 
       # The first line with text in it; a Node throw location with its
       # source line and carets is skipped, and a line that ends in a colon
       # takes the next line after it.
-      def self?.first_visible_line: (untyped text, ?untyped join) -> untyped
+      # : (untyped, ?bool) -> String?
+      def self?.first_visible_line: (untyped, ?bool) -> String?
 
-      def self?.first_error_line: (untyped message) -> untyped
+      # : (untyped) -> String
+      def self?.first_error_line: (untyped) -> String
 
-      def self?.cell_word: (untyped cell) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.cell_word: (Hash[Symbol, untyped]) -> String
 
-      def self?.head_scenarios: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.head_scenarios: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
 
-      def self?.conditions_text: (untyped conditions) -> untyped
+      # : (Hash[untyped, untyped]) -> String
+      def self?.conditions_text: (Hash[untyped, untyped]) -> String
 
-      def self?.title: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.title: (Hash[Symbol, untyped]) -> Array[String]
 
-      def self?.table_cell: (untyped cell) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.table_cell: (Hash[Symbol, untyped]) -> String
 
-      def self?.table: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.table: (Hash[Symbol, untyped]) -> Array[String]
 
       # The line above the table under `--base`: what the run compared with,
       # how many criteria changed, and whether the mapping changed and what
       # in it, since an unchanged criterion over a changed mapping is what
       # the old world was run for.
-      def self?.base_line: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.base_line: (Hash[Symbol, untyped]) -> Array[String]
 
       # Each criterion the base holds and head does not, with its sentences
       # at the base, so a reader approving the change sees what it drops.
-      def self?.removed: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.removed: (Hash[Symbol, untyped]) -> Array[String]
 
       # A capture taken at least this long after its reading says so beside
       # its link: a page that changes on a timer of a few hundred
@@ -92,72 +109,96 @@ module Nukadoko
       # right after the reading its claims were judged on, its screenshot
       # before its ARIA snapshot, or, for a Then that read no page, the
       # requests its own step sent. Each link is [label, href, after_ms].
-      def self?.seen_links: (untyped step) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[Array[untyped]]
+      def self?.seen_links: (Hash[Symbol, untyped]) -> Array[Array[untyped]]
 
-      def self?.markdown_link: (untyped label, untyped href) -> untyped
+      # : (String, String) -> String
+      def self?.markdown_link: (String, String) -> String
 
-      def self?.seen_text: (untyped links) -> untyped
+      # : (Array[Array[untyped]]) -> String
+      def self?.seen_text: (Array[Array[untyped]]) -> String
 
-      def self?.seen_column: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> (^(Hash[Symbol, untyped]) -> String)?
+      def self?.seen_column: (Hash[Symbol, untyped]) -> (^(Hash[Symbol, untyped]) -> String)?
 
-      def self?.reasons: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.reasons: (Hash[Symbol, untyped]) -> Array[String]
 
       # Where an execution stopped: the step, the error's first line, the
       # producers that exited nonzero, the last command that did, the
       # record, and where the Then can be seen.
-      def self?.describe_failure: (untyped scenario) -> untyped
+      # : (Hash[Symbol, untyped]) -> String?
+      def self?.describe_failure: (Hash[Symbol, untyped]) -> String?
 
-      def self?.exited_producers: (untyped used) -> untyped
+      # : (Array[Hash[Symbol, untyped]]?) -> Array[[untyped, Integer, String]]
+      def self?.exited_producers: (Array[Hash[Symbol, untyped]]?) -> Array[[ untyped, Integer, String ]]
 
-      def self?.stdout_line: (untyped stdout) -> untyped
+      # : (String) -> String?
+      def self?.stdout_line: (String) -> String?
 
       # The gaps a green verdict does not cover, computed again from
       # run.json's other fields, never read from a stored list.
-      def self?.limits: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.limits: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
 
       # One entry per row a judgment holds green: nukadoko checked that the
       # value is the one judged, and nothing of the judgment itself. A value
       # judged as an ARIA snapshot names what that leaves out: a change only
       # to how the page looks keeps the snapshot, and so the judgment.
-      def self?.judgment_limits: (untyped rows) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.judgment_limits: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
 
-      def self?.control_limit: (untyped row, untyped head) -> untyped
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
+      def self?.control_limit: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
 
-      def self?.closer_text: (untyped limit) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.closer_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.limit_place: (untyped limit, untyped named) -> untyped
+      # : (Hash[Symbol, untyped], bool) -> String
+      def self?.limit_place: (Hash[Symbol, untyped], bool) -> String
 
-      def self?.limits_section: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.limits_section: (Hash[Symbol, untyped]) -> Array[String]
 
-      def self?.tag_flags: (untyped expressions) -> untyped
+      # : (Array[String]) -> String
+      def self?.tag_flags: (Array[String]) -> String
 
-      def self?.condition: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.condition: (Hash[Symbol, untyped]) -> Array[String]
 
       # The claim as ClaimLine writes it, then where its values were
       # measured: a value no recorded channel holds is what a constant in
       # step code looks like, so the line says `measured: none`.
-      def self?.claim_line: (untyped claim, untyped own) -> untyped
+      # : (Hash[Symbol, untyped], String?) -> String
+      def self?.claim_line: (Hash[Symbol, untyped], String?) -> String
 
-      def self?.measured_text: (untyped claim, untyped own) -> untyped
+      # : (Hash[Symbol, untyped], String?) -> String
+      def self?.measured_text: (Hash[Symbol, untyped], String?) -> String
 
-      def self?.channel_text: (untyped measured, untyped own) -> untyped
+      # : (Hash[Symbol, untyped]?, String?) -> String
+      def self?.channel_text: (Hash[Symbol, untyped]?, String?) -> String
 
-      def self?.claims: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.claims: (Hash[Symbol, untyped]) -> Array[String]
 
-      def self?.where_of: (untyped finding) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.where_of: (Hash[Symbol, untyped]) -> String
 
-      def self?.findings: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.findings: (Hash[Symbol, untyped]) -> Array[String]
 
       # The heading names what the commands under it rerun: a stopped walk
       # did not fail, so a heading that called it failed would state
       # something false.
-      def self?.rerun: (untyped doc) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.rerun: (Hash[Symbol, untyped]) -> Array[String]
 
       # A walk is a run that paused after each step for an answer: its
       # verdicts were measured, but between steps the world and the browser
       # were open to anything, which no record covers. The longest pause
       # says how long that was.
-      def self?.walk_sentence: (untyped walk) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.walk_sentence: (Hash[Symbol, untyped]) -> String
     end
   end
 end

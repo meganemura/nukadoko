@@ -17,104 +17,142 @@ module Nukadoko
 
       LISTED_ITEMS: ::Integer
 
-      def self?.value_text: (untyped value) -> untyped
+      # : (untyped) -> String
+      def self?.value_text: (untyped) -> String
 
-      def self?.expected_text: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.expected_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.comparison_text: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.comparison_text: (Hash[Symbol, untyped]) -> String
 
       # The actual side of a broken fits-aria-snapshot claim as the lines
       # the misfit points at, with their numbers, since a page's snapshot is
       # longer than the line shows and its first lines are seldom where the
       # two part.
-      def self?.snapshot_excerpt_text: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String?
+      def self?.snapshot_excerpt_text: (Hash[Symbol, untyped]) -> String?
 
-      def self?.aria_snapshot_difference: (untyped actual, untyped expected) -> untyped
+      # : (untyped, untyped) -> String?
+      def self?.aria_snapshot_difference: (untyped, untyped) -> String?
 
-      def self?.item_declaration_text: (untyped entry) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.item_declaration_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.item_count: (untyped count) -> untyped
+      # : (Integer) -> String
+      def self?.item_count: (Integer) -> String
 
-      def self?.each_text: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.each_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.each?: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> bool
+      def self?.each?: (Hash[Symbol, untyped]) -> bool
 
-      def self?.claim_text: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.claim_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.plain_object?: (untyped value) -> untyped
+      # : (untyped) -> bool
+      def self?.plain_object?: (untyped) -> bool
 
-      def self?.same_json?: (untyped a, untyped b) -> untyped
+      # : (untyped, untyped) -> bool
+      def self?.same_json?: (untyped, untyped) -> bool
 
       # The first place two JSON values differ: a path of keys and indexes,
       # and what each side holds there, :none for a side with nothing.
       # : (untyped, untyped, Array[String]) -> [Array[String], untyped, untyped]?
       def self?.difference_in: (untyped, untyped, Array[String]) -> [ Array[String], untyped, untyped ]?
 
-      def self?.side_text: (untyped value) -> untyped
+      # : (untyped) -> String
+      def self?.side_text: (untyped) -> String
 
-      def self?.text_difference: (untyped actual, untyped expected) -> untyped
+      # : (String, String) -> String
+      def self?.text_difference: (String, String) -> String
 
-      def self?.equal_difference: (untyped actual, untyped expected) -> untyped
+      # : (untyped, untyped) -> String?
+      def self?.equal_difference: (untyped, untyped) -> String?
 
-      def self?.difference_at: (untyped path, untyped actual, untyped expected) -> untyped
+      # : (Array[untyped], untyped, untyped) -> String
+      def self?.difference_at: (Array[untyped], untyped, untyped) -> String
 
-      def self?.same?: (untyped a, untyped b) -> untyped
+      # : (untyped, untyped) -> bool
+      def self?.same?: (untyped, untyped) -> bool
 
-      def self?.shared_ends: (untyped actual, untyped expected) -> untyped
+      # : (Array[untyped], Array[untyped]) -> [Integer, Integer]
+      def self?.shared_ends: (Array[untyped], Array[untyped]) -> [ Integer, Integer ]
 
-      def self?.unpaired_items: (untyped actual, untyped expected) -> untyped
+      # : (Array[untyped], Array[untyped]) -> Hash[Symbol, Array[Integer]]?
+      def self?.unpaired_items: (Array[untyped], Array[untyped]) -> Hash[Symbol, Array[Integer]]?
 
       # The items a longest run of equal items, in order, leaves out, so an
       # inserted item is one extra item and not a change to every one after it.
-      def self?.aligned_items: (untyped actual, untyped expected) -> untyped
+      # : (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]?
+      def self?.aligned_items: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]?
 
-      def self?.listed_items: (untyped indexes, untyped items) -> untyped
+      # : (Array[Integer], Array[untyped]) -> String
+      def self?.listed_items: (Array[Integer], Array[untyped]) -> String
 
-      def self?.unshared_text: (untyped unshared, untyped actual, untyped expected) -> untyped
+      # : (Hash[Symbol, untyped], Array[untyped], Array[untyped]) -> String?
+      def self?.unshared_text: (Hash[Symbol, untyped], Array[untyped], Array[untyped]) -> String?
 
-      def self?.changed_text: (untyped changed, untyped actual, untyped expected) -> untyped
+      # : (Array[Hash[Symbol, Integer]], Array[untyped], Array[untyped]) -> String?
+      def self?.changed_text: (Array[Hash[Symbol, Integer]], Array[untyped], Array[untyped]) -> String?
 
-      def self?.list_difference: (untyped actual, untyped expected, untyped first) -> untyped
+      # : (Array[untyped], Array[untyped], String) -> String
+      def self?.list_difference: (Array[untyped], Array[untyped], String) -> String
 
-      def self?.same_items_difference: (untyped actual, untyped expected) -> untyped
+      # : (untyped, untyped) -> String?
+      def self?.same_items_difference: (untyped, untyped) -> String?
 
       # The first expected field a broken has-fields claim's object lacks or
       # holds another value at, found by the matcher that judged it.
-      def self?.fields_difference: (untyped actual, untyped expected) -> untyped
+      # : (untyped, untyped) -> String?
+      def self?.fields_difference: (untyped, untyped) -> String?
 
       # How far a broken fits-text claim's text fit, and the line where it
       # stopped, or the two named stand-ins that broke it.
-      def self?.fits_difference: (untyped actual, untyped expected) -> untyped
+      # : (untyped, untyped) -> String?
+      def self?.fits_difference: (untyped, untyped) -> String?
 
-      def self?.readings_difference: (untyped first, untyped after) -> untyped
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
+      def self?.readings_difference: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
 
       # The field a broken lacks-field claim's object holds, with its value,
       # since a long object may not show it and a null reads as absent.
-      def self?.present_field_difference: (untyped actual, untyped expected) -> untyped
+      # : (untyped, untyped) -> String?
+      def self?.present_field_difference: (untyped, untyped) -> String?
 
       DIFFERENCES: untyped
 
-      def self?.difference_text: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.difference_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.reason_text: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.reason_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.named_outcome: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.named_outcome: (Hash[Symbol, untyped]) -> String
 
-      def self?.named_item: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def self?.named_item: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
 
-      def self?.item_claim_text: (untyped claim) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.item_claim_text: (Hash[Symbol, untyped]) -> String
 
-      def self?.item_name: (untyped item) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.item_name: (Hash[Symbol, untyped]) -> String
 
       # The claim and its outcome on one line. A broken each names its
       # first broken item and that item's first broken comparison.
-      def self?.line: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.line: (Hash[Symbol, untyped]) -> String
 
-      def self?.named_item_lines: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.named_item_lines: (Hash[Symbol, untyped]) -> Array[String]
 
       # A claim step's failure: one line per claim that broke or was not
       # judged, the first line naming the first one.
-      def self?.broken_claims_message: (untyped records) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self?.broken_claims_message: (Array[Hash[Symbol, untyped]]) -> String
     end
   end
 end

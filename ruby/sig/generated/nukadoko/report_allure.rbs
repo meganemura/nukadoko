@@ -92,130 +92,177 @@ module Nukadoko
         def atomic: (String) { (String) -> void } -> void
       end
 
-      def self?.status_for_kind: (untyped kind) -> untyped
+      # : (String) -> String
+      def self?.status_for_kind: (String) -> String
 
-      def self?.failure_marker: (untyped kind) -> untyped
+      # : (String) -> String
+      def self?.failure_marker: (String) -> String
 
-      def self?.categories: () -> untyped
+      # : () -> Array[Hash[Symbol, untyped]]
+      def self?.categories: () -> Array[Hash[Symbol, untyped]]
 
       # Writes every result of `run` into `dir`, and returns the files it
       # wrote; what it left out goes to `warn`.
       # : (ReportRun, String, ^(String) -> void) -> Array[String]
       def self?.write: (ReportRun, String, ^(String) -> void) -> Array[String]
 
-      def self?.write_scenario: (untyped run, untyped scenario, untyped writer, untyped warn) -> untyped
+      # : (ReportRun, ReportRun::Scenario, Writer, ^(String) -> void) -> void
+      def self?.write_scenario: (ReportRun, ReportRun::Scenario, Writer, ^(String) -> void) -> void
 
       # What the run directory says of one execution, in the shape the
       # mapping reads: run.json's scenario entry, with its evidence under
       # the run directory.
-      def self?.scenario_record: (untyped run, untyped json) -> untyped
+      # : (ReportRun, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.scenario_record: (ReportRun, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
-      def self?.ms: (untyped time) -> untyped
+      # : (untyped) -> Integer
+      def self?.ms: (untyped) -> Integer
 
-      def self?.title_path: (untyped project, untyped posix, untyped feature_name) -> untyped
+      # : (String?, String, String) -> Array[String]
+      def self?.title_path: (String?, String, String) -> Array[String]
 
-      def self?.test_result: (untyped writer, untyped mapped, untyped full_name, untyped title_path, untyped attach) -> untyped
+      # : (Writer, Hash[Symbol, untyped], String, Array[String], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> Hash[Symbol, untyped]
+      def self?.test_result: (Writer, Hash[Symbol, untyped], String, Array[String], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> Hash[Symbol, untyped]
 
       # `ALLURE_LABEL_*` as the process rendering the report sees it: the
       # person rendering chooses those, and the run recorded none.
-      def self?.environment_labels: () -> untyped
+      # : () -> Array[Hash[Symbol, untyped]]
+      def self?.environment_labels: () -> Array[Hash[Symbol, untyped]]
 
       # The parameters that join historyId, as allure-js-commons orders
       # them: by name, then by value.
-      def self?.parameters_text: (untyped parameters) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self?.parameters_text: (Array[Hash[Symbol, untyped]]) -> String
 
       # A sort key near the Unicode collation JavaScript's localeCompare
       # uses: punctuation before digits before letters, letters without
       # case first and lowercase before uppercase on a tie.
-      def self?.collation: (untyped text) -> untyped
+      # : (untyped) -> Array[untyped]
+      def self?.collation: (untyped) -> Array[untyped]
 
-      def self?.step_result: (untyped name, untyped status, untyped start, untyped stop, ?parameters: untyped, ?message: untyped) -> untyped
+      # : (untyped, String, Integer?, Integer?, ?parameters: Array[Hash[Symbol, untyped]], ?message: String?) -> Hash[Symbol, untyped]
+      def self?.step_result: (untyped, String, Integer?, Integer?, ?parameters: Array[Hash[Symbol, untyped]], ?message: String?) -> Hash[Symbol, untyped]
 
-      def self?.gwt_step: (untyped step, untyped attach) -> untyped
+      # : (Hash[Symbol, untyped], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> Hash[Symbol, untyped]
+      def self?.gwt_step: (Hash[Symbol, untyped], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> Hash[Symbol, untyped]
 
-      def self?.child_steps: (untyped children) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.child_steps: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
 
-      def self?.fixture: (untyped hook, untyped attach) -> untyped
+      # : (Hash[Symbol, untyped], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> [untyped, Hash[Symbol, untyped]]
+      def self?.fixture: (Hash[Symbol, untyped], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> [ untyped, Hash[Symbol, untyped] ]
 
       # An attachment that cannot be read, or whose path is refused, costs
       # that attachment only.
-      def self?.write_attachment: (untyped run, untyped writer, untyped target, untyped attachment, untyped warn) -> untyped
+      # : (ReportRun, Writer, Hash[Symbol, untyped], Hash[Symbol, untyped], ^(String) -> void) -> void
+      def self?.write_attachment: (ReportRun, Writer, Hash[Symbol, untyped], Hash[Symbol, untyped], ^(String) -> void) -> void
 
       # A Java properties file, escaped as allure-js-commons escapes it.
-      def self?.properties: (untyped info) -> untyped
+      # : (Hash[untyped, untyped]) -> String
+      def self?.properties: (Hash[untyped, untyped]) -> String
 
-      def self?.escape: (untyped text, untyped key, ?separators: untyped) -> untyped
+      # : (String, bool, ?separators: bool) -> String
+      def self?.escape: (String, bool, ?separators: bool) -> String
 
-      def self?.map_steps: (untyped record, untyped scenario, untyped document, untyped pickle, untyped warn) -> untyped
+      # : (Hash[Symbol, untyped], ReportRun::Scenario, Hash[String, untyped], Hash[String, untyped], ^(String) -> void) -> Array[Hash[Symbol, untyped]]
+      def self?.map_steps: (Hash[Symbol, untyped], ReportRun::Scenario, Hash[String, untyped], Hash[String, untyped], ^(String) -> void) -> Array[Hash[Symbol, untyped]]
 
-      def self?.own_span: (untyped step_record) -> untyped
+      # : (Hash[String, untyped]?) -> [Integer, Integer]?
+      def self?.own_span: (Hash[String, untyped]?) -> [ Integer, Integer ]?
 
-      def self?.scenarios_of: (untyped document) -> untyped
+      # : (Hash[String, untyped]) -> Array[Hash[String, untyped]]
+      def self?.scenarios_of: (Hash[String, untyped]) -> Array[Hash[String, untyped]]
 
-      def self?.gherkin_steps: (untyped document) -> untyped
+      # : (Hash[String, untyped]) -> Hash[String, Hash[String, untyped]]
+      def self?.gherkin_steps: (Hash[String, untyped]) -> Hash[String, Hash[String, untyped]]
 
-      def self?.step_name: (untyped document, untyped pickle, untyped index, untyped text) -> untyped
+      # : (Hash[String, untyped], Hash[String, untyped], Integer, String) -> String
+      def self?.step_name: (Hash[String, untyped], Hash[String, untyped], Integer, String) -> String
 
-      def self?.example_row: (untyped document, untyped pickle) -> untyped
+      # : (Hash[String, untyped], Hash[String, untyped]) -> untyped
+      def self?.example_row: (Hash[String, untyped], Hash[String, untyped]) -> untyped
 
-      def self?.csv_row: (untyped cells) -> untyped
+      # : (Array[Hash[String, untyped]]) -> String
+      def self?.csv_row: (Array[Hash[String, untyped]]) -> String
 
-      def self?.buffer: (untyped name, untyped type, untyped content, untyped extension) -> untyped
+      # : (String, String, String, String) -> Hash[Symbol, untyped]
+      def self?.buffer: (String, String, String, String) -> Hash[Symbol, untyped]
 
-      def self?.path_attachment: (untyped name, untyped type, untyped path) -> untyped
+      # : (String, String, String) -> Hash[Symbol, untyped]
+      def self?.path_attachment: (String, String, String) -> Hash[Symbol, untyped]
 
-      def self?.join_relative: (untyped dir, untyped file) -> untyped
+      # : (untyped, String) -> String
+      def self?.join_relative: (untyped, String) -> String
 
-      def self?.content_type: (untyped file) -> untyped
+      # : (String) -> String
+      def self?.content_type: (String) -> String
 
       # Attachments, log lines, links, labels, and parameters a step or a
       # hook declared, the same shape either way.
-      def self?.map_declared: (untyped declared, untyped dir, untyped at) -> untyped
+      # : (Hash[String, untyped]?, String?, Integer?) -> Hash[Symbol, untyped]
+      def self?.map_declared: (Hash[String, untyped]?, String?, Integer?) -> Hash[Symbol, untyped]
 
-      def self?.step_outcome: (untyped entry, untyped step_record, untyped unreadable) -> untyped
+      # : (Hash[Symbol, untyped], Hash[String, untyped]?, bool) -> Hash[Symbol, untyped]
+      def self?.step_outcome: (Hash[Symbol, untyped], Hash[String, untyped]?, bool) -> Hash[Symbol, untyped]
 
-      def self?.hook_outcome: (untyped hook) -> untyped
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.hook_outcome: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
-      def self?.action_name: (untyped action) -> untyped
+      # : (Hash[String, untyped]) -> String
+      def self?.action_name: (Hash[String, untyped]) -> String
 
       # Sections, polls, and actions as one timeline in the order they
       # began; on one instant, sections, then polls, then actions.
-      def self?.timeline: (untyped source, untyped anchor) -> untyped
+      # : (Hash[String, untyped], Integer) -> Array[Hash[Symbol, untyped]]
+      def self?.timeline: (Hash[String, untyped], Integer) -> Array[Hash[Symbol, untyped]]
 
-      def self?.page_event_count: (untyped entries, untyped total) -> untyped
+      # : (Array[untyped]?, Integer?) -> String?
+      def self?.page_event_count: (Array[untyped]?, Integer?) -> String?
 
-      def self?.calls: (untyped entries) -> untyped
+      # : (Array[Hash[String, untyped]]?) -> Array[Hash[Symbol, untyped]]
+      def self?.calls: (Array[Hash[String, untyped]]?) -> Array[Hash[Symbol, untyped]]
 
-      def self?.channel: (untyped measured) -> untyped
+      # : (Hash[String, untyped]?) -> String
+      def self?.channel: (Hash[String, untyped]?) -> String
 
       # A judged-as claim compared nothing: a judgment decides it outside
       # the results, and skipped is the one status that claims neither.
-      def self?.claim_status: (untyped outcome) -> untyped
+      # : (String) -> String
+      def self?.claim_status: (String) -> String
 
-      def self?.claim_parameters: (untyped claim) -> untyped
+      # : (Hash[String, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.claim_parameters: (Hash[String, untyped]) -> Array[Hash[Symbol, untyped]]
 
-      def self?.map_claims: (untyped claims, untyped at) -> untyped
+      # : (Array[Hash[String, untyped]]?, Integer) -> Array[Hash[Symbol, untyped]]
+      def self?.map_claims: (Array[Hash[String, untyped]]?, Integer) -> Array[Hash[Symbol, untyped]]
 
       # JSON as JavaScript writes it: a whole-number float has no fraction.
-      def self?.js_json: (untyped value) -> untyped
+      # : (untyped) -> String
+      def self?.js_json: (untyped) -> String
 
-      def self?.js_value: (untyped value) -> untyped
+      # : (untyped) -> untyped
+      def self?.js_value: (untyped) -> untyped
 
-      def self?.judged_view_attachments: (untyped view) -> untyped
+      # : (Hash[String, untyped]?) -> Array[[String, String, String]]
+      def self?.judged_view_attachments: (Hash[String, untyped]?) -> Array[[ String, String, String ]]
 
-      def self?.map_step: (untyped index, untyped entry, untyped step_record, untyped unreadable, untyped previous, untyped document, untyped pickle) -> untyped
+      # : (Integer, Hash[Symbol, untyped], Hash[String, untyped]?, bool, Integer, Hash[String, untyped], Hash[String, untyped]) -> Hash[Symbol, untyped]
+      def self?.map_step: (Integer, Hash[Symbol, untyped], Hash[String, untyped]?, bool, Integer, Hash[String, untyped], Hash[String, untyped]) -> Hash[Symbol, untyped]
 
       # The first classified failure, a step's before a hook's.
       # : (Array[Hash[Symbol, untyped]], Array[untyped]) -> Hash[Symbol, untyped]?
       def self?.first_failure: (Array[Hash[Symbol, untyped]], Array[untyped]) -> Hash[Symbol, untyped]?
 
-      def self?.tag_labels: (untyped pickle) -> untyped
+      # : (Hash[String, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.tag_labels: (Hash[String, untyped]) -> Array[Hash[Symbol, untyped]]
 
-      def self?.map_scenario: (untyped record, untyped document, untyped pickle, untyped posix, untyped project, untyped steps, untyped verdict) -> untyped
+      # : (Hash[Symbol, untyped], Hash[String, untyped], Hash[String, untyped], String, String?, Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
+      def self?.map_scenario: (Hash[Symbol, untyped], Hash[String, untyped], Hash[String, untyped], String, String?, Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
 
       # A hook record holds no time of its own: a before hook sits at the
       # scenario's start and an after hook at its end, both zero-width.
-      def self?.map_hooks: (untyped record, untyped start, untyped stop) -> untyped
+      # : (Hash[Symbol, untyped], Integer, Integer) -> Array[Hash[Symbol, untyped]]
+      def self?.map_hooks: (Hash[Symbol, untyped], Integer, Integer) -> Array[Hash[Symbol, untyped]]
     end
   end
 end

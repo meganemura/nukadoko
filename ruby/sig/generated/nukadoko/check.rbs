@@ -7,22 +7,22 @@
 module Nukadoko
   module Engine
     class Finding < Data
-      attr_reader severity(): untyped
+      attr_reader severity(): String
 
-      attr_reader code(): untyped
+      attr_reader code(): String
 
-      attr_reader file(): untyped
+      attr_reader file(): String?
 
-      attr_reader line(): untyped
+      attr_reader line(): Integer?
 
-      attr_reader step(): untyped
+      attr_reader step(): String?
 
-      attr_reader message(): untyped
+      attr_reader message(): String
 
-      attr_reader fix(): untyped
+      attr_reader fix(): String?
 
-      def self.new: (untyped severity, untyped code, untyped file, untyped line, untyped step, untyped message, untyped fix) -> instance
-                  | (severity: untyped, code: untyped, file: untyped, line: untyped, step: untyped, message: untyped, fix: untyped) -> instance
+      def self.new: (String severity, String code, String? file, Integer? line, String? step, String message, String? fix) -> instance
+                  | (severity: String, code: String, file: String?, line: Integer?, step: String?, message: String, fix: String?) -> instance
 
       def self.members: () -> [ :severity, :code, :file, :line, :step, :message, :fix ]
 
@@ -35,35 +35,40 @@ module Nukadoko
       # : (String, String, singleton(Step), String, String?) -> Finding
       def self.about_step: (String, String, singleton(Step), String, String?) -> Finding
 
-      def to_h: () -> untyped
+      # : () -> Hash[Symbol, untyped]
+      def to_h: () -> Hash[Symbol, untyped]
     end
 
     FIXTURES: untyped
 
     class Check
-      attr_reader findings: untyped
+      attr_reader findings: Array[Finding]
 
-      attr_reader usable: untyped
+      attr_reader usable: Array[singleton(Step)]
 
       # `environments` is the selection a run without --env starts, for
       # condition-unmet; nil when --env named the selection. `problems` are
       # what the feature loader found that runs nothing.
-      def initialize: (untyped steps, untyped scenarios, ?features: untyped, ?full: untyped, ?conditions: untyped, ?environments: untyped, ?problems: untyped) -> untyped
+      # : (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem]) -> void
+      def initialize: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem]) -> void
 
-      def passed?: () -> untyped
+      # : () -> bool
+      def passed?: () -> bool
 
       private
 
       # A step whose definition cannot stand (an unknown claim compare) is left
       # out of the vocabulary, as the TypeScript engine leaves out a step file
       # that fails to import, so it can never match a line.
-      def definition_broken?: (untyped step) -> untyped
+      # : (singleton(Step)) -> bool
+      def definition_broken?: (singleton(Step)) -> bool
 
       KEY: ::Regexp
 
       # Why the step's pattern cannot be read, as the TypeScript engine says
       # it: the first broken capture, then what cucumber-expressions refuses.
-      def pattern_problem: (untyped step) -> untyped
+      # : (singleton(Step)) -> [String, String]?
+      def pattern_problem: (singleton(Step)) -> [ String, String ]?
 
       NUMBER_TYPES: untyped
 
@@ -71,94 +76,117 @@ module Nukadoko
 
       # A capture hands the step a number or a string, and an args field of
       # the other kind can never hold it.
-      def capture_mismatches: (untyped step) -> untyped
+      # : (singleton(Step)) -> Array[Array[untyped]]
+      def capture_mismatches: (singleton(Step)) -> Array[Array[untyped]]
 
-      def check_contract: (untyped step) -> untyped
+      # : (singleton(Step)) -> void
+      def check_contract: (singleton(Step)) -> void
 
       # Two patterns that read the same once their names go would match the
       # same lines; the later file is named, with every step that shares it.
-      def check_duplicate_patterns: () -> untyped
+      # : () -> void
+      def check_duplicate_patterns: () -> void
 
       # A pattern no line binds alone has no place in a scenario; a placeholder
       # description is what a person picking a step would read.
-      def check_unbound: () -> untyped
+      # : () -> void
+      def check_unbound: () -> void
 
       # A from key every line fills with a capture never takes its value
       # from the producer it names.
-      def check_from_unused: () -> untyped
+      # : () -> void
+      def check_from_unused: () -> void
 
       # A from key whose producer has not run before the line fails args
       # validation with certainty, and two producers that both ran leave
       # the feature file unable to say which one counts. A line before it
       # that matches no step may be the producer misspelled, so those
       # findings wait behind one warning.
-      def check_from_order: (untyped scenario) -> untyped
+      # : (Scenario) -> void
+      def check_from_order: (Scenario) -> void
 
       # What a claim step's claims read, from the producers of its from
       # values on the earlier lines of the scenario (ClaimCheck).
-      def check_claim_sources: (untyped scenario) -> untyped
+      # : (Scenario) -> void
+      def check_claim_sources: (Scenario) -> void
 
-      def from_missing_message: (untyped step_name, untyped key, untyped names, untyped resolved) -> untyped
+      # : (String, String, Array[String], Array[untyped]) -> String
+      def from_missing_message: (String, String, Array[String], Array[untyped]) -> String
 
-      def from_order_fix: (untyped issue) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def from_order_fix: (Hash[Symbol, untyped]) -> String
 
-      def hold_from_order: (untyped scenario, untyped held) -> untyped
+      # : (Scenario, Array[Hash[Symbol, untyped]]) -> void
+      def hold_from_order: (Scenario, Array[Hash[Symbol, untyped]]) -> void
 
       SCENARIO_ONLY: untyped
 
       # Fixture definitions that can never resolve, and (in a whole-project
       # check) one no step reaches.
-      def check_fixtures: (untyped full) -> untyped
+      # : (bool) -> void
+      def check_fixtures: (bool) -> void
 
       # A scenario whose condition tags no environment of the selection meets
       # has no required cell, so nothing in the run shows that it holds.
-      def check_conditions_met: (untyped environments) -> untyped
+      # : (Array[Environment]) -> void
+      def check_conditions_met: (Array[Environment]) -> void
 
-      def describe_conditions: (untyped conditions) -> untyped
+      # : (Hash[String, untyped]) -> String
+      def describe_conditions: (Hash[String, untyped]) -> String
 
       CONDITION_NAME: ::Regexp
 
       CONDITION_VALUE: ::Regexp
 
       # The condition a tag names, nil for one that does not read.
-      def self.condition_of: (untyped tag) -> untyped
+      # : (String) -> String?
+      def self.condition_of: (String) -> String?
 
       EXPECTED: untyped
 
       EXPECTS_FORMS: ::String
 
       # Why an @expects: tag accepts nothing, nil for one that reads.
-      def self.expects_problem: (untyped tag) -> untyped
+      # : (String) -> String?
+      def self.expects_problem: (String) -> String?
 
-      def check_tags: (untyped conditions) -> untyped
+      # : (Array[String]?) -> void
+      def check_tags: (Array[String]?) -> void
 
       # A cycle never closes into a fixture bag, and a read-only step cannot
       # reach a part that writes: both can only end one way, so both are errors.
-      def check_parts: () -> untyped
+      # : () -> void
+      def check_parts: () -> void
 
       # Each cycle once, named from the step whose walk first closed it.
-      def part_cycles: () -> untyped
+      # : () -> Array[Array[singleton(Step)]]
+      def part_cycles: () -> Array[Array[singleton(Step)]]
 
       # A scenario with steps of its own and no Then can never be judged on
       # an outcome. The Background's steps count toward the Then.
-      def check_shapes: () -> untyped
+      # : () -> void
+      def check_shapes: () -> void
 
-      def check_lines: () -> untyped
+      # : () -> void
+      def check_lines: () -> void
 
       # A scenario whose Then lines each bind one step, none of them a claim
       # step, passes whenever its steps run.
-      def judging_nothing: (untyped scenario) -> untyped
+      # : (Scenario) -> void
+      def judging_nothing: (Scenario) -> void
 
       # While a step definition is broken, a line it would have matched looks
       # undefined. Saying so would send the reader after the wrong fix, so the
       # judgment waits for the broken definition, with one warning.
-      def suppress_undefined: (untyped undefined) -> untyped
+      # : (Array[untyped]) -> void
+      def suppress_undefined: (Array[untyped]) -> void
 
       KEYWORD: untyped
 
       # Only a Then judges, so a claim step elsewhere and a step that runs in
       # Then position are both mistakes.
-      def check_position: (untyped scenario, untyped line, untyped step) -> untyped
+      # : (Scenario, PickleStep, singleton(Step)) -> void
+      def check_position: (Scenario, PickleStep, singleton(Step)) -> void
 
       # A page between two renders can show any state for one frame, so a
       # claim step whose observe reaches a page, directly or through a
@@ -185,21 +213,25 @@ module Nukadoko
       # The table or docstring fills the one required key no capture and no
       # from speaks for, so zero or two such keys, or a key of a type the
       # attachment can never be, fail binding with certainty.
-      def check_fill: (untyped scenario, untyped line, untyped step, untyped captures) -> untyped
+      # : (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
+      def check_fill: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
 
       # An is-a claim whose expected sentence key this line fills, through a
       # capture, with a name that is no kind breaks on this line for certain.
       # Only a plain string key read as it is or as text counts, so the value
       # the claim reads is the captured text.
-      def check_kinds: (untyped scenario, untyped line, untyped step, untyped captures) -> untyped
+      # : (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
+      def check_kinds: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
 
       # A fits-aria-snapshot claim whose expected sentence key this line
       # fills, through a capture or the docstring, with a tree the run breaks
       # the claim on whatever the page shows: one that does not read, or one
       # that names no node.
-      def check_unfit_trees: (untyped scenario, untyped line, untyped step, untyped captures) -> untyped
+      # : (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
+      def check_unfit_trees: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
 
-      def attachment_mismatch: (untyped step, untyped key, untyped line) -> untyped
+      # : (singleton(Step), String, PickleStep) -> String?
+      def attachment_mismatch: (singleton(Step), String, PickleStep) -> String?
     end
 
     # : (Array[singleton(Step)], String) -> Array[[singleton(Step), Hash[String, untyped]]]

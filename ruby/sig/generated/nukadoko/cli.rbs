@@ -10,16 +10,19 @@ module Nukadoko
 
     VALUED: untyped
 
-    def initialize: (untyped argv, ?project: untyped, ?out: untyped) -> untyped
+    # : (Array[String], ?project: String, ?out: IO) -> void
+    def initialize: (Array[String], ?project: String, ?out: IO) -> void
 
-    def call: () -> untyped
+    # : () -> Integer
+    def call: () -> Integer
 
     private
 
     # `--name value` and `--name=value` for the repeated options, bare
     # flags, and every other word a target. An unknown `--name` is kept to
     # refuse, so a typo never reads as a target or is silently ignored.
-    def parse: (untyped words) -> untyped
+    # : (Array[String]) -> void
+    def parse: (Array[String]) -> void
 
     # `nuka run --step`: a run of one scenario that pauses after each step
     # until `nuka step` answers. The walk is recorded before anything else,
@@ -27,24 +30,29 @@ module Nukadoko
     # refusal or nothing selected ends it as not run, with what the run
     # printed; a signal, which is what ends a pause nobody answers, as
     # interrupted; an exception as an error.
-    def walk: (untyped steps) -> untyped
+    # : (Array[singleton(Step)]) -> Integer
+    def walk: (Array[singleton(Step)]) -> Integer
 
     # Why a walk cannot walk this run, raised as step-needs-one-scenario: a
     # walk is one execution of one scenario, in one environment, where its
     # conditions hold, since a control would run again for its proof.
-    def one_execution: (untyped kept, untyped environments) -> untyped
+    # : (Array[Engine::Scenario], Array[Engine::Environment]) -> void
+    def one_execution: (Array[Engine::Scenario], Array[Engine::Environment]) -> void
 
     # A run checks the scenarios it selected, then runs them in each world
     # it selected; a target or a world it cannot reach is refused first.
-    def run: (untyped steps) -> untyped
+    # : (Array[singleton(Step)]) -> Integer
+    def run: (Array[singleton(Step)]) -> Integer
 
     # `--repeat`, `--concurrency`, and `--proof-runs` take a whole number of 1 or more.
-    def count_flag: (untyped name) -> untyped
+    # : (String) -> Integer
+    def count_flag: (String) -> Integer
 
     # One pass of a `--base` tree, in the tree's own directory: the plan
     # names the world, the environment, and the rows at their place in this
     # tree, and the result goes to the file it names.
-    def tree: (untyped steps) -> untyped
+    # : (Array[singleton(Step)]) -> Integer
+    def tree: (Array[singleton(Step)]) -> Integer
 
     # `nuka do <step>`: one step alone, its args from --args and from the
     # records --use names, in a world started for it. The step record goes
@@ -52,77 +60,101 @@ module Nukadoko
     # `nuka do --use` reads it. A refusal goes to stderr, since stdout is
     # the record's.
     # Paths written go to stdout, notes and refusals to stderr.
-    def init: () -> untyped
+    # : () -> Integer
+    def init: () -> Integer
 
     # Writes stubs; their paths go to stdout, and notes and refusals to stderr.
-    def scaffold: (untyped steps, untyped scenarios) -> untyped
+    # : (Array[singleton(Step)], Array[Engine::Scenario]) -> Integer
+    def scaffold: (Array[singleton(Step)], Array[Engine::Scenario]) -> Integer
 
-    def run_one: (untyped check) -> untyped
+    # : (Engine::Check) -> Integer
+    def run_one: (Engine::Check) -> Integer
 
     # Each from key of the step, from the newest record --use names whose
     # step gives it, and where it came from.
-    def used_args: (untyped step, untyped ids) -> untyped
+    # : (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]]]
+    def used_args: (singleton(Step), Array[String]) -> [ Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]] ]
 
     # The record `nuka do` prints, in the TypeScript engine's shape.
-    def do_record: (untyped record, untyped id, untyped step, untyped given, untyped origins, untyped used, untyped environment) -> untyped
+    # : (Hash[Symbol, untyped], String, singleton(Step), Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], Engine::Environment) -> Hash[Symbol, untyped]
+    def do_record: (Hash[Symbol, untyped], String, singleton(Step), Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], Engine::Environment) -> Hash[Symbol, untyped]
 
-    def meets?: (untyped scenario, untyped environments) -> untyped
+    # : (Engine::Scenario, Array[Engine::Environment]) -> bool
+    def meets?: (Engine::Scenario, Array[Engine::Environment]) -> bool
 
     # The `nuka check` that reports the same errors: the files the targets
     # name, and each --env.
-    def check_command: () -> untyped
+    # : () -> String
+    def check_command: () -> String
 
     # Why --env left out every selected scenario, and the run that meets
     # them: the run without --env when it does, else the first environment
     # of the program file that meets each, or else one that meets some.
-    def left_out_stop: (untyped left_out, untyped program) -> untyped
+    # : (Array[Engine::Scenario], Engine::Program) -> Hash[Symbol, String]
+    def left_out_stop: (Array[Engine::Scenario], Engine::Program) -> Hash[Symbol, String]
 
     # Removes what runs left in the state directory: each run directory,
     # each `nuka do` record, the Allure results nukadoko wrote, and the
     # directories an earlier release left. --dry-run lists them only.
-    def clean: () -> untyped
+    # : () -> Integer
+    def clean: () -> Integer
 
     # `nuka skill path`, the one verb, as the TypeScript engine has it.
-    def skill: () -> untyped
+    # : () -> Integer
+    def skill: () -> Integer
 
     # Renders a finished run again from its run.json alone: the run a
     # directory names, or the newest one.
-    def report: () -> untyped
+    # : () -> Integer
+    def report: () -> Integer
 
     # Why a report cannot go to `target`, or nil when it can.
-    def out_problem: (untyped target, untyped kind, untyped label) -> untyped
+    # : (String, Symbol, String) -> String?
+    def out_problem: (String, Symbol, String) -> String?
 
-    def shown_path: (untyped absolute) -> untyped
+    # : (String) -> String
+    def shown_path: (String) -> String
 
     # The files this project's own run noted in its exports manifest under
     # the export directory, so a render of the same run replaces what the
     # last one wrote there and retention removes them with the run. A run
     # that is not one of this project's own notes nothing.
-    def own_exports: (untyped dir, untyped run_id, untyped problems) -> untyped
+    # : (String, untyped, Array[String]) -> Hash[Symbol, untyped]?
+    def own_exports: (String, untyped, Array[String]) -> Hash[Symbol, untyped]?
 
-    def replace_own_exports: (untyped exports, untyped target, untyped kind) -> untyped
+    # : (Hash[Symbol, untyped]?, String, Symbol) -> void
+    def replace_own_exports: (Hash[Symbol, untyped]?, String, Symbol) -> void
 
-    def note_own_exports: (untyped exports, untyped files) -> untyped
+    # : (Hash[Symbol, untyped]?, Array[String]) -> void
+    def note_own_exports: (Hash[Symbol, untyped]?, Array[String]) -> void
 
-    def report_dir: () -> untyped
+    # : () -> String
+    def report_dir: () -> String
 
     # Reads run.json files and git only, so it loads no step.
-    def verdict: () -> untyped
+    # : () -> Integer
+    def verdict: () -> Integer
 
-    def refuse: (untyped refusal) -> untyped
+    # : (Engine::Refusal) -> Integer
+    def refuse: (Engine::Refusal) -> Integer
 
-    def relative: (untyped finding) -> untyped
+    # : (Engine::Finding) -> Engine::Finding
+    def relative: (Engine::Finding) -> Engine::Finding
 
     # Every envelope opens the same way, in the TypeScript engine's order.
-    def head: (untyped command, untyped verdict, untyped findings, **untyped more) -> untyped
+    # : (String?, String, Array[untyped], **untyped) -> Hash[Symbol, untyped]
+    def head: (String?, String, Array[untyped], **untyped) -> Hash[Symbol, untyped]
 
-    def finish: (untyped command, untyped passed, findings: untyped, ?verdict: untyped, ?exit_code: untyped, **untyped rest) -> untyped
+    # : (String?, bool, findings: Array[untyped], ?verdict: String, ?exit_code: Integer, **untyped) -> Integer
+    def finish: (String?, bool, findings: Array[untyped], ?verdict: String, ?exit_code: Integer, **untyped) -> Integer
 
-    def emit: (untyped envelope, untyped findings, untyped command, ?io: untyped) -> untyped
+    # : (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void
+    def emit: (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void
 
     # After the failed list, under --repeat, each scenario that failed at
     # least once and how many of its executions passed. No verdict is
     # named: one that fails every time is not flaky.
-    def repeat_tallies: (untyped scenarios, untyped io) -> untyped
+    # : (Array[Hash[Symbol, untyped]], IO) -> void
+    def repeat_tallies: (Array[Hash[Symbol, untyped]], IO) -> void
   end
 end

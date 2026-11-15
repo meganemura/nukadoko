@@ -160,10 +160,13 @@ module Nukadoko
 
       module_function
 
+      #: (String) -> String
       def status_for_kind(kind) = FAILED_KINDS.include?(kind) ? "failed" : "broken"
 
+      #: (String) -> String
       def failure_marker(kind) = "[nukadoko.failure=#{kind}]"
 
+      #: () -> Array[Hash[Symbol, untyped]]
       def categories
         CATEGORY_NAMES.map do |kind, name|
           { name: name, matchedStatuses: [status_for_kind(kind)], messageRegex: "#{Regexp.escape(failure_marker(kind))}[\\s\\S]*" }
@@ -194,6 +197,7 @@ module Nukadoko
         writer.written
       end
 
+      #: (ReportRun, ReportRun::Scenario, Writer, ^(String) -> void) -> void
       def write_scenario(run, scenario, writer, warn)
         record = scenario_record(run, scenario.json)
         writer.begin("#{record[:run_id]}\u0000#{record[:scenario_record_id]}\u0000#{record[:environment]}")
@@ -219,6 +223,7 @@ module Nukadoko
       # What the run directory says of one execution, in the shape the
       # mapping reads: run.json's scenario entry, with its evidence under
       # the run directory.
+      #: (ReportRun, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def scenario_record(run, json)
         document = run.document
         target = (document[:environments] || []).find { _1[:name] == json[:environment] }&.dig(:target_version)
@@ -229,8 +234,10 @@ module Nukadoko
           steps: json[:steps], hooks: json[:hooks] || [], evidence: evidence }
       end
 
+      #: (untyped) -> Integer
       def ms(time) = (Time.iso8601(time.to_s).to_r * 1000).floor
 
+      #: (String?, String, String) -> Array[String]
       def title_path(project, posix, feature_name)
         dirs = posix.split("/")[0...-1] || []
         path = feature_name.empty? ? dirs : [*dirs, feature_name]
@@ -239,12 +246,13 @@ module Nukadoko
 
       # --- the files allure-js-commons would write ---
 
+      #: (Writer, Hash[Symbol, untyped], String, Array[String], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> Hash[Symbol, untyped]
       def test_result(writer, mapped, full_name, title_path, attach)
         test = { uuid: writer.reserve, name: mapped[:name], historyId: nil, status: mapped[:status], statusDetails: {}, stage: "pending",
                  steps: [], attachments: [], parameters: mapped[:parameters], labels: [{ name: "language", value: "ruby" },
                                                                                       { name: "framework", value: "nukadoko" },
                                                                                       *mapped[:labels], *environment_labels],
-                 links: mapped[:links], start: mapped[:start], fullName: full_name, titlePath: title_path }
+                 links: mapped[:links], start: mapped[:start], fullName: full_name, titlePath: title_path } #: Hash[Symbol, untyped]
         test[:description] = mapped[:description] if mapped[:description]
         test[:statusDetails] = { message: mapped[:message], **(mapped[:trace] ? { trace: mapped[:trace] } : {}) } if mapped[:message]
         mapped[:attachments].each { attach.(test, _1) }
@@ -258,12 +266,14 @@ module Nukadoko
 
       # `ALLURE_LABEL_*` as the process rendering the report sees it: the
       # person rendering chooses those, and the run recorded none.
+      #: () -> Array[Hash[Symbol, untyped]]
       def environment_labels
         ENV.filter_map { |key, value| (name = key.delete_prefix("ALLURE_LABEL_").strip) && key.start_with?("ALLURE_LABEL_") && !name.empty? ? { name: name, value: value } : nil }
       end
 
       # The parameters that join historyId, as allure-js-commons orders
       # them: by name, then by value.
+      #: (Array[Hash[Symbol, untyped]]) -> String
       def parameters_text(parameters)
         parameters.reject { _1[:excluded] }.sort { |a, b| [collation(a[:name]), collation(a[:value])] <=> [collation(b[:name]), collation(b[:value])] }
                   .map { "#{_1[:name]}:#{_1[:value]}" }.join(",")
@@ -272,6 +282,7 @@ module Nukadoko
       # A sort key near the Unicode collation JavaScript's localeCompare
       # uses: punctuation before digits before letters, letters without
       # case first and lowercase before uppercase on a tie.
+      #: (untyped) -> Array[untyped]
       def collation(text)
         primary = text.to_s.each_char.map do |char|
           rank = if char.match?(/[[:alpha:]]/) then 3
@@ -284,11 +295,13 @@ module Nukadoko
         [primary, text.to_s.swapcase]
       end
 
+      #: (untyped, String, Integer?, Integer?, ?parameters: Array[Hash[Symbol, untyped]], ?message: String?) -> Hash[Symbol, untyped]
       def step_result(name, status, start, stop, parameters: [], message: nil)
         { status: status, statusDetails: message ? { message: message } : {}, stage: "finished", steps: [], attachments: [],
           parameters: parameters, start: start, name: name, stop: stop }
       end
 
+      #: (Hash[Symbol, untyped], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> Hash[Symbol, untyped]
       def gwt_step(step, attach)
         result = step_result(step[:name], step[:status], step[:start], step[:stop], parameters: step[:parameters], message: step[:message])
         step[:attachments].each { attach.(result, _1) }
@@ -296,6 +309,7 @@ module Nukadoko
         result
       end
 
+      #: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
       def child_steps(children)
         children.map do |child|
           result = step_result(child[:name], child[:status], child[:start], child[:stop], parameters: child[:parameters] || [])
@@ -304,6 +318,7 @@ module Nukadoko
         end
       end
 
+      #: (Hash[Symbol, untyped], ^(Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void) -> [untyped, Hash[Symbol, untyped]]
       def fixture(hook, attach)
         value = { status: hook[:status], statusDetails: hook[:message] ? { message: hook[:message] } : {}, stage: "finished", steps: [],
                   attachments: [], parameters: hook[:declared_parameters], start: hook[:start], name: hook[:name], stop: hook[:stop] }
@@ -314,6 +329,7 @@ module Nukadoko
 
       # An attachment that cannot be read, or whose path is refused, costs
       # that attachment only.
+      #: (ReportRun, Writer, Hash[Symbol, untyped], Hash[Symbol, untyped], ^(String) -> void) -> void
       def write_attachment(run, writer, target, attachment, warn)
         if attachment[:path]
           begin
@@ -336,13 +352,16 @@ module Nukadoko
       end
 
       # A Java properties file, escaped as allure-js-commons escapes it.
+      #: (Hash[untyped, untyped]) -> String
       def properties(info)
         info.map { |key, value| "#{escape(key, true, separators: true)}=#{escape(value.to_s, false)}" }.join("\n")
       end
 
+      #: (String, bool, ?separators: bool) -> String
       def escape(text, key, separators: false)
         leading = true
-        text.encode("UTF-16BE").unpack("n*").map do |code|
+        codes = text.encode("UTF-16BE").unpack("n*") #: Array[Integer]
+        codes.map do |code|
           char = [code].pack("U")
           leading &&= [9, 12, 32].include?(code) unless key
           if separators && "=:".include?(char) && code < 128 then "\\#{char}"
@@ -357,6 +376,7 @@ module Nukadoko
 
       # --- one execution, as the TypeScript engine maps it ---
 
+      #: (Hash[Symbol, untyped], ReportRun::Scenario, Hash[String, untyped], Hash[String, untyped], ^(String) -> void) -> Array[Hash[Symbol, untyped]]
       def map_steps(record, scenario, document, pickle, warn)
         mapped = [] #: Array[Hash[Symbol, untyped]]
         record[:steps].each_with_index do |entry, index|
@@ -376,43 +396,54 @@ module Nukadoko
         mapped
       end
 
+      #: (Hash[String, untyped]?) -> [Integer, Integer]?
       def own_span(step_record) = step_record && [ms(step_record["started_at"]), ms(step_record["finished_at"])]
 
+      #: (Hash[String, untyped]) -> Array[Hash[String, untyped]]
       def scenarios_of(document)
         (document.dig("feature", "children") || []).flat_map do |child|
           [child["scenario"], *(child.dig("rule", "children") || []).map { _1["scenario"] }].compact
         end
       end
 
+      #: (Hash[String, untyped]) -> Hash[String, Hash[String, untyped]]
       def gherkin_steps(document)
         (document.dig("feature", "children") || []).flat_map do |child|
           [child, *(child.dig("rule", "children") || [])].flat_map { [*(_1.dig("background", "steps") || []), *(_1.dig("scenario", "steps") || [])] }
         end.to_h { [_1["id"], _1] }
       end
 
+      #: (Hash[String, untyped], Hash[String, untyped], Integer, String) -> String
       def step_name(document, pickle, index, text)
         id = pickle.dig("steps", index, "astNodeIds", 0)
         keyword = id && gherkin_steps(document)[id]&.dig("keyword")
         keyword ? "#{keyword}#{text}" : text
       end
 
+      #: (Hash[String, untyped], Hash[String, untyped]) -> untyped
       def example_row(document, pickle)
         rows = scenarios_of(document).flat_map { |scenario| (scenario["examples"] || []).flat_map { |examples| (examples["tableBody"] || []).map { [_1["id"], [examples, _1]] } } }.to_h
         pickle["astNodeIds"].to_a.lazy.map { rows[_1] }.find(&:itself)
       end
 
+      #: (Array[Hash[String, untyped]]) -> String
       def csv_row(cells) = cells.map { (value = _1["value"].to_s).match?(/[",\r\n]/) ? %("#{value.gsub('"', '""')}") : value }.join(",")
 
+      #: (String, String, String, String) -> Hash[Symbol, untyped]
       def buffer(name, type, content, extension) = { name: name, type: type, content: content, extension: extension }
 
+      #: (String, String, String) -> Hash[Symbol, untyped]
       def path_attachment(name, type, path) = { name: name, type: type, path: path }
 
+      #: (untyped, String) -> String
       def join_relative(dir, file) = "#{dir.to_s.sub(%r{/+\z}, "")}/#{file}"
 
-      def content_type(file) = (dot = file.rindex(".")) ? MEDIA_TYPE_BY_EXTENSION.fetch(file[dot..].downcase, "application/octet-stream") : "application/octet-stream"
+      #: (String) -> String
+      def content_type(file) = (dot = file.rindex(".")) ? MEDIA_TYPE_BY_EXTENSION.fetch(file[dot..].to_s.downcase, "application/octet-stream") : "application/octet-stream"
 
       # Attachments, log lines, links, labels, and parameters a step or a
       # hook declared, the same shape either way.
+      #: (Hash[String, untyped]?, String?, Integer?) -> Hash[Symbol, untyped]
       def map_declared(declared, dir, at)
         return { attachments: [], child_steps: [], links: [], labels: [], parameters: [] } unless declared
 
@@ -423,6 +454,7 @@ module Nukadoko
           parameters: (declared["parameters"] || []).map { { name: _1["name"], value: _1["value"] } } }
       end
 
+      #: (Hash[Symbol, untyped], Hash[String, untyped]?, bool) -> Hash[Symbol, untyped]
       def step_outcome(entry, step_record, unreadable)
         if unreadable
           return { status: "broken", message: "step record #{entry[:step_record_id]} could not be read; run.json records this step as #{entry[:status]}" }
@@ -444,6 +476,7 @@ module Nukadoko
         end
       end
 
+      #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def hook_outcome(hook)
         return { status: "passed" } if hook[:status] == "passed"
         return { status: "broken" } unless hook[:error]
@@ -452,6 +485,7 @@ module Nukadoko
         { status: status_for_kind(kind), message: "#{failure_marker(kind)} #{hook[:error][:message]}", raw: hook[:error][:message], kind: kind }
       end
 
+      #: (Hash[String, untyped]) -> String
       def action_name(action)
         target = action["selector"] || action["url"]
         if action["method"] == "expect" && action["expression"]
@@ -463,6 +497,7 @@ module Nukadoko
 
       # Sections, polls, and actions as one timeline in the order they
       # began; on one instant, sections, then polls, then actions.
+      #: (Hash[String, untyped], Integer) -> Array[Hash[Symbol, untyped]]
       def timeline(source, anchor)
         entries = [] #: Array[[String, Hash[Symbol, untyped]]]
         (source["sections"] || []).each { entries << [_1["at"], { name: _1["label"], start: ms(_1["at"]), stop: ms(_1["at"]), status: "passed" }] }
@@ -483,12 +518,14 @@ module Nukadoko
         steps
       end
 
+      #: (Array[untyped]?, Integer?) -> String?
       def page_event_count(entries, total)
         return nil if entries.nil? || entries.empty?
 
         total ? "#{entries.size} of #{total}" : entries.size.to_s
       end
 
+      #: (Array[Hash[String, untyped]]?) -> Array[Hash[Symbol, untyped]]
       def calls(entries)
         (entries || []).map do |entry|
           { name: entry["step"], start: ms(entry["started_at"]), stop: ms(entry["finished_at"]),
@@ -498,14 +535,17 @@ module Nukadoko
         end
       end
 
+      #: (Hash[String, untyped]?) -> String
       def channel(measured) = measured.nil? ? "none" : "#{measured["step_record_id"]} #{measured["channel"]}"
 
       # A judged-as claim compared nothing: a judgment decides it outside
       # the results, and skipped is the one status that claims neither.
+      #: (String) -> String
       def claim_status(outcome)
         { "for-judgment" => "skipped", "held" => "passed", "broken" => "failed" }.fetch(outcome, "broken")
       end
 
+      #: (Hash[String, untyped]) -> Array[Hash[Symbol, untyped]]
       def claim_parameters(claim)
         parameters = [] #: Array[Hash[Symbol, untyped]]
         parameters << { name: "actual", value: js_json(claim["actual"]) } if claim.key?("actual") && !claim["actual"].nil?
@@ -525,6 +565,7 @@ module Nukadoko
         parameters
       end
 
+      #: (Array[Hash[String, untyped]]?, Integer) -> Array[Hash[Symbol, untyped]]
       def map_claims(claims, at)
         (claims || []).map do |claim|
           { name: ClaimLine.line(JSON.parse(JSON.generate(claim), symbolize_names: true)), start: at, stop: at,
@@ -533,8 +574,10 @@ module Nukadoko
       end
 
       # JSON as JavaScript writes it: a whole-number float has no fraction.
+      #: (untyped) -> String
       def js_json(value) = JSON.generate(js_value(value))
 
+      #: (untyped) -> untyped
       def js_value(value)
         case value
         when Float then value.finite? && value == value.floor && value.abs < 1e21 ? value.to_i : value
@@ -544,6 +587,7 @@ module Nukadoko
         end
       end
 
+      #: (Hash[String, untyped]?) -> Array[[String, String, String]]
       def judged_view_attachments(view)
         pages = view&.dig("pages") || []
         pages.flat_map do |page|
@@ -553,6 +597,7 @@ module Nukadoko
         end
       end
 
+      #: (Integer, Hash[Symbol, untyped], Hash[String, untyped]?, bool, Integer, Hash[String, untyped], Hash[String, untyped]) -> Hash[Symbol, untyped]
       def map_step(index, entry, step_record, unreadable, previous, document, pickle)
         outcome = step_outcome(entry, step_record, unreadable)
         span = own_span(step_record)
@@ -621,6 +666,7 @@ module Nukadoko
         nil
       end
 
+      #: (Hash[String, untyped]) -> Array[Hash[Symbol, untyped]]
       def tag_labels(pickle)
         (pickle["tags"] || []).map do |tag|
           name = tag["name"]
@@ -631,6 +677,7 @@ module Nukadoko
         end
       end
 
+      #: (Hash[Symbol, untyped], Hash[String, untyped], Hash[String, untyped], String, String?, Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
       def map_scenario(record, document, pickle, posix, project, steps, verdict)
         scenario = scenarios_of(document).find { pickle["astNodeIds"].to_a.include?(_1["id"]) }
         feature_name = document.dig("feature", "name") || ""
@@ -681,6 +728,7 @@ module Nukadoko
 
       # A hook record holds no time of its own: a before hook sits at the
       # scenario's start and an after hook at its end, both zero-width.
+      #: (Hash[Symbol, untyped], Integer, Integer) -> Array[Hash[Symbol, untyped]]
       def map_hooks(record, start, stop)
         record[:hooks].map do |hook|
           hook = JSON.parse(JSON.generate(hook))

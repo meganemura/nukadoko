@@ -21,6 +21,7 @@ module Nukadoko
       # the environment, the world, the run, the scenario, and the step's own
       # directory. A record that passed names each step it used; a failed one
       # names what each gave too, since that is what it failed on.
+      #: (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String) -> Hash[Symbol, untyped]
       def step_file(record, environment:, world_name:, run_id:, scenario_record_id:, evidence_dir:)
         passed = record[:status] == "passed"
         outcome = if passed then { result: record[:result] || {}, returns_dropped: record[:returns_dropped] }.compact
@@ -47,6 +48,7 @@ module Nukadoko
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
       # maps an args key to the label of where its value came from, and
       # `texts` to the text the sentence stated it as.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], observed: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
       def claim(declared, judged, origins, texts, observed:, patterns: [])
         actual_key = declared[:actual].to_s
         base = if observed then "observe:#{actual_key}"
@@ -66,6 +68,7 @@ module Nukadoko
       # What a claim step's page had received by its judged reading, and
       # what the page showed right after it. A file is named from the step
       # record's directory, or from the run's when `under` names the step's.
+      #: (Hash[Symbol, untyped], ?String?) -> Hash[Symbol, untyped]
       def page_fields(record, under = nil)
         view = record[:page_view] or return {}
         return view unless under && view[:judged_view]
@@ -79,6 +82,7 @@ module Nukadoko
       # How many times a claim step read, and for a polled one each reading
       # and the settled conditions, with the reading the poll stopped on
       # when two settled.
+      #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def poll_fields(record)
         poll = record[:poll] or return { attempts: 1 }
 
@@ -96,6 +100,7 @@ module Nukadoko
         { attempts: [readings.size, 1].max, readings: readings, **settled }
       end
 
+      #: (untyped) -> Hash[Symbol, untyped]
       def reading_value(value)
         text = JSON.generate(value)
         text.bytesize <= READING_MAX_BYTES ? { value: value } : { json_start: text.byteslice(0, READING_MAX_BYTES).to_s.scrub(""), json_bytes: text.bytesize }
@@ -103,6 +108,7 @@ module Nukadoko
 
       # Why a poll whose claim broke stopped, on the failure's first line,
       # so a reading that settled is never mistaken for the timeout passing.
+      #: (singleton(Step), Hash[Symbol, untyped]) -> String
       def poll_end(step, record)
         poll = record[:poll]
         return "" if poll.nil? || poll[:conditions].empty? || poll[:stop] == "held"
@@ -118,6 +124,7 @@ module Nukadoko
 
       # A declared claim or settled condition as one line, as `nuka
       # describe` writes it: `status not-equal "running"`.
+      #: (Hash[Symbol, untyped]) -> String
       def describe_comparison(claim)
         expected = case claim[:expected]
                    in String => key then key
@@ -136,6 +143,7 @@ module Nukadoko
       # and item claim as declared, how many items the list held and how
       # many `where` selected, and the judged items, the broken first, at
       # most 20, in index order.
+      #: (Hash[Symbol, untyped], untyped, untyped, Hash[String, String], Hash[String, String?], observed_from: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
       def each_claim(declared, observed, args, origins, texts, observed_from:, patterns: [])
         key = declared[:actual].to_s
         actual_from = place(observed_from ? "observe:#{key}" : origins.fetch(key, "sentence:#{key}"), declared[:view], declared[:at])
@@ -192,6 +200,7 @@ module Nukadoko
         record.merge(outcome: outcomes.include?("broken") ? "broken" : outcomes.include?("unjudged") ? "unjudged" : "held", measured: nil)
       end
 
+      #: (Hash[Symbol, untyped], untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
       def item_declaration(entry, args, origins, texts, patterns, observed)
         expected_from, expected_text = expected_origin(entry, origins, texts, patterns)
         expected = begin
@@ -204,6 +213,7 @@ module Nukadoko
                  expected_text: expected_text)
       end
 
+      #: (Hash[Symbol, untyped], untyped, String, untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
       def item_comparison(entry, item, at, args, origins, texts, patterns, top)
         judged = Claims.judge_one(entry, item, args, top)
         expected_from, expected_text = expected_origin(entry, origins, texts, patterns)
@@ -216,6 +226,7 @@ module Nukadoko
 
       # The claims of a scenario's step records, counted by outcome, in the
       # fields run.json gives them.
+      #: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
       def claim_counts(records)
         outcomes = records.flat_map { _1[:claim_records] || [] }.map { _1[:outcome] }
         counts = { held: outcomes.count("held"), broken: outcomes.count("broken") } #: Hash[Symbol, Integer]
@@ -227,6 +238,7 @@ module Nukadoko
 
       # A claim's outcome and, when the two sides could not be compared or
       # nothing judged them, why.
+      #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def outcome(judged)
         return { outcome: "for-judgment" } if judged[:for_judgment]
         return { outcome: "held" } if judged[:holds]
@@ -234,6 +246,7 @@ module Nukadoko
         { outcome: judged[:unjudged] ? "unjudged" : "broken", **(judged[:reason] ? { reason: judged[:reason] } : {}) }
       end
 
+      #: (untyped) -> String
       def json_type(value)
         case value
         when nil then "null"
@@ -245,9 +258,11 @@ module Nukadoko
         end
       end
 
+      #: (String) -> String
       def article(type) = %w[array object].include?(type) ? "an #{type}" : "a #{type}"
 
       # A claim whose observe raised: where each side would come from, and no value.
+      #: (Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], ?patterns: Array[String]) -> Hash[Symbol, untyped]
       def unobserved_claim(declared, origins, texts, patterns: [])
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { actual_from: declared[:compare] == "fits-aria-snapshot" ? "ARIA snapshot of observe:#{declared[:actual]}" : place("observe:#{declared[:actual]}", declared[:view], declared[:at]), view: declared[:view], at: declared[:at]&.to_s,
@@ -256,10 +271,12 @@ module Nukadoko
       end
 
       # A count is the last step a claim takes, so its label names it first.
+      #: (String, untyped) -> String
       def counted(label, count) = count ? "count of #{label}" : label
 
       # Where a side of a claim reads: its origin, read through its view,
       # then walked to its path, as the TypeScript engine labels it.
+      #: (String, String?, untyped) -> String
       def place(base, view, at)
         label = view ? "#{base} as #{view}" : base
         return label unless at
@@ -269,6 +286,7 @@ module Nukadoko
 
       # A literal is named by the pattern words that state it, so the label
       # reads as the sentence did.
+      #: (Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], Array[String]) -> [String, String?]
       def expected_origin(declared, origins, texts, patterns)
         case declared[:expected]
         in String => key then [place(origins.fetch(key, "sentence:#{key}"), declared[:expected_view], nil), texts[key]]
@@ -281,20 +299,25 @@ module Nukadoko
 
       # The sentence a claim step's failure reads as, the same words the
       # TypeScript engine prints.
+      #: (Array[Hash[Symbol, untyped]]) -> String
       def broken_message(records) = ClaimLine.broken_claims_message(records)
 
+      #: (Integer) -> String
       def runs_text(runs) = runs == 1 ? "1 run" : "#{runs} runs"
 
+      #: (Hash[Symbol, untyped]) -> String
       def cell_text(cell) = { "pass" => "pass", "not-run" => "·" }.fetch(cell[:outcome]) { "#{cell[:outcome]}@#{cell[:line]}" }
 
       # A head control or a base cell stands where the criterion's behaviour
       # is absent, so a Then failing there the same way in each proof run
       # proves the criterion tells the behaviour apart.
+      #: (Hash[Symbol, untyped]) -> bool
       def proves?(cell)
         absent = cell[:world] == "base" || (cell[:world] != "old" && cell[:role] == "control")
         absent && cell[:outcome] == "fail" && cell[:runs] >= Table.proof_runs
       end
 
+      #: (Hash[Symbol, untyped], String) -> String
       def failed_reason(cell, where)
         case cell[:outcome]
         when "not-run" then "did not run #{where}: #{cell[:reason] || "no execution was recorded"}"
@@ -305,11 +328,13 @@ module Nukadoko
         end
       end
 
-      def listed(parts) = parts.size <= 2 ? parts.join(" and ") : "#{parts[0..-2].join(", ")}, and #{parts.last}"
+      #: (Array[String]) -> String
+      def listed(parts) = parts.size <= 2 ? parts.join(" and ") : "#{parts[0..-2].to_a.join(", ")}, and #{parts.last}"
 
       # What changed under an unchanged criterion, or nil when nothing did.
+      #: (Hash[Symbol, untyped]) -> String?
       def underneath_change(context)
-        changed = [*("the mapping" if context[:mapping_changed]), *("its tags" if context[:retagged]), *("its name or its file" if context[:renamed])]
+        changed = { "the mapping" => :mapping_changed, "its tags" => :retagged, "its name or its file" => :renamed }.filter_map { |text, key| text if context[key] }
         changed.empty? ? nil : "#{listed(changed)} changed since the base"
       end
 
@@ -318,6 +343,7 @@ module Nukadoko
       # unchanged row runs in the old world when something under it
       # changed; a new or changed row runs at the base unless a head
       # control already proves it, or it carries @held.
+      #: (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Array[String]]
       def planned_world_cells(head_cells, context, old_roles)
         none = { base: [], old: [] }
         return none unless context
@@ -337,6 +363,7 @@ module Nukadoko
         { base: required.map { _1[:environment] }, old: [] }
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def world_cell_clause(cell)
         where = cell[:world] == "old" ? "in the old world in #{cell[:environment]}" : "at the base in #{cell[:environment]}"
         line = cell[:world] == "old" ? "line #{cell[:line]} of the base's feature file" : "line #{cell[:line]}"
@@ -355,12 +382,14 @@ module Nukadoko
         end
       end
 
+      #: (Array[Hash[Symbol, untyped]]) -> String
       def world_cells_clause(cells)
         template = world_cell_clause(cells.first.merge(environment: "\u0000"))
         same = cells.select { world_cell_clause(_1.merge(environment: "\u0000")) == template }.map { _1[:environment] }
         template.sub("\u0000") { same.join(", ") }
       end
 
+      #: (String, Hash[Symbol, untyped]) -> String
       def control_proof_reason(passed_in, proof)
         "passes in #{passed_in}, and a claim broke at line #{proof[:line]} in #{proof[:environment]}, where its conditions do not hold, in each of #{runs_text(proof[:runs])}"
       end
@@ -370,6 +399,7 @@ module Nukadoko
       # control fails at a Then the same way in each proof run. Under
       # `--base` (`context`), red too for a new or changed row nothing proves
       # (unproven) and an unchanged row the old world does not pass (moved).
+      #: (Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> [String, String]
       def judge_row(cells, context = nil)
         head = cells.select { _1[:world] == "head" }
         required = head.select { _1[:role] == "required" }
@@ -449,6 +479,7 @@ module Nukadoko
         ["unproven", "passes in #{passed_in}, and nothing shows a Then failing where its behaviour is absent (#{absent.join(", ")})"]
       end
 
+      #: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
       def counts(scenarios)
         head = scenarios.reject { _1[:role] == "control" }
         controls = scenarios.select { _1[:role] == "control" }
@@ -460,6 +491,7 @@ module Nukadoko
       # uncommitted change, and the working tree as one git tree id, written
       # through a copy of the index so the real one is never touched. Null
       # outside a git repository or before the first commit.
+      #: (String) -> Hash[Symbol, untyped]?
       def commit(project)
         sha, ok = git(project, "rev-parse", "--verify", "HEAD")
         return nil unless ok
@@ -468,6 +500,7 @@ module Nukadoko
         { sha: sha, dirty: !status.empty?, working_tree: working_tree(project) }
       end
 
+      #: (String) -> String?
       def working_tree(project)
         index, ok = git(project, "rev-parse", "--git-path", "index")
         return nil unless ok
@@ -487,6 +520,7 @@ module Nukadoko
         end
       end
 
+      #: (String, *String, ?env: Hash[String, String], ?input: String, ?strip: bool) -> [String, bool]
       def git(project, *argv, env: {}, input: "", strip: true)
         out, status = Open3.capture2(env, "git", *argv, chdir: project, err: File::NULL, stdin_data: input)
         [strip ? out.strip : out, status.success?]

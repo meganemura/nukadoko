@@ -25,6 +25,7 @@ module Nukadoko
       # Takes the ARIA snapshot of the locator or page at each path a
       # fits-aria-snapshot claim reads, once per reading. One path's failure
       # is that path's read, so taking them never raises.
+      #: (Array[Hash[Symbol, untyped]], untyped) -> untyped
       def self.take_aria_snapshots(claims, observed)
         paths = claims.filter_map { _1[:actual].to_s if !_1[:each] && _1[:compare] == "fits-aria-snapshot" }
         judged = claims.filter_map { judged_path(_1) if !_1[:each] && _1[:compare] == "judged-as" }
@@ -43,10 +44,12 @@ module Nukadoko
       end
 
       # The path a judged-as claim reads: its actual and, with no view, its at.
+      #: (Hash[Symbol, untyped]) -> String
       def self.judged_path(claim)
         [claim[:actual], (claim[:at] unless claim[:view])].compact.join(".")
       end
 
+      #: (untyped, Array[String]) -> Hash[Symbol, String]
       def self.aria_snapshot_at(root, segments)
         found = segments.reduce(root) do |current, segment|
           case current
@@ -58,8 +61,9 @@ module Nukadoko
         return { broken: "is undefined" } if found == :missing
         return { broken: "is #{aria_value_kind(found)}, and #{ARIA_TAKES}" } unless aria_snapshot_taker?(found)
 
+        taker = found #: untyped
         text = begin
-          found.aria_snapshot
+          taker.aria_snapshot
         rescue StandardError => e
           return { unjudged: "gave no ARIA snapshot: #{e.message.lines.first.to_s.chomp.delete_suffix(".")}, so the claim was not judged" }
         end
@@ -68,12 +72,14 @@ module Nukadoko
 
       # Only Playwright's own locator and page: a value step code wrote with
       # a method of that name would be a tree written in code.
+      #: (untyped) -> bool
       def self.aria_snapshot_taker?(value)
         value.class.ancestors.any? { %w[Playwright::Locator Playwright::Page].include?(_1.name) }
       end
 
       # The phrase for a value that is not a locator or a page, as the
       # TypeScript engine names it.
+      #: (untyped) -> String
       def self.aria_value_kind(value)
         case value
         when nil then "null"
@@ -88,16 +94,19 @@ module Nukadoko
         end
       end
 
+      #: (String) -> String
       def self.article_of(word) = word.match?(/\A[aeiou]/i) ? "an #{word}" : "a #{word}"
 
       # The side a fits-aria-snapshot claim reads: the text of the snapshot
       # taken of the value at its actual path.
+      #: (Hash[Symbol, untyped], untyped) -> Hash[Symbol, String]
       def self.aria_side(claim, observed)
         path = claim[:actual].to_s
         taken = (observed.is_a?(Hash) ? ARIA_TAKEN[observed] : nil)&.[](path) || { unjudged: "has no ARIA snapshot nukadoko took, so the claim was not judged" } #: Hash[Symbol, String]
         taken[:text] ? taken : taken.transform_values { "observe:#{path} #{_1}" }
       end
 
+      #: (Array[Hash[Symbol, untyped]], untyped, untyped) -> Array[Hash[Symbol, untyped]]
       def self.judge(claims, observed, args)
         claims.map { judge_one(_1, observed, args) }
       end
@@ -105,6 +114,7 @@ module Nukadoko
       # `top` is what observe returned, which an expected { observe } reads
       # from inside an each as well. A claim on an item with no actual reads
       # the item itself.
+      #: (Hash[Symbol, untyped], untyped, untyped, ?untyped) -> Hash[Symbol, untyped]
       def self.judge_one(claim, observed, args, top = observed)
         actual = dig(view(claim[:view], claim[:actual].nil? ? observed : read(observed, claim[:actual])), claim[:at])
         return judge_each(claim[:each], actual, args, top) if claim[:each]
@@ -125,6 +135,7 @@ module Nukadoko
           **(result[:reason] ? { reason: result[:reason] } : {}), **(result[:stopped] ? { reason: result[:stopped], unjudged: true } : {}) }
       end
 
+      #: (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
       def self.judge_aria(claim, observed, args, top)
         side = aria_side(claim, observed)
         expected = expected_value(claim, args, top)
@@ -137,10 +148,12 @@ module Nukadoko
       end
 
       # The tree nukadoko took of a judged value that is a locator or a page.
+      #: (Hash[Symbol, untyped], untyped) -> Hash[Symbol, String]?
       def self.aria_judged(claim, observed)
         observed.is_a?(Hash) ? ARIA_TAKEN[observed]&.[]("judged:#{judged_path(claim)}") : nil
       end
 
+      #: (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
       def self.judge_judged(claim, observed, args, top)
         taken = aria_judged(claim, observed) || {}
         expected = expected_value(claim, args, top)
@@ -149,12 +162,14 @@ module Nukadoko
         { actual: taken[:text], compare: claim[:compare], expected: expected, holds: true, for_judgment: true, aria: true }
       end
 
+      #: (Hash[Symbol, untyped], untyped, untyped, untyped) -> Hash[Symbol, untyped]
       def self.judge_each(each, items, args, top)
         chosen = Array(items).select { |item| (each[:where] || []).all? { judge_one(_1, item, args, top)[:holds] } }
         results = chosen.flat_map { |item| each[:claims].map { judge_one(_1, item, args, top) } }
         { each: results, chosen: chosen.size, holds: !chosen.empty? && results.all? { _1[:holds] } }
       end
 
+      #: (Hash[Symbol, untyped], untyped, ?untyped) -> untyped
       def self.expected_value(claim, args, top = nil)
         value =
           case claim[:expected]
@@ -169,6 +184,7 @@ module Nukadoko
       VIEWS = %w[text lines comma-list json].freeze
 
       # A view reads a string as something else before `at` walks into it.
+      #: (String?, untyped) -> untyped
       def self.view(name, value)
         return value unless name
         raise ArgumentError, "view #{name} reads a string, and the value is #{value.inspect}" unless value.is_a?(String)
@@ -182,19 +198,23 @@ module Nukadoko
         end
       end
 
+      #: (untyped, String | Symbol) -> untyped
       def self.read(hash, key)
         hash = hash.transform_keys(&:to_s) if hash.is_a?(Hash)
         hash.fetch(key.to_s)
       end
 
+      #: (untyped, untyped) -> untyped
       def self.dig(value, path)
         return value unless path
 
         path.to_s.split(".").reduce(value) { |v, part| v.is_a?(Array) ? v[Integer(part)] : read(v, part) }
       end
 
+      #: (untyped, untyped) -> bool
       def self.same?(a, b) = normal(a) == normal(b)
 
+      #: (untyped) -> untyped
       def self.normal(value)
         case value
         when Hash then value.to_h { |k, v| [k.to_s, normal(v)] }
@@ -216,6 +236,7 @@ module Nukadoko
       TIMESTAMP = /\A(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|[+-](\d{2})(?::?(\d{2}))?)\z/
       UUID = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
+      #: (Integer, Integer, Integer) -> bool
       def self.calendar_day?(year, month, day)
         return false if month < 1 || month > 12 || day < 1
 
@@ -223,6 +244,7 @@ module Nukadoko
         day <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
       end
 
+      #: (untyped) -> bool
       def self.date?(value)
         match = value.is_a?(String) ? DATE.match(value) : nil
         return false unless match
@@ -231,6 +253,7 @@ module Nukadoko
         calendar_day?(year.to_i, month.to_i, day.to_i)
       end
 
+      #: (untyped) -> bool
       def self.timestamp?(value)
         match = value.is_a?(String) ? TIMESTAMP.match(value) : nil
         return false unless match
@@ -247,6 +270,7 @@ module Nukadoko
 
       # A text a URL parser accepts can still be no URL a program wrote, so
       # the scheme needs "//" and no character a reader cannot see may appear.
+      #: (untyped) -> bool
       def self.url?(value)
         return false unless value.is_a?(String) && value.match?(%r{\Ahttps?://}i) && !value.match?(/[\s\p{Cc}\p{Cf}]/)
 
@@ -265,8 +289,10 @@ module Nukadoko
       }.freeze
 
       # The test of the kind `name` names, read trimmed and in any case.
+      #: (String) -> untyped
       def self.value_kind(name) = KIND_TESTS[name.strip.downcase]
 
+      #: (untyped) -> String
       def self.json_type(value)
         case value
         when nil then "null"
@@ -278,13 +304,16 @@ module Nukadoko
         end
       end
 
+      #: (String) -> String
       def self.article(type) = %w[array object].include?(type) ? "an #{type}" : "a #{type}"
 
       # JavaScript's trim, which takes Unicode spaces and a byte order mark.
+      #: (String) -> bool
       def self.blank?(text) = text.match?(/\A[[:space:]\u{feff}]*\z/)
 
       # Structural equality over JSON values: key order does not count, and
       # 1 equals 1.0, as JSON writes one number.
+      #: (untyped, untyped) -> bool
       def self.deep_equal?(a, b)
         type = json_type(a)
         return false unless type == json_type(b)
@@ -300,6 +329,7 @@ module Nukadoko
       end
 
       # The same items, each as many times, in any order.
+      #: (Array[untyped], Array[untyped]) -> bool
       def self.same_items?(a, b)
         return false unless a.size == b.size
 
@@ -315,6 +345,7 @@ module Nukadoko
       # nil: an object fits one that holds each of its fields with a value
       # that fits, an array one of its length whose items fit, and anything
       # else an equal value.
+      #: (untyped, untyped, ?Array[String | Integer]) -> Hash[Symbol, untyped]?
       def self.field_misfit(actual, expected, path = [])
         case json_type(expected)
         when "object"
@@ -342,6 +373,7 @@ module Nukadoko
       end
 
       # The path of the first object with no field, at any depth, or nil.
+      #: (untyped, ?Array[String | Integer]) -> Array[String | Integer]?
       def self.fieldless_object(value, path = [])
         type = json_type(value)
         return nil unless %w[object array].include?(type)
@@ -360,6 +392,7 @@ module Nukadoko
       # { stopped: } when nothing judged them. A comparison across two JSON
       # types never holds for the reason the claim states, so it breaks with
       # both types named, and so does an expected value every actual holds.
+      #: (String, untyped, untyped) -> Hash[Symbol, untyped]
       def self.compare(compare, actual, expected)
         a_type = json_type(actual)
         e_type = json_type(expected)
@@ -440,9 +473,14 @@ module Nukadoko
           # meets the quality is a judgment the table reads later
           # (lib/nukadoko/judgments.rb), so it holds the step up nowhere.
           { holds: true, for_judgment: true }
+        else
+          # A step whose claim names another compare never loads, so this
+          # is a fault of nukadoko's, and the claim breaks saying so.
+          { reason: "#{compare} is no compare nukadoko knows" }
         end
       end
 
+      #: (String, untyped, untyped) -> bool
       def self.holds?(compare, actual, expected) = compare(compare, actual, expected)[:holds] == true
     end
   end

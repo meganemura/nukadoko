@@ -7,7 +7,15 @@
 # conformance cases judges both engines.
 module Nukadoko
   module Engine
-    Finding = Data.define(:severity, :code, :file, :line, :step, :message, :fix)
+    Finding = Data.define(
+      :severity, #: String
+      :code, #: String
+      :file, #: String?
+      :line, #: Integer?
+      :step, #: String?
+      :message, #: String
+      :fix, #: String?
+    )
 
     # A Data block's methods are its own, but rbs-inline reads only a class
     # body, so they are written in one.
@@ -17,17 +25,20 @@ module Nukadoko
         new(severity, code, step.file, step.line, step.step_name, message, fix)
       end
 
+      #: () -> Hash[Symbol, untyped]
       def to_h = super.compact
     end
 
     FIXTURES = %w[baseURL call context env evidence page pageAs poll request requireEnv result scratch].freeze
 
     class Check
-      attr_reader :findings, :usable
+      attr_reader :findings #: Array[Finding]
+      attr_reader :usable #: Array[singleton(Step)]
 
       # `environments` is the selection a run without --env starts, for
       # condition-unmet; nil when --env named the selection. `problems` are
       # what the feature loader found that runs nothing.
+      #: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem]) -> void
       def initialize(steps, scenarios, features: true, full: false, conditions: nil, environments: nil, problems: [])
         @steps = steps
         @scenarios = scenarios
@@ -59,6 +70,7 @@ module Nukadoko
         @findings = @findings.uniq { [_1.code, _1.file, _1.line, _1.message] }
       end
 
+      #: () -> bool
       def passed? = findings.none? { _1.severity == "error" }
 
       private
@@ -66,6 +78,7 @@ module Nukadoko
       # A step whose definition cannot stand (an unknown claim compare) is left
       # out of the vocabulary, as the TypeScript engine leaves out a step file
       # that fails to import, so it can never match a line.
+      #: (singleton(Step)) -> bool
       def definition_broken?(step)
         if (pattern = pattern_problem(step))
           findings << Finding.new("error", pattern[0], step.file, nil, step.step_name, pattern[1], Codes.fix(pattern[0]))
@@ -83,6 +96,7 @@ module Nukadoko
 
       # Why the step's pattern cannot be read, as the TypeScript engine says
       # it: the first broken capture, then what cucumber-expressions refuses.
+      #: (singleton(Step)) -> [String, String]?
       def pattern_problem(step)
         pattern = step.pattern or return nil
         head = %(Step "#{step.step_name}" pattern "#{pattern}")
@@ -93,10 +107,10 @@ module Nukadoko
           close = rest.index("}", open)
           return ["unterminated-capture", %(#{head}: Pattern has an unterminated "{" starting at: #{rest[open..]})] unless close
 
-          token = rest[open + 1...close]
+          token = rest[open + 1...close].to_s
           key, type = token.split(":", 2)
           return ["unnamed-capture", %(#{head}: Parameter "{#{token}}" has no name; every parameter in a pattern must be written {key:type} (docs/spec.md "Typed steps"))] unless type
-          return ["invalid-capture-key", %(#{head}: Parameter "{#{token}}" has an invalid name "#{key}": must match [a-zA-Z_][a-zA-Z0-9_]*)] unless key.match?(KEY)
+          return ["invalid-capture-key", %(#{head}: Parameter "{#{token}}" has an invalid name "#{key}": must match [a-zA-Z_][a-zA-Z0-9_]*)] unless key.to_s.match?(KEY)
 
           keys << key
           open = rest.index("{", close)
@@ -118,6 +132,7 @@ module Nukadoko
 
       # A capture hands the step a number or a string, and an args field of
       # the other kind can never hold it.
+      #: (singleton(Step)) -> Array[Array[untyped]]
       def capture_mismatches(step)
         fields = step.args.fields.to_h { [_1.name.to_s, _1.type] }
         step.pattern.to_s.scan(Pattern::NAMED).filter_map do |key, type|
@@ -136,9 +151,10 @@ module Nukadoko
         end
       end
 
+      #: (singleton(Step)) -> void
       def check_contract(step)
         keys = step.args.fields.map { _1.name.to_s }
-        (step.pattern ? Pattern.new(step.pattern).keys - keys : []).each do |key|
+        ((pattern = step.pattern) ? Pattern.new(pattern).keys - keys : []).each do |key|
           findings << Finding.about_step("error", "unknown-capture-key", step,
                                          %(Step "#{step.step_name}" pattern "#{step.pattern}" binds key "#{key}", which is not a key of its args schema),
                                          "Rename the capture to a key of the args schema, or add the key to the schema.")
@@ -164,8 +180,9 @@ module Nukadoko
 
       # Two patterns that read the same once their names go would match the
       # same lines; the later file is named, with every step that shares it.
+      #: () -> void
       def check_duplicate_patterns
-        @usable.select(&:pattern).group_by { _1.pattern.gsub(Pattern::NAMED) { "{#{Regexp.last_match(2)}}" } }.each do |text, group|
+        @usable.select(&:pattern).group_by { _1.pattern.to_s.gsub(Pattern::NAMED) { "{#{Regexp.last_match(2)}}" } }.each do |text, group|
           next if group.size < 2
 
           sorted = group.sort_by(&:file)
@@ -177,6 +194,7 @@ module Nukadoko
 
       # A pattern no line binds alone has no place in a scenario; a placeholder
       # description is what a person picking a step would read.
+      #: () -> void
       def check_unbound
         bound = @scenarios.flat_map(&:steps).filter_map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first.first : nil }
         # A step whose file failed to load is out of the vocabulary, so it is not unbound either.
@@ -195,6 +213,7 @@ module Nukadoko
 
       # A from key every line fills with a capture never takes its value
       # from the producer it names.
+      #: () -> void
       def check_from_unused
         bound = @scenarios.flat_map(&:steps).filter_map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first : nil }
         @usable.each do |step|
@@ -216,6 +235,7 @@ module Nukadoko
       # the feature file unable to say which one counts. A line before it
       # that matches no step may be the producer misspelled, so those
       # findings wait behind one warning.
+      #: (Scenario) -> void
       def check_from_order(scenario)
         resolved = scenario.steps.map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first : nil }
         held = []
@@ -253,6 +273,7 @@ module Nukadoko
 
       # What a claim step's claims read, from the producers of its from
       # values on the earlier lines of the scenario (ClaimCheck).
+      #: (Scenario) -> void
       def check_claim_sources(scenario)
         resolved = scenario.steps.map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first : nil }
         lines = scenario.steps.map(&:line)
@@ -263,6 +284,7 @@ module Nukadoko
         end
       end
 
+      #: (String, String, Array[String], Array[untyped]) -> String
       def from_missing_message(step_name, key, names, resolved)
         anywhere = ->(name) { resolved.any? { _1&.first&.step_name == name } }
         if names.size == 1
@@ -274,6 +296,7 @@ module Nukadoko
         %(Step "#{step_name}"'s from.#{key} needs exactly one of its candidate producers (#{names.map { %("#{_1}") }.join(", ")}) to have already run earlier in this scenario, but none has: #{detail}. This line would fail args validation with certainty)
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def from_order_fix(issue)
         names = issue[:candidates]
         put = names.size == 1 ? %(Put a line that runs step "#{names.first}" earlier in the scenario) : "Put a line that runs exactly one of steps #{names.map { %("#{_1}") }.join(", ")} earlier in the scenario"
@@ -282,6 +305,7 @@ module Nukadoko
         %(#{put}. Or, if a step that an earlier line runs returns #{issue[:key]}, list that step as another [step, "#{issue[:key]}"] candidate in from.#{issue[:key]} of step "#{issue[:step]}".)
       end
 
+      #: (Scenario, Array[Hash[Symbol, untyped]]) -> void
       def hold_from_order(scenario, held)
         steps_phrase = ->(names) { names.size == 1 ? %(step "#{names.first}") : "one of steps #{names.map { %("#{_1}") }.join(", ")}" }
         undefined = held.flat_map { _1[:undefined] }.uniq.sort
@@ -300,6 +324,7 @@ module Nukadoko
 
       # Fixture definitions that can never resolve, and (in a whole-project
       # check) one no step reaches.
+      #: (bool) -> void
       def check_fixtures(full)
         fixtures = Nukadoko.project_fixtures
         return if fixtures.empty?
@@ -356,6 +381,7 @@ module Nukadoko
 
       # A scenario whose condition tags no environment of the selection meets
       # has no required cell, so nothing in the run shows that it holds.
+      #: (Array[Environment]) -> void
       def check_conditions_met(environments)
         declared = @conditions || []
         described = environments.map { |e| "#{e.name} (#{describe_conditions(e.conditions)})" }.join("; ")
@@ -373,6 +399,7 @@ module Nukadoko
         end
       end
 
+      #: (Hash[String, untyped]) -> String
       def describe_conditions(conditions)
         return "no conditions" if conditions.empty?
 
@@ -383,6 +410,7 @@ module Nukadoko
       CONDITION_VALUE = /\A[^\s@]+\z/
 
       # The condition a tag names, nil for one that does not read.
+      #: (String) -> String?
       def self.condition_of(tag)
         if tag.start_with?("@without:")
           name = tag.delete_prefix("@without:")
@@ -401,6 +429,7 @@ module Nukadoko
       EXPECTS_FORMS = "@expects:status=<500-599>, @expects:error=<class>, or @expects:page-error=<name>"
 
       # Why an @expects: tag accepts nothing, nil for one that reads.
+      #: (String) -> String?
       def self.expects_problem(tag)
         kind, value = tag.delete_prefix("@expects:").split("=", 2)
         rule = EXPECTED[kind]
@@ -411,6 +440,7 @@ module Nukadoko
         "#{tag} does not name #{rule[2]}, so it accepts nothing#{": a run judges no other status, and one tag names one status" if kind == "status"}"
       end
 
+      #: (Array[String]?) -> void
       def check_tags(conditions)
         @scenarios.flat_map { |scenario| scenario.tag_lines.map { |tag, line| [scenario.uri, line, tag] } }.uniq.each do |uri, line, tag|
           if tag.start_with?("@expects:")
@@ -441,6 +471,7 @@ module Nukadoko
 
       # A cycle never closes into a fixture bag, and a read-only step cannot
       # reach a part that writes: both can only end one way, so both are errors.
+      #: () -> void
       def check_parts
         @usable.each do |step|
           step.parts.reject { _1.is_a?(Class) && _1 < Step && @steps.include?(_1) }.each do |part|
@@ -462,6 +493,7 @@ module Nukadoko
       end
 
       # Each cycle once, named from the step whose walk first closed it.
+      #: () -> Array[Array[singleton(Step)]]
       def part_cycles
         done = []
         cycles = []
@@ -482,6 +514,7 @@ module Nukadoko
 
       # A scenario with steps of its own and no Then can never be judged on
       # an outcome. The Background's steps count toward the Then.
+      #: () -> void
       def check_shapes
         @scenarios.group_by { [_1.uri, _1.keyword_line] }.each_value do |rows|
           scenario = rows.first
@@ -502,6 +535,7 @@ module Nukadoko
         end
       end
 
+      #: () -> void
       def check_lines
         undefined = []
         @scenarios.each do |scenario|
@@ -530,6 +564,7 @@ module Nukadoko
 
       # A scenario whose Then lines each bind one step, none of them a claim
       # step, passes whenever its steps run.
+      #: (Scenario) -> void
       def judging_nothing(scenario)
         thens = scenario.steps.select { _1.kind.to_s == "Outcome" }
         return if thens.empty?
@@ -546,6 +581,7 @@ module Nukadoko
       # While a step definition is broken, a line it would have matched looks
       # undefined. Saying so would send the reader after the wrong fix, so the
       # judgment waits for the broken definition, with one warning.
+      #: (Array[untyped]) -> void
       def suppress_undefined(undefined)
         broken = @steps - @usable
         if broken.any? && undefined.any?
@@ -564,6 +600,7 @@ module Nukadoko
 
       # Only a Then judges, so a claim step elsewhere and a step that runs in
       # Then position are both mistakes.
+      #: (Scenario, PickleStep, singleton(Step)) -> void
       def check_position(scenario, line, step)
         then_line = line.kind.to_s == "Outcome"
         if then_line && !step.claims
@@ -645,6 +682,7 @@ module Nukadoko
       # The table or docstring fills the one required key no capture and no
       # from speaks for, so zero or two such keys, or a key of a type the
       # attachment can never be, fail binding with certainty.
+      #: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
       def check_fill(scenario, line, step, captures)
         missing = step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys
         if line.table || line.doc_string
@@ -671,14 +709,15 @@ module Nukadoko
       # capture, with a name that is no kind breaks on this line for certain.
       # Only a plain string key read as it is or as text counts, so the value
       # the claim reads is the captured text.
+      #: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
       def check_kinds(scenario, line, step, captures)
         (step.claims || []).each_with_index do |claim, index|
           label = "claims[#{index}]"
-          entries = if claim[:each]
-                      [*(claim[:each][:where] || []).each_with_index.map { ["#{label}.each.where[#{_2}]", _1] },
-                       *claim[:each][:claims].each_with_index.map { ["#{label}.each.claims[#{_2}]", _1] }]
-                    else [[label, claim]]
-                    end
+          entries = [[label, claim]] #: Array[[String, Hash[Symbol, untyped]]]
+          if (each = claim[:each])
+            entries = [*(each[:where] || []).each_with_index.map { ["#{label}.each.where[#{_2}]", _1] },
+                       *each[:claims].each_with_index.map { ["#{label}.each.claims[#{_2}]", _1] }]
+          end
           entries.each do |entry_label, entry|
             key = entry[:expected]
             next unless entry[:compare] == "is-a" && key.is_a?(String) && [nil, "text"].include?(entry[:expected_view])
@@ -697,6 +736,7 @@ module Nukadoko
       # fills, through a capture or the docstring, with a tree the run breaks
       # the claim on whatever the page shows: one that does not read, or one
       # that names no node.
+      #: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
       def check_unfit_trees(scenario, line, step, captures)
         claims = step.claims or return
         docstring_keys = line.doc_string ? step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys.map(&:to_s) : []
@@ -716,8 +756,10 @@ module Nukadoko
         end
       end
 
+      #: (singleton(Step), String, PickleStep) -> String?
       def attachment_mismatch(step, key, line)
-        type = step.args[key].type
+        field = step.args[key] or return nil
+        type = field.type
         kind = case type
                in Schema then "object"
                in [:array, *] then "array"

@@ -19,13 +19,16 @@ module Nukadoko
 
       module_function
 
+      #: (untyped) -> String
       def value_text(value)
         text = JSON.generate(value)
         text.size > VALUE_TEXT_LIMIT ? "#{text[0, VALUE_TEXT_LIMIT]}..." : text
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def expected_text(record) = record.key?(:expected) ? "#{value_text(record[:expected])} (#{record[:expected_from]})" : record[:expected_from]
 
+      #: (Hash[Symbol, untyped]) -> String
       def comparison_text(record)
         actual = record.key?(:actual) ? snapshot_excerpt_text(record) || "#{value_text(record[:actual])} (#{record[:actual_from]})" : record[:actual_from]
         "#{actual} #{record[:compare]} #{expected_text(record)}"
@@ -35,6 +38,7 @@ module Nukadoko
       # the misfit points at, with their numbers, since a page's snapshot is
       # longer than the line shows and its first lines are seldom where the
       # two part.
+      #: (Hash[Symbol, untyped]) -> String?
       def snapshot_excerpt_text(record)
         return nil unless record[:compare] == "fits-aria-snapshot" && record[:outcome] == "broken" && !record[:reason]
         return nil unless record[:actual].is_a?(String) && record[:expected].is_a?(String)
@@ -44,15 +48,19 @@ module Nukadoko
         "#{JSON.generate(excerpt[:text])} (#{lines} of #{record[:actual_from]})"
       end
 
+      #: (untyped, untyped) -> String?
       def aria_snapshot_difference(actual, expected) = actual.is_a?(String) && expected.is_a?(String) ? AriaSnapshot.difference(actual, expected) : nil
 
+      #: (Hash[Symbol, untyped]) -> String
       def item_declaration_text(entry)
         actual = "#{"count of " if entry[:count]}#{entry[:actual] || "item"}#{" as #{entry[:view]}" if entry[:view]}#{" at #{entry[:at]}" if entry[:at]}"
         "#{actual} #{entry[:compare]} #{expected_text(entry)}"
       end
 
+      #: (Integer) -> String
       def item_count(count) = count == 1 ? "1 item" : "#{count} items"
 
+      #: (Hash[Symbol, untyped]) -> String
       def each_text(record)
         each = record[:each]
         selected = each[:selected] == each[:items] ? "" : ", #{each[:selected]} selected"
@@ -60,10 +68,14 @@ module Nukadoko
         "each of #{record[:actual_from]} (#{item_count(each[:items])}#{selected})#{where}: #{each[:claims].map { item_declaration_text(_1) }.join(" and ")}"
       end
 
+      #: (Hash[Symbol, untyped]) -> bool
       def each?(record) = record.key?(:each)
+      #: (Hash[Symbol, untyped]) -> String
       def claim_text(record) = each?(record) ? each_text(record) : comparison_text(record)
 
+      #: (untyped) -> bool
       def plain_object?(value) = value.is_a?(Hash)
+      #: (untyped, untyped) -> bool
       def same_json?(a, b) = JSON.generate(a) == JSON.generate(b) && a.class == b.class
 
       # The first place two JSON values differ: a path of keys and indexes,
@@ -87,8 +99,10 @@ module Nukadoko
         same_json?(actual, expected) ? nil : [path, actual, expected]
       end
 
+      #: (untyped) -> String
       def side_text(value) = value == :none ? "nothing" : value_text(value)
 
+      #: (String, String) -> String
       def text_difference(actual, expected)
         if actual.include?("\n") || expected.include?("\n")
           actual_lines = actual.split("\n", -1)
@@ -106,6 +120,7 @@ module Nukadoko
         "character #{at + 1}: actual #{JSON.generate(around.(a))}, expected #{JSON.generate(around.(e))}"
       end
 
+      #: (untyped, untyped) -> String?
       def equal_difference(actual, expected)
         if actual.is_a?(String) && expected.is_a?(String)
           return nil if actual == expected
@@ -120,6 +135,7 @@ module Nukadoko
         actual.is_a?(Array) ? list_difference(actual, expected, first) : first
       end
 
+      #: (Array[untyped], untyped, untyped) -> String
       def difference_at(path, actual, expected)
         if actual.is_a?(String) && expected.is_a?(String) && equal_difference(actual, expected)
           return "#{path.join(".")}, #{text_difference(actual, expected)}"
@@ -128,8 +144,10 @@ module Nukadoko
         "#{path.join(".")}: actual #{side_text(actual)}, expected #{side_text(expected)}"
       end
 
+      #: (untyped, untyped) -> bool
       def same?(a, b) = Claims.same?(a, b) && a.class == b.class || (a.is_a?(Numeric) && b.is_a?(Numeric) && a == b)
 
+      #: (Array[untyped], Array[untyped]) -> [Integer, Integer]
       def shared_ends(actual, expected)
         shorter = [actual.size, expected.size].min
         start = 0
@@ -139,6 +157,7 @@ module Nukadoko
         [start, tail]
       end
 
+      #: (Array[untyped], Array[untyped]) -> Hash[Symbol, Array[Integer]]?
       def unpaired_items(actual, expected)
         start, tail = shared_ends(actual, expected)
         actual_end = actual.size - tail
@@ -156,6 +175,7 @@ module Nukadoko
 
       # The items a longest run of equal items, in order, leaves out, so an
       # inserted item is one extra item and not a change to every one after it.
+      #: (Array[untyped], Array[untyped]) -> Hash[Symbol, untyped]?
       def aligned_items(actual, expected)
         start, tail = shared_ends(actual, expected)
         a_count = actual.size - tail - start
@@ -200,12 +220,14 @@ module Nukadoko
         { missing: missing, extra: extra, changed: changed }
       end
 
+      #: (Array[Integer], Array[untyped]) -> String
       def listed_items(indexes, items)
         shown = indexes.first(LISTED_ITEMS).map { "#{value_text(items[_1])} (item #{_1})" }
         more = indexes.size - shown.size
         more.zero? ? shown.join(", ") : "#{shown.join(", ")}, and #{more} more"
       end
 
+      #: (Hash[Symbol, untyped], Array[untyped], Array[untyped]) -> String?
       def unshared_text(unshared, actual, expected)
         head = ->(indexes, side) { "#{indexes.size} #{side} #{indexes.size == 1 ? "item is" : "items are"}" }
         parts = []
@@ -214,6 +236,7 @@ module Nukadoko
         parts.empty? ? nil : parts.join("; ")
       end
 
+      #: (Array[Hash[Symbol, Integer]], Array[untyped], Array[untyped]) -> String?
       def changed_text(changed, actual, expected)
         first = changed.first or return nil
         found = difference_in(actual[first[:actual]], expected[first[:expected]], []) or return nil
@@ -222,6 +245,7 @@ module Nukadoko
         changed.size == 1 ? "#{item} changed#{where}" : "#{changed.size} items changed, first #{item}#{where}"
       end
 
+      #: (Array[untyped], Array[untyped], String) -> String
       def list_difference(actual, expected, first)
         unpaired = unpaired_items(actual, expected)
         return "the same items in another order, #{first}" if unpaired && unpaired[:missing].empty? && unpaired[:extra].empty?
@@ -232,6 +256,7 @@ module Nukadoko
         [unshared_text(aligned, actual, expected), changed_text(aligned[:changed], actual, expected)].compact.join("; ")
       end
 
+      #: (untyped, untyped) -> String?
       def same_items_difference(actual, expected)
         return nil unless actual.is_a?(Array) && expected.is_a?(Array)
 
@@ -241,6 +266,7 @@ module Nukadoko
 
       # The first expected field a broken has-fields claim's object lacks or
       # holds another value at, found by the matcher that judged it.
+      #: (untyped, untyped) -> String?
       def fields_difference(actual, expected)
         misfit = Claims.field_misfit(actual, expected) or return nil
         at = misfit[:path].join(".")
@@ -253,6 +279,7 @@ module Nukadoko
 
       # How far a broken fits-text claim's text fit, and the line where it
       # stopped, or the two named stand-ins that broke it.
+      #: (untyped, untyped) -> String?
       def fits_difference(actual, expected)
         return nil unless actual.is_a?(String) && expected.is_a?(String)
 
@@ -269,6 +296,7 @@ module Nukadoko
         "#{fitted}expected line #{fit[:fitted] + 1} fits nothing from actual line #{fit[:at]}: actual #{side_text(fit.fetch(:actual, :none))}, expected #{value_text(fit[:expected])}"
       end
 
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
       def readings_difference(first, after)
         where = if first[:at] == after[:at] then "in actual line #{first[:at]}: actual #{value_text(first[:line])}"
                 else "in actual lines #{first[:at]} and #{after[:at]}: actual #{value_text(first[:line])}, then #{value_text(after[:line])}"
@@ -281,6 +309,7 @@ module Nukadoko
 
       # The field a broken lacks-field claim's object holds, with its value,
       # since a long object may not show it and a null reads as absent.
+      #: (untyped, untyped) -> String?
       def present_field_difference(actual, expected)
         return nil unless plain_object?(actual) && expected.is_a?(String)
 
@@ -292,6 +321,7 @@ module Nukadoko
                       "lacks-field" => :present_field_difference, "fits-text" => :fits_difference,
                       "fits-aria-snapshot" => :aria_snapshot_difference }.freeze
 
+      #: (Hash[Symbol, untyped]) -> String
       def difference_text(record)
         return "" if each?(record) || record[:outcome] != "broken" || record[:reason]
 
@@ -302,21 +332,27 @@ module Nukadoko
         difference ? "; #{difference}" : ""
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def reason_text(record) = record[:reason] ? ": #{record[:reason]}" : difference_text(record)
 
+      #: (Hash[Symbol, untyped]) -> String
       def named_outcome(record) = record[:outcome] == "unjudged" ? "unjudged" : "broken"
 
+      #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
       def named_item(record)
         outcome = named_outcome(record)
         record[:each][:results].find { _1[:selected] && _1[:outcome] == outcome }
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def item_claim_text(claim) = claim[:outcome] == "unjudged" && claim[:reason] ? "#{comparison_text(claim)}: #{claim[:reason]}" : comparison_text(claim)
 
+      #: (Hash[Symbol, untyped]) -> String
       def item_name(item) = item[:identity] ? "item #{item[:index]} (#{item[:identity][:field]} #{value_text(item[:identity][:value])})" : "item #{item[:index]}"
 
       # The claim and its outcome on one line. A broken each names its
       # first broken item and that item's first broken comparison.
+      #: (Hash[Symbol, untyped]) -> String
       def line(record)
         text = "#{claim_text(record)} #{record[:outcome]}#{reason_text(record)}"
         return text unless each?(record)
@@ -326,6 +362,7 @@ module Nukadoko
         item && claim ? "#{text}; #{item_name(item)}: #{item_claim_text(claim)}" : text
       end
 
+      #: (Hash[Symbol, untyped]) -> Array[String]
       def named_item_lines(record)
         item = named_item(record) or return []
         item[:claims].select { _1[:outcome] == named_outcome(record) }.map { "  #{item_name(item)}: #{line(_1)}" }
@@ -333,6 +370,7 @@ module Nukadoko
 
       # A claim step's failure: one line per claim that broke or was not
       # judged, the first line naming the first one.
+      #: (Array[Hash[Symbol, untyped]]) -> String
       def broken_claims_message(records)
         records.select { %w[broken unjudged].include?(_1[:outcome]) }.flat_map do |record|
           ["claim #{record[:outcome]}: #{claim_text(record)}#{reason_text(record)}", *(each?(record) ? named_item_lines(record) : [])]

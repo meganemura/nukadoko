@@ -15,34 +15,41 @@ module Nukadoko
       # the environment, the world, the run, the scenario, and the step's own
       # directory. A record that passed names each step it used; a failed one
       # names what each gave too, since that is what it failed on.
-      def self?.step_file: (untyped record, environment: untyped, world_name: untyped, run_id: untyped, scenario_record_id: untyped, evidence_dir: untyped) -> untyped
+      # : (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String) -> Hash[Symbol, untyped]
+      def self?.step_file: (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String) -> Hash[Symbol, untyped]
 
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
       # maps an args key to the label of where its value came from, and
       # `texts` to the text the sentence stated it as.
-      def self?.claim: (untyped declared, untyped judged, untyped origins, untyped texts, observed: untyped, ?patterns: untyped) -> untyped
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], observed: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
+      def self?.claim: (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], observed: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
 
       READING_MAX_BYTES: ::Integer
 
       # What a claim step's page had received by its judged reading, and
       # what the page showed right after it. A file is named from the step
       # record's directory, or from the run's when `under` names the step's.
-      def self?.page_fields: (untyped record, ?untyped under) -> untyped
+      # : (Hash[Symbol, untyped], ?String?) -> Hash[Symbol, untyped]
+      def self?.page_fields: (Hash[Symbol, untyped], ?String?) -> Hash[Symbol, untyped]
 
       # How many times a claim step read, and for a polled one each reading
       # and the settled conditions, with the reading the poll stopped on
       # when two settled.
-      def self?.poll_fields: (untyped record) -> untyped
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.poll_fields: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
-      def self?.reading_value: (untyped value) -> untyped
+      # : (untyped) -> Hash[Symbol, untyped]
+      def self?.reading_value: (untyped) -> Hash[Symbol, untyped]
 
       # Why a poll whose claim broke stopped, on the failure's first line,
       # so a reading that settled is never mistaken for the timeout passing.
-      def self?.poll_end: (untyped step, untyped record) -> untyped
+      # : (singleton(Step), Hash[Symbol, untyped]) -> String
+      def self?.poll_end: (singleton(Step), Hash[Symbol, untyped]) -> String
 
       # A declared claim or settled condition as one line, as `nuka
       # describe` writes it: `status not-equal "running"`.
-      def self?.describe_comparison: (untyped claim) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.describe_comparison: (Hash[Symbol, untyped]) -> String
 
       EACH_RESULTS_CAP: ::Integer
 
@@ -52,89 +59,116 @@ module Nukadoko
       # and item claim as declared, how many items the list held and how
       # many `where` selected, and the judged items, the broken first, at
       # most 20, in index order.
-      def self?.each_claim: (untyped declared, untyped observed, untyped args, untyped origins, untyped texts, observed_from: untyped, ?patterns: untyped) -> untyped
+      # : (Hash[Symbol, untyped], untyped, untyped, Hash[String, String], Hash[String, String?], observed_from: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
+      def self?.each_claim: (Hash[Symbol, untyped], untyped, untyped, Hash[String, String], Hash[String, String?], observed_from: bool, ?patterns: Array[String]) -> Hash[Symbol, untyped]
 
-      def self?.item_declaration: (untyped entry, untyped args, untyped origins, untyped texts, untyped patterns, untyped observed) -> untyped
+      # : (Hash[Symbol, untyped], untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
+      def self?.item_declaration: (Hash[Symbol, untyped], untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
 
-      def self?.item_comparison: (untyped entry, untyped item, untyped at, untyped args, untyped origins, untyped texts, untyped patterns, untyped top) -> untyped
+      # : (Hash[Symbol, untyped], untyped, String, untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
+      def self?.item_comparison: (Hash[Symbol, untyped], untyped, String, untyped, Hash[String, String], Hash[String, String?], Array[String], untyped) -> Hash[Symbol, untyped]
 
       # The claims of a scenario's step records, counted by outcome, in the
       # fields run.json gives them.
-      def self?.claim_counts: (untyped records) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
+      def self?.claim_counts: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
 
       # A claim's outcome and, when the two sides could not be compared or
       # nothing judged them, why.
-      def self?.outcome: (untyped judged) -> untyped
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.outcome: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
-      def self?.json_type: (untyped value) -> untyped
+      # : (untyped) -> String
+      def self?.json_type: (untyped) -> String
 
-      def self?.article: (untyped type) -> untyped
+      # : (String) -> String
+      def self?.article: (String) -> String
 
       # A claim whose observe raised: where each side would come from, and no value.
-      def self?.unobserved_claim: (untyped declared, untyped origins, untyped texts, ?patterns: untyped) -> untyped
+      # : (Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], ?patterns: Array[String]) -> Hash[Symbol, untyped]
+      def self?.unobserved_claim: (Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], ?patterns: Array[String]) -> Hash[Symbol, untyped]
 
       # A count is the last step a claim takes, so its label names it first.
-      def self?.counted: (untyped label, untyped count) -> untyped
+      # : (String, untyped) -> String
+      def self?.counted: (String, untyped) -> String
 
       # Where a side of a claim reads: its origin, read through its view,
       # then walked to its path, as the TypeScript engine labels it.
-      def self?.place: (untyped base, untyped view, untyped at) -> untyped
+      # : (String, String?, untyped) -> String
+      def self?.place: (String, String?, untyped) -> String
 
       # A literal is named by the pattern words that state it, so the label
       # reads as the sentence did.
-      def self?.expected_origin: (untyped declared, untyped origins, untyped texts, untyped patterns) -> untyped
+      # : (Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], Array[String]) -> [String, String?]
+      def self?.expected_origin: (Hash[Symbol, untyped], Hash[String, String], Hash[String, String?], Array[String]) -> [ String, String? ]
 
       # The sentence a claim step's failure reads as, the same words the
       # TypeScript engine prints.
-      def self?.broken_message: (untyped records) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self?.broken_message: (Array[Hash[Symbol, untyped]]) -> String
 
-      def self?.runs_text: (untyped runs) -> untyped
+      # : (Integer) -> String
+      def self?.runs_text: (Integer) -> String
 
-      def self?.cell_text: (untyped cell) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.cell_text: (Hash[Symbol, untyped]) -> String
 
       # A head control or a base cell stands where the criterion's behaviour
       # is absent, so a Then failing there the same way in each proof run
       # proves the criterion tells the behaviour apart.
-      def self?.proves?: (untyped cell) -> untyped
+      # : (Hash[Symbol, untyped]) -> bool
+      def self?.proves?: (Hash[Symbol, untyped]) -> bool
 
-      def self?.failed_reason: (untyped cell, untyped where) -> untyped
+      # : (Hash[Symbol, untyped], String) -> String
+      def self?.failed_reason: (Hash[Symbol, untyped], String) -> String
 
-      def self?.listed: (untyped parts) -> untyped
+      # : (Array[String]) -> String
+      def self?.listed: (Array[String]) -> String
 
       # What changed under an unchanged criterion, or nil when nothing did.
-      def self?.underneath_change: (untyped context) -> untyped
+      # : (Hash[Symbol, untyped]) -> String?
+      def self?.underneath_change: (Hash[Symbol, untyped]) -> String?
 
       # The environments a row needs a base cell and an old cell in, from its
       # head cells: none unless every required head cell passed; an
       # unchanged row runs in the old world when something under it
       # changed; a new or changed row runs at the base unless a head
       # control already proves it, or it carries @held.
-      def self?.planned_world_cells: (untyped head_cells, untyped context, untyped old_roles) -> untyped
+      # : (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Array[String]]
+      def self?.planned_world_cells: (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Array[String]]
 
-      def self?.world_cell_clause: (untyped cell) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.world_cell_clause: (Hash[Symbol, untyped]) -> String
 
-      def self?.world_cells_clause: (untyped cells) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self?.world_cells_clause: (Array[Hash[Symbol, untyped]]) -> String
 
-      def self?.control_proof_reason: (untyped passed_in, untyped proof) -> untyped
+      # : (String, Hash[Symbol, untyped]) -> String
+      def self?.control_proof_reason: (String, Hash[Symbol, untyped]) -> String
 
       # A row's verdict and why, from its cells: red for a required cell that
       # did not pass, or for a row with no required cell; proven when a
       # control fails at a Then the same way in each proof run. Under
       # `--base` (`context`), red too for a new or changed row nothing proves
       # (unproven) and an unchanged row the old world does not pass (moved).
-      def self?.judge_row: (untyped cells, ?untyped context) -> untyped
+      # : (Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> [String, String]
+      def self?.judge_row: (Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> [ String, String ]
 
-      def self?.counts: (untyped scenarios) -> untyped
+      # : (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
+      def self?.counts: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
 
       # The commit HEAD named when the run started, whether the tree had an
       # uncommitted change, and the working tree as one git tree id, written
       # through a copy of the index so the real one is never touched. Null
       # outside a git repository or before the first commit.
-      def self?.commit: (untyped project) -> untyped
+      # : (String) -> Hash[Symbol, untyped]?
+      def self?.commit: (String) -> Hash[Symbol, untyped]?
 
-      def self?.working_tree: (untyped project) -> untyped
+      # : (String) -> String?
+      def self?.working_tree: (String) -> String?
 
-      def self?.git: (untyped project, *untyped argv, ?env: untyped, ?input: untyped, ?strip: untyped) -> untyped
+      # : (String, *String, ?env: Hash[String, String], ?input: String, ?strip: bool) -> [String, bool]
+      def self?.git: (String, *String, ?env: Hash[String, String], ?input: String, ?strip: bool) -> [ String, bool ]
     end
   end
 end
