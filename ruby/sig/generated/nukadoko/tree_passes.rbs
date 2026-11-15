@@ -17,8 +17,8 @@ module Nukadoko
 
       # `judged_by` says why head's passing executions of a row judged no
       # claim in Then position (Run.then_judged_by).
-      # : (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped) -> void
-      def initialize: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped) -> void
+      # : (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String) -> void
+      def initialize: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String) -> void
 
       # The worlds each tree's passes started, as run.json names them.
       attr_reader worlds: untyped

@@ -13,14 +13,16 @@ module Nukadoko
   module Engine
     class Run
       # `world` is head for a run, or base or old for a tree's pass, which
-      # writes into the head run's directory `dir`. `base` is the
+      # writes into the head run's directory `dir`, and reads its env files
+      # from `head`'s root, with head's secrets as well as its own. `base` is the
       # comparison a `--base` run judges its rows by. `scenarios` are in the
       # run's order, which every round of every pass keeps; `records`, when
       # given, gets each scenario's run.json entry as one line as it ends,
       # and `rerun` is what a shuffled run's rerun lines name.
-      #: (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?) -> void
+      #: (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?, ?head: Hash[Symbol, untyped]?) -> void
       def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout, world: "head", dir: nil, base: nil, env_flags: [],
-                     repeat: 1, concurrency: 1, order: Order::FILE, records: nil, rerun: nil, walk: nil)
+                     repeat: 1, concurrency: 1, order: Order::FILE, records: nil, rerun: nil, walk: nil, head: nil)
+        @head = head
         @project = project
         @steps = steps
         @scenarios = scenarios
@@ -58,7 +60,7 @@ module Nukadoko
         tree_cells = {}
         if @base
           begin
-            trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out, ->(scenario) { Run.then_judged_by(scenario, executions) })
+            trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out, ->(scenario) { Run.then_judged_by(scenario, executions) }, head_root: @project)
             tree_cells = trees.call(executions)
             @world_entries.concat(trees.worlds)
           ensure
@@ -124,7 +126,7 @@ module Nukadoko
             play_in_workers(environment, roles, world, due, ran, runs)
           else
             @process_fixtures = FixtureCache.new
-            @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
+            @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}), secrets: -> { secrets })
             play_one = lambda do |scenario|
               @out.puts boundary(scenario.uri, scenario.line, scenario.name, roles[scenario])
               ran.(scenario, play(scenario, environment, roles[scenario], world))
@@ -249,7 +251,7 @@ module Nukadoko
         @out = WorkerOut.new(pipe)
         @records = nil
         @process_fixtures = FixtureCache.new
-        @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
+        @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}), secrets: -> { secrets })
         list.each do |scenario|
           execution = play(scenario, environment, roles[scenario], world)
           Marshal.dump([:execution, [scenario.uri, scenario.line], execution, @out.take], pipe)
@@ -660,7 +662,7 @@ module Nukadoko
         @scratch = Scratch.new(@project)
         @scenario_fixtures = FixtureCache.new
         @process_fixtures = FixtureCache.new
-        @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}))
+        @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}), secrets: -> { secrets })
         record = { step_record_id: @id, step: step.step_name, started_at: now }
         execute(step, record, @dir, world, then_line: true, at_line: nil, results: [], origins: origins) { [args, texts] }
       ensure
@@ -962,8 +964,15 @@ module Nukadoko
       def read_env(environment)
         EnvCheck.validate!
         config = Nukadoko.config_options.fetch(:secrets, {}) #: Hash[Symbol, untyped]
-        @env_vars = EnvFile.load(@project, environment.env_files)
-        @secrets = Secrets.of(@project, environment.env_files, public_keys: (config[:public] || []).map(&:to_s), redact_keys: (config[:redact] || []).map(&:to_s))
+        # A tree's checkout holds no env file git ignores, and head's are
+        # the ones the person keeps.
+        root = @head ? @head[:root].to_s : @project
+        @env_vars = EnvFile.load(root, environment.env_files)
+        @secrets = Secrets.of(root, environment.env_files, public_keys: (config[:public] || []).map(&:to_s), redact_keys: (config[:redact] || []).map(&:to_s))
+        head = @head
+        return unless head
+
+        @secrets = @secrets.with(Secrets.of(root, head[:env_files], public_keys: head[:public], redact_keys: head[:redact]))
       rescue EnvFile::Unreadable => e
         raise Refusal.new("env-file-unreadable", e.message)
       end

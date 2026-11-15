@@ -8,13 +8,14 @@ module Nukadoko
   module Engine
     class Run
       # `world` is head for a run, or base or old for a tree's pass, which
-      # writes into the head run's directory `dir`. `base` is the
+      # writes into the head run's directory `dir`, and reads its env files
+      # from `head`'s root, with head's secrets as well as its own. `base` is the
       # comparison a `--base` run judges its rows by. `scenarios` are in the
       # run's order, which every round of every pass keeps; `records`, when
       # given, gets each scenario's run.json entry as one line as it ends,
       # and `rerun` is what a shuffled run's rerun lines name.
-      # : (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?) -> void
-      def initialize: (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?) -> void
+      # : (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?, ?head: Hash[Symbol, untyped]?) -> void
+      def initialize: (String, Array[singleton(Step)], Array[Scenario], Hash[Symbol, untyped], ?environments: Array[Environment]?, ?left_out: Integer, ?out: untyped, ?world: String, ?dir: String?, ?base: Base?, ?env_flags: Array[String], ?repeat: Integer, ?concurrency: Integer, ?order: Hash[Symbol, untyped], ?records: IO?, ?rerun: untyped, ?walk: WalkFiles::Handle?, ?head: Hash[Symbol, untyped]?) -> void
 
       # : () -> Hash[Symbol, untyped]
       def call: () -> Hash[Symbol, untyped]

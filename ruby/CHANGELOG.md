@@ -19,6 +19,15 @@ notes come from the section below whose heading starts with `## [<version>]`.
   order mark, and a line separator. They no longer take a NUL or a next
   line (U+0085). A `comma-list` keeps the empty item after a comma at the
   end, and a docstring that ends in an empty line keeps it in a criterion.
+- A screenshot nukadoko takes (a scenario's `final.png`, a judged view's
+  `page.png`, and a `nuka run --step` pause's `page.png`) covers in black
+  each element that shows a loaded secret, as text or as a field's value,
+  as the TypeScript engine does. When those elements are not found within
+  5 seconds, no screenshot is written. A judged view and a pause show the
+  caret.
+- A `--base` run's base and old passes read their env files from head's
+  checkout, which holds the ones git ignores, and redact with head's
+  secrets as well as the tree's own, as the TypeScript engine does.
 
 ## [0.2.0] - 2026-11-15
 

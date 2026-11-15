@@ -213,15 +213,31 @@ module Nukadoko
       #: Hash[String, String]
       attr_reader :values
 
-      #: (?Hash[String, String]) -> void
+      # Each name with its value, a name twice when two sets held it with
+      # different values (`with`), so neither value goes unredacted.
+      #: Array[[String, String]]
+      attr_reader :pairs
+
+      #: (?Hash[String, String] | Array[[String, String]]) -> void
       def initialize(values = {})
-        @values = values
+        @pairs = values.to_a.uniq
+        @values = @pairs.to_h
         @replacements = replacements
         @pattern = @replacements.empty? ? nil : Regexp.union((@replacements.keys + @replacements.values.uniq).sort_by { -_1.length })
       end
 
       #: () -> bool
-      def empty? = @values.empty?
+      def empty? = @pairs.empty?
+
+      # Both sets: a tree's pass redacts with head's secrets as well as its
+      # own, since the tree's config must not decide which of head's values
+      # may print.
+      #: (Secrets) -> Secrets
+      def with(other) = Secrets.new(@pairs + other.pairs)
+
+      # Every loaded value, each once.
+      #: () -> Array[String]
+      def shown_values = @pairs.map(&:last).uniq
 
       # A copy of `value` with every secret spelling in its strings and
       # keys written as its token. Two keys that redact to one would lose
@@ -265,7 +281,7 @@ module Nukadoko
       # among equals the alphabetically first name wins.
       #: () -> Hash[String, String]
       def replacements
-        named = @values.select { |_, value| value.length >= MIN_LENGTH }.sort_by(&:first)
+        named = @pairs.select { |_, value| value.length >= MIN_LENGTH }.sort_by(&:first)
         tokens = {} #: Hash[String, String]
         named.each { |name, value| tokens[value] ||= "{{secret.#{name}}}" }
         named.each do |name, value|

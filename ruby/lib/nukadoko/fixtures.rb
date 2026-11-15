@@ -5,6 +5,7 @@ require "net/http"
 require "json"
 require "fileutils"
 require "time"
+require "timeout"
 
 # Fixtures are built by the engine, not the step, so what they record is
 # measured: every request a step sends goes through Request and lands in the
@@ -89,10 +90,53 @@ module Nukadoko
     # TypeScript engine. Requests the page sends are recorded by the engine's
     # own listener, and each step gets a trace chunk.
     class Browser
-      #: (String?, ?Hash[Symbol, untyped]) -> void
-      def initialize(base_url, launch_options = {})
+      # `secrets` gives the run's loaded secrets when a screenshot is taken,
+      # since an environment's env files are read after the browser is made.
+      #: (String?, ?Hash[Symbol, untyped], ?secrets: ^() -> Secrets) -> void
+      def initialize(base_url, launch_options = {}, secrets: -> { Secrets.new })
         @base_url = base_url
         @launch_options = launch_options
+        @secrets = secrets
+      end
+
+      # Opaque, so a masked secret leaves no trace of its glyphs.
+      MASK_COLOR = "#000000"
+
+      # Locators for every element of `page`, in every frame, that shows a
+      # loaded secret: as text, or as the value of an input or textarea, which
+      # is not text `get_by_text` reads, and a step may have typed the secret
+      # there. The text redaction of a record cannot reach pixels, and
+      # marking or rewriting the elements would change the page the next step
+      # reads. Only the value as written is found, not an encoded spelling;
+      # `get_by_text` ignores case, which costs pixels, never a leak.
+      #: (untyped) -> Array[untyped]
+      def secret_masks(page)
+        values = @secrets.call.shown_values.select { _1.length >= Secrets::MIN_LENGTH }
+        return [] if values.empty?
+
+        page.frames.flat_map do |frame|
+          fields = frame.locator("input, textarea")
+          held = fields.evaluate_all("(elements) => elements.map((element) => String(element.value ?? ''))") #: Array[String]
+          values.map { frame.get_by_text(_1) } + held.each_index.select { |index| values.any? { held[index].include?(_1) } }.map { fields.nth(_1) }
+        end
+      end
+
+      # A screenshot of `page` at `path` with what shows a secret covered,
+      # true once written. No screenshot rather than one that shows a
+      # secret: masks not found by `deadline` (a monotonic time) give none,
+      # and the image is written only once it arrived. `bounded` holds the
+      # screenshot to the deadline too, as a pause and a judged view do.
+      #: (untyped, String, Float, ?caret: String?, ?bounded: bool) -> bool
+      def masked_shot(page, path, deadline, caret: nil, bounded: true)
+        masks = Timeout.timeout([deadline - monotonic, 0.001].max) { secret_masks(page) }
+        left = ((deadline - monotonic) * 1000).floor
+        return false if bounded && left <= 0
+
+        image = page.screenshot(mask: masks, maskColor: MASK_COLOR, **(bounded ? { timeout: left } : {}), **(caret ? { caret: caret } : {}))
+        File.binwrite(path, image)
+        true
+      rescue StandardError, Timeout::Error
+        false
       end
 
       #: (String, Array[Hash[Symbol, untyped]]) -> [untyped, ^() -> void]
@@ -227,12 +271,9 @@ module Nukadoko
       def view_files(dir, ended, aria_in_claims)
         FileUtils.mkdir_p(File.join(dir, "judged"))
         title = (@page.title rescue nil)
-        shot = begin
-          @page.screenshot(path: File.join(dir, "judged", "page.png"))
-          { file: "judged/page.png", after_reading_ms: ((monotonic - ended) * 1000).round }
-        rescue StandardError
-          nil
-        end
+        shot = if masked_shot(@page, File.join(dir, "judged", "page.png"), monotonic + VIEW_TIMEOUT_MS / 1000.0, caret: "initial")
+                 { file: "judged/page.png", after_reading_ms: ((monotonic - ended) * 1000).round }
+               end
         aria = aria_in_claims ? nil : begin
           tree = @page.aria_snapshot(mode: "ai")
           File.write(File.join(dir, "judged", "page.aria.yml"), tree.end_with?("\n") ? tree : "#{tree}\n")
@@ -301,12 +342,8 @@ module Nukadoko
           nil
         end
         @page.on("request", @held)
-        shot = begin
-          @page.screenshot(path: File.join(dir, "page.png"), timeout: VIEW_TIMEOUT_MS)
-          "#{recorded_as}/page.png"
-        rescue StandardError
-          nil
-        end
+        # The caret shows, as the person would see the field they type in.
+        shot = masked_shot(@page, File.join(dir, "page.png"), monotonic + VIEW_TIMEOUT_MS / 1000.0, caret: "initial") ? "#{recorded_as}/page.png" : nil
         aria = begin
           tree = @page.aria_snapshot(mode: "ai", timeout: VIEW_TIMEOUT_MS)
           File.write(File.join(dir, "page.aria.yml"), tree.end_with?("\n") ? tree : "#{tree}\n")
@@ -342,13 +379,8 @@ module Nukadoko
       def end_scenario(dir = nil)
         shots = [] #: Array[Hash[Symbol, untyped]]
         if dir && @page
-          begin
-            FileUtils.mkdir_p(dir)
-            @page.screenshot(path: File.join(dir, "final.png"))
-            shots << { file: "final.png", at: Time.now.utc.iso8601(3) }
-          rescue StandardError
-            nil
-          end
+          FileUtils.mkdir_p(dir)
+          shots << { file: "final.png", at: Time.now.utc.iso8601(3) } if masked_shot(@page, File.join(dir, "final.png"), monotonic + VIEW_TIMEOUT_MS / 1000.0, bounded: false)
         end
         @context&.tracing&.stop
         @context&.close

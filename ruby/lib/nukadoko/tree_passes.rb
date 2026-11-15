@@ -21,8 +21,9 @@ module Nukadoko
 
       # `judged_by` says why head's passing executions of a row judged no
       # claim in Then position (Run.then_judged_by).
-      #: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped) -> void
-      def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {})
+      #: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String) -> void
+      def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {}, head_root: Dir.pwd)
+        @head_root = head_root
         @judged_by = judged_by
         @base = base
         @scenarios = scenarios
@@ -105,7 +106,9 @@ module Nukadoko
         plan = File.join(@dir, "trees", "#{world}-#{environment.name}.plan.json")
         result = File.join(@dir, "trees", "#{world}-#{environment.name}.result.json")
         targets = rows.map { |scenario| place(world, scenario).then { { feature: _1, line: _2 } } }
-        File.write(plan, JSON.generate(world: world, environment: environment.name, targets: targets, dir: @dir, result: result))
+        config = Nukadoko.config_options.fetch(:secrets, {}) #: Hash[Symbol, untyped]
+        head = { root: File.expand_path(@head_root), env_files: environment.env_files, public: (config[:public] || []).map(&:to_s), redact: (config[:redact] || []).map(&:to_s) }
+        File.write(plan, JSON.generate(world: world, environment: environment.name, targets: targets, dir: @dir, result: result, head: head))
         output, status = Open3.capture2e(RbConfig.ruby, "-I", LIB, EXE, "__tree", plan, chdir: root)
         @out.write(output.gsub(@dir, File.join(".nukadoko", "runs", File.basename(@dir))))
         return JSON.parse(File.read(result), symbolize_names: true) if File.exist?(result)

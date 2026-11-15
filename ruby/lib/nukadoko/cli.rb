@@ -356,7 +356,7 @@ module Nukadoko
         environment = Engine::Program.new(Nukadoko.program_options).environments([plan[:environment]]).first
         usable = Engine::Check.new(steps, scenarios).usable
         run = Engine::Run.new(@project, usable, scenarios, Nukadoko.program_options, environments: [environment],
-                              world: plan[:world], dir: plan[:dir], out: @out)
+                              world: plan[:world], dir: plan[:dir], out: @out, head: plan[:head])
         { results: run.tree_pass, worlds: run.world_entries }
       rescue Engine::Refusal => e
         { not_run: "the #{plan[:world]} tree's program file does not give this environment: #{e.message}" }
