@@ -171,7 +171,10 @@ module Nukadoko
         before = @requests.select { _1[:finished] && _1[:finished] < started }.max_by { _1[:finished] }
         open = @requests.select { _1[:sent] <= ended && !(_1[:finished] && _1[:finished] < started) && !(_1[:ended] && _1[:ended] < started) }
         page = { as: nil, page: 1, url: @page.url, last_response: before && index.(before), in_flight: open.map { index.(_1) } }
-        { pages: [page], page_requests: listed.map { request_record(_1, step_record_id) }, judged_view: view(dir, ended, aria_in_claims) }
+        # What the pages had received is of requests to a world, so a run
+        # with none keeps the view alone.
+        received = @base_url ? { pages: [page], page_requests: listed.map { request_record(_1, step_record_id) } } : {}
+        { **received, judged_view: view(dir, ended, aria_in_claims) }
       rescue StandardError
         {}
       end

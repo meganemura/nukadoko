@@ -423,27 +423,45 @@ module Nukadoko
       unless %w[markdown allure messages].include?(format)
         raise Engine::Refusal.new("invalid-arguments", %(Invalid values:;   Argument: format, Given: #{JSON.generate(format)}, Choices: "markdown", "allure", "messages"))
       end
-      unless format == "markdown"
-        raise Engine::Refusal.new("invalid-value", "nuka report --format #{format} is not in the Ruby engine yet: it renders --format markdown",
-                                  fix: "Pass --format markdown.")
+      unless %w[markdown messages].include?(format)
+        raise Engine::Refusal.new("invalid-value", "nuka report --format #{format} is not in the Ruby engine yet: it renders --format markdown and messages",
+                                  fix: "Pass --format markdown or --format messages.")
       end
       if @json && !out
-        raise Engine::Refusal.new("invalid-arguments", "nuka report --json needs --out for --format markdown, since the markdown output itself would go to stdout",
+        raise Engine::Refusal.new("invalid-arguments", "nuka report --json needs --out for --format #{format}, since the #{format} output itself would go to stdout",
                                   fix: "Add --out <path>.")
       end
 
-      doc = JSON.parse(File.read(File.join(report_dir, "run.json"), encoding: "UTF-8"), symbolize_names: true)
-      markdown = Engine::Summary.render(doc)
-      return (@out.write(markdown) && 0) unless out
+      dir = report_dir
+      problems = [] #: Array[String]
+      if format == "markdown"
+        doc = JSON.parse(File.read(File.join(dir, "run.json"), encoding: "UTF-8"), symbolize_names: true)
+        text = Engine::Summary.render(doc)
+      else
+        run = Engine::ReportRun.new(dir)
+        doc = run.document
+        text = Engine::ReportMessages.render(run)
+        problems = run.problems
+      end
+      # A part of the run the render left out is a failed finding of its
+      # own, and the rest is still written.
+      findings = problems.map { { severity: "failed", code: "report-incomplete", message: _1 } }
+      exit_code = findings.empty? ? 0 : 1
+      unless out
+        emit({}, findings, "report", io: $stderr)
+        @out.write(text)
+        return exit_code
+      end
 
       target = File.expand_path(out, @project)
       FileUtils.mkdir_p(File.dirname(target))
-      File.write(target, markdown)
+      File.write(target, text)
       written = Pathname.new(target).relative_path_from(Pathname.new(@project)).to_s
-      return finish("report", true, findings: [], run_id: doc[:run_id], format: format, written: [written]) if @json
+      return finish("report", findings.empty?, findings: findings, run_id: doc[:run_id], format: format, written: [written]) if @json
 
-      @out.puts "markdown  #{written}"
-      0
+      emit({}, findings, "report", io: $stderr)
+      $stderr.puts "#{format.ljust(10)}#{written}"
+      exit_code
     rescue Engine::Refusal => e
       refuse(e)
     end

@@ -1,6 +1,12 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+# Every file and pipe nukadoko reads is UTF-8 (feature files, records, the
+# Playwright driver's protocol). Under LANG=C the default would be
+# US-ASCII, and the driver's reader thread dies on the first non-ASCII
+# byte, leaving the run waiting on a reply that never comes.
+Encoding.default_external = Encoding::UTF_8
+
 require_relative "../lib/nukadoko"
 require_relative "../lib/nukadoko/cli"
 require_relative "../lib/nukadoko/judge"

@@ -64,8 +64,12 @@ run は始めません。
 - `nuka judge <feature>:<line> [--run <id>] [--json]` は、Then が判断を求める基準(`judged-as` の claim)について、run が読んだ値を見せます。
 `--meets` か `--misses` に `--by <who>` と `--because <一文>` を付けると、その値の判断を `judgments/<feature>.json` に記録します。
 次の run は、この記録と照らして基準を読みます。
-- `nuka report [run] --format markdown [--out <file>] [--json]` は、run の `summary.md` を `run.json` だけからもう一度書きます。
+- `nuka report [run] --format markdown|messages [--out <file>] [--json]` は、run を run ディレクトリだけからもう一度書きます。
 run を名指ししなければ、いちばん新しい run を使います。
+`markdown` は run の `summary.md` です。
+`messages` は cucumber-messages の stream で、1 行に 1 つの envelope を書きます。
+cucumber のプロトコルを読む formatter や JUnit のステップは、そのまま動きます。
+claim のステップの claims と、各基準の判定は attachment として載ります。
 - `nuka clean [--dry-run] [--json]` は、`.nukadoko/` の下の run ディレクトリを消します。
 - `nuka do <step> [--args <json>] [--use <step-id>]...` は、シナリオの外で 1 つのステップを実行し、ステップの記録を出します。
 `--use` は、前の記録(`do` のものでも run のものでも)から、ステップの `from` の args を埋めます。

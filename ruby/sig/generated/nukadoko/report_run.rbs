@@ -1,0 +1,91 @@
+# Generated from lib/nukadoko/report_run.rb with RBS::Inline
+
+# One run directory read back into what the report writers take, as the
+# TypeScript engine's src/report/load-run.ts reads it: each feature the run
+# parsed, from sources.json, and each head execution of run.json with its
+# step records, its pickle, and what the verdict table says of it. It reads
+# only the run directory, so a directory copied off a CI machine renders
+# the same as one in the project that ran it.
+#
+# A run directory copied off a machine is untrusted input: an edited
+# record can name any path, so every path a record names is resolved,
+# symlinks included, and refused unless it stays inside the run directory.
+# A refused path is a problem the report names, never a file it reads.
+#
+# The pickles are parsed again from sources.json, so their ids differ from
+# the run's; no output keeps a pickle id across renders.
+module Nukadoko
+  module Engine
+    class ReportRun
+      class Feature < Data
+        attr_reader path(): String
+
+        attr_reader source(): String
+
+        attr_reader document(): Hash[String, untyped]
+
+        attr_reader pickles(): Array[Hash[String, untyped]]
+
+        def self.new: (String path, String source, Hash[String, untyped] document, Array[Hash[String, untyped]] pickles) -> instance
+                    | (path: String, source: String, document: Hash[String, untyped], pickles: Array[Hash[String, untyped]]) -> instance
+
+        def self.members: () -> [ :path, :source, :document, :pickles ]
+
+        def members: () -> [ :path, :source, :document, :pickles ]
+      end
+
+      class Scenario < Data
+        attr_reader json(): Hash[Symbol, untyped]
+
+        attr_reader step_records(): Hash[String, Hash[String, untyped]?]
+
+        attr_reader feature(): Feature
+
+        attr_reader pickle(): Hash[String, untyped]
+
+        attr_reader verdict(): Hash[Symbol, untyped]?
+
+        def self.new: (Hash[Symbol, untyped] json, Hash[String, Hash[String, untyped]?] step_records, Feature feature, Hash[String, untyped] pickle, Hash[Symbol, untyped]? verdict) -> instance
+                    | (json: Hash[Symbol, untyped], step_records: Hash[String, Hash[String, untyped]?], feature: Feature, pickle: Hash[String, untyped], verdict: Hash[Symbol, untyped]?) -> instance
+
+        def self.members: () -> [ :json, :step_records, :feature, :pickle, :verdict ]
+
+        def members: () -> [ :json, :step_records, :feature, :pickle, :verdict ]
+      end
+
+      attr_reader dir: String
+
+      attr_reader document: Hash[Symbol, untyped]
+
+      attr_reader project_name: String?
+
+      attr_reader features: Array[Feature]
+
+      attr_reader scenarios: Array[Scenario]
+
+      attr_reader problems: Array[String]
+
+      # The run in `dir`, or a Refusal that says why it cannot be read.
+      # : (String) -> void
+      def initialize: (String) -> void
+
+      # Where a path inside the run directory is on disk; raises for one
+      # that resolves outside it.
+      # : (String) -> String
+      def resolve: (String) -> String
+
+      private
+
+      def inside?: (untyped file) -> untyped
+
+      def read_features: () -> untyped
+
+      # An execution of the base or the old world is a cell of the table,
+      # not a test result, so the formats render head's executions alone.
+      def read_scenarios: () -> untyped
+
+      # What the verdict table says of an execution's row and cell.
+      def verdict_of: (untyped scenario) -> untyped
+    end
+  end
+end

@@ -44,6 +44,7 @@ module Nukadoko
       def call
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         @started_at = now
+        write_sources
         @commit = RunRecord.commit(@project)
         # Said before any scenario, so a run a signal stops still names its seed.
         @out.puts "order #{Order.text(@order)}" unless @order[:kind] == "file"
@@ -338,6 +339,26 @@ module Nukadoko
           retagged: change[:retagged] == true, renamed: !change[:renamed_from].nil?, then_judges_no_claim: no_claim }
       end
 
+      # sources.json: the feature text this run parsed its scenarios from,
+      # so `nuka report` renders the scenarios as they ran, long after the
+      # files moved on. The project name rides along: it is part of an
+      # Allure result's full name, and a copied run directory has no
+      # package.json beside it.
+      def write_sources
+        package = File.join(@project, "package.json")
+        name = begin
+          (JSON.parse(File.read(package))["name"] if File.file?(package))
+        rescue JSON::ParserError
+          nil
+        end
+        features = @scenarios.map(&:uri).uniq.filter_map do |uri|
+          file = File.join(@project, uri)
+          { path: uri, source: File.read(file, encoding: "UTF-8") } if File.file?(file)
+        end
+        document = { schema_version: 1, project: name.is_a?(String) ? name : nil, features: features }
+        File.write(File.join(@dir, "sources.json"), "#{JSON.pretty_generate(document)}\n")
+      end
+
       # Why head's passing required executions of a row judged no claim in
       # Then position, from the first that says: `nothing`, or `judgment`
       # when its only claims there are judged-as claims.
@@ -444,7 +465,10 @@ module Nukadoko
 
       # One step as run.json's scenarios[].steps[] holds it.
       def step_entry(line, record)
-        entry = { line: line.line, text: line.text, step: record[:step], status: record[:status],
+        # A line no step matches is `undefined`, and one more than one step
+        # matches is `ambiguous`, as cucumber names them, so a messages
+        # stream says the same of it as the TypeScript engine's.
+        entry = { line: line.line, text: line.text, step: record[:step], status: record[:never_began] || record[:status],
                   step_record_id: record[:step_record_id], record: record[:step_record_id] && "steps/#{record[:step_record_id]}" }
         return entry if record[:status] == "skipped"
 
@@ -473,9 +497,18 @@ module Nukadoko
       end
 
       def play_step(line, results, world)
-        step, captures = Engine.matches(@steps, line.text).first
+        matched = Engine.matches(@steps, line.text)
+        step, captures = matched.first
         unless step
-          return { status: "failed", outcome: :broke, step_record_id: nil, error_kind: "step_error", error: %(No step definition matches "#{line.text}") }
+          return { status: "failed", outcome: :broke, step_record_id: nil, error_kind: "step_error", error: %(No step definition matches "#{line.text}"), never_began: "undefined" }
+        end
+        # Under --no-check nothing refused the line before it ran, and
+        # running the first match would pass a line the author meant for
+        # another step.
+        names = matched.map { _1.first.step_name }.uniq.sort
+        if names.size > 1
+          return { status: "failed", outcome: :broke, step_record_id: nil, error_kind: "step_error",
+                   error: %("#{line.text}" matches more than one step: #{names.join(", ")}), never_began: "ambiguous" }
         end
 
         id = new_id("step")
