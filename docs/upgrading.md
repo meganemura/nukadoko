@@ -46,7 +46,7 @@ This part does not change release to release.
   0.14.1", and one on 0.18.0, 0.19.0, or 0.20.0 starts at "0.20.0 to
   0.21.0".
 
-## 0.25.0 to the next release
+## 0.25.0 to 0.26.0
 
 - **A scenario whose claims held is `broke` when the program failed
   underneath it.** A cell whose steps all passed reads `broke@<line>`

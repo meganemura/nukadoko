@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.26.0 — 2026-11-15
+
 ### Added
 
 - **A Ruby engine has started, held to the TypeScript engine by shared
