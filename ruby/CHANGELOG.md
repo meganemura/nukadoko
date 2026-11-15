@@ -28,6 +28,15 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - A `--base` run's base and old passes read their env files from head's
   checkout, which holds the ones git ignores, and redact with head's
   secrets as well as the tree's own, as the TypeScript engine does.
+- A `matches` claim reads its pattern as JavaScript's `RegExp` does, as
+  the TypeScript engine does, and no longer as a Ruby pattern: `^` and `$`
+  match only at the ends of the text, `\s` takes every Unicode space, an
+  escaped letter with no meaning is the letter (`\A`, `\h`), a `{` that
+  starts no count is a `{`, `[^]` takes any character, a backreference to
+  a group that did not match matches nothing, `.` takes one UTF-16 unit,
+  and a pattern JavaScript refuses (`(?i)`, `a*+`, `(?#...)`) does not
+  build, with V8's reason. A lookbehind Ruby cannot run (one of unbounded
+  length) is refused with Ruby's reason.
 
 ## [0.2.0] - 2026-11-15
 

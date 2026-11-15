@@ -555,15 +555,17 @@ module Nukadoko
           end
           return { reason: "matches has an empty expected value, which every string holds" } if expected.empty?
 
+          # Read as JavaScript's RegExp reads it, as the TypeScript engine does.
           pattern = begin
-            Regexp.new(expected, timeout: PATTERN_TIMEOUT)
-          rescue RegexpError => e
+            JsPattern.compile(expected, timeout: PATTERN_TIMEOUT)
+          rescue JsPattern::Invalid => e
             return { reason: "matches could not build a regular expression: #{e.message}" }
           end
-          return { reason: "matches has a pattern that matches the empty string, so every string holds it" } if pattern.match?("") 
 
           begin
-            { holds: pattern.match?(actual) }
+            return { reason: "matches has a pattern that matches the empty string, so every string holds it" } if pattern.match?("")
+
+            { holds: pattern.match?(JsPattern.units(actual)) }
           rescue Regexp::TimeoutError
             { stopped: "matches ran for more than #{PATTERN_TIMEOUT} seconds, so nukadoko stopped judging it" }
           end
