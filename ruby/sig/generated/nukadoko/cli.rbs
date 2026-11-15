@@ -82,6 +82,9 @@ module Nukadoko
     # directories an earlier release left. --dry-run lists them only.
     def clean: () -> untyped
 
+    # `nuka skill path`, the one verb, as the TypeScript engine has it.
+    def skill: () -> untyped
+
     # Renders a finished run again from its run.json alone: the run a
     # directory names, or the newest one.
     def report: () -> untyped

@@ -10,7 +10,7 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`--step`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-`nuka skill` など、TypeScript 版の機能の一部はまだありません。
+`nuka scaffold --command` など、TypeScript 版の機能の一部はまだありません。
 
 ## インストール
 
@@ -81,6 +81,8 @@ history id は、同じシナリオについて TypeScript 版が書く結果と
 止めたシナリオは stopped になり、その行は赤になります。
 どちらのエンジンの `nuka step` も、どちらのエンジンの walk に答えられます。
 - `nuka clean [--dry-run] [--json]` は、`.nukadoko/` の下の run ディレクトリを消します。
+- `nuka skill path` は、gem に入っているエージェント向けスキル(`nukadoko` と `nukadoko-verification`)のディレクトリを出します。
+npm パッケージに入っているものと同じスキルです。
 - `nuka do <step> [--args <json>] [--use <step-id>]...` は、シナリオの外で 1 つのステップを実行し、ステップの記録を出します。
 `--use` は、前の記録(`do` のものでも run のものでも)から、ステップの `from` の args を埋めます。
 - `nuka scaffold <name> [--pattern <p>] [--then] [--description <text>] [--replace]` は、`features/steps/<name>.rb` を書きます。

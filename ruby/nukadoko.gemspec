@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.homepage = "https://github.com/meganemura/nukadoko"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.4"
-  spec.files = Dir["lib/**/*.rb", "lib/**/*.json", "sig/**/*.rbs", "exe/*", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE"]
+  spec.files = Dir["lib/**/*.rb", "lib/**/*.json", "sig/**/*.rbs", "exe/*", "skills/**/*", "llms.txt", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE"]
   spec.bindir = "exe"
   spec.executables = ["nuka"]
   spec.add_dependency "cucumber-cucumber-expressions", "20.1.0"

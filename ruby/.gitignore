@@ -1,3 +1,5 @@
 vendor/
 .bundle/
 .mutineer/
+skills/
+llms.txt

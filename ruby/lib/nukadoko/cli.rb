@@ -30,6 +30,7 @@ module Nukadoko
       return report if @command == "report"
       return clean if @command == "clean"
       return Walked.new(@project, @rest, @options, json: @json, out: @out).call if @command == "step"
+      return skill if @command == "skill"
       return init if @command == "init"
 
       %w[nukadoko.config.rb nukadoko.program.rb].each do |name|
@@ -488,6 +489,15 @@ module Nukadoko
       # finding it.
       FileUtils.mkdir_p(results) if plan[:export].any?
       0
+    end
+
+    # `nuka skill path`, the one verb, as the TypeScript engine has it.
+    def skill
+      verb = @rest.first
+      return Skill.print_path(@out, $stderr) if verb == "path" && @rest.size == 1
+      return refuse(Engine::Refusal.new("invalid-arguments", "Not enough non-option arguments: got 0, need at least 1")) if verb.nil?
+
+      refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: #{(@rest - ["path"]).first || verb}"))
     end
 
     # Renders a finished run again from its run.json alone: the run a

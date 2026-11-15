@@ -1,0 +1,20 @@
+# Generated from lib/nukadoko/skill.rb with RBS::Inline
+
+# `nuka skill path`: the directory that holds every agent skill this gem
+# ships, one absolute path, as the TypeScript engine prints its own. It is
+# a fact about the installed nukadoko, the one route sure to match the
+# version installed; copying a skill into an agent's own layout is what
+# `gh skill install` and the agent's plugin marketplace already do.
+#
+# The gem ships the skills beside lib/ (bin/stage-shared copies them in
+# before `gem build`). A checkout that has not staged them reads the
+# repository root's, which are the same files.
+module Nukadoko
+  module Skill
+    # : () -> String
+    def self?.dir: () -> String
+
+    # : (IO, IO) -> Integer
+    def self?.print_path: (IO, IO) -> Integer
+  end
+end

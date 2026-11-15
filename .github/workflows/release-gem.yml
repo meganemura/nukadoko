@@ -127,6 +127,7 @@ jobs:
         env:
           TAG: ${{ needs.check.outputs.tag }}
         run: |
+          ruby bin/stage-shared
           gem build nukadoko.gemspec
           test -f "nukadoko-${TAG#ruby-v}.gem"
       # RubyGems creates a new gem from a pending trusted publisher only when the
