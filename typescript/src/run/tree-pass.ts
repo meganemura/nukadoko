@@ -74,7 +74,7 @@ export interface TreePassOptions {
   readonly concurrency: number;
   readonly targets: readonly TreeTarget[];
   /** The world the pass runs against, or `null` for a tree with no
-   * program file. */
+   * program. */
   readonly view: WorldView | null;
   /** Whether a target runs once more for proof (src/run/verdict-table.ts's
    * `needsProofRun`), from the records `onRecord` heard. */

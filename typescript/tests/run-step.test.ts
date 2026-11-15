@@ -16,6 +16,7 @@ import {
   sourceNodeArgs,
   writeUrlProgram,
 } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: a walk end to end, through the real CLI. `nuka run
 // --step` runs as a child process with tests/fixtures/step-walk-project as
@@ -831,10 +832,7 @@ describe("nuka run --step and nuka step", () => {
         path.join(rootDir, "slow-server.mjs"),
         'import { createServer } from "node:http";\nsetTimeout(() => createServer((req, res) => res.end("ok")).listen(Number(process.env.PORT), "127.0.0.1"), 4000);\n',
       );
-      await writeFile(
-        path.join(rootDir, "nukadoko.program.ts"),
-        'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ serve: { command: "node slow-server.mjs", ready: "/" }, env: { PORT: "{port}" } });\n',
-      );
+      writeProgram(rootDir, '{ serve: { command: "node slow-server.mjs", ready: "/" }, env: { PORT: "{port}" } }');
       const run = nukaRun(rootDir, ["features/order.feature:3", "--step"]);
       while (!existsSync(path.join(rootDir, ".nukadoko", "walk.json"))) await settle(50);
 

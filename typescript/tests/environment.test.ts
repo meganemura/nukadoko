@@ -5,7 +5,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 
 // Responsibility: `nuka do --env`'s wiring exercised end to end against
 // tests/fixtures/environments-project —
-// the program file's url/envFiles layering, unknown-environment setup failure,
+// the program's url/envFiles layering, unknown-environment setup failure,
 // `policy: "read-only"` refusal, and the `version` probe (success/throw).
 // Pure resolution-logic unit tests live in
 // resolve-environment.test.ts and probe-version.test.ts.

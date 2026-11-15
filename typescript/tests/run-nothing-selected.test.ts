@@ -72,7 +72,7 @@ describe("nuka run: a selection with no scenario is no pass", () => {
 
   it("names an environment that meets the scenario when a run without --env would not, and its do: line runs it", () =>
     inProject(async (rootDir) => {
-      const program = path.join(rootDir, "nukadoko.program.ts");
+      const program = path.join(rootDir, "nukadoko.config.ts");
       writeFileSync(program, readFileSync(program, "utf8").replace("environments: {", "defaultEnvironments: [\"flag-off\"],\n  environments: {"));
       const ran = await cli(rootDir, ["run", "features/banner.feature:4", "--env", "flag-off"]);
       expect(ran).toEqual({
@@ -80,7 +80,7 @@ describe("nuka run: a selection with no scenario is no pass", () => {
         stdout: "",
         stderr:
           "failed\tnothing-selected\t-\tno scenario to run: the conditions of the 1 selected scenario hold in no environment --env names (flag-off), so nothing was checked\n" +
-          "  fix: A run without --env selects flag-off (defaultEnvironments in nukadoko.program.ts), which does not meet it either. flag-on meets it.\n" +
+          "  fix: A run without --env selects flag-off (defaultEnvironments in nukadoko.config.ts), which does not meet it either. flag-on meets it.\n" +
           "  do: nuka run features/banner.feature:4 --env flag-on\n",
       });
 
@@ -90,12 +90,12 @@ describe("nuka run: a selection with no scenario is no pass", () => {
     }));
 
   it("gives no do: line when no environment meets the scenarios", () => {
-    const finding = nothingSelectedFinding(["features/a.feature"], ["features/a.feature"], ["on"], [["@with:missing"], ["@with:missing"]], { environments: { on: { conditions: { banner: true } } } }, "nukadoko.program.ts");
+    const finding = nothingSelectedFinding(["features/a.feature"], ["features/a.feature"], ["on"], [["@with:missing"], ["@with:missing"]], { environments: { on: { conditions: { banner: true } } } }, "nukadoko.config.ts");
     expect(finding).toEqual({
       severity: "failed",
       code: "nothing-selected",
       message: "no scenario to run: the conditions of the 2 selected scenarios hold in no environment --env names (on), so nothing was checked",
-      fix: "A run without --env selects on (the environments that declare conditions), which does not meet them either, and no environment of nukadoko.program.ts meets them. Declare the conditions they need on an environment, or change their tags.",
+      fix: "A run without --env selects on (the environments that declare conditions), which does not meet them either, and no environment of nukadoko.config.ts meets them. Declare the conditions they need on an environment, or change their tags.",
     });
   });
 

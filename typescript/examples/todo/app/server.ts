@@ -99,7 +99,7 @@ function createTodoApp(options: TodoAppOptions = {}): ReturnType<typeof createSe
 function parseArgs(argv: readonly string[]): { port: number; v2: boolean } {
   let port = 4000;
   // An env var alongside the flag: a reader starting the app by hand can
-  // type --v2, and the v2 environment in nukadoko.program.ts sets
+  // type --v2, and the v2 environment in the program sets
   // TODO_APP_V2=1, so both environments share one serve command.
   let v2 = process.env.TODO_APP_V2 === "1";
   for (let i = 0; i < argv.length; i++) {

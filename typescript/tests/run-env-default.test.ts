@@ -10,7 +10,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // `--env` uses, the one run.json calls "default", whether or not the program
 // file defines `environments.default`: it combines with named environments in
 // `nuka run`, works alone in `nuka do`, and resolves to the top-level
-// settings unless the program file defines its own entry.
+// settings unless the program defines its own entry.
 
 describe("--env default", () => {
   let rootDir: string;
@@ -51,7 +51,7 @@ describe("--env default", () => {
     expect((JSON.parse(result.stdout) as { environment: string }).environment).toBe("default");
   });
 
-  it("resolves to the top-level settings, or to environments.default when the program file defines it", () => {
+  it("resolves to the top-level settings, or to environments.default when the program defines it", () => {
     const config = { envFiles: [".env"] } as never;
     const program = programSchema.parse({ url: "http://top.example" });
     expect(resolveEnvironment(config, program, "default", true)).toEqual({
@@ -65,10 +65,10 @@ describe("--env default", () => {
     const resolved = resolveEnvironment(config, defined, "default", true);
     expect(resolved.envFiles).toEqual([".env", ".env.default"]);
     expect(resolved.program?.reach).toEqual({ kind: "url", url: "http://own.example", timeout_ms: 60_000 });
-    expect(() => resolveEnvironment(config, program, "staging", true)).toThrow('Unknown environment "staging": not defined in nukadoko.program.ts\'s "environments"');
+    expect(() => resolveEnvironment(config, program, "staging", true)).toThrow('Unknown environment "staging": not defined in the environments of the program in nukadoko.config.ts');
   });
 
-  it("resolves --env default as leaving --env out does, for any program file", () =>
+  it("resolves --env default as leaving --env out does, for any program", () =>
     hegel.test((tc) => {
       const names = tc.draw(gs.arrays(gs.sampledFrom(["default", "staging", "production"] as const), { maxSize: 3 }));
       const environments = Object.fromEntries(names.map((name) => [name, { url: `http://${name}.example`, envFiles: [`.env.${name}`] }]));

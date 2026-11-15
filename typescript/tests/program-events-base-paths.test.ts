@@ -4,12 +4,13 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: run.json's `paths` against the base, end to end. A
 // scratch copy of tests/fixtures/events-project holds two commits: the
 // base, and head, whose server also reports a handled cache miss on a
 // room's page and an audit row on each score, and whose feature file adds
-// a criterion. Both program files name `{events}`, in two environments.
+// a criterion. Both programs name `{events}`, in two environments.
 // Each environment's base world is paired with its head world. The new
 // criterion is a cell of the base and shows the audit row head writes.
 // The two criteria that did not change are no cells of the base, so the
@@ -24,16 +25,14 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 const PROGRAM = [
-  'import { defineProgram } from "./nukadoko-shim.js";',
-  "",
-  "export default defineProgram({",
+  "{",
   '  serve: { command: "node app/server.mjs", ready: "/up" },',
   '  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs", QUICK_REORDER: "{condition.quick_reorder}" },',
   "  environments: {",
   '    "reorder-off": { conditions: { quick_reorder: false } },',
   '    "reorder-on": { conditions: { quick_reorder: true } },',
   "  },",
-  "});",
+  "}",
   "",
 ].join("\n");
 
@@ -85,7 +84,7 @@ describe("the paths of each environment's base world against its head world", ()
     // path would not reach the source from there.
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     writeFileSync(path.join(rootDir, "features", "events.feature"), feature(ROOM, AUDIT, SLOW));
     git(rootDir, "init", "-q", "-b", "main");
     git(rootDir, "add", "-A");

@@ -558,7 +558,7 @@ export async function runCli(
           type: "string",
           describe:
             'target a named environment (omit it, or name "default", for the "default" environment: the top-level ' +
-            "settings, or environments.default when nukadoko.program.ts defines it)",
+            "settings, or environments.default when the program in nukadoko.config.ts defines it)",
         })
         .option("use", {
           type: "string",
@@ -628,7 +628,7 @@ export async function runCli(
         .option("env", {
           type: "string",
           describe:
-            "target a named environment from nukadoko.program.ts; repeat it to run every selected scenario once in each, " +
+            "target a named environment from the program in nukadoko.config.ts; repeat it to run every selected scenario once in each, " +
             "in one run with one cell per scenario and environment. Omitted, the run selects every environment that declares " +
             'conditions, or the "default" environment (the top-level settings, or environments.default) when none does',
         })
@@ -790,14 +790,14 @@ export async function runCli(
     builder: (y: Argv) =>
       refuseRemovedFlags(y, {
         "base-url":
-          "nuka init --base-url is removed: write url in nukadoko.program.ts " +
-          '(export default defineProgram({ url: "http://localhost:3000" })), the URL every page and request resolves against.',
+          "nuka init --base-url is removed: write url in the program in nukadoko.config.ts " +
+          '(program: () => ({ url: "http://localhost:3000" })), the URL every page and request resolves against.',
         server:
-          "nuka init --server is removed: describe the program in nukadoko.program.ts " +
-          '(export default defineProgram({ serve: { command: "npm start" }, env: { PORT: "{port}" } })); ' +
+          "nuka init --server is removed: describe the program in the program function of nukadoko.config.ts " +
+          '(program: () => ({ serve: { command: "npm start" }, env: { PORT: "{port}" } })); ' +
           "nukadoko starts it once for each environment, on a port of its own, and stops it after the scenarios.",
         "server-url":
-          "nuka init --server-url is removed: a program nukadoko starts gets its port from serve in nukadoko.program.ts, " +
+          "nuka init --server-url is removed: a program nukadoko starts gets its port from serve in the program in nukadoko.config.ts, " +
           "and one it does not start is named by url there.",
         "features-dir":
           "nuka init --features-dir is removed: init creates features/steps; for another directory, " +

@@ -133,6 +133,7 @@ describe("nuka run with showRequests", () => {
         "",
       ].join("\n"),
     );
+    await writeUrlProgram(rootDir, baseURL);
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "features/notes.feature"], { rootDir, stdout, stderr });

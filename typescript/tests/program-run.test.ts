@@ -17,8 +17,9 @@ import {
   stepRecordIds,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
-// Responsibility: the program file end to end through `nuka run`, `nuka
+// Responsibility: the program end to end through `nuka run`, `nuka
 // run --concurrency`, `nuka do`, and `nuka check`: the world each starts,
 // what run.json and each step record say about it, the env and the base
 // URL the steps get, and a program that does not start.
@@ -125,18 +126,7 @@ describe("a program nukadoko serves", () => {
   });
 
   it("starts a world for each environment, each with a directory of its own", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "./nukadoko-shim.js";',
-        "export default defineProgram({",
-        '  serve: { command: "node app/server.mjs", ready: "/whoami" },',
-        '  env: { PORT: "{port}", DB: "{dir}/db.sqlite3", TOKEN: "{token}" },',
-        '  environments: { other: { env: { DB: "{dir}/other.sqlite3" } } },',
-        "});",
-        "",
-      ].join("\n"),
-    );
+    writeProgram(rootDir, ["{", '  serve: { command: "node app/server.mjs", ready: "/whoami" },', '  env: { PORT: "{port}", DB: "{dir}/db.sqlite3", TOKEN: "{token}" },', '  environments: { other: { env: { DB: "{dir}/other.sqlite3" } } },', "}"].join("\n"));
     const { exitCode } = await cli(rootDir, ["run", "--env", "default", "--env", "other"]);
 
     expect(exitCode).toBe(0);
@@ -158,10 +148,7 @@ describe("a program nukadoko serves", () => {
   });
 
   it("fails the run when the program does not start, names why, and runs no scenario", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ serve: { command: ["node", "-e", "console.log(\'no database\'); process.exit(4)"] } });\n',
-    );
+    writeProgram(rootDir, '{ serve: { command: ["node", "-e", "console.log(\'no database\'); process.exit(4)"] } }');
     const { exitCode, stderr } = await cli(rootDir, ["run"]);
 
     expect(exitCode).toBe(1);
@@ -184,18 +171,7 @@ describe("a program nukadoko serves", () => {
   });
 
   it("stops a build that does not finish within its timeout_ms, says so when it starts and when it stops, and runs no scenario", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "./nukadoko-shim.js";',
-        "export default defineProgram({",
-        '  build: [{ command: ["node", "-e", "console.log(\'building\'); setInterval(() => {}, 1000)"], timeout_ms: 500 }],',
-        '  serve: { command: "node app/server.mjs", ready: "/whoami" },',
-        '  env: { PORT: "{port}" },',
-        "});",
-        "",
-      ].join("\n"),
-    );
+    writeProgram(rootDir, ["{", '  build: [{ command: ["node", "-e", "console.log(\'building\'); setInterval(() => {}, 1000)"], timeout_ms: 500 }],', '  serve: { command: "node app/server.mjs", ready: "/whoami" },', '  env: { PORT: "{port}" },', "}"].join("\n"));
     const startedAt = Date.now();
     const { exitCode, stderr } = await cli(rootDir, ["run"]);
 
@@ -213,21 +189,7 @@ describe("a program nukadoko serves", () => {
   });
 
   it("shows what setup prints once each, redacted, on the terminal and in the log", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "./nukadoko-shim.js";',
-        "export default defineProgram({",
-        '  serve: { command: "node app/server.mjs", ready: "/whoami" },',
-        '  env: { PORT: "{port}", DB: "{dir}/db.sqlite3", TOKEN: "{token}", ADMIN_PASSWORD: "{token}" },',
-        "  setup(world) {",
-        "    console.log(`seeding admin with ${world.env.ADMIN_PASSWORD}`);",
-        "    process.stderr.write(`and with ${world.env.ADMIN_PASSWORD} again\\n`);",
-        "  },",
-        "});",
-        "",
-      ].join("\n"),
-    );
+    writeProgram(rootDir, ["{", '  serve: { command: "node app/server.mjs", ready: "/whoami" },', '  env: { PORT: "{port}", DB: "{dir}/db.sqlite3", TOKEN: "{token}", ADMIN_PASSWORD: "{token}" },', "  setup(world) {", "    console.log(`seeding admin with ${world.env.ADMIN_PASSWORD}`);", "    process.stderr.write(`and with ${world.env.ADMIN_PASSWORD} again\\n`);", "  },", "}"].join("\n"));
     const { exitCode, stderr } = await spawnedCli(rootDir, ["run", "--no-check"]);
 
     expect(exitCode, stderr).toBe(0);
@@ -241,10 +203,7 @@ describe("a program nukadoko serves", () => {
   });
 
   it("imports the step files before the world's env is set, at --concurrency 1 and 2 alike, and gives it to the step when it runs", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ env: { IMPORT_MARK: "from-the-world" } });\n',
-    );
+    writeProgram(rootDir, '{ env: { IMPORT_MARK: "from-the-world" } }');
     await writeFile(
       path.join(rootDir, "features", "steps", "read-at-import.ts"),
       [
@@ -284,18 +243,14 @@ describe("a program nukadoko serves", () => {
   });
 
   it("names the log from the project root when the program exits during the pass", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "./nukadoko-shim.js";',
+    writeProgram(rootDir, [
         "// Answers the ready check, then exits.",
-        "export default defineProgram({",
+        "{",
         '  serve: { command: ["node", "-e", "require(\'http\').createServer((q, s) => { s.end(\'{}\'); setTimeout(() => process.exit(3), 20); }).listen(process.env.PORT)"] },',
         '  env: { PORT: "{port}" },',
-        "});",
+        "}",
         "",
-      ].join("\n"),
-    );
+      ].join("\n"));
     const { stderr } = await cli(rootDir, ["run"]);
 
     const run = latestRunJson(rootDir);
@@ -344,10 +299,7 @@ describe("a program nukadoko serves", () => {
   });
 
   it("nuka do writes no step record when the program does not start", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ prepare: ["node -e process.exit(5)"], url: "http://a.example" });\n',
-    );
+    writeProgram(rootDir, '{ prepare: ["node -e process.exit(5)"], url: "http://a.example" }');
     const { exitCode, stdout, stderr } = await cli(rootDir, ["do", "ask-program", "--args", "{}"]);
 
     expect(exitCode).toBe(1);
@@ -363,24 +315,13 @@ describe("a program nukadoko serves", () => {
   });
 
   it("refuses a placeholder a world it starts has no value for before any command runs, in check, run, run --no-check, and do", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "./nukadoko-shim.js";',
-        "export default defineProgram({",
-        '  build: [["node", "-e", "require(\'fs\').writeFileSync(\'build-ran\', \'\')"]],',
-        '  prepare: ["echo {port}"],',
-        '  environments: { local: { serve: { command: "node app/server.mjs" }, env: { PORT: "{port}" } } },',
-        "});",
-        "",
-      ].join("\n"),
-    );
+    writeProgram(rootDir, ["{", '  build: [["node", "-e", "require(\'fs\').writeFileSync(\'build-ran\', \'\')"]],', '  prepare: ["echo {port}"],', '  environments: { local: { serve: { command: "node app/server.mjs" }, env: { PORT: "{port}" } } },', "}"].join("\n"));
     const gap = "world default: prepare[0] names {port}, which has no value here: this world has neither serve nor url";
-    const fix = "  fix: Remove {port} from prepare[0] of nukadoko.program.ts, or give world default serve or url.\n";
+    const fix = "  fix: Remove {port} from prepare[0] of nukadoko.config.ts, or give world default serve or url.\n";
 
     const check = await cli(rootDir, ["check"]);
     expect(check.exitCode).toBe(1);
-    expect(check.stdout).toContain(`error\tprogram-placeholder-unfilled\tnukadoko.program.ts\t${gap}\n${fix}`);
+    expect(check.stdout).toContain(`error\tprogram-placeholder-unfilled\tnukadoko.config.ts\t${gap}\n${fix}`);
     expect(check.stdout).not.toContain("world local");
 
     for (const args of [["run", "--no-check"], ["do", "ask-program", "--args", "{}"]]) {
@@ -406,13 +347,13 @@ describe("a program nukadoko serves", () => {
     expect(unknown.stderr).toMatch(/^refused\tunknown-environment\t-\tUnknown environment "nope"/);
   });
 
-  it("nuka check refuses a program file that does not parse, naming the file", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), 'export default { serve: { command: "x" }, url: "http://a.example" };\n');
+  it("nuka check refuses a program that does not parse, naming the file", async () => {
+    writeProgram(rootDir, '{ serve: { command: "x" }, url: "http://a.example" }');
     const { exitCode, stderr } = await cli(rootDir, ["check"]);
 
     expect(exitCode).toBe(2);
     expect(stderr).toContain(
-      `refused\tconfig-invalid\t-\tInvalid program at nukadoko.program.ts: url: serve and url are two ways to reach the program`,
+      `refused\tconfig-invalid\t-\tInvalid program at nukadoko.config.ts: program.url: serve and url are two ways to reach the program`,
     );
   });
 
@@ -421,11 +362,11 @@ describe("a program nukadoko serves", () => {
     ["url: \"localhost:4123\"", 'url: must be an http: or https: URL, such as "http://localhost:3000"'],
     ["url: \"http://user:hunter2@127.0.0.1:1\"", "url: must not hold a user or a password"],
   ])("nuka check and nuka run refuse %s before anything runs", async (field, reason) => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), `export default { ${field} };\n`);
+    writeProgram(rootDir, `{ ${field} }`);
     for (const args of [["check"], ["run", "--no-check"]]) {
       const { exitCode, stderr } = await cli(rootDir, args);
       expect(exitCode).toBe(2);
-      expect(stderr).toContain(`refused\tconfig-invalid\t-\tInvalid program at nukadoko.program.ts: ${reason}`);
+      expect(stderr).toContain(`refused\tconfig-invalid\t-\tInvalid program at nukadoko.config.ts: program.${reason}`);
       expect(stderr).not.toContain("hunter2");
     }
     expect(stepRecordIds(rootDir)).toEqual([]);

@@ -58,7 +58,7 @@ describe("examples/migration", () => {
   });
 
   it("runs the shipped mixed compat/typed suite green, with the shapes README.md quotes", async () => {
-    // The program file serves ../todo/app/server.ts, so examples/todo is
+    // The program serves ../todo/app/server.ts, so examples/todo is
     // copied beside it.
     examplesDir = await copyExamplesToTempDir(["migration", "todo"]);
     rootDir = path.join(examplesDir, "migration");

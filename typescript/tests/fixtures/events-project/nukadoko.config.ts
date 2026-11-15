@@ -1,4 +1,13 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// The program under test is in nukadoko.program.ts.
-export default defineConfig({});
+// The program under test is this config's program.
+// A program that writes execution events (docs/execution-events.md) from
+// two processes, a server and the job worker it starts, to the file
+// {events} names. tests/program-events.test.ts reads where each line went.
+
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node app/server.mjs", ready: "/up" },
+    env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs" },
+  }),
+});

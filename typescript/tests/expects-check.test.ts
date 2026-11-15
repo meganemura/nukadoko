@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: the two `nuka check` findings about `@expects:` tags,
 // against tests/fixtures/underneath-project: a tag that does not read is an
@@ -72,10 +73,7 @@ describe("nuka check: @expects tags", () => {
   });
 
   it("warns on an @expects:error= tag when no world the run starts reads execution events", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      ['import { defineProgram } from "./nukadoko-shim.js";', 'export default defineProgram({ serve: { command: "node app/server.mjs", ready: "/up" }, env: { PORT: "{port}" } });', ""].join("\n"),
-    );
+    writeProgram(rootDir, ['{ serve: { command: "node app/server.mjs", ready: "/up" }, env: { PORT: "{port}" } }', ""].join("\n"));
     const { exitCode, findings } = await check(rootDir, []);
     expect(exitCode).toBe(0);
     expect(findings).toEqual([
@@ -86,7 +84,7 @@ describe("nuka check: @expects tags", () => {
         line: 15,
         message:
           "@expects:error=Boom::Exploded accepts an unhandled error the program reports in its execution events, and no world this run starts reads them " +
-          "(world default: the program file names no {events}), so the tag can never match",
+          "(world default: the program names no {events}), so the tag can never match",
       }),
     ]);
   });

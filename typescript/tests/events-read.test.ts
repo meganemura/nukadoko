@@ -366,7 +366,7 @@ describe("a step context's events reading", () => {
     }
   });
 
-  it("names a world whose program file names no {events}, and one nukadoko did not start", async () => {
+  it("names a world whose program names no {events}, and one nukadoko did not start", async () => {
     const config = { stepTitle: "x", stepTimeout: 1_200_000, browserType: "chromium", worldParameters: {} } as unknown as NukadokoConfig;
     const served = createStepContext({ config, baseURL: origin, evidenceDir: dir, env: {}, stepTitle: "a", programLog: path.join(dir, "program.log") });
     const atUrl = createStepContext({ config, baseURL: origin, evidenceDir: dir, env: {}, stepTitle: "b", programLog: null, events: null });

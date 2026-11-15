@@ -1,7 +1,7 @@
-// Prints one of the program's lists, as nukadoko.program.ts's `lists`
+// Prints one of the program's lists, as the program's `lists`
 // runs it: `node app/list.mjs <routes|flags|tables> <the world's URL>`. It asks
 // the running program first, so a list read before the program answers
-// fails. LIST_MODE, from the program file's env, makes the list a wrong
+// fails. LIST_MODE, from the program's env, makes the list a wrong
 // one: `fail` exits 3 after a line on stderr, `malformed` prints a
 // routes line with a key the format does not have, and `short` leaves the
 // last route out, as a world whose program lacks it would.

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: each step's coarse execution path in run.json, end to
 // end, against tests/fixtures/events-project served in two environments
@@ -43,16 +44,14 @@ const FEATURE = [
 ].join("\n");
 
 const PROGRAM = [
-  'import { defineProgram } from "./nukadoko-shim.js";',
-  "",
-  "export default defineProgram({",
+  "{",
   '  serve: { command: "node app/server.mjs", ready: "/up" },',
   '  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs", QUICK_REORDER: "{condition.quick_reorder}" },',
   "  environments: {",
   '    "reorder-off": { conditions: { quick_reorder: false } },',
   '    "reorder-on": { conditions: { quick_reorder: true } },',
   "  },",
-  "});",
+  "}",
   "",
 ].join("\n");
 
@@ -78,7 +77,7 @@ describe("each step's path in run.json, and the paths of two environments compar
   // One run serves every test here: it starts two worlds.
   beforeAll(async () => {
     rootDir = await copyFixtureToTempDir("events-project");
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     await writeFile(path.join(rootDir, FILE), FEATURE);
     exitCode = await runCli(["run"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
   }, 120_000);

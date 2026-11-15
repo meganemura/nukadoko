@@ -480,7 +480,7 @@ export function leftOutText(count: number): string {
 /** A `criterion-without-required-cell` finding for each row with no
  * required cell, which only a run under `--no-check` reaches: the row is
  * red, and the table's reason alone gave no command. `elsewhere` names an
- * environment of the program file the run did not start that meets the
+ * environment of the program the run did not start that meets the
  * row's conditions, for a `do:` line that runs the scenario there; without
  * one, the `do:` line is `nuka check` on the file, which names the tags
  * and the environments as `condition-unmet`. Pure. */

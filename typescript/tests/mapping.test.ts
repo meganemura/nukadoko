@@ -3,11 +3,11 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { configSchema } from "../src/config/schema.js";
-import { compareMapping, configMappingText, programMappingOf, RUN_SETTINGS, type MappingSnapshot } from "../src/run/mapping.js";
+import { compareMapping, configFileMappingText, configMappingText, programMappingOf, RUN_SETTINGS, type MappingSnapshot } from "../src/run/mapping.js";
 
 // Responsibility: whether the mapping changed since `nuka run --base`'s
 // ref (src/run/mapping.ts): the files under the features directory other
-// than `.feature` files, the config's mapping part, and the program file's
+// than `.feature` files, the config's mapping part, and the program's
 // conditions and default selection. A mapping compared with itself never
 // changed; any one of those parts that differs is named.
 
@@ -68,7 +68,7 @@ describe("compareMapping", () => {
     expect(compareMapping(before, after).changed).toBe(false);
   });
 
-  it("counts a program file or a config that did not load at the ref as changed", () => {
+  it("counts a program or a config that did not load at the ref as changed", () => {
     const head = { ...plain, program: programMappingOf({ environments: { on: { conditions: { banner: true } } } }) };
     expect(compareMapping({ ...plain, program: { problem: "it threw" } }, head)).toEqual({ changed: true, files: [], config: false, conditions: ["on"], defaultEnvironments: true });
     expect(compareMapping({ ...plain, config: { problem: "it threw" } }, plain)).toEqual({ changed: true, files: [], config: true, conditions: [], defaultEnvironments: false });
@@ -92,15 +92,48 @@ describe("compareMapping", () => {
 });
 
 describe("configMappingText", () => {
-  it("counts every config field as mapping but where records are written and how many are kept", () =>
+  it("counts every config field as mapping but where records are written, how many are kept, and the program", () =>
     hegel.test((tc) => {
       const base = configSchema.parse({}) as Record<string, unknown>;
       const key = tc.draw(gs.sampledFrom(Object.keys(configSchema.shape)));
       const changed = { ...base, [key]: { a: tc.draw(gs.integers({ minValue: 0, maxValue: 9 })) } };
-      expect(configMappingText(changed) !== configMappingText(base)).toBe(!(RUN_SETTINGS as readonly string[]).includes(key));
+      expect(configMappingText(changed) !== configMappingText(base)).toBe(![...RUN_SETTINGS, "program"].includes(key));
     }));
 
   it("names the fields left out of the mapping", () => {
     expect(RUN_SETTINGS).toEqual(["stateDir", "retention"]);
+  });
+});
+
+describe("configFileMappingText", () => {
+  // The program goes with the code: a config whose program alone changed
+  // reads as the same mapping, and one changed beside it does not.
+  const file = (program: string, rest = "headless: true"): string =>
+    `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({\n  browser: { ${rest} },\n  program: ${program},\n});\n`;
+  const programs = gs.sampledFrom([
+    "() => ({ url: \"http://a.example\" })",
+    "() => ({ serve: { command: \"node app.mjs\", ready: \"/up\" }, env: { PORT: \"{port}\" } })",
+    "() => ({})",
+  ]);
+
+  it("is the same text for two configs that differ only in their program", () =>
+    hegel.test((tc) => {
+      const one = tc.draw(programs);
+      const two = tc.draw(programs);
+      expect(configFileMappingText(file(one), (0, eval)(one))).toBe(configFileMappingText(file(two), (0, eval)(two)));
+    }));
+
+  it("keeps what lies beside the program", () =>
+    hegel.test((tc) => {
+      const program = tc.draw(programs);
+      expect(configFileMappingText(file(program), (0, eval)(program))).not.toBe(configFileMappingText(file(program, "headless: false"), (0, eval)(program)));
+    }));
+
+  it("reads the whole file when the program's source is not in it exactly once", () => {
+    const program = () => ({});
+    const text = `${program.toString()} ${program.toString()}`;
+    expect(configFileMappingText(text, program)).toBe(text);
+    expect(configFileMappingText("export default {};", program)).toBe("export default {};");
+    expect(configFileMappingText("export default {};", undefined)).toBe("export default {};");
   });
 });

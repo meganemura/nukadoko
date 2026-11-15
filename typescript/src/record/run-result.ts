@@ -728,7 +728,7 @@ export type RunPathStep =
  * declares the difference (`RunIntent`). */
 export type RunPathDifference = PathKey & { readonly holds?: MarkedHolds; readonly intent?: number; readonly a: CountRange; readonly b: CountRange };
 
-/** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
+/** A condition the run ran under: an environment from the program in nukadoko.config.ts, or `default`. */
 export interface RunEnvironment {
   readonly name: string;
   /** What the environment's version probe answered, `null` without one. */
@@ -738,7 +738,7 @@ export interface RunEnvironment {
    * Absent in a run.json an earlier build wrote. */
   readonly base_url?: string | null;
   /** What the environment declares under `conditions` in
-   * nukadoko.program.ts; present only when it declares them. */
+   * the program in nukadoko.config.ts; present only when it declares them. */
   readonly conditions?: Readonly<Record<string, boolean | string>>;
 }
 
@@ -755,11 +755,11 @@ export interface RunWorld {
   readonly name: string;
   /** Which tree the program was built from (`RunWorldName`). */
   readonly tree: RunWorldName;
-  /** `true` on a base world whose ref holds no program file, so it was
+  /** `true` on a base world whose ref holds no program, so it was
    * built and started from head's. */
   readonly program_from_head?: true;
   /** The base URL every page and request resolved against: the port
-   * nukadoko gave `serve`, or the program file's `url`. `null` for a world
+   * nukadoko gave `serve`, or the program's `url`. `null` for a world
    * with neither. */
   readonly url: string | null;
   /** What the world ran: build commands appear in the first world that
@@ -780,13 +780,13 @@ export interface RunWorld {
   readonly program_log?: RunWorldProgramLog | null;
   /** What the program wrote to the file `{events}` names (docs/spec.md
    * "Execution events"). `null` for a world at a `url`, which nukadoko
-   * does not start. Absent for a world whose program file names no
+   * does not start. Absent for a world whose program names no
    * `{events}`, one with no URL, one that did not start, and in a
    * run.json an earlier build wrote. */
   readonly events?: RunWorldEvents | null;
-  /** Each list of the program file's `lists` the world read
+  /** Each list of the program's `lists` the world read
    * (docs/spec.md "Lists"), by kind. Present only for a head world
-   * nukadoko served with an events file, whose program file names
+   * nukadoko served with an events file, whose program names
    * `lists`. */
   readonly lists?: Readonly<Partial<Record<ListKind, RunWorldList>>>;
 }
@@ -861,11 +861,11 @@ export type RunFields = {
   } | null;
   /** Every environment the run ran under, in the order `--env` named
    * them, or without `--env`, the ones that declare conditions in the
-   * program file's order, or `default` alone when none does. Each
+   * program's order, or `default` alone when none does. Each
    * selected scenario ran once per environment. */
   readonly environments: readonly RunEnvironment[];
   /** One per world the run started, in the order it started them; empty
-   * when the tree has no program file. Absent in a run.json an earlier
+   * when the tree has no program. Absent in a run.json an earlier
    * build wrote. */
   readonly worlds?: readonly RunWorld[];
   /** `partial` when a `:line` target left out some scenarios of its file,

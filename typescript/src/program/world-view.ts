@@ -6,7 +6,7 @@ import type { SecretSet } from "../secrets/types.js";
 // URL, the env its processes got, the values made for it that every record
 // redacts, the prefix of its trace ids, its program log when nukadoko
 // serves the program, and the file its program appends execution events
-// to when the program file asks for one, and what its tables list says,
+// to when the program asks for one, and what its tables list says,
 // which decides what a claim step's count leaves out. Boundary:
 // no process; starting and stopping the program is src/program/world.ts's.
 
@@ -15,7 +15,7 @@ export interface WorldView {
   /** The base URL `page`, `context`, `request`, and `pageAs` resolve
    * against; `undefined` for a world with neither `serve` nor `url`. */
   readonly url: string | undefined;
-  /** The program file's `env`, placeholders filled, without the
+  /** The program's `env`, placeholders filled, without the
    * variables whose value names `{events}`. The steps' process gets it,
    * so a step and a `runCommand` child read a variable the way the
    * program does; only the program may write the events file. */
@@ -36,12 +36,12 @@ export interface WorldView {
   readonly tracePrefix: string;
   /** The absolute path of the file the program appends its execution
    * events to, `{events}`, while nukadoko serves the program and the
-   * program file names it; `null` otherwise. Only the parent makes and
+   * program names it; `null` otherwise. Only the parent makes and
    * removes the file; every process that runs steps reads it. */
   readonly events: string | null;
   /** What the program's tables list says of its tables, when the world
    * read one (src/execution-events/tables.ts); no table is marked when
-   * the program file names none. */
+   * the program names none. */
   readonly tables: WorldTables;
 }
 

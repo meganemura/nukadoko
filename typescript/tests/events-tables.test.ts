@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: the program's tables list end to end, against
 // tests/fixtures/events-project, whose `/dashboard` page fills a cache
@@ -26,13 +27,11 @@ async function cli(rootDir: string, args: readonly string[]): Promise<{ exitCode
 
 const program = (extra = "", lists = 'lists: { tables: "node app/list.mjs tables {url}" },'): string =>
   [
-    'import { defineProgram } from "./nukadoko-shim.js";',
-    "",
-    "export default defineProgram({",
+    "{",
     '  serve: { command: "node app/server.mjs", ready: "/up" },',
     `  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", JOBS_DIR: "{dir}/jobs"${extra} },`,
     `  ${lists}`,
-    "});",
+    "}",
     "",
   ].join("\n");
 
@@ -101,7 +100,7 @@ describe("a count under the program's tables list", () => {
   });
 
   it("leaves out the bookkeeping and infrastructure writes of a selection that names no table, and says so, and counts them where the selection names the table", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program());
+    writeProgram(rootDir, program());
     const { exitCode, stderr } = await cli(rootDir, ["run"]);
     expect(exitCode, stderr).toBe(0);
     const [, nothing, events] = stepsOf(rootDir);
@@ -126,7 +125,7 @@ describe("a count under the program's tables list", () => {
   });
 
   it("breaks the same claim on those writes when the program declares no tables list", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program("", ""));
+    writeProgram(rootDir, program("", ""));
     const { exitCode, stderr } = await cli(rootDir, ["run"]);
     expect(exitCode).toBe(1);
     const [, nothing] = stepsOf(rootDir);
@@ -138,7 +137,7 @@ describe("a count under the program's tables list", () => {
   });
 
   it("leaves the claim unjudged when the tables list was not read, since any write may be on a table it leaves out", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "fail"'));
+    writeProgram(rootDir, program(', LIST_MODE: "fail"'));
     await writeFile(
       path.join(rootDir, "features", "events.feature"),
       [FEATURE, "  Scenario: one table is counted", '    When the client gets "/dashboard"', '    Then the page wrote to "events" 1 time', ""].join("\n"),
@@ -159,7 +158,7 @@ describe("a count under the program's tables list", () => {
   });
 
   it("reads the same list under nuka do --use, and leaves the same lines out", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program());
+    writeProgram(rootDir, program());
     const get = await cli(rootDir, ["do", "get", "--args", JSON.stringify({ path: "/dashboard" })]);
     expect(get.exitCode, get.stderr).toBe(0);
     const id = (JSON.parse(get.stdout) as { step_record_id: string }).step_record_id;
@@ -172,7 +171,7 @@ describe("a count under the program's tables list", () => {
   });
 
   it("names a tables list nuka do could not read, whose claim it leaves unjudged", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "fail"'));
+    writeProgram(rootDir, program(', LIST_MODE: "fail"'));
     const get = await cli(rootDir, ["do", "get", "--args", JSON.stringify({ path: "/dashboard" })]);
     expect(get.exitCode, get.stderr).toBe(0);
     const id = (JSON.parse(get.stdout) as { step_record_id: string }).step_record_id;
@@ -196,14 +195,14 @@ describe("a count at the base under the base's own tables list", () => {
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     writeFileSync(path.join(rootDir, "features", "steps", "page-wrote.ts"), PAGE_WROTE);
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), program());
+    writeProgram(rootDir, program());
     writeFileSync(path.join(rootDir, "features", "events.feature"), ["Feature: A dashboard", "", "  Scenario: a room is read", '    When the client gets "/rooms/7"', ""].join("\n"));
     git("init", "-q", "-b", "main");
     git("add", "-A");
     git("commit", "-q", "-m", "base");
     git("branch", "base-branch");
     // The change under review adds the criterion, so the base world runs
-    // it as a cell, under the base tree's own program file.
+    // it as a cell, under the base tree's own program.
     writeFileSync(path.join(rootDir, "features", "events.feature"), FEATURE);
     git("commit", "-q", "-am", "head");
   });
@@ -233,7 +232,7 @@ describe("a step that declares mutates: false, set beside the writes its trace h
   });
 
   it("notes a committed write to state, after the step's record too, and not a bookkeeping or infrastructure write, nor one that rolled back", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program());
+    writeProgram(rootDir, program());
     await writeFile(
       path.join(rootDir, "features", "events.feature"),
       [
@@ -266,7 +265,7 @@ describe("a step that declares mutates: false, set beside the writes its trace h
   });
 
   it("names no write when the tables list was not read, since any table may hold bookkeeping", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "fail"'));
+    writeProgram(rootDir, program(', LIST_MODE: "fail"'));
     await writeFile(path.join(rootDir, "features", "events.feature"), ["Feature: Reads", "", "  Scenario: a read that writes", '    When the client gets "/after"', ""].join("\n"));
     await cli(rootDir, ["run"]);
     const codes = (latestRunJson(rootDir).findings as { code: string }[]).map((finding) => finding.code);
@@ -287,13 +286,10 @@ describe("a path under the program's tables list", () => {
   });
 
   it("keeps a marked write in the step's path, with what its table holds, and ranks a pair's difference on it below the rest", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      program(
+    writeProgram(rootDir, program(
         "",
         'lists: { tables: "node app/list.mjs tables {url}" },\n  environments: { "telemetry-off": { conditions: { telemetry: false }, env: { TELEMETRY: "off" } }, "telemetry-on": { conditions: { telemetry: true } } },',
-      ),
-    );
+      ));
     await writeFile(path.join(rootDir, "features", "events.feature"), ["Feature: A dashboard", "", "  Scenario: a dashboard is read", '    When the client gets "/dashboard"', ""].join("\n"));
     const { exitCode, stderr } = await cli(rootDir, ["run", "--env", "telemetry-off", "--env", "telemetry-on"]);
     expect(exitCode, stderr).toBe(0);

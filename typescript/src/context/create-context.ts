@@ -588,7 +588,7 @@ export interface CreateStepContextOptions {
   programLog?: string | null | undefined;
   /** The file the world's program appends its execution events to
    * (src/program/world-view.ts), which each step's record slices by trace
-   * id: its path when the program file names `{events}` and nukadoko
+   * id: its path when the program names `{events}` and nukadoko
    * serves the program, `null` or absent otherwise. A world at a `url`
    * (`programLog: null`) records `events: null`, since nukadoko reads
    * nothing a program it did not start writes. Ignored without
@@ -599,7 +599,7 @@ export interface CreateStepContextOptions {
   tracePrefix?: string | undefined;
   /** What the world's tables list says (src/program/world-view.ts), which
    * decides the lines a claim step's count leaves out. A world whose
-   * program file names no tables list marks none, as when it is absent. */
+   * program names no tables list marks none, as when it is absent. */
   tables?: WorldTables | undefined;
   /** The world's directory (src/program/world-view.ts). It is inside the
    * state directory, which the file measurement leaves out, and a step's
@@ -1551,7 +1551,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     if (known !== undefined) return known;
     let producer: EventsProducer;
     if (eventsReader === undefined) {
-      // A world nukadoko serves has a log path; one whose program file
+      // A world nukadoko serves has a log path; one whose program
       // names no {events} has no events file to read.
       producer = { source: "unread", of, gap: trace !== undefined && typeof options.programLog === "string" ? "inlet-unnamed" : "world-unread" };
     } else {

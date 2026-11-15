@@ -3,12 +3,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: the three findings about condition tags, against
 // tests/fixtures/condition-check-project: a tag that does not read, a tag
 // that names a condition no environment declares, and a scenario no
 // selected environment meets. `nuka check` reads the environments a run
-// with no --env selects, which the program file is expected to cover. A
+// with no --env selects, which the program is expected to cover. A
 // selection --env names is a choice of where to run: `nuka check --env`
 // and `nuka run --env` report no scenario as unmet there, and the run
 // leaves such a scenario out (tests/run-verdict-selection.test.ts).
@@ -40,14 +41,14 @@ const BOOLEAN_TEXT = {
   code: "condition-tag-malformed",
   file: "features/tags.feature",
   line: 27,
-  message: "@with:banner=true names a boolean as text, which reads two ways: write @with:banner, which reads the boolean the program file declares",
+  message: "@with:banner=true names a boolean as text, which reads two ways: write @with:banner, which reads the boolean the program declares",
 };
 const UNKNOWN = {
   code: "condition-unknown",
   file: "features/tags.feature",
   line: 15,
   message:
-    '@with:colour names the condition "colour", and no environment in nukadoko.program.ts declares it under conditions. ' +
+    '@with:colour names the condition "colour", and no environment in nukadoko.config.ts declares it under conditions. ' +
     "If colour was removed and its on side kept, remove the tag, so the scenario holds everywhere; if its off side was kept, delete the scenario.",
 };
 
@@ -97,7 +98,7 @@ describe("nuka check: condition tags", () => {
     expect(refusal?.do).toBe("nuka check features/tags.feature --env staging");
   });
 
-  it("refuses an --env name the program file does not define", async () => {
+  it("refuses an --env name the program does not define", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--env", "stagin", "--json"], { rootDir: project, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(2);
@@ -115,24 +116,20 @@ describe("nuka check: condition tags", () => {
     ]);
   });
 
-  it("refuses a program file whose condition a tag could not name", async () => {
+  it("refuses a program whose condition a tag could not name", async () => {
     const rootDir = await copyFixtureToTempDir("condition-check-project");
     try {
-      await writeFile(
-        path.join(rootDir, "nukadoko.program.ts"),
-        'import { defineProgram } from "./nukadoko-shim.js";\n' +
-          'export default defineProgram({ environments: { "flag-off": { conditions: { "bad name": false, locale: "en US", banner: "false", mail: "a@b" } } } });\n',
-      );
+      writeProgram(rootDir, '{ environments: { "flag-off": { conditions: { "bad name": false, locale: "en US", banner: "false", mail: "a@b" } } } }');
       const stdout = createCaptureSink();
       const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
       expect(exitCode).toBe(2);
       const finding = (JSON.parse(stdout.text()) as { findings: { code: string; message: string }[] }).findings[0]!;
       expect(finding.code).toBe("config-invalid");
       expect(finding.message).toContain(
-        'environments.flag-off.conditions.locale: must be true, false, or a value with no whitespace and no "@", as @with:<name>=<value> names it; ' +
-          "environments.flag-off.conditions.banner: is a boolean written as a string, which @with:<name> reads as on whatever it says: write the boolean, without quotes; " +
-          'environments.flag-off.conditions.mail: must be true, false, or a value with no whitespace and no "@", as @with:<name>=<value> names it; ' +
-          'environments.flag-off.conditions.bad name: must be a condition name of letters, digits, "_", ".", or "-", as @with:<name> names it',
+        'program.environments.flag-off.conditions.locale: must be true, false, or a value with no whitespace and no "@", as @with:<name>=<value> names it; ' +
+          "program.environments.flag-off.conditions.banner: is a boolean written as a string, which @with:<name> reads as on whatever it says: write the boolean, without quotes; " +
+          'program.environments.flag-off.conditions.mail: must be true, false, or a value with no whitespace and no "@", as @with:<name>=<value> names it; ' +
+          'program.environments.flag-off.conditions.bad name: must be a condition name of letters, digits, "_", ".", or "-", as @with:<name> names it',
       );
     } finally {
       await removeTempDir(rootDir);

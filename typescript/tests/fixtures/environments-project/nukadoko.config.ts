@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// Fixture for named environments (nukadoko.program.ts) covering url and
+// Fixture for named environments (the program's environments) covering url and
 // envFiles layering, `policy: "read-only"`, and the `version` probe
 // (success and throw). No real HTTP server is needed: the steps under
 // features/steps/ only ever read `ctx.baseURL`/`ctx.env`, never
@@ -15,4 +15,25 @@ import { defineConfig } from "./nukadoko-shim.js";
 export default defineConfig({
   envFiles: [".env.base"],
   secrets: { public: ["KEY", "SHARED"] },
+  program: () => ({
+    url: "http://top.example",
+    environments: {
+      staging: {
+        url: "http://staging.example",
+        envFiles: [".env.staging"],
+      },
+      "no-overrides": {},
+      readonly: {
+        policy: "read-only",
+      },
+      "probe-ok": {
+        version: () => "1.2.3",
+      },
+      "probe-throws": {
+        version: () => {
+          throw new Error("probe boom");
+        },
+      },
+    },
+  }),
 });

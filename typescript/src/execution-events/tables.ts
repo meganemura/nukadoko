@@ -38,7 +38,7 @@ export const MARKED_HOLDS = TABLE_HOLDS.filter((holds): holds is MarkedHolds => 
  * `--concurrency` worker inside the world's view. */
 export type WorldTables = { readonly marked: Readonly<Record<string, MarkedHolds>> } | { readonly unread: true };
 
-/** The tables of a world whose program file names no tables list. */
+/** The tables of a world whose program names no tables list. */
 export const NO_MARKED_TABLES: WorldTables = { marked: {} };
 
 /** A read tables list, as a count reads it. Pure. */

@@ -3,8 +3,8 @@ import path from "node:path";
 import { loadEnvFiles, parseEnvFile } from "../context/env.js";
 import { skippedEnvFileLines } from "../env/parse-env-file.js";
 import { locateConfig } from "../config/config-presence.js";
-import { resolveConfigFileName } from "../config/load-config.js";
-import { PROGRAM_FILE_NAME, type LoadedProgram } from "../config/load-program.js";
+import { CONFIG_FILE_NAME, resolveConfigFileName } from "../config/load-config.js";
+import type { LoadedProgram } from "../config/load-program.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { worldsToStart } from "../environment/resolve-environment.js";
 import { describePlaceholderGap, placeholderGapFix, placeholderGaps } from "../program/placeholders.js";
@@ -17,7 +17,7 @@ import type { CheckIssue } from "./types.js";
 // the additionalFeatureDirs-missing check below, same severity and
 // same reasoning: a directory named in config to be scanned and absent from
 // disk is a config mistake, not a leniency to extend); a configured envFile
-// (top-level, or an environment's in nukadoko.program.ts) not existing is
+// (top-level, or an environment's in the program in nukadoko.config.ts) not existing is
 // a warning. The distinction
 // there matters: `do`/`run` are already tolerant of a missing envFile
 // (loadEnvFiles contributes nothing for ENOENT). check's job here is to
@@ -59,7 +59,7 @@ export interface ConfigCheckResult {
 }
 
 /** Every key any configured envFile defines, across the top-level list and
- * every environment's own list in the program file, plus the flattened list of envFile paths
+ * every environment's own list in the program, plus the flattened list of envFile paths
  * itself. loadEnvFiles tolerates a missing file (contributes nothing) and
  * throws for any other read error, naming the path and the errno, so a
  * directory or an unreadable file is reported here rather than looking like
@@ -158,7 +158,7 @@ export async function checkConfig(
     }
   }
 
-  const programFile = program?.fileName ?? PROGRAM_FILE_NAME;
+  const programFile = program?.fileName ?? CONFIG_FILE_NAME;
   for (const [environmentName, environment] of Object.entries(program?.program.environments ?? {})) {
     for (const relativePath of environment.envFiles ?? []) {
       if (!existsSync(path.join(rootDir, relativePath))) {

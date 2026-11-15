@@ -20,6 +20,7 @@ import {
   repoRoot,
   testsDir,
 } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // The one line init writes to stderr when nothing else needs saying. These
 // tests run init from source, so the package is this checkout.
@@ -158,7 +159,7 @@ describe("nuka init", () => {
     await expect(loadConfig(rootDir)).resolves.toMatchObject({ featuresDir: "features" });
   });
 
-  it("starts the program file's serve command for a --request step, and the scenario passes with no hand edit", async () => {
+  it("starts the program's serve command for a --request step, and the scenario passes with no hand edit", async () => {
     await mkdir(path.join(rootDir, "src"));
     await writeFile(
       path.join(rootDir, "src", "server.ts"),
@@ -166,15 +167,10 @@ describe("nuka init", () => {
     );
     const quiet = { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() };
     expect(await runCli(["init"], quiet)).toBe(0);
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "nukadoko";',
+    writeProgram(rootDir, [
+        '{ serve: { command: "node src/server.ts", ready: "/health" }, env: { PORT: "{port}" } }',
         "",
-        'export default defineProgram({ serve: { command: "node src/server.ts", ready: "/health" }, env: { PORT: "{port}" } });',
-        "",
-      ].join("\n"),
-    );
+      ].join("\n"));
     await writeFile(
       path.join(rootDir, "features", "health.feature"),
       'Feature: health\n  Scenario: ok\n    When I request "/health"\n    Then the body is "ok"\n',
@@ -451,15 +447,15 @@ describe("nuka init", () => {
   it.each([
     [
       ["--base-url", "https://example.com"],
-      'nuka init --base-url is removed: write url in nukadoko.program.ts (export default defineProgram({ url: "http://localhost:3000" })), the URL every page and request resolves against.',
+      'nuka init --base-url is removed: write url in the program in nukadoko.config.ts (program: () => ({ url: "http://localhost:3000" })), the URL every page and request resolves against.',
     ],
     [
       ["--server", "npm start"],
-      'nuka init --server is removed: describe the program in nukadoko.program.ts (export default defineProgram({ serve: { command: "npm start" }, env: { PORT: "{port}" } })); nukadoko starts it once for each environment, on a port of its own, and stops it after the scenarios.',
+      'nuka init --server is removed: describe the program in the program function of nukadoko.config.ts (program: () => ({ serve: { command: "npm start" }, env: { PORT: "{port}" } })); nukadoko starts it once for each environment, on a port of its own, and stops it after the scenarios.',
     ],
     [
       ["--server-url", "http://127.0.0.1:3000"],
-      "nuka init --server-url is removed: a program nukadoko starts gets its port from serve in nukadoko.program.ts, and one it does not start is named by url there.",
+      "nuka init --server-url is removed: a program nukadoko starts gets its port from serve in the program in nukadoko.config.ts, and one it does not start is named by url there.",
     ],
     [
       ["--features-dir", "e2e"],

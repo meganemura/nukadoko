@@ -21,7 +21,7 @@ const TOO_LONG = MAX_TIMER_DELAY_MS + 1;
 const LIMIT_TEXT = "at most 2147483647 ms, the longest delay a Node.js timer keeps (a longer one fires after 1 ms)";
 
 
-describe("nukadoko.program.ts", () => {
+describe("the program in nukadoko.config.ts", () => {
   const withTimeout = (timeout: number) => [
     { where: "build.0.timeout_ms", input: { build: [{ command: "make", timeout_ms: timeout }] } },
     { where: "prepare.0.timeout_ms", input: { prepare: [{ command: "seed", timeout_ms: timeout }] } },

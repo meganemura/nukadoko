@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: run.json's `routes` and the summary's "Routes" over a
 // real run of tests/fixtures/events-project, whose app/list.mjs lists
@@ -36,14 +37,12 @@ const FEATURE = [
 
 function program(env = "", environments: readonly string[] = []): string {
   return [
-    'import { defineProgram } from "./nukadoko-shim.js";',
-    "",
-    "export default defineProgram({",
+    "{",
     '  serve: { command: "node app/server.mjs", ready: "/up" },',
     `  env: { PORT: "{port}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs", EXECUTION_EVENTS: "{events}"${env} },`,
     '  lists: { routes: "node app/list.mjs routes {url}" },',
     ...(environments.length === 0 ? [] : ["  environments: {", ...environments.map((line) => `    ${line}`), "  },"]),
-    "});",
+    "}",
     "",
   ].join("\n");
 }
@@ -86,7 +85,7 @@ describe("run.json's routes", () => {
   });
 
   it("names every listed route, with the requests head steps sent it, and the requests the list does not account for", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program());
+    writeProgram(rootDir, program());
     expect(await run(rootDir)).toBe(0);
 
     const unrequested = (method: string, route: string, handler: string) => ({
@@ -143,7 +142,7 @@ describe("run.json's routes", () => {
   });
 
   it("gives no routes when the list was not read, and the summary says whose", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "malformed"'));
+    writeProgram(rootDir, program(', LIST_MODE: "malformed"'));
     expect(await run(rootDir)).toBe(0);
 
     const document = latestRunJson(rootDir);
@@ -158,7 +157,7 @@ describe("run.json's routes", () => {
 
   it("names the program's list once when two worlds list the same routes", async () => {
     const environments = ['"reorder-off": { conditions: { quick_reorder: false } },', '"reorder-on": { conditions: { quick_reorder: true } },'];
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', QUICK_REORDER: "{condition.quick_reorder}"', environments));
+    writeProgram(rootDir, program(', QUICK_REORDER: "{condition.quick_reorder}"', environments));
     expect(await run(rootDir)).toBe(0);
 
     expect(routesSection(summaryOf(rootDir))).toEqual([
@@ -176,7 +175,7 @@ describe("run.json's routes", () => {
 
   it("counts each world's list when two worlds list different routes", async () => {
     const environments = ['"full-list": { conditions: { list_mode: "full" } },', '"short-list": { conditions: { list_mode: "short" } },'];
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(', LIST_MODE: "{condition.list_mode}"', environments));
+    writeProgram(rootDir, program(', LIST_MODE: "{condition.list_mode}"', environments));
     expect(await run(rootDir)).toBe(0);
 
     expect(routesSection(summaryOf(rootDir))).toEqual([
@@ -193,7 +192,7 @@ describe("run.json's routes", () => {
   });
 
   it("gives no routes and no section to a run that reads no list", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program().replace('  lists: { routes: "node app/list.mjs routes {url}" },\n', ""));
+    writeProgram(rootDir, program().replace('  lists: { routes: "node app/list.mjs routes {url}" },\n', ""));
     expect(await run(rootDir)).toBe(0);
 
     expect(latestRunJson(rootDir)).not.toHaveProperty("routes");

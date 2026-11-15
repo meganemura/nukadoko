@@ -134,7 +134,7 @@ export interface ConcurrentPass {
   readonly environment: string;
   readonly targetVersion: string | undefined;
   readonly secrets: SecretSet;
-  /** Starts the pass's world: `null` when the tree has no program file,
+  /** Starts the pass's world: `null` when the tree has no program,
    * `"failed"` when the program did not start (the caller has reported
    * why). `close` stops the program after the pass. `abort` fires on the
    * first signal, and stops a start that is still waiting at once. */

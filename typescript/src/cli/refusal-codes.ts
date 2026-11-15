@@ -61,6 +61,10 @@ const REFUSAL_CODES = {
     description: "The config file sets a key that an earlier release removed.",
     fix: "Remove the key from the config file, and do what the message names in its place.",
   },
+  "program-file-moved": {
+    description: "The project root holds a program file (nukadoko.program.ts, .mts, or .rb), which an earlier release read and this one does not: the program is part of the config now.",
+    fix: "Move what the program file describes into the config as its program (program: () => ({ ... }) in nukadoko.config.ts, program: -> { { ... } } in nukadoko.config.rb), and delete the program file; CHANGELOG.md, under \"The program moves into the config\", shows the move.",
+  },
   "config-invalid": {
     description: "The config file did not load: it does not import, it has no default export, or a field is wrong.",
     fix: "Correct the config file as the message says.",
@@ -199,8 +203,8 @@ const REFUSAL_CODES = {
     fix: "Read the message; it is the error the command stopped on.",
   },
   "unknown-environment": {
-    description: "--env names an environment that nukadoko.program.ts does not define.",
-    fix: "Pass default or an environment nukadoko.program.ts defines, or add it to environments there.",
+    description: "--env names an environment that the program in nukadoko.config.ts does not define.",
+    fix: "Pass default or an environment the program in nukadoko.config.ts defines, or add it to environments there.",
   },
   "unknown-step": {
     description: "The command names a step that is not in the vocabulary.",

@@ -8,7 +8,7 @@ import { pathToFileURL } from "node:url";
 // checkout of the ref with head's features directory and config over it.
 // The old tree is head's code under the ref's criteria and mapping: a copy
 // of head's working tree with the ref's features directory and config over
-// it. The program file goes with the code, so the base tree keeps the
+// it. The program goes with the code, so the base tree keeps the
 // ref's, and takes head's only when the ref has none. Boundary: the plan is
 // pure; the checkout itself is src/run/git-ref.ts's, and when a tree is
 // made is src/run/base-run.ts's.
@@ -32,7 +32,7 @@ export interface TreeSide {
   readonly featuresDir: string;
   /** The config file, or `null` when the side has none. */
   readonly config: string | null;
-  /** The program file, or `null` when the side has none. */
+  /** The program, or `null` when the side has none. */
   readonly program: string | null;
 }
 

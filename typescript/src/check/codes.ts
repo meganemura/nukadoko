@@ -135,15 +135,15 @@ const CHECK_CODES = {
   },
   "condition-tag-malformed": {
     description:
-      "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition. @with:<condition>=true and =false are malformed too: a value written as text is not the boolean the program file declares.",
+      "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition. @with:<condition>=true and =false are malformed too: a value written as text is not the boolean the program declares.",
     severity: "error",
     fix: 'Rewrite the tag as @with:<condition>, @with:<condition>=<value>, or @without:<condition>; a condition name holds letters, digits, "_", ".", or "-", a value holds no whitespace and no "@", and a boolean is @with:<condition> or @without:<condition>.',
   },
   "condition-unknown": {
     description:
-      "A condition tag names a condition that no environment in nukadoko.program.ts declares under conditions, so no environment sets it up.",
+      "A condition tag names a condition that no environment in the program in nukadoko.config.ts declares under conditions, so no environment sets it up.",
     severity: "error",
-    fix: "Declare the condition under the conditions of the environments that set it up in nukadoko.program.ts, or remove the tag.",
+    fix: "Declare the condition under the conditions of the environments that set it up in the program in nukadoko.config.ts, or remove the tag.",
   },
   "condition-unmet": {
     description:
@@ -183,13 +183,13 @@ const CHECK_CODES = {
   "environment-env-file-missing": {
     description: "An entry in one environment's own envFiles does not exist on disk.",
     severity: "warning",
-    fix: "Create the file, or remove it from that environment's envFiles in nukadoko.program.ts.",
+    fix: "Create the file, or remove it from that environment's envFiles in the program in nukadoko.config.ts.",
   },
   "events-inlet-missing": {
     description:
-      "A step's events counts execution events, and a world the run would serve names no {events} in its program file, so the program has no file to write them to and each claim on the count is unjudged there (inlet-unnamed).",
+      "A step's events counts execution events, and a world the run would serve names no {events} in its program, so the program has no file to write them to and each claim on the count is unjudged there (inlet-unnamed).",
     severity: "error",
-    fix: 'Set the variable the program reads to {events} under env in the program file, such as EXECUTION_EVENTS: "{events}", and have the program append its execution events to that file.',
+    fix: 'Set the variable the program reads to {events} under env in the program, such as EXECUTION_EVENTS: "{events}", and have the program append its execution events to that file.',
   },
   "events-producer-ambiguous": {
     description:
@@ -205,7 +205,7 @@ const CHECK_CODES = {
   },
   "events-unread": {
     description:
-      "A step's events counts execution events, and a world the run would start is one nukadoko does not serve (a url, or a project with no program file), so it reads no execution events there and each claim on the count is unjudged (world-unread).",
+      "A step's events counts execution events, and a world the run would start is one nukadoko does not serve (a url, or a project whose config has no program), so it reads no execution events there and each claim on the count is unjudged (world-unread).",
     severity: "warning",
     fix: "Run those scenarios in a world nukadoko serves, with {events} in env, or select one with --env.",
   },
@@ -217,9 +217,9 @@ const CHECK_CODES = {
   },
   "expects-unread": {
     description:
-      "An @expects:error= tag accepts an unhandled error the program reports in its execution events, and no world the run would start reads them (the program file names no {events}, the world runs at a url, or there is no program file), so the tag can never match.",
+      "An @expects:error= tag accepts an unhandled error the program reports in its execution events, and no world the run would start reads them (the program names no {events}, the world runs at a url, or there is no program), so the tag can never match.",
     severity: "warning",
-    fix: "Name {events} in env of nukadoko.program.ts for a world the run starts, such as env: { EXECUTION_EVENTS: \"{events}\" }, and have the program append its execution events there, or remove the tag.",
+    fix: "Name {events} in env of the program in nukadoko.config.ts for a world the run starts, such as env: { EXECUTION_EVENTS: \"{events}\" }, and have the program append its execution events there, or remove the tag.",
   },
   "feature-parse-error": {
     description: "A .feature file could not be parsed, so nothing in it was checked.",
@@ -380,7 +380,7 @@ const CHECK_CODES = {
   },
   "program-placeholder-unfilled": {
     description:
-      "A command or an env value in nukadoko.program.ts names a placeholder a world that nuka run with the same --env flags would start has no value for: {port} or {url} in a world with neither serve nor url, {condition.<name>} in one whose environment does not declare that condition, or anything but {root} in a build command.",
+      "A command or an env value in the program in nukadoko.config.ts names a placeholder a world that nuka run with the same --env flags would start has no value for: {port} or {url} in a world with neither serve nor url, {condition.<name>} in one whose environment does not declare that condition, or anything but {root} in a build command.",
     severity: "error",
     fix: "Remove the placeholder from the field the message names, or give the world what fills it: serve or url for {port} or {url}, the condition under its environment's conditions for {condition.<name>}; in a build command, write only {root}, or move the command to prepare.",
   },

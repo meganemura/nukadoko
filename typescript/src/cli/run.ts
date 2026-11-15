@@ -8,8 +8,8 @@ import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback
 import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { hookApplies, validateTagExpression } from "../compat/tag-expression.js";
-import { loadConfig } from "../config/load-config.js";
-import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
+import { CONFIG_FILE_NAME, loadConfig } from "../config/load-config.js";
+import { loadProgram } from "../config/load-program.js";
 import type { Program, ProgramRecipe } from "../config/program-schema.js";
 import { namesPlaceholder, placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
@@ -223,7 +223,7 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // is.
 //
 // Each environment's pass runs against one world (src/program/world.ts):
-// when the tree has a program file, the world is built, prepared, and
+// when the tree has a program, the world is built, prepared, and
 // served before the pass's BeforeAll, and stopped after its process
 // fixtures are torn down, since a fixture's teardown may still talk to
 // it. A world that does not start fails the pass, and its scenarios are
@@ -251,7 +251,7 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // them, one environment at a time, against a world built from that tree
 // (src/run/tree-pass.ts). Their records are run.json entries with
 // `world`, keyed to the head row they are a cell of, and the trees are
-// removed before run.json is written. Where both program files name
+// removed before run.json is written. Where both programs name
 // `{events}`, the base world also runs, once and for run.json's `paths`
 // alone, each row whose head cell is required and ran and that no base
 // cell runs, so a criterion that did not change still shows what the code
@@ -359,7 +359,7 @@ export interface RunRunOptions {
 }
 
 /** Whether a world of this recipe writes execution events: nukadoko
- * serves it, and its program file names {events} (src/program/world.ts). */
+ * serves it, and its program names {events} (src/program/world.ts). */
 function writesEvents(recipe: ProgramRecipe | null): boolean {
   return recipe !== null && recipe.reach.kind === "serve" && namesPlaceholder(recipe, "events");
 }
@@ -407,7 +407,7 @@ export function checkCommandFor(targets: readonly string[], envs: readonly strin
  * the `do:` line is that run only when those environments meet every
  * targeted scenario, since `nuka check` refuses one they do not
  * (`condition-unmet`). Otherwise it names the first environment of the
- * program file that meets every scenario, or else one that meets some,
+ * program that meets every scenario, or else one that meets some,
  * and there is none when no environment meets any. When the targets hold
  * no scenario, only an edit gets past it. The `do:` line keeps `--order`
  * as it was given (`givenOrder`). Pure. */
@@ -580,7 +580,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // --- Setup phase: any failure here writes nothing. ---
   let config;
   let program;
-  let programFile = PROGRAM_FILE_NAME;
+  let programFile = CONFIG_FILE_NAME;
   try {
     config = await loadConfig(rootDir);
     const loaded = await loadProgram(rootDir);
@@ -799,7 +799,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // only control cells, and nothing it showed would count. It is not
     // run, and the table and the summary count it, so naming one
     // environment runs what applies there: a hook failure's `do:` line,
-    // which names one, runs as printed. Without `--env` the program file
+    // which names one, runs as printed. Without `--env` the program
     // chose the environments and is expected to cover every condition a tag
     // names, so `nuka check` reports such a criterion (`condition-unmet`)
     // and a run under `--no-check` keeps its red row. Workers select by
@@ -1111,7 +1111,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // events trace id, from every world's stop.
     const stateWrites = new Map<string, readonly CountedGroup[]>();
     // Starts the pass's world, or reports why it did not start. `null`
-    // when the tree has no program file: the pass runs with no world.
+    // when the tree has no program: the pass runs with no world.
     // A start a signal aborted is no failure of the program's, and the
     // run that follows is incomplete, so it reports nothing here.
     // A list a started world did not read, as a warning: head's routes
@@ -1259,7 +1259,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           options.featureArgs.length === 0
             ? null
             : [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
-        // The base's own program file is not read until its tree is made,
+        // The base's own program is not read until its tree is made,
         // so head's decides; a base that names no {events} then runs nothing
         // for paths, below.
         pathsWanted: passes.some((pass) => writesEvents(pass.resolvedEnv.program)),
@@ -1298,7 +1298,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const base = prepared;
     const old = base === undefined ? undefined : oldPlaces(base.criteria.changes);
     // The old world's environments are the ref's (src/run/base-run.ts),
-    // head's when the ref has no program file; when the ref's did not
+    // head's when the ref has no program; when the ref's did not
     // load, its cells stand in head's environments and say why.
     const oldEnvironments: readonly TableEnvironment[] =
       base === undefined || base.oldEnvironments === null || "problem" in base.oldEnvironments ? tableEnvironments : base.oldEnvironments;
@@ -1917,7 +1917,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // file's header): each row's head cells decide which of their cells it
     // needs, and each tree runs those, one environment at a time, against
     // a world built from that tree. The base world builds and starts the
-    // base tree's program file, from which it reads its environments and
+    // base tree's program, from which it reads its environments and
     // their conditions; the old world runs head's code, so it starts
     // head's recipe in the old tree. A signal stops the workers first
     // (SIGTERM, a world's grace period, then SIGKILL), then aborts a
@@ -1974,12 +1974,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // ref's mapping on head's code, so its cells say so.
       const oldPassOf = async (environment: string): Promise<EnvironmentPass | string> => {
         if (base.oldEnvironments !== null && "problem" in base.oldEnvironments) {
-          return projectRelativeText(`the base's program file did not load, so the environments its mapping requires are not known: ${base.oldEnvironments.problem}`, rootDir);
+          return projectRelativeText(`the base's program did not load, so the environments its mapping requires are not known: ${base.oldEnvironments.problem}`, rootDir);
         }
         const known = passes.find((pass) => pass.resolvedEnv.name === environment);
         if (known !== undefined) return known;
         if (environment !== DEFAULT_ENVIRONMENT_NAME && !Object.hasOwn(program?.environments ?? {}, environment)) {
-          return "the base's mapping requires this environment, and head's program file no longer has it";
+          return "the base's mapping requires this environment, and head's program no longer has it";
         }
         try {
           const resolvedEnv = resolveEnvironment(config, program, environment, true);
@@ -2064,7 +2064,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
                 leaveNotRun(
                   world,
                   environment,
-                  projectRelativeText(`the base tree's program file does not give this environment: ${error instanceof Error ? error.message : String(error)}`, rootDir),
+                  projectRelativeText(`the base tree's program does not give this environment: ${error instanceof Error ? error.message : String(error)}`, rootDir),
                 );
               }
               continue;

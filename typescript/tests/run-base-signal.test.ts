@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { copyFixtureToTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: a signal during `nuka run --base`'s base world stops
 // the base's program and removes the trees, as a signal during head's
@@ -52,13 +53,10 @@ createServer((req, res) => {
 }).listen(Number(process.env.PORT));
 `;
 
-const PROGRAM = `import { defineProgram } from "./nukadoko-shim.js";
-
-export default defineProgram({
+const PROGRAM = `{
   serve: { command: "node app/server.mjs", ready: "/whoami", timeout_ms: 60000 },
   env: { PORT: "{port}", DB: "{dir}/db.sqlite3", TOKEN: "{token}" },
-});
-`;
+}`;
 
 function isAlive(pid: number): boolean {
   try {
@@ -92,7 +90,7 @@ describe.runIf(process.platform !== "win32")("a signal during nuka run --base's 
     // A tree sits deeper than the project, so the shim names nukadoko by
     // an absolute URL, which loads from inside a tree as from the project.
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(pathToFileURL(path.join(repoRoot, "src", "index.ts")).href)};\n`);
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     const server = readFileSync(path.join(rootDir, "app", "server.mjs"), "utf8");
     writeFileSync(path.join(rootDir, "app", "server.mjs"), NEVER_READY);

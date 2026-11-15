@@ -55,7 +55,7 @@ describe("resolveEnvironment", () => {
     expect(resolveEnvironment(parseConfig({}), program, "staging", true).envFiles).toEqual([]);
   });
 
-  it("resolves no program, and only the config's envFiles, when the tree has no program file", () => {
+  it("resolves no program, and only the config's envFiles, when the tree has no program", () => {
     const resolved = resolveEnvironment(parseConfig({ envFiles: [".env"] }), null, "default", false);
     expect(resolved).toEqual({ name: "default", envFiles: [".env"], policy: undefined, version: undefined, program: null });
   });
@@ -63,7 +63,7 @@ describe("resolveEnvironment", () => {
   it("throws UnknownEnvironmentError for an explicit --env name with no matching entry", () => {
     expect(() => resolveEnvironment(parseConfig({}), null, "no-such-env", true)).toThrow(UnknownEnvironmentError);
     expect(() => resolveEnvironment(parseConfig({}), parseProgram({}), "no-such-env", true)).toThrow(
-      'Unknown environment "no-such-env": not defined in nukadoko.program.ts\'s "environments"',
+      'Unknown environment "no-such-env": not defined in the environments of the program in nukadoko.config.ts',
     );
   });
 
@@ -96,7 +96,7 @@ describe("resolveEnvironment", () => {
 
   // Object.prototype's own names match the environment-name pattern, and a
   // bracket read finds them on every plain object. They are not entries the
-  // program file defined. An own entry with one of those names still is.
+  // program defined. An own entry with one of those names still is.
   it("rejects an inherited name such as toString or constructor, and still resolves an own name", () => {
     const config = parseConfig({});
     const program = parseProgram({

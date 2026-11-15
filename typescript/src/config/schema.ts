@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ParameterTypeConfig as BindingParameterTypeConfig } from "../binding/parameter-type-config.js";
 import type { FixtureDefinition } from "../step/fixture-types.js";
 import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
+import type { ProgramInput } from "./program-schema.js";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
 // export, per docs/spec.md's config section (featuresDir, envFiles,
@@ -11,7 +12,7 @@ import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.j
 // what makes an unknown key an error instead of a silent no-op. The config
 // holds the criteria side only: how the program under test is built,
 // started, or reached, and the named environments, are
-// nukadoko.program.ts's (src/config/program-schema.ts). `browser` takes
+// the program function's (src/config/program-schema.ts). `browser` takes
 // Playwright's own `LaunchOptions` type directly rather than a bespoke
 // enumeration — see the field's own
 // doc comment for why zod does not re-validate its shape. `secrets` is
@@ -196,7 +197,7 @@ export const configSchema = z
     additionalFeatureDirs: z.array(z.string()).default([]),
     stateDir: z.string().default(".nukadoko"),
     /** Env files every environment loads; an environment in
-     * nukadoko.program.ts appends its own (src/environment/
+     * the program appends its own (src/environment/
      * resolve-environment.ts). */
     envFiles: z.array(z.string()).optional(),
     // Default `[]`: registering nothing is the common case, and every
@@ -302,7 +303,7 @@ export const configSchema = z
      * intersection type instead of deferring to Playwright, the same
      * problem `browser`'s doc comment above already argues against.
      * `baseURL` is rejected below even though `BrowserContextOptions`
-     * allows it: the world's URL (nukadoko.program.ts) is the only place a
+     * allows it: the world's URL (the program in this config) is the only place a
      * project states its base URL, and accepting it here would let a config
      * value silently disagree with the one nukadoko already injects. Rejecting it
      * outright (rather than silently dropping it) is deliberate: a dropped
@@ -313,7 +314,7 @@ export const configSchema = z
       .superRefine((value, ctx) => {
         if (value.baseURL !== undefined) {
           ctx.addIssue(
-            "browserContext.baseURL is not accepted: the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL; setting it again here would give two disagreeing answers for the same question.",
+            "browserContext.baseURL is not accepted: the world's URL, from serve or url in the program in nukadoko.config.ts, is the only source for baseURL; setting it again here would give two disagreeing answers for the same question.",
           );
         }
       })
@@ -330,7 +331,7 @@ export const configSchema = z
       .superRefine((value, ctx) => {
         if (value.baseURL !== undefined) {
           ctx.addIssue(
-            "requestContext.baseURL is not accepted: the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL; setting it again here would give two disagreeing answers for the same question.",
+            "requestContext.baseURL is not accepted: the world's URL, from serve or url in the program in nukadoko.config.ts, is the only source for baseURL; setting it again here would give two disagreeing answers for the same question.",
           );
         }
       })
@@ -398,6 +399,18 @@ export const configSchema = z
      * with nothing removed) is why "keep everything" is not a setting.
      * Export files are removed only inside the project root: a
      * `nuka report --out` above it keeps its files. */
+    /** The program under test (docs/spec.md "Program"), as a function that
+     * returns it. It is a function so that nukadoko can read its source text
+     * (`Function.prototype.toString`) and leave that text out when it
+     * compares the config across commits: how the program builds and starts
+     * goes with the code, and is no change to a criterion
+     * (src/run/mapping.ts). Calling it is src/config/load-program.ts's job,
+     * which validates what it returns against src/config/program-schema.ts. */
+    program: z
+      .custom<() => ProgramInput>((value) => typeof value === "function", {
+        message: "must be a function that returns the program, such as program: () => ({ serve: { command, ready } })",
+      })
+      .optional(),
     retention: z
       .object({
         runs: z.number().int().min(1).default(DEFAULT_RETENTION_RUNS),

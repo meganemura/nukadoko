@@ -14,7 +14,7 @@ import type { CheckIssue } from "./types.js";
 // scenario that only a deployment target meets has no required cell in a
 // run that leaves the target out, and a run with no required cell for a
 // criterion holds no evidence for it. It is reported for the default
-// selection alone, which the program file is expected to cover: a
+// selection alone, which the program is expected to cover: a
 // selection `--env` names is a choice of where to run, and `nuka run`
 // leaves such a scenario out of that run instead (src/cli/run.ts), so a
 // hook failure's `do:` line, which names one environment, runs as printed.
@@ -31,7 +31,7 @@ export interface ConditionCheckInput {
   readonly program: Program | null;
   readonly programFile: string;
   readonly selected: readonly SelectedConditions[];
-  /** Whether `--env` named the selection, rather than the program file. */
+  /** Whether `--env` named the selection, rather than the program. */
   readonly explicit: boolean;
 }
 
@@ -47,7 +47,7 @@ export function checkConditions(input: ConditionCheckInput): CheckIssue[] {
         message:
           meant === undefined
             ? `${occurrence.tag} does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition`
-            : `${occurrence.tag} names a boolean as text, which reads two ways: write ${conditionTagText(meant)}, which reads the boolean the program file declares`,
+            : `${occurrence.tag} names a boolean as text, which reads two ways: write ${conditionTagText(meant)}, which reads the boolean the program declares`,
         ...where,
       });
       continue;

@@ -5,12 +5,12 @@ import { UnknownEnvironmentError } from "./errors.js";
 export { ReadOnlyEnvironmentError } from "./errors.js";
 
 // Responsibility: turn a `--env` name, the loaded config, and the loaded
-// program file into the *effective* settings one environment's pass uses,
+// program into the *effective* settings one environment's pass uses,
 // and never anything else's job (cli/run.ts and cli/do.ts wire the result
 // into the read-only check, the version probe, env files, and the world
 // they start; neither re-derives any of this layering itself).
 //
-// Environments live in nukadoko.program.ts, beside the program they
+// Environments live in the program in nukadoko.config.ts, beside the program they
 // change, and not in the config, which holds the criteria. Layering rule:
 // the program's fields are the environment's over the top level's
 // (`layerProgram`, src/config/program-schema.ts); effective envFiles =
@@ -28,16 +28,16 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 // named "default" everywhere a run records one (run.json's cells, the
 // summary's columns, a scenario's `environment`), so `--env default` names
 // it too, and `nuka run --env default --env staging` runs both. The
-// alternative refused was refusing `--env default` unless the program file
+// alternative refused was refusing `--env default` unless the program
 // defines it, which left the environment every record names as the one
-// name `--env` could not combine with others. A program file that does
+// name `--env` could not combine with others. A program that does
 // define `environments.default` keeps its entry.
 
 export const DEFAULT_ENVIRONMENT_NAME = "default";
 
 /** The environments a run with no `--env` runs: the ones
- * `defaultEnvironments` names, in its order, when the program file writes
- * it. Otherwise, in the order the program file names them, every
+ * `defaultEnvironments` names, in its order, when the program writes
+ * it. Otherwise, in the order the program names them, every
  * environment that declares `conditions`, when at least one does, and
  * `default` otherwise. `defaultEnvironments` is how a deployment target
  * declares its real switches without joining every local run. The scenarios name the
@@ -57,7 +57,7 @@ export function defaultEnvironmentNames(program: Program | null): string[] {
 
 /** The worlds a `nuka run` with these `--env` names starts, each with its
  * recipe, once per name: the `defaultEnvironmentNames` when `envs` is
- * empty, as `nuka run` selects them. A name the program file does not
+ * empty, as `nuka run` selects them. A name the program does not
  * define, other than `default`, is left out: `resolveEnvironment`
  * refuses it by name for the command that named it.
  * `nuka check` checks these worlds and no others, so a world no command
@@ -82,7 +82,7 @@ export interface ResolvedEnvironment {
    * condition off. */
   readonly conditions: Conditions | undefined;
   /** The program this environment's world builds and reaches, or `null`
-   * when the tree has no program file and the run starts no world. */
+   * when the tree has no program and the run starts no world. */
   readonly program: ProgramRecipe | null;
 }
 
@@ -94,7 +94,7 @@ export function resolveEnvironment(
 ): ResolvedEnvironment {
   // Bracket access walks Object.prototype, so "constructor" and "toString"
   // read as present on every plain `environments` object even when the
-  // program file never defined them. Only an own entry is a name that exists.
+  // program never defined them. Only an own entry is a name that exists.
   const environments = program?.environments;
   const environment =
     environments !== undefined && Object.hasOwn(environments, name) ? environments[name] : undefined;

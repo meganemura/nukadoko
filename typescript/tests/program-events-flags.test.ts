@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { parseRunDocument } from "../src/report/run-document-schema.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, latestRunJsonText, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: run.json's `flags` end to end, against
 // tests/fixtures/events-project served in two environments that declare
@@ -47,16 +48,14 @@ const FEATURE = [
 ].join("\n");
 
 const PROGRAM = [
-  'import { defineProgram } from "./nukadoko-shim.js";',
-  "",
-  "export default defineProgram({",
+  "{",
   '  serve: { command: "node app/server.mjs", ready: "/up" },',
   '  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs", QUICK_REORDER: "{condition.quick_reorder}" },',
   "  environments: {",
   '    "reorder-off": { conditions: { quick_reorder: false } },',
   '    "reorder-on": { conditions: { quick_reorder: true } },',
   "  },",
-  "});",
+  "}",
   "",
 ].join("\n");
 
@@ -71,7 +70,7 @@ describe("run.json's flags", () => {
 
   beforeEach(async () => {
     rootDir = await copyFixtureToTempDir("events-project");
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     await writeFile(path.join(rootDir, FILE), FEATURE);
   });
 
@@ -174,7 +173,7 @@ describe("run.json's flags", () => {
     };
 
     it("gives each side the list declares a row, one no criterion evaluated included, and marks a flag's only side", async () => {
-      await writeFile(path.join(rootDir, "nukadoko.program.ts"), withLists());
+      writeProgram(rootDir, withLists());
       expect(await runCli(["run", "--env", "reorder-off", ONE_SIDE_FILE], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
 
       const declared = (name: string, side: string) => ({ name, side, criteria: [], counts: { held: 0, proven: 0, failed: 0, unproven: 0, moved: 0, controls: 0 }, listed_in: ["reorder-off"] });
@@ -209,7 +208,7 @@ describe("run.json's flags", () => {
     });
 
     it("leaves the rows as the lines named them when the list was not read, and names the world", async () => {
-      await writeFile(path.join(rootDir, "nukadoko.program.ts"), withLists(' LIST_MODE: "fail",'));
+      writeProgram(rootDir, withLists(' LIST_MODE: "fail",'));
       expect(await runCli(["run", "--env", "reorder-off", ONE_SIDE_FILE], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
 
       const rows = latestRunJson(rootDir).flags as Record<string, unknown>[];

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: skills/nukadoko/scripts/merge-risk.jq, which
 // references/merge-risk.md tells an agent to run, read against a real
@@ -16,12 +17,10 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, removeTempDir, r
 
 const git = (cwd: string, ...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" } });
 
-const PROGRAM = `import { defineProgram } from "./nukadoko-shim.js";
-export default defineProgram({
+const PROGRAM = `{
   serve: { command: "node app/server.mjs", ready: "/up" },
   env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", JOBS_DIR: "{dir}/jobs" },
-});
-`;
+}`;
 const BASE_FEATURE = `Feature: Rooms and scores
 
   Scenario: a room page reads the room
@@ -68,7 +67,7 @@ describe("merge-risk.jq on a run against the base", () => {
     rootDir = await copyFixtureToTempDir("events-project");
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     writeFileSync(path.join(rootDir, "features", "events.feature"), BASE_FEATURE);
     const server = path.join(rootDir, "app", "server.mjs");
     const source = readFileSync(server, "utf8");

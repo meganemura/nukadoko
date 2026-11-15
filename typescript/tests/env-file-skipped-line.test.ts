@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: a line the env-file parser does not load used to
 // disappear. `nuka check` is the place that can say so before a run.
@@ -32,14 +33,10 @@ describe("nuka check: env-file-skipped-line", () => {
         "",
       ].join("\n"),
     );
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "./nukadoko-shim.js";',
-        'export default defineProgram({ environments: { staging: { envFiles: [".env.staging"] } } });',
+    writeProgram(rootDir, [
+        '{ environments: { staging: { envFiles: [".env.staging"] } } }',
         "",
-      ].join("\n"),
-    );
+      ].join("\n"));
     await writeFile(
       path.join(rootDir, ".env"),
       ["# comment", "", "TOKEN=abc123 # rotated", "NOT_A_BINDING", 'KEY="a"', ""].join("\n"),

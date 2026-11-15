@@ -112,11 +112,11 @@ describe("the config file", () => {
 });
 
 describe("a url function", () => {
-  const program = (url: string): string => `import { defineProgram } from "nukadoko";\nexport default defineProgram({ url: ${url} });\n`;
+  const program = (url: string): string => `{ url: ${url} }`;
 
   async function urlProject(url: string): Promise<BaseProject & { readonly top: string }> {
     const made = await makeBaseProject();
-    made.write({ "nukadoko.program.ts": program(url), "features/cart.feature": feature(scenario("three items", 3, 6)) });
+    made.write({ program: program(url), "features/cart.feature": feature(scenario("three items", 3, 6)) });
     made.commit("base");
     made.git("branch", "base-branch");
     // Head discounts five items, and a new criterion says so.
@@ -215,14 +215,12 @@ describe("a proof round that did not finish", () => {
   it("leaves the base world to prove a new row, since the control it ran proves nothing", async () => {
     project = await makeBaseProject();
     project.write({
-      "nukadoko.program.ts": `import { defineProgram } from "nukadoko";
-export default defineProgram({
+      program: `{
   environments: {
     on: { conditions: { double: true }, env: { DOUBLE: "{condition.double}" } },
     off: { conditions: { double: false }, env: { DOUBLE: "{condition.double}" } },
   },
-});
-`,
+}`,
       "lib/cart.mjs": cartModule("return count;"),
       "features/cart.feature": feature(scenario("one item", 1, 1, "@without:double")),
       "features/other.feature": "Feature: Other\n\n" + scenario("zero items", 0, 0),
@@ -269,11 +267,11 @@ AfterAll(function () {
 
 describe("the old world's environments", () => {
   const environments = (entries: Readonly<Record<string, string>>, defaults?: readonly string[]): string =>
-    `import { defineProgram } from "nukadoko";\nexport default defineProgram({\n${defaults === undefined ? "" : `  defaultEnvironments: ${JSON.stringify(defaults)},\n`}  environments: {\n${Object.entries(
+    `{\n${defaults === undefined ? "" : `  defaultEnvironments: ${JSON.stringify(defaults)},\n`}  environments: {\n${Object.entries(
       entries,
     )
       .map(([name, conditions]) => `    ${name}: { conditions: ${conditions}, env: { WHERE: ${JSON.stringify(name)} } },`)
-      .join("\n")}\n  },\n});\n`;
+      .join("\n")}\n  },\n}`;
   // Head's code gets three items wrong in `b` alone.
   const wrongInB = cartModule('return process.env.WHERE === "b" ? 7 : count * 2;');
 
@@ -284,14 +282,14 @@ describe("the old world's environments", () => {
   it("are the ones the base's mapping requires the row in, so a cell head made a control still runs there", async () => {
     project = await makeBaseProject();
     project.write({
-      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }),
+      program: environments({ a: "{ flag: true }", b: "{ flag: true }" }),
       "features/cart.feature": feature(scenario("three items", 3, 6, "@with:flag")),
     });
     project.commit("base");
     project.git("branch", "base-branch");
     // Head breaks the total in b and declares the flag off there, which
     // turns head's b cell into a control.
-    project.write({ "lib/cart.mjs": wrongInB, "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: false }" }) });
+    project.write({ "lib/cart.mjs": wrongInB, program: environments({ a: "{ flag: true }", b: "{ flag: false }" }) });
     project.commit("head");
     const result = await project.cli(["run", "--base", "base-branch"]);
     expect(result.exitCode).toBe(1);
@@ -304,12 +302,12 @@ describe("the old world's environments", () => {
   it("start head's recipe of an environment the base selects and head's run does not", async () => {
     project = await makeBaseProject();
     project.write({
-      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }, ["a", "b"]),
+      program: environments({ a: "{ flag: true }", b: "{ flag: true }" }, ["a", "b"]),
       "features/cart.feature": feature(scenario("three items", 3, 6, "@with:flag")),
     });
     project.commit("base");
     project.git("branch", "base-branch");
-    project.write({ "lib/cart.mjs": wrongInB, "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }, ["a"]) });
+    project.write({ "lib/cart.mjs": wrongInB, program: environments({ a: "{ flag: true }", b: "{ flag: true }" }, ["a"]) });
     project.commit("head");
     const result = await project.cli(["run", "--base", "base-branch"]);
     expect(result.exitCode).toBe(1);
@@ -318,15 +316,15 @@ describe("the old world's environments", () => {
     expect(cellsOf(row!)).toEqual(["head:a:required:pass", "old:a:required:pass", "old:b:required:fail"]);
   }, 60_000);
 
-  it("leave a cell not run where head's program file no longer has the environment", async () => {
+  it("leave a cell not run where head's program no longer has the environment", async () => {
     project = await makeBaseProject();
     project.write({
-      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }),
+      program: environments({ a: "{ flag: true }", b: "{ flag: true }" }),
       "features/cart.feature": feature(scenario("three items", 3, 6, "@with:flag")),
     });
     project.commit("base");
     project.git("branch", "base-branch");
-    project.write({ "nukadoko.program.ts": environments({ a: "{ flag: true }" }) });
+    project.write({ program: environments({ a: "{ flag: true }" }) });
     project.commit("head");
     const result = await project.cli(["run", "--base", "base-branch"]);
     expect(result.exitCode).toBe(1);
@@ -334,7 +332,7 @@ describe("the old world's environments", () => {
     expect(row!.verdict).toBe("moved");
     expect(cellsOf(row!)).toEqual(["head:a:required:pass", "old:a:required:pass", "old:b:required:not-run"]);
     expect(row!.reason).toBe(
-      "passes in a, but the mapping changed since the base, and it did not run in the old world in b: the base's mapping requires this environment, and head's program file no longer has it",
+      "passes in a, but the mapping changed since the base, and it did not run in the old world in b: the base's mapping requires this environment, and head's program no longer has it",
     );
     const document = latestRunJson(project.root) as { run_dir: string };
     expect(readFileSync(path.join(project.root, document.run_dir, "summary.md"), "utf8")).toContain(
@@ -345,20 +343,23 @@ describe("the old world's environments", () => {
   it("name every environment the old world did not run, and say it ran none, when the base's config does not load", async () => {
     project = await makeBaseProject();
     project.write({
-      "nukadoko.program.ts": environments({ a: "{ flag: true }", b: "{ flag: true }" }),
+      program: environments({ a: "{ flag: true }", b: "{ flag: true }" }),
       "nukadoko.config.ts": `import { defineConfig } from "nukadoko";\nexport default defineConfig({ removedOption: true } as never);\n`,
       "features/cart.feature": feature(scenario("three items", 3, 6)),
     });
     project.commit("base");
     project.git("branch", "base-branch");
-    project.write({ "nukadoko.config.ts": `import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n` });
+    project.write({
+      program: environments({ a: "{ flag: true }", b: "{ flag: true }" }),
+      "nukadoko.config.ts": `import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n`,
+    });
     project.commit("head");
     const result = await project.cli(["run", "--base", "base-branch"]);
     expect(result.exitCode).toBe(1);
     const [row] = rows(project.root);
     expect(row!.verdict).toBe("moved");
     expect(cellsOf(row!)).toEqual(["head:a:required:pass", "head:b:required:pass", "old:a:required:not-run", "old:b:required:not-run"]);
-    expect(row!.reason).toMatch(/^passes in a, b, but the mapping changed since the base, and it did not run in the old world in a, b: the config file did not load/);
+    expect(row!.reason).toMatch(/^passes in a, b, but the mapping changed since the base, and it did not run in the old world in a, b: the base's program did not load, so the environments its mapping requires are not known: Invalid config at nukadoko.config.ts/);
     const document = latestRunJson(project.root) as { run_dir: string };
     expect(readFileSync(path.join(project.root, document.run_dir, "summary.md"), "utf8")).toContain(
       "), so each unchanged criterion needed the old world, but it ran none of them; each moved row says why.",
@@ -370,12 +371,12 @@ describe("a project whose steps run build output git ignores", () => {
   const distStep = CART_STEP.replace("../../lib/cart.mjs", "../../dist/cart.mjs");
   const buildScript = `import { copyFileSync, mkdirSync } from "node:fs";\nmkdirSync("dist", { recursive: true });\ncopyFileSync("lib/cart.mjs", "dist/cart.mjs");\n`;
 
-  it("runs the base's code at the base when a program file's build makes that output in each tree", async () => {
+  it("runs the base's code at the base when a program's build makes that output in each tree", async () => {
     project = await makeBaseProject();
     writeFileSync(path.join(project.top, ".gitignore"), ".nukadoko/\nnode_modules/\ndist/\n");
     project.write({
       "build.mjs": buildScript,
-      "nukadoko.program.ts": `import { defineProgram } from "nukadoko";\nexport default defineProgram({ build: ["node build.mjs"] });\n`,
+      program: `{ build: ["node build.mjs"] }`,
       "features/steps/a-cart.ts": distStep,
       "features/cart.feature": feature(scenario("three items", 3, 6)),
     });

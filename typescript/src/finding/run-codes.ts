@@ -139,7 +139,7 @@ const RUN_CODES = {
   "program-list-unread": {
     severity: "warning",
     description:
-      "A command under lists in nukadoko.program.ts failed, passed its limit, or printed a line that is not one entry of its list, so that world's list was not read and nothing of it counts.",
+      "A command under lists in the program in nukadoko.config.ts failed, passed its limit, or printed a line that is not one entry of its list, so that world's list was not read and nothing of it counts.",
     fix: "Correct the command the message names, or what it prints: one JSON object per line, in the shape docs/spec.md \"Lists\" gives for its kind. Its stderr is in the world's program.log.",
   },
   "program-log-late": {
@@ -151,7 +151,7 @@ const RUN_CODES = {
   "program-start-failed": {
     severity: "failed",
     description:
-      "The program in nukadoko.program.ts did not start for a world: a build or prepare command failed or did not finish within its timeout_ms, the server did not answer its ready path in time, or setup or the url function threw or did not finish within its timeout_ms. The world's scenarios did not run.",
+      "The program in nukadoko.config.ts did not start for a world: a build or prepare command failed or did not finish within its timeout_ms, the server did not answer its ready path in time, or setup or the url function threw or did not finish within its timeout_ms. The world's scenarios did not run.",
     fix: "Correct what the message names; the end of the world's program.log is in the message, and the whole file is in the world's directory.",
   },
   "proof-run-incomplete": {
@@ -276,7 +276,7 @@ const RUN_CODES = {
   "version-probe-failed": {
     severity: "warning",
     description: "The environment's version probe did not answer, so the records have no target version.",
-    fix: "Correct the environment's version setting in nukadoko.program.ts, or the endpoint it names.",
+    fix: "Correct the environment's version setting in the program in nukadoko.config.ts, or the endpoint it names.",
   },
   "walk-gone": {
     severity: "failed",

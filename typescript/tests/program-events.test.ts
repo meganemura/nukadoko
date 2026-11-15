@@ -190,7 +190,7 @@ describe("the program's execution events", () => {
     expectOnePass(rootDir, steps!);
 
     // The file the program wrote is private, outside the run directory,
-    // and named by the one variable the program file named.
+    // and named by the one variable the program named.
     const inlet = recordOf(rootDir, steps!.get("wait")!).result!;
     expect(path.isAbsolute(inlet.file!)).toBe(true);
     expect(path.relative(rootDir, inlet.file!).startsWith("..")).toBe(true);
@@ -394,8 +394,8 @@ describe("the program's execution events", () => {
     expect((JSON.parse(done.stdout) as { result: unknown }).result).toEqual({ named: [] });
   });
 
-  it("makes no file and sets no variable for a world whose program file does not name {events}", async () => {
-    const program = path.join(rootDir, "nukadoko.program.ts");
+  it("makes no file and sets no variable for a world whose program does not name {events}", async () => {
+    const program = path.join(rootDir, "nukadoko.config.ts");
     await writeFile(program, readFileSync(program, "utf8").replace(' EXECUTION_EVENTS: "{events}",', ""));
     await writeFile(
       path.join(rootDir, "features", "events.feature"),
@@ -468,11 +468,11 @@ describe("execution events of a world at a URL", () => {
     await writeUrlProgram(rootDir, url, 'env: { EXECUTION_EVENTS: "{events}" }');
     const gap = "world default: env.EXECUTION_EVENTS names {events}, which has no value here: nukadoko does not start this world's program, so it reads no file the program writes";
     const fix =
-      "  fix: Remove {events} from env.EXECUTION_EVENTS of nukadoko.program.ts, or serve world default in place of its url: nukadoko makes the events file only for a program it starts.\n";
+      "  fix: Remove {events} from env.EXECUTION_EVENTS of nukadoko.config.ts, or serve world default in place of its url: nukadoko makes the events file only for a program it starts.\n";
 
     const check = await cli(rootDir, ["check"]);
     expect(check.exitCode).toBe(1);
-    expect(check.stdout).toContain(`error\tprogram-placeholder-unfilled\tnukadoko.program.ts\t${gap}\n${fix}`);
+    expect(check.stdout).toContain(`error\tprogram-placeholder-unfilled\tnukadoko.config.ts\t${gap}\n${fix}`);
     const refused = await cli(rootDir, ["run", "--no-check"]);
     expect(refused.exitCode).toBe(2);
     expect(refused.stderr).toBe(`refused\tprogram-placeholder-unfilled\t-\t${gap}; nothing ran\n${fix}`);

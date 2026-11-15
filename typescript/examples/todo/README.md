@@ -31,15 +31,19 @@ Run `npm install` and `npm run build` once, from the repository root.
 | `GET` | `/todos/:id` | one todo |
 | `PATCH` | `/todos/:id` | update `done` |
 
-You do not start it yourself. [`nukadoko.program.ts`](nukadoko.program.ts)
+You do not start it yourself. The `program` in [`nukadoko.config.ts`](nukadoko.config.ts)
 says how:
 
 ```ts
-export default defineProgram({
-  serve: { command: "node app/server.ts --port {port}", ready: "/todos" },
-  environments: {
-    v2: { env: { TODO_APP_V2: "1" } },
-  },
+import { defineConfig } from "nukadoko";
+
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node app/server.ts --port {port}", ready: "/todos" },
+    environments: {
+      v2: { env: { TODO_APP_V2: "1" } },
+    },
+  }),
 });
 ```
 
@@ -60,7 +64,7 @@ To look at the app with `curl` outside a run, start it by hand with
 
 ## Layout
 
-- `nukadoko.program.ts`: how the app starts, and the `v2` environment.
+- `nukadoko.config.ts`: how the app starts, and the `v2` environment, as `program`.
 - `nukadoko.config.ts`: empty. No `envFiles` (this app needs no secrets).
 - `features/todo.feature`: 3 scenarios: adding a todo, completing a todo,
   and adding several at once via a data table.

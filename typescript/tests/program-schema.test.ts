@@ -1,6 +1,6 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { writeFile } from "node:fs/promises";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfigError } from "../src/config/errors.js";
@@ -17,9 +17,9 @@ import {
   readyPathProblem,
   type ProgramEnvironment,
 } from "../src/config/program-schema.js";
-import { copyFixtureToTempDir, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, removeTempDir, writeProgram } from "./helpers/fixtures.js";
 
-// Responsibility: nukadoko.program.ts's shape (src/config/program-schema.ts)
+// Responsibility: the program in nukadoko.config.ts's shape (src/config/program-schema.ts)
 // and its loading (src/config/load-program.ts): how a command splits, the
 // defaults `serve` gets, what the schema refuses, and how an environment
 // layers over the top level.
@@ -220,33 +220,58 @@ describe("loadProgram", () => {
     await removeTempDir(rootDir);
   });
 
-  it("is null for a tree with no program file", async () => {
+  it("is null for a tree with no program", async () => {
     expect(await loadProgram(rootDir)).toBeNull();
   });
 
   it("reads the default export, defaults applied, and names the file it read", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), 'export default { serve: { command: "node app.js" } };\n');
+    writeProgram(rootDir, '{ serve: { command: "node app.js" } }');
     expect(await loadProgram(rootDir)).toEqual({
       program: { serve: { command: "node app.js", port: "auto", ready: "/", timeout_ms: 60_000 } },
-      fileName: "nukadoko.program.ts",
+      fileName: "nukadoko.config.ts",
     });
   });
 
   it("names a case-only typo's real key, nested in an environment", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), 'export default { environments: { staging: { URL: "http://a.example" } } };\n');
+    writeProgram(rootDir, '{ environments: { staging: { URL: "http://a.example" } } }');
     const error = await loadProgram(rootDir).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ConfigError);
     expect((error as ConfigError).message).toBe(
-      `Invalid program at nukadoko.program.ts: unknown key(s): URL (did you mean "url"?)`,
+      `Invalid program at nukadoko.config.ts: unknown key(s): URL (did you mean "url"?)`,
     );
   });
 
-  it("refuses a file with no default export, and two program files at once", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), "export const program = {};\n");
-    await expect(loadProgram(rootDir)).rejects.toThrow(
-      `nukadoko.program.ts has no default export. nukadoko reads the default export as the program.`,
-    );
-    await writeFile(path.join(rootDir, "nukadoko.program.mts"), "export default {};\n");
-    await expect(loadProgram(rootDir)).rejects.toThrow("nukadoko cannot tell which one to read");
+  it("refuses a program that is not a function, and one that throws or returns a Promise", async () => {
+    writeFileSync(path.join(rootDir, "nukadoko.config.ts"), 'export default { program: { url: "http://a.example" } };\n');
+    await expect(loadProgram(rootDir)).rejects.toThrow("program: must be a function that returns the program");
+    writeFileSync(path.join(rootDir, "nukadoko.config.ts"), 'export default { program: () => { throw new Error("no port"); } };\n');
+    await expect(loadProgram(rootDir)).rejects.toThrow("The program function of nukadoko.config.ts threw: no port");
+    writeFileSync(path.join(rootDir, "nukadoko.config.ts"), "export default { program: async () => ({}) };\n");
+    await expect(loadProgram(rootDir)).rejects.toThrow("The program function of nukadoko.config.ts returned a Promise.");
   });
+
+  for (const fileName of ["nukadoko.program.ts", "nukadoko.program.mts"]) {
+    it(`refuses ${fileName}, a program file of an earlier release, with the move to make`, async () => {
+      writeProgram(rootDir, '{ url: "http://a.example" }');
+      writeFileSync(path.join(rootDir, fileName), 'export default { url: "http://b.example" };\n');
+      const error = await loadProgram(rootDir).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(ConfigError);
+      expect((error as ConfigError).code).toBe("program-file-moved");
+      expect((error as ConfigError).message).toBe(
+        `${fileName} is no longer read: the program under test is part of nukadoko.config.ts now, so nukadoko does not start what ${fileName} describes.`,
+      );
+      expect((error as ConfigError).fix).toBe(
+        `Move what ${fileName} describes into nukadoko.config.ts as its program, and delete ${fileName}; CHANGELOG.md, under "The program moves into the config", shows the move.`,
+      );
+    });
+  }
+
+  it("reads, in a --base tree, the program of the copy the run wrote beside the config", async () => {
+    writeProgram(rootDir, '{ url: "http://config.example" }');
+    writeFileSync(path.join(rootDir, "nukadoko.tree-program.ts"), 'export default { program: () => ({ url: "http://other-side.example" }) };\n');
+    expect((await loadProgram(rootDir))?.program.url).toBe("http://other-side.example");
+    writeFileSync(path.join(rootDir, "nukadoko.tree-legacy-program.ts"), 'export default { url: "http://legacy.example" };\n');
+    expect(await loadProgram(rootDir)).toMatchObject({ program: { url: "http://legacy.example" }, fileName: "nukadoko.tree-legacy-program.ts" });
+  });
+
 });

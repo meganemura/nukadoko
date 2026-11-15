@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run --base` on a change that declares its intent
 // in INTENT.md (docs/intent.md): the file's history since the base, each
@@ -21,12 +22,10 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 const PROGRAM = [
-  'import { defineProgram } from "./nukadoko-shim.js";',
-  "",
-  "export default defineProgram({",
+  "{",
   '  serve: { command: "node app/server.mjs", ready: "/up" },',
   '  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", JOBS_DIR: "{dir}/jobs" },',
-  "});",
+  "}",
   "",
 ].join("\n");
 
@@ -77,7 +76,7 @@ describe("--base on a change that declares its intent", () => {
     rootDir = await copyFixtureToTempDir("events-project");
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     writeFileSync(path.join(rootDir, "features", "events.feature"), FEATURE);
     const server = path.join(rootDir, "app", "server.mjs");
     const source = readFileSync(server, "utf8");

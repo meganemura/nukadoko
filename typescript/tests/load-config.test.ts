@@ -622,7 +622,7 @@ describe("configSchema: browserContext", () => {
     if (!result.success) {
       const message = JSON.stringify(result.error.issues);
       expect(message).toContain("browserContext.baseURL");
-      expect(message).toContain("the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL");
+      expect(message).toContain("the world's URL, from serve or url in the program in nukadoko.config.ts, is the only source for baseURL");
     }
   });
 
@@ -672,7 +672,7 @@ describe("configSchema: requestContext", () => {
     if (!result.success) {
       const message = JSON.stringify(result.error.issues);
       expect(message).toContain("requestContext.baseURL");
-      expect(message).toContain("the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL");
+      expect(message).toContain("the world's URL, from serve or url in the program in nukadoko.config.ts, is the only source for baseURL");
     }
   });
 

@@ -138,7 +138,7 @@ describe("run-time emitters, removed", () => {
   });
 });
 
-describe("the program's keys, moved to nukadoko.program.ts", () => {
+describe("the program's keys, moved to the program in nukadoko.config.ts", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -162,15 +162,15 @@ describe("the program's keys, moved to nukadoko.program.ts", () => {
     const findings = (JSON.parse(stdout.text()) as { findings: { code: string; message: string; fix: string }[] }).findings;
     expect(findings.map((finding) => finding.code)).toEqual(["config-key-removed"]);
     expect(findings[0]!.message).toBe(
-      `Invalid config at nukadoko.config.ts: baseURL was removed: the program under test is described in nukadoko.program.ts. ` +
-        'Write url there for a program nukadoko does not start (export default defineProgram({ url: "http://localhost:3000" })), or serve for one it starts; ' +
+      `Invalid config at nukadoko.config.ts: baseURL was removed: the program under test is the program function of nukadoko.config.ts. ` +
+        'Write url there for a program nukadoko does not start (program: () => ({ url: "http://localhost:3000" })), or serve for one it starts; ' +
         "the world's URL is the baseURL every page and request resolves against. " +
-        "environments was removed: write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, " +
+        "environments was removed: write each environment in the program in nukadoko.config.ts, with its policy, envFiles, and version; its baseURL is url there, " +
         "and --env starts that environment's world.",
     );
     expect(findings[0]!.fix).toBe(
-      "Remove baseURL and environments from nukadoko.config.ts: write baseURL as url in nukadoko.program.ts (or serve, for a program nukadoko starts), " +
-        "and write each environment under environments in nukadoko.program.ts.",
+      "Remove baseURL and environments from nukadoko.config.ts: write baseURL as url in the program in nukadoko.config.ts (or serve, for a program nukadoko starts), " +
+        "and write each environment under environments in the program in nukadoko.config.ts.",
     );
   });
 });

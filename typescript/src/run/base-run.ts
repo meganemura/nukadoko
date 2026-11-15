@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { stripTypeScriptTypes } from "node:module";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import type { Conditions } from "../condition/condition.js";
 import { CONFIG_FILE_NAMES, loadConfig } from "../config/load-config.js";
-import { loadProgram, PROGRAM_FILE_NAMES } from "../config/load-program.js";
+import { LEGACY_PROGRAM_FILE_NAMES, loadLegacyProgram, loadProgram, TREE_LEGACY_PROGRAM_FILE_NAMES, TREE_PROGRAM_FILE_NAMES } from "../config/load-program.js";
 import type { Program } from "../config/program-schema.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { defaultEnvironmentNames } from "../environment/resolve-environment.js";
@@ -14,7 +15,7 @@ import type { RunMappingChanges } from "../record/run-result.js";
 import { runsRelativeDir } from "../record/state-layout.js";
 import { compareCriteria, criteriaOfFeature, criterionKey, type CriteriaComparison, type Criterion, type CriterionChange } from "./criteria.js";
 import { addWorktree, NO_HOOKS, removeStaleTreeRegistrations, removeWorktree, repositoryPlace, trackedEntries, workingTreeFiles } from "./git-ref.js";
-import { compareMapping, configMappingText, programMappingOf, type MappingComparison, type MappingSnapshot } from "./mapping.js";
+import { compareMapping, configFileMappingText, configMappingText, programMappingOf, type MappingComparison, type MappingSnapshot } from "./mapping.js";
 import { runOnce } from "./process-signal.js";
 import { overlayBaseTree, within, writeOldTree, type TreeInput, type TreeSide } from "./trees.js";
 import { entryKindOfMode, worldObstacles, type EntryKind, type SideEntry, type WorldObstacle } from "./world-obstacles.js";
@@ -59,12 +60,12 @@ export { fetchCommandFor, GitRefError, removeStaleTreeRegistrations, resolveRef,
 // targets name at the ref. A head file outside the targets that does not
 // parse holds no criteria here: no run of these targets reads it.
 //
-// The ref's config and program file are loaded to read its features
+// The ref's config and program are loaded to read its features
 // directory and its mapping part. One that does not load at the ref is a
 // mapping that cannot be shown to be head's, so it counts as changed, and
 // the old world, which runs that mapping, then says it could not run.
 // The old world's environments are that mapping too: the ones the ref's
-// program file selects for the run's `--env` names, each with the
+// program selects for the run's `--env` names, each with the
 // conditions the ref gives it, so a row is asked to hold where the base
 // asked it to, and the old world starts head's recipe of the same name.
 //
@@ -89,7 +90,7 @@ export interface RefFeature {
 
 /** A tree a pass runs in. */
 export interface PreparedTree {
-  /** The tree's project root: where its config, program file, and
+  /** The tree's project root: where its config, program, and
    * features are. */
   readonly root: string;
 }
@@ -111,8 +112,8 @@ export interface PreparedBase {
    * world: each world named here is `null` above. */
   readonly obstacles: readonly WorldObstacle[];
   /** The environments the old world runs in, with the conditions the
-   * ref's program file gives each (module header); `null` when the ref
-   * has no program file and head's are the old world's, and why when it
+   * ref's program gives each (module header); `null` when the ref
+   * has no program and head's are the old world's, and why when it
    * did not load. */
   readonly oldEnvironments: readonly OldEnvironment[] | null | { readonly problem: string };
   /** The ref's feature files, by path relative to the project root: its
@@ -125,7 +126,7 @@ export interface PreparedBase {
   cleanup(): Promise<void>;
 }
 
-/** One environment of the old world, as the ref's program file has it. */
+/** One environment of the old world, as the ref's program has it. */
 export interface OldEnvironment {
   readonly name: string;
   readonly conditions: Conditions | undefined;
@@ -163,6 +164,36 @@ function hashOf(file: string): string {
   const stats = lstatSync(file);
   hash.update(stats.isSymbolicLink() ? `link:${readlinkSync(file)}` : readFileSync(file));
   return hash.digest("hex");
+}
+
+/** The hash of a config file as its mapping compares it: its text as Node
+ * runs it, with the config's `program` cut out (src/run/mapping.ts). A
+ * link is its target's name, and a text that does not strip is hashed as
+ * written. */
+function configHashOf(file: string, config: NukadokoConfig): string {
+  const stats = lstatSync(file);
+  if (stats.isSymbolicLink()) return hashOf(file);
+  const written = readFileSync(file, "utf8");
+  let text: string;
+  try {
+    text = stripTypeScriptTypes(written);
+  } catch {
+    text = written;
+  }
+  return createHash("sha256").update(configFileMappingText(text, config.program)).digest("hex");
+}
+
+function writeTreeCopy(file: string, bytes: Buffer | string): void {
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, bytes);
+}
+
+/** Writes a side's config into a tree as the source of the tree's program,
+ * keeping its extension; a side with no config file has no program, which
+ * an empty config says. */
+function writeTreeProgram(treeProject: string, configFile: string | null, bytes: Buffer | null): void {
+  const name = TREE_PROGRAM_FILE_NAMES[configFile?.endsWith(".mts") === true ? 1 : 0];
+  writeTreeCopy(path.join(treeProject, name), bytes ?? "export default {};\n");
 }
 
 function existing(dir: string, names: readonly string[]): string | null {
@@ -310,10 +341,12 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     await addWorktree(top, baseTop, input.commit);
     const baseProject = path.join(baseTop, prefix);
 
-    // The ref's own config and program file, read from its pristine
+    // The ref's own config and program, read from its pristine
     // checkout before anything is laid over it.
     const refConfigFile = existing(baseProject, CONFIG_FILE_NAMES);
-    const refProgramFile = existing(baseProject, PROGRAM_FILE_NAMES);
+    // A ref from before the program moved into the config holds a program
+    // file of its own, which its base world still reads.
+    const refProgramFile = existing(baseProject, LEGACY_PROGRAM_FILE_NAMES);
     let refConfig: NukadokoConfig | { problem: string };
     try {
       refConfig = await loadConfig(baseProject);
@@ -322,7 +355,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     }
     let refProgram: Program | null | { problem: string };
     try {
-      refProgram = (await loadProgram(baseProject))?.program ?? null;
+      refProgram = refProgramFile === null ? ((await loadProgram(baseProject))?.program ?? null) : await loadLegacyProgram(path.join(baseProject, refProgramFile));
     } catch (error) {
       refProgram = { problem: problemOf(error) };
     }
@@ -372,7 +405,9 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     // The mapping: head's from its working tree, the ref's from its
     // checkout.
     const headConfigFile = existing(rootDir, CONFIG_FILE_NAMES);
-    const headProgramFile = existing(rootDir, PROGRAM_FILE_NAMES);
+    // Head holds no program file of an earlier release: a run refuses one
+    // before it gets here.
+    const headProgramFile: string | null = null;
     const headSide: TreeSide = {
       featuresDir: inRepo(config.featuresDir),
       config: headConfigFile === null ? null : inRepo(headConfigFile),
@@ -407,7 +442,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     const blocked = (world: WorldObstacle["world"]): boolean => found.obstacles.some((obstacle) => obstacle.world === world);
     const headSnapshot: MappingSnapshot = {
       files: mappingFiles(headEntries, headSide.featuresDir, top),
-      config: { text: configMappingText(config), file: headConfigFile === null ? null : hashOf(path.join(rootDir, headConfigFile)) },
+      config: { text: configMappingText(config), file: headConfigFile === null ? null : configHashOf(path.join(rootDir, headConfigFile), config) },
       program: programMappingOf(input.headProgram),
     };
     const refSnapshot: MappingSnapshot = {
@@ -415,7 +450,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
       config:
         "problem" in refConfig
           ? { problem: refConfig.problem }
-          : { text: configMappingText(refConfig), file: refConfigFile === null ? null : hashOf(path.join(baseProject, refConfigFile)) },
+          : { text: configMappingText(refConfig), file: refConfigFile === null ? null : configHashOf(path.join(baseProject, refConfigFile), refConfig) },
       program: refProgram !== null && "problem" in refProgram ? { problem: refProgram.problem } : programMappingOf(refProgram),
     };
     const compared = compareMapping(refSnapshot, headSnapshot);
@@ -434,9 +469,28 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
       !blocked("old") && changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true || change.renamedFrom !== undefined));
     const treeInput: TreeInput = { headFiles, refFiles, head: headSide, ref: refSide, stateDir };
     const roots = { head: top, ref: baseTop };
-    if (oldNeeded) writeOldTree(treeInput, roots, oldTop);
+    // Each tree runs the program of the side whose code it holds, and the
+    // config it holds is the other side's: the program's source is written
+    // beside that config (src/config/load-program.ts). The ref's config is
+    // read now, before the base tree's overlay takes its place.
+    const refConfigText = refConfigFile === null ? null : readFileSync(path.join(baseProject, refConfigFile));
+    const headConfigPath = headConfigFile === null ? null : path.join(rootDir, headConfigFile);
+    // A ref program that did not load is still the ref's: its tree fails
+    // to load it again, and the base world says so.
+    const refHasProgram = refProgramFile !== null || refProgram !== null;
+    if (oldNeeded) {
+      writeOldTree(treeInput, roots, oldTop);
+      writeTreeProgram(path.join(oldTop, prefix), headConfigFile, headConfigPath === null ? null : readFileSync(headConfigPath));
+    }
     if (baseNeeded) {
       overlayBaseTree(treeInput, roots);
+      if (refProgramFile !== null) {
+        writeTreeCopy(path.join(baseProject, TREE_LEGACY_PROGRAM_FILE_NAMES[refProgramFile.endsWith(".mts") ? 1 : 0]), readFileSync(path.join(baseProject, refProgramFile)));
+      } else if (refHasProgram || input.headProgram === null) {
+        writeTreeProgram(baseProject, refConfigFile, refConfigText);
+      } else {
+        writeTreeProgram(baseProject, headConfigFile, headConfigPath === null ? null : readFileSync(headConfigPath));
+      }
     } else {
       worktree = false;
       await removeWorktree(top, baseTop);
@@ -460,7 +514,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
         default_environments: mapping.defaultEnvironments,
         unseen: found.mappingUnseen,
       },
-      base: baseNeeded ? { root: baseProject, programFromHead: refProgramFile === null && headProgramFile !== null } : null,
+      base: baseNeeded ? { root: baseProject, programFromHead: !refHasProgram && input.headProgram !== null } : null,
       old: oldNeeded ? { root: path.join(oldTop, prefix) } : null,
       obstacles: found.obstacles,
       oldEnvironments:

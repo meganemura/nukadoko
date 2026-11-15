@@ -90,15 +90,15 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // It starts no program of its own.
 //
 // In a tree of `nuka run --base` (src/run/tree-pass.ts) the worker runs
-// from the tree, whose config, program file, and step files the parent has
+// from the tree, whose config, program, and step files the parent has
 // not loaded, so it runs `nuka check` over its selection itself, unless the
 // run was given `--no-check`. A tree whose files do not load or check is
 // not a crash of the run: the worker says why in one `not-run` envelope
 // and runs nothing, and the cells it was to fill say why. The condition
 // findings are left out of that check: which cells are required is decided
-// by head's program file, and a condition only head declares is the usual
+// by head's program, and a condition only head declares is the usual
 // case for a change that adds one. `events-inlet-missing` is left out too:
-// the tree's program file goes with its code, so a ref whose program names
+// the tree's program goes with its code, so a ref whose program names
 // no `{events}` is the usual case for the change that adds them, and each
 // claim on a count there is unjudged (`inlet-unnamed`) while every other
 // claim still runs. Its records go to head's run, and the
@@ -196,7 +196,7 @@ async function main(): Promise<void> {
   // through them.
   installChannelPatches();
   const config = await inTree("the config file did not load", () => loadConfig(rootDir));
-  const program = await inTree("the program file did not load", async () => (await loadProgram(rootDir))?.program ?? null);
+  const program = await inTree("the program did not load", async () => (await loadProgram(rootDir))?.program ?? null);
   const resolvedEnv = await inTree("the environment did not resolve", () =>
     resolveEnvironment(config, program, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null),
   );

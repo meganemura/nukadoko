@@ -1,7 +1,7 @@
 // Responsibility: the longest delay a Node.js timer keeps, for every limit
 // nukadoko arms from a value a project writes: a step's or a fixture's
 // timeout, a poll's budget, a `runCommand` timeout, a compat step's or
-// hook's `{ timeout }`, and each `timeout_ms` of nukadoko.program.ts. A
+// hook's `{ timeout }`, and each `timeout_ms` of the program in nukadoko.config.ts. A
 // leaf, since compat, config, the step contract, the context, and the
 // program all refuse a larger value, and compat sits below the rest.
 //

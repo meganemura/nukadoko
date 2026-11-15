@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -58,21 +58,13 @@ export async function copyFixtureToTempDir(name: string): Promise<string> {
 }
 
 /**
- * Writes `nukadoko.program.ts` into `rootDir` naming a program nukadoko does
+ * Writes a program into `rootDir`'s config naming a program nukadoko does
  * not start, listening at `url`: the way a test points a project at the
  * server it started itself. `rest` is spliced into the object as written,
  * such as `environments: { readonly: { policy: "read-only" } }`.
- * `importFrom` is the module `defineProgram` is imported from.
  */
-export async function writeUrlProgram(rootDir: string, url: string, rest = "", importFrom = "./nukadoko-shim.js"): Promise<void> {
-  await writeFile(
-    path.join(rootDir, "nukadoko.program.ts"),
-    [
-      `import { defineProgram } from ${JSON.stringify(importFrom)};`,
-      `export default defineProgram({ url: ${JSON.stringify(url)}${rest === "" ? "" : `, ${rest}`} });`,
-      "",
-    ].join("\n"),
-  );
+export async function writeUrlProgram(rootDir: string, url: string, rest = ""): Promise<void> {
+  writeProgram(rootDir, `{ url: ${JSON.stringify(url)}${rest === "" ? "" : `, ${rest}`} }`);
 }
 
 export async function removeTempDir(dir: string): Promise<void> {
@@ -102,7 +94,7 @@ export async function copyExampleToTempDir(name: string): Promise<string> {
 /**
  * Copies the examples `names` side by side into one temporary directory,
  * the way they sit under examples/, and returns that directory: for an
- * example whose program file serves a sibling example's app. Each example
+ * example whose program serves a sibling example's app. Each example
  * is copied as copyExampleToTempDir copies one.
  */
 export async function copyExamplesToTempDir(names: readonly string[]): Promise<string> {
@@ -418,4 +410,58 @@ export function withoutCheckNotes(text: string): string {
       return !inNote && line !== "ok: no issues found";
     })
     .join("\n");
+}
+
+// Putting a program into a test project's config, where
+// nukadoko reads it (`program: () => ({ ... })` in nukadoko.config.ts).
+// Boundary: text only; whether the result loads is what the test checks.
+//
+// The program replaces the one the config holds, or goes in as its first
+// key, so a config the fixture already holds keeps every other key it had,
+// and a test rewrites the program between runs the way a person edits it.
+
+const PROGRAM_START = "program: () => (";
+
+/** Where the parenthesis opened at `open` closes, skipping strings. */
+function closing(text: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === "\"" || c === "'" || c === "`") {
+      for (i++; i < text.length && text[i] !== c; i++) if (text[i] === "\\") i++;
+    } else if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c) && --depth === 0) return i;
+  }
+  throw new Error("withProgram: the program in the config does not close");
+}
+
+/** `config` with its program set to `object`, the text of an object
+ * literal. `header` is prepended once, for the imports and constants the
+ * object refers to. Pure. */
+export function withProgram(config: string | null, object: string, header = ""): string {
+  let text = config ?? "export default {\n};\n";
+  const start = text.indexOf(PROGRAM_START);
+  if (start !== -1) {
+    const open = start + PROGRAM_START.length - 1;
+    text = `${text.slice(0, open + 1)}${object.trim()}${text.slice(closing(text, open))}`;
+  } else {
+    const call = text.indexOf("defineConfig(");
+    const at = text.indexOf("{", call === -1 ? text.indexOf("export default") : call);
+    if (at === -1) throw new Error("withProgram: the config has no object literal to put the program in");
+    text = `${text.slice(0, at + 1)}\n  ${PROGRAM_START}${object.trim()}),\n${text.slice(at + 1)}`;
+  }
+  return header === "" || text.startsWith(header) ? text : `${header.trimEnd()}\n${text}`;
+}
+
+/** The config file of `rootDir`: the `.mts` one when only that exists. */
+export function configPath(rootDir: string): string {
+  const mts = path.join(rootDir, "nukadoko.config.mts");
+  return existsSync(mts) && !existsSync(path.join(rootDir, "nukadoko.config.ts")) ? mts : path.join(rootDir, "nukadoko.config.ts");
+}
+
+/** Writes the program `object` into `rootDir`'s config, creating the
+ * config when there is none. */
+export function writeProgram(rootDir: string, object: string, header = ""): void {
+  const file = configPath(rootDir);
+  writeFileSync(file, withProgram(existsSync(file) ? readFileSync(file, "utf8") : null, object, header));
 }

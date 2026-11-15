@@ -2,8 +2,8 @@ import { z } from "zod";
 import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
 import { BOOLEAN_TEXTS, CONDITION_NAME_PATTERN, CONDITION_VALUE_PATTERN, type Conditions } from "../condition/condition.js";
 import { LIST_KINDS, type ListKind } from "../execution-events/lists.js";
-// Responsibility: the validated shape of nukadoko.program.ts's default
-// export (docs/spec.md "Program"): how nukadoko builds, prepares, starts,
+// Responsibility: the validated shape of what the program function of
+// nukadoko.config.ts returns (docs/spec.md "Program"): how nukadoko builds, prepares, starts,
 // or reaches the program under test, the environment its processes get,
 // and the named environments that override any of it. Boundary: shape
 // only. Layering an environment over the top level is
@@ -38,7 +38,7 @@ const commandSchema = z
   .refine((command) => (commandWords(command)[0] ?? "") !== "", { message: "must name a program to run" });
 
 /** How long a `build` or `prepare` command may run, a `setup` take, and
- * a `url` function take, unless the program file says otherwise. A phase
+ * a `url` function take, unless the program says otherwise. A phase
  * with no limit left a run waiting on a command that never ended, with
  * nothing on the terminal to say which. */
 export const DEFAULT_COMMAND_TIMEOUT_MS = 600_000;
@@ -312,11 +312,11 @@ export const programSchema = z
   .superRefine(serveOrUrl)
   .superRefine(defaultEnvironmentsNamed);
 
-/** The loaded program file, defaults applied. */
+/** The loaded program, defaults applied. */
 export type Program = z.infer<typeof programSchema>;
 /** One `environments` entry, defaults applied. */
 export type ProgramEnvironment = NonNullable<Program["environments"]>[string];
-/** What `defineProgram` accepts. */
+/** What the config's `program` function returns. */
 export type ProgramInput = z.input<typeof programSchema>;
 /** `serve`, defaults applied. */
 export type ProgramServe = z.infer<typeof serveSchema>;

@@ -4,6 +4,7 @@ import { copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { copyFixtureToTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: a signal while a world is starting stops the program at
 // once and leaves nothing running, in `nuka do` and in `nuka run
@@ -91,10 +92,7 @@ describe.runIf(process.platform !== "win32")("a signal while a world starts", ()
       path.join(rootDir, "app", "never-ready.mjs"),
       'import { writeFileSync } from "node:fs";\nwriteFileSync("server-pid.txt", `${process.pid}\\n`);\nsetInterval(() => {}, 1000);\n',
     );
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ serve: { command: "node app/never-ready.mjs", ready: "/whoami", timeout_ms: 60000 }, env: { PORT: "{port}" } });\n',
-    );
+    writeProgram(rootDir, '{ serve: { command: "node app/never-ready.mjs", ready: "/whoami", timeout_ms: 60000 }, env: { PORT: "{port}" } }');
   });
 
   afterEach(async () => {

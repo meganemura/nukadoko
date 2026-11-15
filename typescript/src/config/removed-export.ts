@@ -18,11 +18,17 @@ export interface RemovedExport {
 
 const UPGRADING = 'docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts"';
 
+const PROGRAM_MOVED = 'CHANGELOG.md in the nukadoko package, under "The program moves into the config"';
+
 const REMOVED_EXPORTS: Readonly<Record<string, RemovedExport>> = {
   runServer: {
     sentence:
-      "; runServer was removed from nukadoko: nukadoko.program.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after",
-    fix: `Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; ${UPGRADING}, shows the move.`,
+      "; runServer was removed from nukadoko: the program function of nukadoko.config.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after",
+    fix: `Remove runServer and the fixture that called it, and write the program's command under program in nukadoko.config.ts instead; ${UPGRADING}, shows the move.`,
+  },
+  defineProgram: {
+    sentence: "; defineProgram was removed from nukadoko: the program under test is the program function of nukadoko.config.ts now",
+    fix: `Move the object defineProgram wrapped into nukadoko.config.ts as program: () => ({ ... }), and delete nukadoko.program.ts; ${PROGRAM_MOVED}, shows the move.`,
   },
 };
 

@@ -198,6 +198,7 @@ describe("the view of a claim step's judged reading", () => {
       path.join(rootDir, "nukadoko.config.ts"),
       `import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ judgedView: false });\n`,
     );
+    await writeUrlProgram(rootDir, baseURL);
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/cart.feature:3"], { rootDir, stdout: createCaptureSink(), stderr });
     expect(exitCode, stderr.text()).toBe(0);

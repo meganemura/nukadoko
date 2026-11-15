@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run`'s own progress output end to end —
 // everything src/run/progress-log.ts writes, reached
@@ -166,10 +167,7 @@ describe("nuka run: progress output", () => {
   });
 
   it("the do line carries --env, so the scenario reruns where it failed", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ environments: { staging: {} } });\n',
-    );
+    writeProgram(rootDir, '{ environments: { staging: {} } }');
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature", "--env", "staging"], {

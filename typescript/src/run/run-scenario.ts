@@ -274,7 +274,7 @@ export interface RunScenarioOptions {
   readonly records?: { readonly root: string; readonly stateDir: string };
   /** The world this scenario runs against: its URL is the base URL every
    * page and request resolves against, and its name goes on each step
-   * record. `null` when the tree has no program file. Not the compat
+   * record. `null` when the tree has no program. Not the compat
    * World, which this file calls `world`. */
   readonly programWorld: WorldView | null;
   readonly pickle: Pickle;

@@ -56,7 +56,7 @@ describe("{condition.<name>}", () => {
 
   it("moves the program with the word: declaring flag-off's banner on makes both cells required, and both pass", () =>
     withProject(async (rootDir) => {
-      const programPath = path.join(rootDir, "nukadoko.program.ts");
+      const programPath = path.join(rootDir, "nukadoko.config.ts");
       await writeFile(programPath, readFileSync(programPath, "utf8").replace('"flag-off": { conditions: { banner: false } }', '"flag-off": { conditions: { banner: true } }'));
       expect((await cli(rootDir, ["run"])).exitCode).toBe(0);
       const row = latestRunJson(rootDir).table.rows[0];
@@ -72,8 +72,8 @@ describe("{condition.<name>}", () => {
       const check = await cli(rootDir, ["check", "--env", "staging"]);
       expect(check.exitCode).toBe(1);
       expect(check.stdout).toContain(
-        'error\tprogram-placeholder-unfilled\tnukadoko.program.ts\tworld staging: env.BANNER names {condition.banner}, which has no value here: its environment declares no condition "banner" under conditions\n' +
-          "  fix: Declare banner under conditions of world staging in nukadoko.program.ts, or remove {condition.banner} from env.BANNER.\n",
+        'error\tprogram-placeholder-unfilled\tnukadoko.config.ts\tworld staging: env.BANNER names {condition.banner}, which has no value here: its environment declares no condition "banner" under conditions\n' +
+          "  fix: Declare banner under conditions of world staging in nukadoko.config.ts, or remove {condition.banner} from env.BANNER.\n",
       );
       const run = await cli(rootDir, ["run", "--no-check", "--env", "staging"]);
       expect(run.exitCode).toBe(2);
@@ -109,7 +109,7 @@ describe("{condition.<name>}", () => {
       expect(named.stdout).not.toContain("program-placeholder-unfilled");
       const both = await cli(rootDir, ["check", "--env", "flag-on", "--env", "default"]);
       expect(both.exitCode).toBe(1);
-      expect(both.stdout).toContain("program-placeholder-unfilled\tnukadoko.program.ts\tworld default: env.BANNER names {condition.banner}");
+      expect(both.stdout).toContain("program-placeholder-unfilled\tnukadoko.config.ts\tworld default: env.BANNER names {condition.banner}");
       expect(both.stdout).not.toContain("world flag-on:");
       expect(both.stdout).not.toContain("world staging:");
     }));

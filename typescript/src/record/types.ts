@@ -283,7 +283,7 @@ export interface ObservedCounts {
   /** The lines of the world's execution events that carry this step's
    * trace id (docs/spec.md "Execution events"). `null` for a world at a
    * `url`, which nukadoko does not start, so it reads nothing the program
-   * writes. Absent when the world has no events file: the program file
+   * writes. Absent when the world has no events file: the program
    * names no `{events}`, or the run has no world URL. */
   events?: EventsSlice | null;
   /** How many MCP calls the step sent through a transport `measureMcp`
@@ -1280,7 +1280,7 @@ export interface StepRecordBase {
    * written before its world stops. Absent when there were none. */
   events_late?: { readonly lines: number; readonly file: string | null; readonly truncated?: true };
   /** The world this step ran against (run.json's `worlds[].name`), or
-   * `null` when the tree has no program file and no world ran. Not the
+   * `null` when the tree has no program and no world ran. Not the
    * compat World a step reads and writes, which is `world`. Absent on a
    * record an earlier build wrote. */
   world_name?: string | null;

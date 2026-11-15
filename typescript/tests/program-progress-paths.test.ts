@@ -13,7 +13,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 async function withProject<T>(body: (rootDir: string) => Promise<T>): Promise<T> {
   const rootDir = await copyFixtureToTempDir("program-project");
   try {
-    const programPath = path.join(rootDir, "nukadoko.program.ts");
+    const programPath = path.join(rootDir, "nukadoko.config.ts");
     const source = readFileSync(programPath, "utf8");
     const changed = source.replace('command: "node app/server.mjs"', 'command: "node app/server.mjs --data {dir}"');
     expect(changed).not.toBe(source);

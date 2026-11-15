@@ -1,5 +1,5 @@
 // Responsibility: what a condition is, on both sides that name one. An
-// environment in nukadoko.program.ts declares the conditions it sets up
+// environment in the program in nukadoko.config.ts declares the conditions it sets up
 // (`conditions: { not_found_hint: true }`), and a scenario names the ones
 // it needs with tags on its Feature, Rule, Scenario, or Examples
 // (`@with:not_found_hint`, `@with:locale=ja`, `@without:not_found_hint`).
@@ -37,7 +37,7 @@ export const CONDITION_VALUE_PATTERN = /^[^\s@]+$/;
 /** The two values a tag may not name as text: `true` and `false` are the
  * booleans an environment declares, and `@with:x=true` beside a declared
  * `x: true` would read as on to a person and never meet it. A tag writes
- * `@with:x` or `@without:x`, and the program file writes the boolean. */
+ * `@with:x` or `@without:x`, and the program writes the boolean. */
 export const BOOLEAN_TEXTS: ReadonlySet<string> = new Set(["true", "false"]);
 
 /** What an environment declares for one condition: on, off, or a value. */

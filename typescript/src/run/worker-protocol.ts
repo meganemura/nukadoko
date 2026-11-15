@@ -25,7 +25,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // whole number of 1 or more that the parent has already validated.
 // `worldPath` names a temp file holding the world the parent started for
 // this pass (src/program/world-view.ts), or is empty when the tree has no
-// program file. The parent owns the program: every worker of a pass sends
+// program. The parent owns the program: every worker of a pass sends
 // its requests to the one server the parent started. `treePath` names a
 // temp file holding a `WorkerTree` when the worker runs a pass in a tree
 // of `nuka run --base` (src/run/tree-pass.ts), or is empty.
@@ -100,7 +100,7 @@ export interface WorkerBeforeAllFailedEnvelope {
 }
 
 /** Sent instead of any scenario by a worker in a tree whose config,
- * program file, or step files do not load or check: nothing of the pass
+ * program, or step files do not load or check: nothing of the pass
  * ran, and `reason` says why, for every cell the pass was to fill. */
 export interface WorkerNotRunEnvelope {
   readonly kind: "not-run";

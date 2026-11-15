@@ -15,7 +15,7 @@ import {
 
 // Responsibility: src/program/placeholders.ts, the one rule that fills
 // `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, `{token}`, and
-// `{events}` in a program file's commands and env, and names each one a
+// `{events}` in a program's commands and env, and names each one a
 // world has no value for from its recipe alone: every world with a URL
 // has `{port}`, the one `serve` got or the URL's, and only a world
 // nukadoko serves has `{events}`.
@@ -120,16 +120,16 @@ describe("placeholderGaps", () => {
       { where: "prepare[1]", name: "port", why: "this world has neither serve nor url" },
       { where: "env.BASE", name: "url", why: "this world has neither serve nor url" },
     ]);
-    expect(placeholderRefusal([{ name: "default", recipe: { ...recipe, reach: reachOf("none") } }, { name: "local", recipe: { ...recipe, reach: reachOf("serve") } }], "nukadoko.program.ts", {})).toEqual({
+    expect(placeholderRefusal([{ name: "default", recipe: { ...recipe, reach: reachOf("none") } }, { name: "local", recipe: { ...recipe, reach: reachOf("serve") } }], "nukadoko.config.ts", {})).toEqual({
       message:
         "world default: build[0] names {port}, which has no value here: build runs once per tree, before any world exists; " +
         "world default: prepare[1] names {port}, which has no value here: this world has neither serve nor url; " +
         "world default: env.BASE names {url}, which has no value here: this world has neither serve nor url; " +
         "world local: build[0] names {port}, which has no value here: build runs once per tree, before any world exists; nothing ran",
-      fix: "Write only {root} in build[0] of nukadoko.program.ts, or move the command to prepare, which runs once per world.",
+      fix: "Write only {root} in build[0] of nukadoko.config.ts, or move the command to prepare, which runs once per world.",
       first: { world: "default", gap: { where: "build[0]", name: "port", why: "build runs once per tree, before any world exists" } },
     });
-    expect(placeholderRefusal([{ name: "local", recipe: { ...recipe, build: [], reach: reachOf("serve") } }], "nukadoko.program.ts", {})).toBeUndefined();
+    expect(placeholderRefusal([{ name: "local", recipe: { ...recipe, build: [], reach: reachOf("serve") } }], "nukadoko.config.ts", {})).toBeUndefined();
   });
 
   it("fixes a gap by naming only what the world lacks, for each kind of world", () =>
@@ -137,14 +137,14 @@ describe("placeholderGaps", () => {
       const kind = tc.draw(reachKind);
       const name = tc.draw(placeholder);
       const recipe = { build: [timed(`make {${name}}`)], prepare: [timed(`seed {${name}}`)], reach: reachOf(kind), env: {} };
-      const fixes = placeholderGaps(recipe).map((gap) => placeholderGapFix(gap, "w", "nukadoko.program.ts", {}));
+      const fixes = placeholderGaps(recipe).map((gap) => placeholderGapFix(gap, "w", "nukadoko.config.ts", {}));
       for (const fix of fixes) {
-        if (fix.includes("build[0]")) expect(fix).toBe("Write only {root} in build[0] of nukadoko.program.ts, or move the command to prepare, which runs once per world.");
+        if (fix.includes("build[0]")) expect(fix).toBe("Write only {root} in build[0] of nukadoko.config.ts, or move the command to prepare, which runs once per world.");
         else if (name === "events") {
           const edit = kind === "url" ? "serve world w in place of its url" : "give world w serve";
-          expect(fix).toBe(`Remove {events} from prepare[0] of nukadoko.program.ts, or ${edit}: nukadoko makes the events file only for a program it starts.`);
+          expect(fix).toBe(`Remove {events} from prepare[0] of nukadoko.config.ts, or ${edit}: nukadoko makes the events file only for a program it starts.`);
         }
-        else expect(fix).toBe(`Remove {${name}} from prepare[0] of nukadoko.program.ts, or give world w serve or url.`);
+        else expect(fix).toBe(`Remove {${name}} from prepare[0] of nukadoko.config.ts, or give world w serve or url.`);
       }
       // A world that serves or has a url is never told to add the other,
       // which the file refuses beside it; {events} has a value only where
@@ -210,10 +210,10 @@ describe("{condition.<name>}", () => {
         tc.draw(gs.arrays(gs.tuples(gs.sampledFrom(["on", "off", "staging"]), gs.optional(declared)), { maxSize: 3 })).map(([env, conditions]) => [env, conditions === null ? {} : { conditions }]),
       );
       const gap = { where: "env.FLAG", name: `condition.${name}` as const, why: "" };
-      const outside = conditionOutsideEnvironmentsFix(gap, environments, "nukadoko.program.ts");
-      expect(placeholderGapFix(gap, "default", "nukadoko.program.ts", environments)).toBe(outside?.fix);
+      const outside = conditionOutsideEnvironmentsFix(gap, environments, "nukadoko.config.ts");
+      expect(placeholderGapFix(gap, "default", "nukadoko.config.ts", environments)).toBe(outside?.fix);
       for (const env of Object.keys(environments)) {
-        expect(placeholderGapFix(gap, env, "nukadoko.program.ts", environments)).toBe(`Declare ${name} under conditions of world ${env} in nukadoko.program.ts, or remove {condition.${name}} from env.FLAG.`);
+        expect(placeholderGapFix(gap, env, "nukadoko.config.ts", environments)).toBe(`Declare ${name} under conditions of world ${env} in nukadoko.config.ts, or remove {condition.${name}} from env.FLAG.`);
       }
       const declaring = Object.entries(environments)
         .filter(([, environment]) => environment.conditions !== undefined && Object.hasOwn(environment.conditions, name))
@@ -225,8 +225,8 @@ describe("{condition.<name>}", () => {
 
   it("leaves a gap that is not a condition, or is in a build, to placeholderGapFix", () => {
     const environments = { on: { conditions: { banner: true } } };
-    expect(conditionOutsideEnvironmentsFix({ where: "env.PORT", name: "port", why: "" }, environments, "nukadoko.program.ts")).toBeUndefined();
-    expect(conditionOutsideEnvironmentsFix({ where: "build[0]", name: "condition.banner", why: "" }, environments, "nukadoko.program.ts")).toBeUndefined();
+    expect(conditionOutsideEnvironmentsFix({ where: "env.PORT", name: "port", why: "" }, environments, "nukadoko.config.ts")).toBeUndefined();
+    expect(conditionOutsideEnvironmentsFix({ where: "build[0]", name: "condition.banner", why: "" }, environments, "nukadoko.config.ts")).toBeUndefined();
   });
 
   it("leaves a brace that only looks like one as written", () => {

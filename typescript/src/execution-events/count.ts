@@ -105,7 +105,7 @@ function lines(count: number): string {
 export function describeGap(gap: EventsGap): string {
   switch (gap.gap) {
     case "inlet-unnamed":
-      return "the program file names no {events}, so the program has no events file";
+      return "the program names no {events}, so the program has no events file";
     case "world-unread":
       return "nukadoko did not start the world's program, so it reads no events there";
     case "producer-not-run":

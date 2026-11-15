@@ -28,7 +28,7 @@ describe("nuka run: a scenario that never destructures page never launches a bro
   let rootDir: string;
 
   beforeEach(async () => {
-    // No program file: neither step in features/no-browser.feature
+    // No program: neither step in features/no-browser.feature
     // navigates anywhere, since the point here is bag construction, not
     // network.
     rootDir = await copyFixtureToTempDir("run-browser-project");

@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run --base <ref>` on a real git history, end to
 // end: the base and the old tree, the worlds they run, each change kind and
@@ -135,9 +136,11 @@ describe("nuka run --base", () => {
 
   beforeAll(async () => {
     rootDir = await copyFixtureToTempDir("allure-identity-project");
-    for (const file of ["nukadoko.program.ts", "features/checkout.feature", "features/steps/a-cart.ts", "features/steps/cart-holds.ts"]) {
+    for (const file of ["features/checkout.feature", "features/steps/a-cart.ts", "features/steps/cart-holds.ts"]) {
       rmSync(path.join(rootDir, file));
     }
+    // No program: the fixture's worlds are URLs nothing answers at.
+    writeFileSync(path.join(rootDir, "nukadoko.config.ts"), 'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({});\n');
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(pathToFileURL(path.join(repoRoot, "src", "index.ts")).href)};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     mkdirSync(path.join(rootDir, "lib"));
@@ -419,9 +422,11 @@ describe("nuka run --base, when the base's steps no longer load against head", (
   // base's copy of the step still imports it from where it was.
   beforeAll(async () => {
     rootDir = await copyFixtureToTempDir("allure-identity-project");
-    for (const file of ["nukadoko.program.ts", "features/checkout.feature", "features/steps/a-cart.ts", "features/steps/cart-holds.ts"]) {
+    for (const file of ["features/checkout.feature", "features/steps/a-cart.ts", "features/steps/cart-holds.ts"]) {
       rmSync(path.join(rootDir, file));
     }
+    // No program: the fixture's worlds are URLs nothing answers at.
+    writeFileSync(path.join(rootDir, "nukadoko.config.ts"), 'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({});\n');
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(pathToFileURL(path.join(repoRoot, "src", "index.ts")).href)};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     mkdirSync(path.join(rootDir, "lib"));
@@ -472,7 +477,7 @@ describe("nuka run --base, when the base's steps no longer load against head", (
   });
 });
 
-describe("nuka run --base, with a program file at the base and at head", () => {
+describe("nuka run --base, with a program at the base and at head", () => {
   let rootDir: string;
   let result: { exitCode: number; stdout: string; stderr: string };
 
@@ -484,22 +489,19 @@ describe("nuka run --base, with a program file at the base and at head", () => {
   // `unused` names {port} and has neither serve nor url, which `nuka check`
   // reports only for a run that starts it: this one starts `default` alone,
   // at head and in both trees.
-  const PROGRAM = `import { defineProgram } from "./nukadoko-shim.js";
-
-export default defineProgram({
+  const PROGRAM = `{
   prepare: [["node", "-e", "", "{dir}"]],
   environments: {
     unused: { env: { WHERE: "{port}" } },
   },
-});
-`;
+}`;
 
   beforeAll(async () => {
     rootDir = await copyFixtureToTempDir("allure-identity-project");
     for (const file of ["features/checkout.feature", "features/steps/a-cart.ts", "features/steps/cart-holds.ts"]) {
       rmSync(path.join(rootDir, file));
     }
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(pathToFileURL(path.join(repoRoot, "src", "index.ts")).href)};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     mkdirSync(path.join(rootDir, "lib"));

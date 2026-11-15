@@ -3,13 +3,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram as writeConfigProgram } from "./helpers/fixtures.js";
 
 // Responsibility: which criteria a run selects, against
 // tests/fixtures/run-verdict-hooks-project (run-verdict-project's two
 // features and three environments, with run hooks hooks.json can fail).
 // Under `--env`, a criterion no named environment meets is left out of
 // the run and counted, and `nuka check --env` does not report it; the
-// program file's `defaultEnvironments` names what a run without `--env`
+// program's `defaultEnvironments` names what a run without `--env`
 // starts; a red row with no required cell, which only `--no-check` lets
 // run, has a finding whose `do:` line runs; and each `do:` line a hook
 // failure prints runs as printed.
@@ -37,10 +38,7 @@ async function inProject<T>(body: (rootDir: string) => Promise<T>): Promise<T> {
 }
 
 function writeProgram(rootDir: string, environments: string, top = ""): void {
-  writeFileSync(
-    path.join(rootDir, "nukadoko.program.ts"),
-    ['import { defineProgram } from "./nukadoko-shim.js";', "export default defineProgram({", top, `  environments: { ${environments} },`, "});", ""].join("\n"),
-  );
+  writeConfigProgram(rootDir, ["{", top, `  environments: { ${environments} },`, "}"].join("\n"));
 }
 
 const STAGING = 'staging: { envFiles: [".env.flag-on"] }';
@@ -109,7 +107,7 @@ describe("nuka run: which criteria a run selects", () => {
   it("keeps a red row with no required cell under the default selection, with a finding whose do: runs it where it is met", () =>
     inProject(async (rootDir) => {
       writeProgram(rootDir, `${STAGING}, ${FLAG_OFF}, ${FLAG_ON}`, '  defaultEnvironments: ["flag-off"],');
-      // The default selection is the program file's, which is expected to
+      // The default selection is the program's, which is expected to
       // cover every condition a tag names.
       const check = await cli(rootDir, ["check", "features/banner.feature"]);
       expect(check.exitCode).toBe(1);
@@ -131,7 +129,7 @@ describe("nuka run: which criteria a run selects", () => {
       expect(rowsOf(rootDir)).toEqual(["features/banner.feature:4 held"]);
     }));
 
-  it("gives a row no environment of the program file meets a do: line that checks its file", () =>
+  it("gives a row no environment of the program meets a do: line that checks its file", () =>
     inProject(async (rootDir) => {
       writeFileSync(path.join(rootDir, "features", "unmet.feature"), 'Feature: Unmet\n\n  @with:banner=yes\n  Scenario: the banner says yes\n    Then the banner reads "yes"\n');
       const ran = await cli(rootDir, ["run", "--no-check", "features/unmet.feature"]);

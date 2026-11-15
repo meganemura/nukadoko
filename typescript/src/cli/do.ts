@@ -16,8 +16,8 @@ import {
 import { settleEvents } from "../context/events-read.js";
 import { recordedEventsProducer } from "./recorded-events.js";
 import path from "node:path";
-import { loadConfig } from "../config/load-config.js";
-import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
+import { CONFIG_FILE_NAME, loadConfig } from "../config/load-config.js";
+import { loadProgram } from "../config/load-program.js";
 import { conditionOutsideEnvironmentsFix, placeholderRefusal } from "../program/placeholders.js";
 import { shellWord } from "../shell/shell-word.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
@@ -109,7 +109,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // and its failure or timeout never fails the run. Only `target_version`
 // is omitted, with one stderr warning line.
 //
-// With a program file, the tree's head world is started for this one
+// With a program, the tree's head world is started for this one
 // execution, before the step's context, and stopped after the step's
 // fixtures are torn down (docs/spec.md "Program"). Its directory sits in
 // the step record's own, so a failed step and the program's log are read
@@ -141,7 +141,7 @@ export interface RunDoOptions {
   argsJson: string | null;
   /** `--env`'s value, or `null` when it was omitted. `null` is not the same
    * as the string `"default"`: it is what tells resolveEnvironment() not to
-   * require a matching `environments` entry in nukadoko.program.ts.
+   * require a matching `environments` entry in the program in nukadoko.config.ts.
    */
   env: string | null;
   /** `--use <record-id>` (repeatable), in the order given (docs/spec.md
@@ -175,7 +175,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   // --- Setup phase: any failure here writes nothing. ---
   let config;
   let program;
-  let programFile = PROGRAM_FILE_NAME;
+  let programFile = CONFIG_FILE_NAME;
   try {
     config = await loadConfig(rootDir);
     const loaded = await loadProgram(rootDir);
@@ -186,7 +186,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   }
 
   // `env !== null` is what distinguishes "explicit --env
-  // that must exist in the program file's environments" from "implicit
+  // that must exist in the program's environments" from "implicit
   // default, no such requirement"; see
   // resolve-environment.ts's header for the reasoning.
   let resolvedEnv: ResolvedEnvironment;

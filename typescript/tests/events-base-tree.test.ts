@@ -5,9 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { rowSummary, type TableRow } from "./helpers/base-project.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: that `nuka run --base` runs the base world when head's
-// steps count execution events and the ref's program file names no
+// steps count execution events and the ref's program names no
 // `{events}`, the shape of the change that adds them. The base tree's
 // check does not stop the tree on `events-inlet-missing`: the claim on a
 // count is unjudged there with the gap word, and the row's other cells
@@ -26,14 +27,14 @@ async function cli(rootDir: string, args: string[]): Promise<{ exitCode: number;
 }
 
 const program = (env: string): string =>
-  `import { defineProgram } from "./nukadoko-shim.js";\n\nexport default defineProgram({\n  serve: { command: "node app/server.mjs", ready: "/up" },\n  env: { ${env} },\n});\n`;
+  `{\n  serve: { command: "node app/server.mjs", ready: "/up" },\n  env: { ${env} },\n}`;
 
 const feature = (...scenarios: string[]): string => `Feature: Counts of what the program did\n\n${scenarios.join("\n")}`;
 
 const READ = `  Scenario: a read\n    When the client gets "/rooms/7"\n`;
 const WRITE = `  Scenario: a write\n    When the client posts to "/scores"\n    Then "scores" was written 1 time\n`;
 
-describe("--base with a ref whose program file names no {events}", () => {
+describe("--base with a ref whose program names no {events}", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -43,12 +44,12 @@ describe("--base with a ref whose program file names no {events}", () => {
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
     git(rootDir, "init", "-q", "-b", "main");
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), program(`PORT: "{port}", JOBS_DIR: "{dir}/jobs"`));
+    writeProgram(rootDir, program(`PORT: "{port}", JOBS_DIR: "{dir}/jobs"`));
     writeFileSync(path.join(rootDir, "features", "events.feature"), feature(READ));
     git(rootDir, "add", "-A");
     git(rootDir, "commit", "-q", "-m", "base");
     git(rootDir, "branch", "base-branch");
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), program(`PORT: "{port}", EXECUTION_EVENTS: "{events}", JOBS_DIR: "{dir}/jobs"`));
+    writeProgram(rootDir, program(`PORT: "{port}", EXECUTION_EVENTS: "{events}", JOBS_DIR: "{dir}/jobs"`));
     writeFileSync(path.join(rootDir, "features", "events.feature"), feature(READ, WRITE));
     git(rootDir, "add", "-A");
     git(rootDir, "commit", "-q", "-m", "head");
@@ -70,7 +71,7 @@ describe("--base with a ref whose program file names no {events}", () => {
     const atBase = run.scenarios.find((scenario) => scenario.scenario === "a write" && scenario.world === "base")!;
     const [claim] = atBase.steps[1]!.claims!;
     expect(claim!.outcome).toBe("unjudged");
-    expect(claim!.reason).toContain("(inlet-unnamed): the program file names no {events}");
+    expect(claim!.reason).toContain("(inlet-unnamed): the program names no {events}");
 
     const paths = (run as { paths?: { between: { kind: string }; unread: string | null; criteria: unknown[] }[] }).paths ?? [];
     expect(paths).toEqual([
@@ -78,7 +79,7 @@ describe("--base with a ref whose program file names no {events}", () => {
         between: { kind: "base" },
         a: { world: "base", environment: "default" },
         b: { world: "head", environment: "default" },
-        unread: "the base's program file names no {events}, so the base world wrote no execution events",
+        unread: "the base's program names no {events}, so the base world wrote no execution events",
         counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 },
         criteria: [],
         not_compared: [],
@@ -86,6 +87,6 @@ describe("--base with a ref whose program file names no {events}", () => {
     ]);
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8").split("\n");
     const start = summary.indexOf("### base → head");
-    expect(summary.slice(start, start + 3)).toEqual(["### base → head", "", "Not compared: the base's program file names no {events}, so the base world wrote no execution events."]);
+    expect(summary.slice(start, start + 3)).toEqual(["### base → head", "", "Not compared: the base's program names no {events}, so the base world wrote no execution events."]);
   }, 120_000);
 });

@@ -178,7 +178,7 @@ export interface StepFixtures {
    * `config.requestContext` when this name is destructured. */
   readonly request: APIRequestContext;
   /** Environment variables from the configured envFiles, then the world's
-   * `env` from nukadoko.program.ts. A frozen copy of
+   * `env` from the program in nukadoko.config.ts. A frozen copy of
    * the merged map: assigning a property throws in a step module, so a
    * write in one step is not visible to a later step or a later scenario.
    * A configured key still reads back as the loaded value. */
@@ -195,7 +195,7 @@ export interface StepFixtures {
    * `if (!value) throw` at every call site. */
   readonly requireEnv: (name: string) => string;
   /** The world's base URL: the port nukadoko gave `serve`, or the program
-   * file's `url`. `undefined` with no program file, or a world with
+   * file's `url`. `undefined` with no program, or a world with
    * neither; `request`'s own construction is what raises the error for a
    * relative URL then, not this type. */
   readonly baseURL: string | undefined;
@@ -344,7 +344,7 @@ export interface StepContext {
   /** Playwright APIRequestContext with the world's base URL, built from `config.requestContext`. */
   request(): Promise<APIRequestContext>;
   /** Environment variables from the configured envFiles, then the world's
-   * `env` from nukadoko.program.ts. A frozen copy of
+   * `env` from the program in nukadoko.config.ts. A frozen copy of
    * the merged map: assigning a property throws in a step module, so a
    * write in one step is not visible to a later step or a later scenario.
    * A configured key still reads back as the loaded value. */

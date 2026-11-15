@@ -10,7 +10,7 @@ import { baseTreeFiles, oldTreeFiles, overlayBaseTree, projectRelativeText, writ
 // Responsibility: what the base and the old tree of `nuka run --base`
 // hold (src/run/trees.ts). The base tree is the ref's code with head's
 // features directory and config; the old tree is head's code with the
-// ref's features directory and config. The program file goes with the
+// ref's features directory and config. The program goes with the
 // code, and the base tree takes head's only when the ref has none. The
 // state directory is in neither. The plan is checked against those
 // sentences, and the files on disk against the plan.

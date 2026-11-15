@@ -31,8 +31,8 @@ import type { NukadokoConfig } from "../config/schema.js";
 // pass and at worst a row it cannot run reads `moved`, never a false
 // `held`.
 //
-// The program file's `conditions` on each environment and its
-// `defaultEnvironments` are part of the mapping too, though the program file
+// The program's `conditions` on each environment and its
+// `defaultEnvironments` are part of the mapping too, though the program
 // otherwise goes with the code: they decide which cells of a criterion are
 // required and which are controls, so an unchanged sentence under changed
 // conditions can be asked to hold somewhere it never had to.
@@ -46,12 +46,12 @@ export interface MappingSnapshot {
    * file's bytes, `null` for a tree with no config file; or why the config
    * did not load. */
   readonly config: { readonly text: string; readonly file: string | null } | { readonly problem: string };
-  /** `programMappingOf` the tree's program file, or why it did not
+  /** `programMappingOf` the tree's program, or why it did not
    * load. */
   readonly program: ProgramMapping | { readonly problem: string };
 }
 
-/** The part of a program file that is mapping, as text two trees
+/** The part of a program that is mapping, as text two trees
  * compare. */
 export interface ProgramMapping {
   /** Each environment's `conditions`, as text, by environment name. */
@@ -68,7 +68,7 @@ export interface MappingComparison {
    * config could not be read at the ref. */
   readonly config: boolean;
   /** Each environment whose `conditions` differ, sorted; every
-   * environment when the program file could not be read at the ref. */
+   * environment when the program could not be read at the ref. */
   readonly conditions: readonly string[];
   /** Whether `defaultEnvironments` differs, or could not be read at the
    * ref. */
@@ -99,29 +99,44 @@ function canonical(value: unknown, seen: Set<unknown>): unknown {
  * written, and `retention` how many runs of them are kept. */
 export const RUN_SETTINGS: readonly (keyof NukadokoConfig)[] = ["stateDir", "retention"];
 
+/** The config fields left out of its mapping part: the run settings, and
+ * `program`, which goes with the code (this file's header). */
+const NOT_MAPPING: readonly string[] = [...RUN_SETTINGS, "program"];
+
+/** The config file's text as its mapping compares it: `program`'s source
+ * text cut out when `text` holds it exactly once (this file's header).
+ * Pure. */
+export function configFileMappingText(text: string, program: unknown): string {
+  if (typeof program !== "function") return text;
+  const source = program.toString();
+  const at = text.indexOf(source);
+  if (source === "" || at === -1 || text.indexOf(source, at + 1) !== -1) return text;
+  return text.slice(0, at) + text.slice(at + source.length);
+}
+
 /** The config's mapping part as text two trees compare: every field but
- * `RUN_SETTINGS` (this file's header). Pure. */
+ * `RUN_SETTINGS` and `program` (this file's header). Pure. */
 export function configMappingText(config: Readonly<Record<string, unknown>>): string {
-  const part = Object.fromEntries(Object.entries(config).filter(([key]) => !(RUN_SETTINGS as readonly string[]).includes(key)));
+  const part = Object.fromEntries(Object.entries(config).filter(([key]) => !NOT_MAPPING.includes(key)));
   return JSON.stringify(canonical(part, new Set()));
 }
 
-/** The program file's mapping part (this file's header), from what a
- * loaded program holds: `null` for a tree with no program file, whose
+/** The program's mapping part (this file's header), from what a
+ * loaded program holds: `null` for a tree with no program, whose
  * environments declare no conditions. Pure. */
 export function programMappingOf(program: { readonly environments?: Readonly<Record<string, { readonly conditions?: unknown }>> } | null): ProgramMapping {
   const conditions = new Map<string, string>();
   for (const [name, environment] of Object.entries(program?.environments ?? {})) {
     conditions.set(name, JSON.stringify(canonical(environment.conditions ?? null, new Set())));
   }
-  // Read by name, so a program file of a release that has no such field
+  // Read by name, so a program of a release that has no such field
   // reads as one that leaves the default selection alone.
   const defaults = (program as { readonly defaultEnvironments?: unknown } | null)?.defaultEnvironments;
   return { conditions, defaultEnvironments: JSON.stringify(canonical(defaults ?? null, new Set())) };
 }
 
 /** What differs between the mapping at the ref and at head. A config or a
- * program file that did not load at the ref counts as changed: nothing
+ * program that did not load at the ref counts as changed: nothing
  * shows its mapping part is the one head has. Pure. */
 export function compareMapping(base: MappingSnapshot, head: MappingSnapshot): MappingComparison {
   const paths = new Set([...base.files.keys(), ...head.files.keys()]);

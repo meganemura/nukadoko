@@ -1,7 +1,7 @@
 import type { Conditions } from "../condition/condition.js";
 import { commandWords, type ProgramRecipe } from "../config/program-schema.js";
 
-// Responsibility: fill the placeholders a program file writes in its
+// Responsibility: fill the placeholders a program writes in its
 // commands and its env (docs/spec.md "Program"), and name each one a world
 // has no value for before anything runs. Pure: values in, text out.
 // Boundary: which values a running world has is src/program/world.ts's;
@@ -19,7 +19,7 @@ import { commandWords, type ProgramRecipe } from "../config/program-schema.js";
 //
 // `{events}` is the file the program appends its execution events to
 // (docs/execution-events.md). nukadoko makes it only for a world it
-// serves, and only when the program file names `{events}`
+// serves, and only when the program names `{events}`
 // (`namesPlaceholder`): it sets no variable a program did not ask for,
 // and a program that writes no events gets no file.
 //
@@ -28,7 +28,7 @@ import { commandWords, type ProgramRecipe } from "../config/program-schema.js";
 // swaps `serve` for `url` keeps the top level's `PORT: "{port}"`.
 //
 // `{condition.<name>}` is the environment's own value for one of its
-// `conditions`, as text: `true`, `false`, or the string. A program file
+// `conditions`, as text: `true`, `false`, or the string. A program
 // that derives its switch from it (`env: { BANNER: "{condition.banner}" }`)
 // cannot declare one side of a switch and run the other, which is what a
 // condition is trusted to say (docs/spec.md "Verdicts"). A condition the
@@ -148,7 +148,7 @@ export function placeholderGaps(
   return gaps;
 }
 
-/** Whether `text`, as the program file wrote it, names placeholder
+/** Whether `text`, as the program wrote it, names placeholder
  * `name`. */
 export function textNamesPlaceholder(text: string, name: (typeof PLACEHOLDER_NAMES)[number]): boolean {
   return [...text.matchAll(PLACEHOLDER)].some((match) => match[1] === name);
@@ -190,7 +190,7 @@ export function placeholderRefusal(
 }
 
 /** The edit for a `{condition.<name>}` gap in a world that is no
- * environment of the program file: the default world when `environments`
+ * environment of the program: the default world when `environments`
  * has no `default` entry. Such a world declares no conditions, and the
  * file has no place to declare one for it, so the edit is to run in an
  * environment that declares the condition. `environment` is the first of
@@ -219,7 +219,7 @@ export function conditionOutsideEnvironmentsFix(
   };
 }
 
-/** The program file's `environments`, as far as a fix reads them. */
+/** The program's `environments`, as far as a fix reads them. */
 export type ProgramEnvironments = Readonly<Record<string, { readonly conditions?: Conditions | undefined }>>;
 
 /** The edit that closes `gap` in world `world` of `programFile`: it names

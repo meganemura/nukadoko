@@ -67,14 +67,14 @@ export function checkExpects(input: ExpectsCheckInput): { readonly errors: Check
 // Why no world the run would start reads execution events, or `undefined`
 // when one does.
 function whyEventsUnread(input: ExpectsCheckInput): string | undefined {
-  if (input.program === null) return `the project has no ${input.programFile}, so no world starts`;
+  if (input.program === null) return `${input.programFile} has no program, so no world starts`;
   const reasons: string[] = [];
   for (const world of worldsToStart(input.program.program, input.envs)) {
     const { reach } = world.recipe;
     if (reach.kind === "serve" && namesPlaceholder(world.recipe, "events")) return undefined;
     reasons.push(
       `world ${world.name}: ${
-        reach.kind === "serve" ? "the program file names no {events}" : reach.kind === "url" ? "the program runs at a url, which nukadoko does not start" : "it has neither serve nor url"
+        reach.kind === "serve" ? "the program names no {events}" : reach.kind === "url" ? "the program runs at a url, which nukadoko does not start" : "it has neither serve nor url"
       }`,
     );
   }

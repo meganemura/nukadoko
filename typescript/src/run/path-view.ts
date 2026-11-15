@@ -117,7 +117,7 @@ function readingOf(document: ComparedDocument, side: RunPathSide): "read" | "non
   const named = base ? "the base world" : `world ${side.environment}`;
   if (world === undefined || world.error !== null) return { unread: `the program did not start for ${named}` };
   if (world.events === null) return { unread: `${named} runs at ${world.url ?? "a url"}, which nukadoko did not start, so it read no execution events there` };
-  if (world.events === undefined) return { unread: base ? "the base's program file names no {events}, so the base world wrote no execution events" : `the program file of ${named} names no {events}, so it wrote no execution events` };
+  if (world.events === undefined) return { unread: base ? "the base's program names no {events}, so the base world wrote no execution events" : `the program of ${named} names no {events}, so it wrote no execution events` };
   return "read";
 }
 

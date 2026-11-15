@@ -41,12 +41,16 @@ this one, in order, each with its own real command and its own real output.
 ## The app
 
 Reuses [examples/todo](../todo)'s own todo API outright.
-[`nukadoko.program.ts`](nukadoko.program.ts) serves
+The `program` in [`nukadoko.config.ts`](nukadoko.config.ts) serves
 `../todo/app/server.ts` as it is:
 
 ```ts
-export default defineProgram({
-  serve: { command: "node ../todo/app/server.ts --port {port}", ready: "/todos" },
+import { defineConfig } from "nukadoko";
+
+export default defineConfig({
+  program: () => ({
+    serve: { command: "node ../todo/app/server.ts --port {port}", ready: "/todos" },
+  }),
 });
 ```
 
@@ -57,7 +61,7 @@ and stops it when the run ends, so there is nothing to start by hand.
 
 ## Layout
 
-- `nukadoko.program.ts` -- how the app starts.
+- `nukadoko.config.ts` -- how the app starts, as `program`.
 - `nukadoko.config.ts` -- empty: this app needs no secrets.
 - `features/migration.feature` -- 2 scenarios: one still-compat, one fully
   promoted.
@@ -198,7 +202,7 @@ Two things changed, not one: the import (`@cucumber/cucumber` ->
 `nukadoko/compat`), and the Before hook's own hand-rolled bootstrapping
 became `await this.openRequest()` -- no `baseURL` to manage by hand there
 anymore: every request resolves against the URL of the app
-`nukadoko.program.ts` started, once, for every step. Every
+the program in `nukadoko.config.ts` started, once, for every step. Every
 step body below that hook -- the table read, `.hashes()`, the POSTs, the
 `this.seededCount` stash, the regexp capture, the GET -- is untouched,
 character for character.

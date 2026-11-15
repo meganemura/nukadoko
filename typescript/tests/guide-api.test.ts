@@ -8,13 +8,13 @@ import { httpLogLines, latestRunJson, repoRoot, sharedRoot, stepRecordDir, witho
 
 // Responsibility: the two HTTP sections of docs/guide.md work as written.
 //
-// "An HTTP API": its program file, its install line, and its two scaffold
+// "An HTTP API": its program, its install line, and its two scaffold
 // lines, run as written in a project with Playwright after a plain
 // `nuka init`, take its feature to green against the program nukadoko
 // starts, with the request counted.
 //
 // "Calling the program with fetch": that section's When step, beside the
-// program file the section above shows, compiles under `tsc --strict`,
+// program the section above shows, compiles under `tsc --strict`,
 // with `skipLibCheck: false`, in a project with no Playwright installed.
 // The Then step comes from the scaffold command the section names, and
 // `nuka run` takes the feature it shows to green. docs/guide.ja.md carries the
@@ -92,7 +92,7 @@ const TSCONFIG = `${JSON.stringify(
       rewriteRelativeImportExtensions: true,
       types: ["node"],
     },
-    include: ["nukadoko.config.ts", "nukadoko.program.ts", "src", "features"],
+    include: ["nukadoko.config.ts", "src", "features"],
   },
   null,
   2,
@@ -276,11 +276,11 @@ describe(`docs/guide.md: ${HTTP_API}`, () => {
   it("docs/guide.ja.md shows the same blocks", async () => {
     const ja = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.ja.md"), "utf8"), HTTP_API);
     expect(apiBlocks.map((block) => block.lang)).toEqual(["ts", "gherkin", "sh"]);
-    expect(apiBlocks.slice(0, 2).map(filePath)).toEqual(["nukadoko.program.ts", "features/greet.feature"]);
+    expect(apiBlocks.slice(0, 2).map(filePath)).toEqual(["nukadoko.config.ts", "features/greet.feature"]);
     expect(ja).toEqual(apiBlocks);
   });
 
-  it("its program file and commands, after nuka init, run the feature green against the program nukadoko starts", async () => {
+  it("its program and commands, after nuka init, run the feature green against the program nukadoko starts", async () => {
     const [program, feature, commands] = apiBlocks;
     const [install, ...scaffolds] = commands!.body.trim().split("\n");
     // The pin the section installs is the one this repository tests against.

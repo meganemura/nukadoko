@@ -3,8 +3,8 @@ import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
-import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
-import { loadProgram, PROGRAM_FILE_NAME, type LoadedProgram } from "../config/load-program.js";
+import { CONFIG_FILE_NAME, loadConfig, resolveConfigFileName } from "../config/load-config.js";
+import { loadProgram, type LoadedProgram } from "../config/load-program.js";
 import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import { isPlaywrightInstalled } from "../context/load-playwright.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
@@ -277,10 +277,10 @@ async function analyze(
   envs: readonly string[],
 ): Promise<RunSelectionAnalysis> {
   const config = await loadConfig(rootDir);
-  // A program file that does not load is refused the way a config file
+  // A program that does not load is refused the way a config file
   // that does not load is, before any step file is read.
   const program = await loadProgram(rootDir);
-  // An `--env` name the program file does not define is refused by name,
+  // An `--env` name the program does not define is refused by name,
   // as `nuka run` refuses it, instead of checking no world for it.
   for (const name of envs) resolveEnvironment(config, program?.program ?? null, name, true);
   // Tolerant mode: a broken step file
@@ -623,7 +623,7 @@ async function reportFor(
     });
   }
   // The environments `nuka run` selects: the ones `--env` names, or the
-  // ones a run without it runs. A name `--env` gave that the program file
+  // ones a run without it runs. A name `--env` gave that the program
   // does not define is refused (`unknown-environment`), as `nuka run`
   // refuses it before its check.
   const selectedNames = envs.length === 0 ? defaultEnvironmentNames(program?.program ?? null) : envs;
@@ -632,12 +632,12 @@ async function reportFor(
       conditionTags,
       features,
       program: program?.program ?? null,
-      programFile: program?.fileName ?? "nukadoko.program.ts",
+      programFile: program?.fileName ?? CONFIG_FILE_NAME,
       selected: selectedNames.map((name) => ({ name, conditions: resolveEnvironment(config, program?.program ?? null, name, selectedNames === envs).conditions })),
       explicit: selectedNames === envs,
     }),
   );
-  const expectsFindings = checkExpects({ expectsTags, program, envs, programFile: program?.fileName ?? PROGRAM_FILE_NAME });
+  const expectsFindings = checkExpects({ expectsTags, program, envs, programFile: program?.fileName ?? CONFIG_FILE_NAME });
   errors.push(...expectsFindings.errors);
   warnings.push(...expectsFindings.warnings);
   // Warnings, not errors: a scenario with no Then can be a deliberate smoke
@@ -679,7 +679,7 @@ async function reportFor(
   });
   errors.push(...findPlaywrightMissing(featureResult.boundSteps, vocabulary, fixtureGraph, isPlaywrightInstalled));
   errors.push(...findUnstatedPolls(featureResult.boundSteps, vocabulary, fixtureGraph));
-  const eventsGaps = findEventsWorldGaps(featureResult.boundSteps, vocabulary, program, envs, program?.fileName ?? PROGRAM_FILE_NAME);
+  const eventsGaps = findEventsWorldGaps(featureResult.boundSteps, vocabulary, program, envs, program?.fileName ?? CONFIG_FILE_NAME);
   errors.push(...eventsGaps.errors);
   warnings.push(...eventsGaps.warnings);
   errors.push(...findTransformedExpected(featureResult.boundSteps, vocabulary, [...config.parameterTypes, ...compatParameterTypes]));

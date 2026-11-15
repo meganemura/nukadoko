@@ -4,9 +4,10 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run --base` on a change that leaves every
-// criterion unchanged, a refactor's shape. Head's program file names
+// criterion unchanged, a refactor's shape. Head's program names
 // `{events}`, so the base world is built for run.json's `paths` alone and
 // runs each row for paths, with no cell: the table, the verdicts, and the
 // exit code are what they are without it. A scratch copy of
@@ -21,12 +22,10 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 const PROGRAM = [
-  'import { defineProgram } from "./nukadoko-shim.js";',
-  "",
-  "export default defineProgram({",
+  "{",
   '  serve: { command: "node app/server.mjs", ready: "/up" },',
   '  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", JOBS_DIR: "{dir}/jobs" },',
-  "});",
+  "}",
   "",
 ].join("\n");
 
@@ -95,7 +94,7 @@ describe("--base on a change that leaves every criterion unchanged", () => {
     // path would not reach the source from there.
     writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(path.resolve("src/index.js"))};\n`);
     writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
-    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeProgram(rootDir, PROGRAM);
     writeFileSync(path.join(rootDir, "features", "events.feature"), FEATURE);
     git(rootDir, "init", "-q", "-b", "main");
     git(rootDir, "add", "-A");

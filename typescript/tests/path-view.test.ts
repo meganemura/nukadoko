@@ -36,7 +36,7 @@ const OFF: RunEnvironment = { name: "reorder-off", target_version: null, conditi
 const ON: RunEnvironment = { name: "reorder-on", target_version: null, conditions: { quick_reorder: true } };
 
 /** A world that read its events file, or one at a `url` (`null`), or
- * one whose program file names no `{events}` (`"unnamed"`). */
+ * one whose program names no `{events}` (`"unnamed"`). */
 function world(name: string, events: null | "unnamed" | "read" = "read", tree: "head" | "base" = "head"): RunWorld {
   const read = { file: null, lines: 0, owned: 0, late: 0, unowned: 0, unreadable: 0, undefined_kinds: {} };
   return { name, tree, url: "http://127.0.0.1:4100", commands: [], timings: {}, log: null, error: null, ...(events === "unnamed" ? {} : { events: events === "read" ? read : null }) };
@@ -434,14 +434,14 @@ describe("comparePaths against the base", () => {
     expect(off).toMatchObject({ a: { environment: "reorder-off" }, counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 }, criteria: [], not_compared: [] });
   });
 
-  it("says why a base whose program file names no {events} was not compared, and gives no base pair when neither side read events", () => {
+  it("says why a base whose program names no {events} was not compared, and gives no base pair when neither side read events", () => {
     const unnamed = [OFF, ON].flatMap((environment) => [world(environment.name), world(environment.name, "unnamed", "base")]);
     expect(comparePaths(baseDocumentOf([placed()], [OFF, ON], unnamed)).filter((comparison) => comparison.between.kind === "base")).toEqual(
       ["reorder-off", "reorder-on"].map((environment) => ({
         between: { kind: "base" },
         a: { world: "base", environment },
         b: { world: "head", environment },
-        unread: "the base's program file names no {events}, so the base world wrote no execution events",
+        unread: "the base's program names no {events}, so the base world wrote no execution events",
         counts: { changed: 0, open: 0, same_so_far: 0, marked_only: 0, same: 0, not_compared: 0 },
         criteria: [],
         not_compared: [],
@@ -770,9 +770,9 @@ describe("the Changed paths section of the summary", () => {
       if (firstExplained !== -1 && lastUnexplained !== -1) expect(lastUnexplained).toBeLessThan(firstExplained);
     }));
 
-  it("says once that the base's program file names no {events}", () => {
+  it("says once that the base's program names no {events}", () => {
     const unnamed = [OFF, ON].flatMap((environment) => [world(environment.name), world(environment.name, "unnamed", "base")]);
     const lines = section(baseDocumentOf([placed()], [OFF, ON], unnamed));
-    expect(lines.slice(4, 8)).toEqual(["### base → head", "", "Not compared: the base's program file names no {events}, so the base world wrote no execution events.", ""]);
+    expect(lines.slice(4, 8)).toEqual(["### base → head", "", "Not compared: the base's program names no {events}, so the base world wrote no execution events.", ""]);
   });
 });

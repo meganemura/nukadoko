@@ -120,10 +120,10 @@ const REMOVED_CONFIG_KEYS: Readonly<Record<string, string>> = {
   messages:
     "nuka run writes no cucumber-messages stream. Run nuka report --format messages --out <path> after a run.",
   baseURL:
-    "the program under test is described in nukadoko.program.ts. Write url there for a program nukadoko does not start " +
-    "(export default defineProgram({ url: \"http://localhost:3000\" })), or serve for one it starts; the world's URL is the baseURL every page and request resolves against.",
+    "the program under test is the program function of nukadoko.config.ts. Write url there for a program nukadoko does not start " +
+    "(program: () => ({ url: \"http://localhost:3000\" })), or serve for one it starts; the world's URL is the baseURL every page and request resolves against.",
   environments:
-    "write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, " +
+    "write each environment in the program in nukadoko.config.ts, with its policy, envFiles, and version; its baseURL is url there, " +
     "and --env starts that environment's world.",
 };
 
@@ -131,8 +131,8 @@ const REMOVED_CONFIG_KEYS: Readonly<Record<string, string>> = {
 // that moved to another file is not fixed by deleting it alone, and the
 // `fix` line is what a reader acts on.
 const REMOVED_CONFIG_KEY_MOVES: Readonly<Record<string, string>> = {
-  baseURL: "write baseURL as url in nukadoko.program.ts (or serve, for a program nukadoko starts)",
-  environments: "write each environment under environments in nukadoko.program.ts",
+  baseURL: "write baseURL as url in the program in nukadoko.config.ts (or serve, for a program nukadoko starts)",
+  environments: "write each environment under environments in the program in nukadoko.config.ts",
 };
 
 /** The `fix` for a config that sets `removed`. */
@@ -159,7 +159,7 @@ export function isThenable(value: unknown): boolean {
 
 /** `issues` as one line, each unknown key with the known key it differs
  * from only by case. `root` is the schema the issues came from: the
- * config's, or the program file's (src/config/load-program.ts). */
+ * config's, or the program's (src/config/load-program.ts). */
 export function formatIssues(issues: readonly z.core.$ZodIssue[], root: unknown = configSchema): string {
   return issues
     .map((issue) => {

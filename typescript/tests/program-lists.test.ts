@@ -6,8 +6,9 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir, writeUrlProgram } from "./helpers/fixtures.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
-// Responsibility: the program file's `lists` end to end, against
+// Responsibility: the program's `lists` end to end, against
 // tests/fixtures/events-project, whose app/list.mjs prints the program's
 // routes, flags, and tables after it has asked the running program: each command
 // runs once per served world with an events file, after the program
@@ -15,19 +16,17 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, r
 // counts each list's entries. A command that fails or prints what is not
 // a list fails no world and no scenario: the record says why the list was
 // not read, and a warning names it. A world at a URL, a world with no
-// events file, and a program file with no `lists` read none.
+// events file, and a program with no `lists` read none.
 
 const FEATURE = ["Feature: A room", "", "  Scenario: a room is read", '    When the client gets "/rooms/7"', ""].join("\n");
 
 function program(env: string, lists = 'lists: { routes: "node app/list.mjs routes {url}", flags: ["node", "app/list.mjs", "flags", "{url}"] },'): string {
   return [
-    'import { defineProgram } from "./nukadoko-shim.js";',
-    "",
-    "export default defineProgram({",
+    "{",
     '  serve: { command: "node app/server.mjs", ready: "/up" },',
     `  env: { PORT: "{port}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs"${env} },`,
     `  ${lists}`,
-    "});",
+    "}",
     "",
   ].join("\n");
 }
@@ -51,7 +50,7 @@ const listFindings = (rootDir: string): Finding[] =>
     .filter((finding) => finding.code === "program-list-unread")
     .map(({ severity, code, message }) => ({ severity, code, message }));
 
-describe("the program file's lists", () => {
+describe("the program's lists", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -64,7 +63,7 @@ describe("the program file's lists", () => {
   });
 
   it("runs each list once the program answers, with the world's placeholders, and counts its entries", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(EVENTS));
+    writeProgram(rootDir, program(EVENTS));
     const { exitCode, stderr } = await run(rootDir);
 
     expect(exitCode).toBe(0);
@@ -80,10 +79,7 @@ describe("the program file's lists", () => {
   });
 
   it("reads the tables list beside the others, each table once, and refuses one that says two things of a table", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      program(EVENTS, 'lists: { tables: "node app/list.mjs tables {url}", routes: "node app/list.mjs routes {url}" },'),
-    );
+    writeProgram(rootDir, program(EVENTS, 'lists: { tables: "node app/list.mjs tables {url}", routes: "node app/list.mjs routes {url}" },'));
     expect((await run(rootDir)).exitCode).toBe(0);
     const [world] = latestRunJson(rootDir).worlds;
     // The kinds are read in one order, whatever order the file names them in.
@@ -94,7 +90,7 @@ describe("the program file's lists", () => {
       path.join(rootDir, "app", "two-holdings.mjs"),
       'process.stdout.write(`${JSON.stringify({ table: "events", holds: "bookkeeping" })}\n${JSON.stringify({ table: "rooms" })}\n${JSON.stringify({ table: "events" })}\n`);\n',
     );
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(EVENTS, 'lists: { tables: "node app/two-holdings.mjs" },'));
+    writeProgram(rootDir, program(EVENTS, 'lists: { tables: "node app/two-holdings.mjs" },'));
     expect((await run(rootDir)).exitCode).toBe(0);
     const [refused] = latestRunJson(rootDir).worlds;
     expect(refused.lists).toEqual({
@@ -107,7 +103,7 @@ describe("the program file's lists", () => {
   });
 
   it("reads no list of a command that fails, and runs the scenarios all the same", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(`${EVENTS}, LIST_MODE: "fail"`));
+    writeProgram(rootDir, program(`${EVENTS}, LIST_MODE: "fail"`));
     const { exitCode, stderr } = await run(rootDir);
 
     // A list is evidence beside the verdicts: a list that was not read
@@ -133,7 +129,7 @@ describe("the program file's lists", () => {
   });
 
   it("reads no list that holds one line it cannot read, and names the line", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(`${EVENTS}, LIST_MODE: "malformed"`, 'lists: { routes: "node app/list.mjs routes {url}" },'));
+    writeProgram(rootDir, program(`${EVENTS}, LIST_MODE: "malformed"`, 'lists: { routes: "node app/list.mjs routes {url}" },'));
     const { exitCode } = await run(rootDir);
 
     expect(exitCode).toBe(0);
@@ -147,8 +143,8 @@ describe("the program file's lists", () => {
     expect(listFindings(rootDir)).toHaveLength(1);
   });
 
-  it("reads no list in a world with no events file, nor in a program file with no lists", async () => {
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(""));
+  it("reads no list in a world with no events file, nor in a program with no lists", async () => {
+    writeProgram(rootDir, program(""));
     expect((await run(rootDir)).exitCode).toBe(0);
     let [world] = latestRunJson(rootDir).worlds;
     expect(world).not.toHaveProperty("lists");
@@ -156,7 +152,7 @@ describe("the program file's lists", () => {
     expect(world.commands.map((command: { phase: string }) => command.phase)).toEqual(["serve"]);
     expect(world.timings).not.toHaveProperty("lists_ms");
 
-    await writeFile(path.join(rootDir, "nukadoko.program.ts"), program(EVENTS, ""));
+    writeProgram(rootDir, program(EVENTS, ""));
     expect((await run(rootDir)).exitCode).toBe(0);
     [world] = latestRunJson(rootDir).worlds;
     expect(world).not.toHaveProperty("lists");

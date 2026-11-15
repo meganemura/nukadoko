@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runCli } from "../../src/cli/run-cli.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim } from "./fixtures.js";
+import { writeProgram } from "./fixtures.js";
 
 // Responsibility: the small git project the `nuka run --base` tests build
 // a history in: a program module (`lib/cart.mjs`) outside the features
@@ -50,7 +51,8 @@ export const cartModule = (body = "return count * 2;"): string => `export functi
 
 export interface BaseProject {
   readonly root: string;
-  /** Writes each file, relative to the project root. */
+  /** Writes each file, relative to the project root. The key `program`
+   * is the program object instead, put into the config after the files. */
   write(files: Readonly<Record<string, string>>): void;
   git(...args: string[]): string;
   /** Commits everything under `message`. */
@@ -67,9 +69,11 @@ export async function makeBaseProject(options: { readonly dir?: string } = {}): 
   const root = options.dir === undefined ? top : path.join(top, options.dir);
   const write = (files: Readonly<Record<string, string>>): void => {
     for (const [file, text] of Object.entries(files)) {
+      if (file === "program") continue;
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), text);
     }
+    if (files.program !== undefined) writeProgram(root, files.program);
   };
   write({
     "package.json": `${JSON.stringify({ name: "cart", private: true, type: "module" })}\n`,

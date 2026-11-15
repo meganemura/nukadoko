@@ -9,6 +9,9 @@ import { defineConfig, measureMcp } from "./nukadoko-shim.js";
 // that calls the world. The first two are a hand-written client; the
 // `sdk` pair is the official SDK client with its own transports, so the
 // wrapper is proved on what a project passes it.
+// The world serves MCP over HTTP and writes execution events to the file
+// {events} names. tests/mcp-measured.test.ts reads the step records.
+
 export default defineConfig({
   fixtures: {
     notesOverHttp: async ({ baseURL }, use) => {
@@ -37,4 +40,8 @@ export default defineConfig({
       await client.close();
     },
   },
+  program: () => ({
+    serve: { command: "node app/server.mjs", ready: "/up" },
+    env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+  }),
 });

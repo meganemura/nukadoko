@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir, writeUrlProgram } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
+import { writeProgram } from "./helpers/fixtures.js";
 
 // Responsibility: the `nuka check` findings for a claim step's `events`,
 // against tests/fixtures/events-project. Each one names a claim the run
@@ -144,11 +145,8 @@ describe("nuka check: a world that reads no execution events", () => {
     await removeTempDir(rootDir);
   });
 
-  it("is an error for a served world whose program file names no {events}", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ serve: { command: "node app/server.mjs", ready: "/up" }, env: { PORT: "{port}" } });\n',
-    );
+  it("is an error for a served world whose program names no {events}", async () => {
+    writeProgram(rootDir, '{ serve: { command: "node app/server.mjs", ready: "/up" }, env: { PORT: "{port}" } }');
     const { exitCode, errors, warnings } = await check(rootDir);
     expect(exitCode).toBe(1);
     expect(eventsFindings(warnings)).toEqual([]);
@@ -156,9 +154,9 @@ describe("nuka check: a world that reads no execution events", () => {
       {
         code: "events-inlet-missing",
         message:
-          'world default: step "nothing-was-written" counts execution events, and the program file names no {events}, so the program has no file to write them to: each claim on a count is unjudged (inlet-unnamed)',
-        file: "nukadoko.program.ts",
-        fix: 'Name {events} in env of nukadoko.program.ts for world default, such as env: { EXECUTION_EVENTS: "{events}" }, and have the program append its execution events to that file (docs/execution-events.md).',
+          'world default: step "nothing-was-written" counts execution events, and the program names no {events}, so the program has no file to write them to: each claim on a count is unjudged (inlet-unnamed)',
+        file: "nukadoko.config.ts",
+        fix: 'Name {events} in env of nukadoko.config.ts for world default, such as env: { EXECUTION_EVENTS: "{events}" }, and have the program append its execution events to that file (docs/execution-events.md).',
       },
     ]);
   });
@@ -173,40 +171,29 @@ describe("nuka check: a world that reads no execution events", () => {
         code: "events-unread",
         message:
           'world default: step "nothing-was-written" counts execution events, and the program runs at a url, which nukadoko does not start, so nukadoko reads no execution events there: each claim on a count is unjudged (world-unread)',
-        file: "nukadoko.program.ts",
-        fix: "Run these scenarios in a world nukadoko serves: give world default serve in nukadoko.program.ts, with {events} in env, or select one that has it with --env.",
+        file: "nukadoko.config.ts",
+        fix: "Run these scenarios in a world nukadoko serves: give world default serve in nukadoko.config.ts, with {events} in env, or select one that has it with --env.",
       },
     ]);
   });
 
   it("names the worlds the --env flags select, and only those", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.program.ts"),
-      [
-        'import { defineProgram } from "./nukadoko-shim.js";',
-        "export default defineProgram({",
-        '  serve: { command: "node app/server.mjs", ready: "/up" },',
-        '  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs" },',
-        '  environments: { staging: { url: "http://127.0.0.1:9" } },',
-        "});",
-        "",
-      ].join("\n"),
-    );
+    writeProgram(rootDir, ["{", '  serve: { command: "node app/server.mjs", ready: "/up" },', '  env: { PORT: "{port}", EXECUTION_EVENTS: "{events}", ADMIN_TOKEN: "{token}", JOBS_DIR: "{dir}/jobs" },', '  environments: { staging: { url: "http://127.0.0.1:9" } },', "}"].join("\n"));
     expect(eventsFindings((await check(rootDir)).warnings)).toEqual([]);
     const staging = await check(rootDir, ["--env", "staging"]);
     expect(eventsFindings(staging.warnings).map((finding) => finding.message.split(":")[0])).toEqual(["world staging"]);
   });
 
-  it("is a warning for a project with no program file", async () => {
-    await rm(path.join(rootDir, "nukadoko.program.ts"));
+  it("is a warning for a project whose config has no program", async () => {
+    await writeFile(path.join(rootDir, "nukadoko.config.ts"), 'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({});\n');
     const { errors, warnings } = await check(rootDir);
     expect(eventsFindings(errors)).toEqual([]);
     expect(eventsFindings(warnings)).toEqual([
       {
         code: "events-unread",
         message:
-          'step "nothing-was-written" counts execution events, and the project has no nukadoko.program.ts, so no world starts and nukadoko reads no execution events: each claim on a count is unjudged (world-unread)',
-        fix: 'Write nukadoko.program.ts with serve, the command that starts the program, and {events} in env, such as env: { EXECUTION_EVENTS: "{events}" }.',
+          'step "nothing-was-written" counts execution events, and nukadoko.config.ts has no program, so no world starts and nukadoko reads no execution events: each claim on a count is unjudged (world-unread)',
+        fix: 'Add program to nukadoko.config.ts with serve, the command that starts the program, and {events} in env, such as program: () => ({ serve: { command, ready }, env: { EXECUTION_EVENTS: "{events}" } }).',
       },
     ]);
   });

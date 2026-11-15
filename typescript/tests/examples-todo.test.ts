@@ -14,7 +14,7 @@ import {
 
 // Responsibility: anti-rot proof for examples/todo/README.md's two central,
 // checkable claims: the example project, with the app its committed
-// nukadoko.program.ts starts, runs green as v1 and fails under the v2
+// config's program starts, runs green as v1 and fails under the v2
 // environment, so the walkthrough's story ("the feature runs green" / "the
 // field rename breaks it") cannot silently stop being true. Only that
 // mechanical claim is asserted here; the repair loop itself (README.md,
@@ -40,7 +40,7 @@ describe("examples/todo", () => {
     await removeTempDir(rootDir);
   });
 
-  it("runs features/todo.feature green against the v1 app the program file starts", async () => {
+  it("runs features/todo.feature green against the v1 app the program starts", async () => {
     rootDir = await copyExampleToTempDir("todo");
     await ensureNukadokoShim();
 

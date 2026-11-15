@@ -400,7 +400,7 @@ describe("a world nukadoko does not serve", () => {
       dir: path.join(runDir, "worlds", "pr-12"),
       tracePrefix: expect.stringMatching(/^[0-9a-f]{8}$/),
       events: null,
-      // A program file with no tables list marks no table.
+      // A program with no tables list marks no table.
       tables: { marked: {} },
     });
     expect(progress.text()).toBe("");

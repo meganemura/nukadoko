@@ -123,7 +123,7 @@ export type TraceGap =
  * that keeps the reading from counting on all of the world's lines. */
 export type EventsGap =
   | TraceGap
-  /** The program file names no `{events}`, so the program has no file
+  /** The program names no `{events}`, so the program has no file
    * to write events to. */
   | { readonly gap: "inlet-unnamed" }
   /** nukadoko did not start the world's program (a world at a URL, or

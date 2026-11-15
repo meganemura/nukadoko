@@ -4,7 +4,7 @@
 
 export class ConfigError extends Error {
   /** The refusal code a CLI refusal carries for this error. */
-  readonly code: "config-invalid" | "config-key-removed";
+  readonly code: "config-invalid" | "config-key-removed" | "program-file-moved";
   readonly configPath: string;
   /** The edit that gets past this error, in words, naming the file. */
   readonly fix?: string;
@@ -19,7 +19,7 @@ export class ConfigError extends Error {
     message: string,
     configPath: string,
     hint: { readonly fix?: string; readonly do?: string },
-    options?: ErrorOptions & { readonly code?: "config-key-removed" },
+    options?: ErrorOptions & { readonly code?: "config-key-removed" | "program-file-moved" },
   ) {
     super(message, options);
     this.name = "ConfigError";

@@ -6,7 +6,7 @@ import { loadProgram } from "../src/config/load-program.js";
 import { defaultEnvironmentNames } from "../src/environment/resolve-environment.js";
 import { createCaptureSink, removeTempDir, repoRoot, testsDir } from "./helpers/fixtures.js";
 
-// Responsibility: every whole `nukadoko.program.ts` the reader-facing docs
+// Responsibility: every whole config with a program the reader-facing docs
 // show loads, and `nuka check` passes it for each world it can start:
 // each environment, and the default world when a run without `--env`
 // starts it. A default world no run starts unless `--env default` names it
@@ -18,8 +18,9 @@ import { createCaptureSink, removeTempDir, repoRoot, testsDir } from "./helpers/
 // `url` and kept the top level's `PORT: "{port}"`, which a url world had no
 // value for.
 //
-// A block is a whole program file when it holds `export default
-// defineProgram(`. A fragment (an `environments` entry alone) is not read.
+// A block is a whole config file with a program when it holds `export
+// default defineConfig(` and `program: () =>`. A fragment (an
+// `environments` entry alone) is not read.
 // The block is written as it is, with `"nukadoko"` pointed at this
 // checkout's `src/`; a function it calls but does not define (`seedAdmin`)
 // is not called, since nothing here starts a world.
@@ -52,7 +53,7 @@ function programBlocks(file: string): ProgramBlock[] {
     const body: string[] = [];
     for (index++; index < lines.length && lines[index]!.trim() !== "```"; index++) body.push(lines[index]!.slice(indent));
     const text = body.join("\n");
-    if (text.includes("export default defineProgram(")) blocks.push({ file, line: start + 1, body: text });
+    if (text.includes("export default defineConfig(") && text.includes("program: () =>")) blocks.push({ file, line: start + 1, body: text });
   }
   return blocks;
 }
@@ -70,9 +71,8 @@ function projectFor(block: ProgramBlock): string {
   made.push(rootDir);
   // tests/.tmp-fixtures/<dir>/ is three levels below the repository root.
   writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), 'export * from "../../../src/index.js";\n');
-  writeFileSync(path.join(rootDir, "nukadoko.config.ts"), 'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({});\n');
   // One step and one feature that binds it, so the check has a project to
-  // read and every finding left is the program file's.
+  // read and every finding left is the program's.
   mkdirSync(path.join(rootDir, "features", "steps"), { recursive: true });
   writeFileSync(
     path.join(rootDir, "features", "steps", "noop.ts"),
@@ -84,12 +84,11 @@ function projectFor(block: ProgramBlock): string {
     ].join("\n"),
   );
   writeFileSync(path.join(rootDir, "features", "noop.feature"), "Feature: noop\n\n  Scenario: noop\n    When nothing happens\n");
-  const imported = block.body.includes('from "nukadoko"') ? block.body : `import { defineProgram } from "nukadoko";\n${block.body}`;
-  writeFileSync(path.join(rootDir, "nukadoko.program.ts"), `${imported.replaceAll('from "nukadoko"', 'from "./nukadoko-shim.js"')}\n`);
+  writeFileSync(path.join(rootDir, "nukadoko.config.ts"), `${block.body.replaceAll('from "nukadoko"', 'from "./nukadoko-shim.js"')}\n`);
   return rootDir;
 }
 
-describe("the program files the docs show", () => {
+describe("the programs the docs show", () => {
   const blocks = DOCS.flatMap(programBlocks);
 
   it("are found in the spec and the guide", () => {

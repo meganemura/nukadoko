@@ -14,6 +14,7 @@ import {
   removeTempDir,
   repoRoot,
 } from "./helpers/fixtures.js";
+import { withProgram } from "./helpers/fixtures.js";
 
 // Responsibility: what a claim step records and refuses, end to end, through
 // `nuka check` and `nuka run` on a project written for each case
@@ -2135,7 +2136,7 @@ describe("measured names an HTTP status", () => {
     try {
       const port = (server.address() as AddressInfo).port;
       const rootDir = await project({
-        "nukadoko.program.ts": `import { defineProgram } from "nukadoko";\nexport default defineProgram({ url: "http://127.0.0.1:${port}" });\n`,
+        "nukadoko.config.ts": withProgram(CONFIG, `{ url: "http://127.0.0.1:${port}" }`),
         "features/steps/an-item-is-created.ts": `import { defineStep, z } from "nukadoko";
 export default defineStep({
   description: "POST /items",
@@ -2529,7 +2530,7 @@ export default defineStep({
 });
 `;
       const rootDir = await project({
-        "nukadoko.program.ts": `import { defineProgram } from "nukadoko";\nexport default defineProgram({ url: "http://127.0.0.1:${port}" });\n`,
+        "nukadoko.config.ts": withProgram(CONFIG, `{ url: "http://127.0.0.1:${port}" }`),
         "features/steps/user-is-fetched.ts": `import { defineStep, z } from "nukadoko";
 export default defineStep({
   description: "GET /users/<id>",

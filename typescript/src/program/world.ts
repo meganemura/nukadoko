@@ -97,7 +97,7 @@ import type { WorldView } from "./world-view.js";
 // trace id of the world, which is how the run tells a program that does
 // not tag its lines from one whose lines all came late.
 //
-// A served world whose program file names `{events}` gets the file the
+// A served world whose program names `{events}` gets the file the
 // program appends its execution events to (src/program/events-inlet.ts)
 // before its first command runs. When the world stops, after the program
 // has, one pass over that file writes the world's redacted copy beside
@@ -203,17 +203,17 @@ export interface WorldStarterOptions {
   readonly progress: WritableSink;
   /** Which tree this starter builds: `head` when absent. */
   readonly tree?: RunWorldName;
-  /** `true` for a base tree whose ref has no program file, built and
+  /** `true` for a base tree whose ref has no program, built and
    * started from head's. */
   readonly programFromHead?: boolean;
   /** The URL head's world of each environment reached, by name: a base
    * world whose `url` function answers with it is `unavailable` (module
    * header). */
   readonly headUrls?: ReadonlyMap<string, string>;
-  /** `true` when head's served worlds read the program file's `lists`
+  /** `true` when head's served worlds read the program's `lists`
    * (module header). */
   readonly lists?: true;
-  /** `false` when no world reads the program file's tables list: a
+  /** `false` when no world reads the program's tables list: a
    * `nuka do` step that counts no execution events reads nothing a table's
    * holding changes. */
   readonly tables?: false;

@@ -17,10 +17,10 @@ import type { CheckIssue } from "./types.js";
 // way. A count of an earlier step's execution events is read at run time,
 // and the run leaves every claim on it unjudged when nothing can be read:
 // no earlier line ran a step `of` names (`producer-not-run`), two of its
-// candidates ran so none can be chosen, the world's program file names no
+// candidates ran so none can be chosen, the world's program names no
 // `{events}` (`inlet-unnamed`), or nukadoko does not serve the world
 // (`world-unread`). Each of those is known from the feature file, the
-// step contracts, and the program file, so the check names it before a
+// step contracts, and the program, so the check names it before a
 // world starts. What only the lines can say (a kind the program never
 // reports, a job that never performs) stays the run's.
 //
@@ -35,10 +35,10 @@ import type { CheckIssue } from "./types.js";
 //
 // The world findings are judged for the worlds a `nuka run` with the same
 // `--env` flags would start, once per world, naming each bound step that
-// declares `events`: the fix is the program file's, so one line per
-// world says it once. A served world whose program file names no
+// declares `events`: the fix is the program's, so one line per
+// world says it once. A served world whose program names no
 // `{events}` is an error, since the fix is in the project's own file. A
-// world nukadoko does not serve (a url, or no program file) is a warning:
+// world nukadoko does not serve (a url, or no program) is a warning:
 // such a world is often one the project does not run, such as a shared
 // staging server, the other scenarios still have something to say there,
 // and the run names each claim it cannot judge with `world-unread`.
@@ -208,7 +208,7 @@ function eventsStepsOf(
 
 /** `events-inlet-missing` (errors) and `events-unread` (warnings) for
  * the worlds a run with `envs` starts, when a bound step declares
- * `events`: a world nukadoko serves whose program file names no
+ * `events`: a world nukadoko serves whose program names no
  * `{events}`, and a world it does not serve, or a project with no program
  * file to start one. Pure. */
 export function findEventsWorldGaps(
@@ -226,8 +226,8 @@ export function findEventsWorldGaps(
   if (program === null) {
     warnings.push({
       code: "events-unread",
-      message: `${counting}, and the project has no ${programFileName}, so no world starts and nukadoko reads no execution events: each claim on a count is unjudged (world-unread)`,
-      fix: `Write ${programFileName} with serve, the command that starts the program, and {events} in env, such as env: { EXECUTION_EVENTS: "{events}" }.`,
+      message: `${counting}, and ${programFileName} has no program, so no world starts and nukadoko reads no execution events: each claim on a count is unjudged (world-unread)`,
+      fix: `Add program to ${programFileName} with serve, the command that starts the program, and {events} in env, such as program: () => ({ serve: { command, ready }, env: { EXECUTION_EVENTS: "{events}" } }).`,
     });
     return { errors, warnings };
   }
@@ -237,7 +237,7 @@ export function findEventsWorldGaps(
       if (namesPlaceholder(world.recipe, "events")) continue;
       errors.push({
         code: "events-inlet-missing",
-        message: `world ${world.name}: ${counting}, and the program file names no {events}, so the program has no file to write them to: each claim on a count is unjudged (inlet-unnamed)`,
+        message: `world ${world.name}: ${counting}, and the program names no {events}, so the program has no file to write them to: each claim on a count is unjudged (inlet-unnamed)`,
         file: program.fileName,
         fix: `Name {events} in env of ${program.fileName} for world ${world.name}, such as env: { EXECUTION_EVENTS: "{events}" }, and have the program append its execution events to that file (docs/execution-events.md).`,
       });
