@@ -23,10 +23,6 @@ module Nukadoko
 
       FEATURES: ::String
 
-      CONFIG: ::String
-
-      PROGRAM: ::String
-
       STATE: ::String
 
       attr_reader ref: String

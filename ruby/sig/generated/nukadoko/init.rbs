@@ -17,8 +17,6 @@
 module Nukadoko
   module Engine
     class Init
-      CONFIG: ::String
-
       STEPS: untyped
 
       # `.env` files are ignored since a committed one is configuration, not

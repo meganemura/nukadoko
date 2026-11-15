@@ -28,8 +28,6 @@ module Nukadoko
     class Base
       NO_HOOKS = ["-c", "core.hooksPath=/dev/null"].freeze
       FEATURES = "features"
-      CONFIG = "nukadoko.config.rb"
-      PROGRAM = "nukadoko.program.rb"
       STATE = ".nukadoko"
 
       attr_reader :ref #: String

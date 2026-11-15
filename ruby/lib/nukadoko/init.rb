@@ -20,7 +20,6 @@ require "fileutils"
 module Nukadoko
   module Engine
     class Init
-      CONFIG = "nukadoko.config.rb"
       STEPS = File.join("features", "steps")
       # `.env` files are ignored since a committed one is configuration, not
       # a secret source; `!.env.example` must follow `.env.*` to re-include it.

@@ -9,10 +9,6 @@
 module Nukadoko
   module Engine
     module EnvCheck
-      CONFIG: ::String
-
-      PROGRAM: ::String
-
       # `KEY` counts only as a whole underscore-delimited word, so MONKEY,
       # KEYWORD, and APIKEY are not guessed to be secrets.
       SECRET_LOOKING: ::Regexp

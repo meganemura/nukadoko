@@ -342,7 +342,7 @@ module Nukadoko
         fixtures = Nukadoko.project_fixtures
         return if fixtures.empty?
 
-        config = "nukadoko.config.rb"
+        config = CONFIG
         state = Hash.new(:white)
         visit = lambda do |name, stack|
           state[name] = :gray

@@ -10,8 +10,6 @@
 module Nukadoko
   module Engine
     module EnvCheck
-      CONFIG = "nukadoko.config.rb"
-      PROGRAM = "nukadoko.program.rb"
       # `KEY` counts only as a whole underscore-delimited word, so MONKEY,
       # KEYWORD, and APIKEY are not guessed to be secrets.
       SECRET_LOOKING = /SECRET|PASSWORD|TOKEN|CREDENTIAL|(?:^|_)KEY(?:_|$)/i

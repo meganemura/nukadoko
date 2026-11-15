@@ -98,7 +98,7 @@ module Nukadoko
       return skill if @command == "skill"
       return init if @command == "init"
 
-      %w[nukadoko.config.rb nukadoko.program.rb].each do |name|
+      [Engine::CONFIG, Engine::PROGRAM].each do |name|
         file = File.join(@project, name)
         load file if File.exist?(file)
       end
