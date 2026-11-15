@@ -1,11 +1,22 @@
 # Generated from lib/nukadoko.rb with RBS::Inline
 
 module Nukadoko
+  # What a program file of a release before the program moved into the
+  # config calls. Only a `--base` ref still holds one, and the run reads it
+  # in a process of its own (Engine::ProjectProgram.elsewhere).
   # : (**untyped) -> Hash[Symbol, untyped]
   def self.program: (**untyped) -> Hash[Symbol, untyped]
 
+  # : () -> Hash[Symbol, untyped]?
+  def self.legacy_program: () -> Hash[Symbol, untyped]?
+
+  # The program under test of the project whose config load_project read.
   # : () -> Hash[Symbol, untyped]
   def self.program_options: () -> Hash[Symbol, untyped]
+
+  # Loads the config of the project at `root`, and reads its program.
+  # : (String) -> void
+  def self.load_project: (String) -> void
 
   # : (**untyped) -> Hash[Symbol, untyped]
   def self.config: (**untyped) -> Hash[Symbol, untyped]

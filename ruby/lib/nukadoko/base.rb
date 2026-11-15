@@ -13,14 +13,19 @@ require "rbconfig"
 #
 # - base: the ref's code with head's features/ and config, so a new or
 #   changed criterion runs where its behaviour should be absent. The ref's
-#   program file starts it, or head's when the ref has none.
+#   program starts it, or head's when the ref has none: the program goes
+#   with the code, so the run writes the ref's config beside head's as
+#   nukadoko.tree-program.rb (or the ref's program file from before the
+#   program moved into the config as nukadoko.tree-legacy-program.rb).
 # - old: head's working tree with the ref's features/ and config, so an
 #   unchanged criterion over a changed mapping runs under the steps it was
-#   approved with.
+#   approved with. Head's config goes beside it as nukadoko.tree-program.rb,
+#   so head's program starts it.
 #
 # The mapping is every file under features/ but a .feature file, the config
-# file's bytes, and the program file's conditions and defaultEnvironments,
-# which decide where a criterion is required. Every git command runs with
+# file's bytes with its program lambda cut out, and the program's
+# conditions and defaultEnvironments, which decide where a criterion is
+# required. Every git command runs with
 # hooks off, since a checkout's hook is the project's code and not the
 # run's. Both trees are removed when the run ends.
 module Nukadoko
@@ -131,7 +136,9 @@ module Nukadoko
 
         head_files = working_tree_files
         ref_files = Base.git(@base_top, "ls-files", "-z", strip: false).first.split("\0").reject(&:empty?)
-        ref_program = File.exist?(File.join(base_project, PROGRAM)) ? read_program(base_project) : nil
+        ref_program = read_program(base_project)
+        ref_config = File.join(base_project, CONFIG)
+        ref_config_text = File.exist?(ref_config) ? File.read(ref_config) : nil
         @mapping = compare_mapping(head_files, ref_files, base_project, head_program, ref_program)
 
         wanted = selected.map { @changes[_1] }
@@ -139,9 +146,9 @@ module Nukadoko
         old_needed = wanted.any? { _1&.dig(:change) == "unchanged" && (@mapping[:changed] || _1[:retagged] || _1[:renamed_from]) }
         write_old_tree(head_files, ref_files) if old_needed
         if base_needed
-          overlay_base_tree(head_files, ref_files)
+          overlay_base_tree(head_files, ref_files, ref_program && ref_config_text)
           @base_root = base_project
-          @program_from_head = !File.exist?(File.join(@base_top, in_repo(PROGRAM))) && File.exist?(File.join(@project, PROGRAM))
+          @program_from_head = ref_program.nil? && !(head_program || {}).empty?
         else
           @worktree = false
           Base.git(@top, "worktree", "remove", "--force", "--force", @base_top)
@@ -151,7 +158,7 @@ module Nukadoko
       end
 
       # The environments the old world runs in, with the conditions the ref's
-      # program file gives each; nil when the ref has no program file, so
+      # program gives each; nil when the ref has no program, so
       # head's environments are the old world's too.
       #: (Hash[Symbol, untyped]?, Array[String]) -> Array[Environment]?
       def old_environments_of(program, envs)
@@ -202,18 +209,21 @@ module Nukadoko
              .to_h { [_1.delete_prefix("#{dir}/"), hash_of(File.join(top, _1))] }
       end
 
-      # The ref's program file read in a process of its own, since loading
-      # it here would replace head's: its conditions and defaultEnvironments.
-      #: (String) -> Hash[Symbol, untyped]
+      # The ref's program: its program file from before the program moved
+      # into the config, or its config's program, read in a process of its
+      # own (ProjectProgram.elsewhere). nil when the ref has neither.
+      #: (String) -> Hash[Symbol, untyped]?
       def read_program(root)
-        script = 'require "nukadoko"; load ARGV[0]; o = Nukadoko.program_options; ' \
-                 'puts JSON.generate(environments: (o[:environments] || {}).to_h { |k, v| [k, { conditions: v[:conditions] }] }, defaultEnvironments: o[:defaultEnvironments])'
-        out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("..", __dir__.to_s), "-rjson", "-e", script, File.join(root, PROGRAM), chdir: root)
-        return { problem: err.lines.first.to_s.strip } unless status.success?
+        legacy = File.join(root, LEGACY_PROGRAM)
+        config = File.join(root, CONFIG)
+        program = if File.exist?(legacy) then ProjectProgram.elsewhere(legacy, legacy: true) || {}
+                  elsif File.exist?(config) then ProjectProgram.elsewhere(config, legacy: false)
+                  end
+        return nil if program.nil?
 
-        program = JSON.parse(out, symbolize_names: true)
-        program[:environments] = program[:environments].transform_keys(&:to_s)
-        program
+        { environments: (program[:environments] || {}).transform_keys(&:to_s), defaultEnvironments: program[:defaultEnvironments] }
+      rescue Refusal => e
+        { problem: e.message }
       end
 
       #: (Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
@@ -227,7 +237,7 @@ module Nukadoko
         head = mapping_files(head_files, @top)
         ref = mapping_files(ref_files, @base_top)
         files = (head.keys | ref.keys).select { head[_1] != ref[_1] }.sort
-        config_hash = ->(root) { File.exist?(File.join(root, CONFIG)) ? hash_of(File.join(root, CONFIG)) : nil }
+        config_hash = ->(root) { File.exist?(File.join(root, CONFIG)) ? Digest::SHA256.hexdigest(ProjectProgram.mapping_text(File.read(File.join(root, CONFIG)))) : nil }
         config = config_hash.(@project) != config_hash.(base_project)
         after = program_mapping(head_program && { environments: (head_program[:environments] || {}).transform_keys(&:to_s), defaultEnvironments: head_program[:defaultEnvironments] })
         if ref_program&.dig(:problem)
@@ -250,22 +260,34 @@ module Nukadoko
         File.symlink?(from) ? File.symlink(File.readlink(from), to) : FileUtils.cp(from, to)
       end
 
-      # The ref's checkout loses the ref's mapping and gains head's; the
-      # ref's program file stays, or head's comes in when the ref has none.
-      #: (Array[String], Array[String]) -> void
-      def overlay_base_tree(head_files, ref_files)
+      # The ref's checkout loses the ref's mapping and gains head's. The
+      # ref's program stays: its program file under the tree's own name, or
+      # its config `ref_config` beside head's. When the ref has no program,
+      # head's config brings head's.
+      #: (Array[String], Array[String], String?) -> void
+      def overlay_base_tree(head_files, ref_files, ref_config)
         ref_files.select { mapping?(_1) }.each { FileUtils.rm_f(File.join(@base_top, _1)) }
         head_files.select { mapping?(_1) }.each { copy(File.join(@top, _1), File.join(@base_top, _1)) }
-        program = in_repo(PROGRAM)
-        copy(File.join(@top, program), File.join(@base_top, program)) if !ref_files.include?(program) && head_files.include?(program)
+        legacy = File.join(@base_top, in_repo(LEGACY_PROGRAM))
+        if File.exist?(legacy)
+          FileUtils.mv(legacy, File.join(@base_top, in_repo(TREE_LEGACY_PROGRAM)))
+        elsif ref_config
+          File.write(File.join(@base_top, in_repo(TREE_PROGRAM)), ref_config)
+        end
       end
 
       # Head's working tree with the ref's mapping in place of its own,
-      # written before the base checkout is overlaid.
+      # written before the base checkout is overlaid. Head's program stays:
+      # head's config goes beside the ref's, or a file that names no
+      # program when head has no config.
       #: (Array[String], Array[String]) -> void
       def write_old_tree(head_files, ref_files)
         head_files.reject { mapping?(_1) }.each { copy(File.join(@top, _1), File.join(@old_top, _1)) }
         ref_files.select { mapping?(_1) }.each { copy(File.join(@base_top, _1), File.join(@old_top, _1)) }
+        head_config = File.join(@project, CONFIG)
+        tree_program = File.join(@old_top, in_repo(TREE_PROGRAM))
+        FileUtils.mkdir_p(File.dirname(tree_program))
+        File.write(tree_program, File.exist?(head_config) ? File.read(head_config) : "# Head has no config, so no program.\n")
       end
     end
   end

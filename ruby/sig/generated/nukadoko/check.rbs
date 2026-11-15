@@ -51,7 +51,7 @@ module Nukadoko
       # `environments` is the selection a run without --env starts, for
       # condition-unmet; nil when --env named the selection. `problems` are
       # what the feature loader found that runs nothing.
-      # `config` holds what was found in the config and the program file before
+      # `config` holds what was found in the config and its program before
       # any step loaded, such as an env file that is missing.
       # : (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
       def initialize: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void

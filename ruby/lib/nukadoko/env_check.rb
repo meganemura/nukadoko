@@ -40,7 +40,7 @@ module Nukadoko
         environments.each do |name, paths|
           paths.reject(&exists).each do |path|
             found << warning("environment-env-file-missing", path, %(environments.#{name}.envFiles names "#{path}", which does not exist),
-                             %(Create #{path}, or remove "#{path}" from environments.#{name}.envFiles in #{PROGRAM}.))
+                             %(Create #{path}, or remove "#{path}" from environments.#{name}.envFiles in #{CONFIG}.))
           end
         end
         defined = EnvFile.load(project, all)

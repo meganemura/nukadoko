@@ -6,6 +6,14 @@ module Nukadoko
   module Engine
     CONFIG: ::String
 
-    PROGRAM: ::String
+    # The program file of releases before the program moved into the
+    # config. A project may no longer hold one; a `--base` ref may.
+    LEGACY_PROGRAM: ::String
+
+    # What a `--base` run writes into a tree for the program it runs:
+    # another config whose program the tree runs, or a ref's legacy file.
+    TREE_PROGRAM: ::String
+
+    TREE_LEGACY_PROGRAM: ::String
   end
 end

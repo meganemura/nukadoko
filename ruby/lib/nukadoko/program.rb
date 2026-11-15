@@ -32,18 +32,18 @@ module Nukadoko
         declared = self.declared
         (selected.any? ? selected : default_names).map do |name|
           unless name == "default" || declared.key?(name)
-            add = "add environments.#{name} to nukadoko.program.rb"
-            fix = if declared.empty? then "Leave out --env or pass --env default (nukadoko.program.rb defines no other environment), or #{add}."
+            add = "add environments.#{name} to the program in nukadoko.config.rb"
+            fix = if declared.empty? then "Leave out --env or pass --env default (the program in nukadoko.config.rb defines no other environment), or #{add}."
                   else "Pass --env with a name it accepts (#{["default", *declared.keys].uniq.sort.join(", ")}), or #{add}."
                   end
-            raise Refusal.new("unknown-environment", %(Unknown environment "#{name}": not defined in nukadoko.program.rb's "environments"), fix: fix)
+            raise Refusal.new("unknown-environment", %(Unknown environment "#{name}": not defined in the environments of the program in nukadoko.config.rb), fix: fix)
           end
 
           environment(name)
         end
       end
 
-      # Whether a program file gave any options, so each step names its world.
+      # Whether the config gave a program, so each step names its world.
       #: () -> bool
       def file? = !@options.empty?
 
@@ -71,7 +71,7 @@ module Nukadoko
       # Why a run without --env starts the environments it starts.
       #: () -> String
       def chosen_by
-        if @options[:defaultEnvironments] then "defaultEnvironments in nukadoko.program.rb"
+        if @options[:defaultEnvironments] then "defaultEnvironments in nukadoko.config.rb"
         elsif default_names == ["default"] then "no environment declares conditions"
         else "the environments that declare conditions"
         end

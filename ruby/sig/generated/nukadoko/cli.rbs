@@ -95,7 +95,7 @@ module Nukadoko
 
     # Why --env left out every selected scenario, and the run that meets
     # them: the run without --env when it does, else the first environment
-    # of the program file that meets each, or else one that meets some.
+    # of the program that meets each, or else one that meets some.
     # : (Array[Engine::Scenario], Engine::Program) -> Hash[Symbol, String]
     def left_out_stop: (Array[Engine::Scenario], Engine::Program) -> Hash[Symbol, String]
 

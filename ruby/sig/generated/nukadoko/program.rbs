@@ -33,7 +33,7 @@ module Nukadoko
       # : (?Array[String]) -> Array[Environment]
       def environments: (?Array[String]) -> Array[Environment]
 
-      # Whether a program file gave any options, so each step names its world.
+      # Whether the config gave a program, so each step names its world.
       # : () -> bool
       def file?: () -> bool
 

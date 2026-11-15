@@ -41,6 +41,7 @@ require_relative "nukadoko/claim_rules"
 require_relative "nukadoko/definition"
 require_relative "nukadoko/vocabulary"
 require_relative "nukadoko/program"
+require_relative "nukadoko/project_program"
 require_relative "nukadoko/table"
 require_relative "nukadoko/order"
 require_relative "nukadoko/run_record"
@@ -58,10 +59,26 @@ require_relative "nukadoko/init"
 require_relative "nukadoko/skill"
 
 module Nukadoko
+  # What a program file of a release before the program moved into the
+  # config calls. Only a `--base` ref still holds one, and the run reads it
+  # in a process of its own (Engine::ProjectProgram.elsewhere).
   #: (**untyped) -> Hash[Symbol, untyped]
-  def self.program(**options) = (@program = options)
+  def self.program(**options) = (@legacy_program = options)
+  #: () -> Hash[Symbol, untyped]?
+  def self.legacy_program = @legacy_program
+  # The program under test of the project whose config load_project read.
   #: () -> Hash[Symbol, untyped]
-  def self.program_options = @program || {}
+  def self.program_options = @program_options || {}
+
+  # Loads the config of the project at `root`, and reads its program.
+  #: (String) -> void
+  def self.load_project(root)
+    config = File.join(root, Engine::CONFIG)
+    @legacy_program = nil
+    load config if File.exist?(config)
+    @program_options = Engine::ProjectProgram.read(root)
+  end
+
   #: (**untyped) -> Hash[Symbol, untyped]
   def self.config(**options) = (@config = options)
   #: () -> Hash[Symbol, untyped]

@@ -131,13 +131,13 @@
   },
   "condition-tag-malformed": {
     "severity": "error",
-    "description": "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition. @with:<condition>=true and =false are malformed too: a value written as text is not the boolean the program file declares.",
+    "description": "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition. @with:<condition>=true and =false are malformed too: a value written as text is not the boolean the program declares.",
     "fix": "Rewrite the tag as @with:<condition>, @with:<condition>=<value>, or @without:<condition>; a condition name holds letters, digits, \"_\", \".\", or \"-\", a value holds no whitespace and no \"@\", and a boolean is @with:<condition> or @without:<condition>."
   },
   "condition-unknown": {
     "severity": "error",
-    "description": "A condition tag names a condition that no environment in nukadoko.program.ts declares under conditions, so no environment sets it up.",
-    "fix": "Declare the condition under the conditions of the environments that set it up in nukadoko.program.ts, or remove the tag."
+    "description": "A condition tag names a condition that no environment in the program in nukadoko.config.ts declares under conditions, so no environment sets it up.",
+    "fix": "Declare the condition under the conditions of the environments that set it up in the program in nukadoko.config.ts, or remove the tag."
   },
   "condition-unmet": {
     "severity": "error",
@@ -237,12 +237,12 @@
   "environment-env-file-missing": {
     "severity": "warning",
     "description": "An entry in one environment's own envFiles does not exist on disk.",
-    "fix": "Create the file, or remove it from that environment's envFiles in nukadoko.program.ts."
+    "fix": "Create the file, or remove it from that environment's envFiles in the program in nukadoko.config.ts."
   },
   "events-inlet-missing": {
     "severity": "error",
-    "description": "A step's events counts execution events, and a world the run would serve names no {events} in its program file, so the program has no file to write them to and each claim on the count is unjudged there (inlet-unnamed).",
-    "fix": "Set the variable the program reads to {events} under env in the program file, such as EXECUTION_EVENTS: \"{events}\", and have the program append its execution events to that file."
+    "description": "A step's events counts execution events, and a world the run would serve names no {events} in its program, so the program has no file to write them to and each claim on the count is unjudged there (inlet-unnamed).",
+    "fix": "Set the variable the program reads to {events} under env in the program, such as EXECUTION_EVENTS: \"{events}\", and have the program append its execution events to that file."
   },
   "events-late": {
     "severity": "note",
@@ -261,7 +261,7 @@
   },
   "events-unread": {
     "severity": "warning",
-    "description": "A step's events counts execution events, and a world the run would start is one nukadoko does not serve (a url, or a project with no program file), so it reads no execution events there and each claim on the count is unjudged (world-unread).",
+    "description": "A step's events counts execution events, and a world the run would start is one nukadoko does not serve (a url, or a project whose config has no program), so it reads no execution events there and each claim on the count is unjudged (world-unread).",
     "fix": "Run those scenarios in a world nukadoko serves, with {events} in env, or select one with --env."
   },
   "expects-tag-malformed": {
@@ -271,8 +271,8 @@
   },
   "expects-unread": {
     "severity": "warning",
-    "description": "An @expects:error= tag accepts an unhandled error the program reports in its execution events, and no world the run would start reads them (the program file names no {events}, the world runs at a url, or there is no program file), so the tag can never match.",
-    "fix": "Name {events} in env of nukadoko.program.ts for a world the run starts, such as env: { EXECUTION_EVENTS: \"{events}\" }, and have the program append its execution events there, or remove the tag."
+    "description": "An @expects:error= tag accepts an unhandled error the program reports in its execution events, and no world the run would start reads them (the program names no {events}, the world runs at a url, or there is no program), so the tag can never match.",
+    "fix": "Name {events} in env of the program in nukadoko.config.ts for a world the run starts, such as env: { EXECUTION_EVENTS: \"{events}\" }, and have the program append its execution events there, or remove the tag."
   },
   "expects-unseen": {
     "severity": "note",
@@ -564,9 +564,14 @@
     "description": "The program a world served exited while the scenarios still ran, so the requests after that found nothing listening.",
     "fix": "Read the world's program.log, which the message names, for why the program exited."
   },
+  "program-file-moved": {
+    "severity": "refused",
+    "description": "The project root holds a program file (nukadoko.program.ts, .mts, or .rb), which an earlier release read and this one does not: the program is part of the config now.",
+    "fix": "Move what the program file describes into the config as its program (program: () => ({ ... }) in nukadoko.config.ts, program: -> { { ... } } in nukadoko.config.rb), and delete the program file; CHANGELOG.md, under \"The program moves into the config\", shows the move."
+  },
   "program-list-unread": {
     "severity": "warning",
-    "description": "A command under lists in nukadoko.program.ts failed, passed its limit, or printed a line that is not one entry of its list, so that world's list was not read and nothing of it counts.",
+    "description": "A command under lists in the program in nukadoko.config.ts failed, passed its limit, or printed a line that is not one entry of its list, so that world's list was not read and nothing of it counts.",
     "fix": "Correct the command the message names, or what it prints: one JSON object per line, in the shape docs/spec.md \"Lists\" gives for its kind. Its stderr is in the world's program.log."
   },
   "program-log-late": {
@@ -576,12 +581,12 @@
   },
   "program-placeholder-unfilled": {
     "severity": "error",
-    "description": "A command or an env value in nukadoko.program.ts names a placeholder a world that nuka run with the same --env flags would start has no value for: {port} or {url} in a world with neither serve nor url, {condition.<name>} in one whose environment does not declare that condition, or anything but {root} in a build command.",
+    "description": "A command or an env value in the program in nukadoko.config.ts names a placeholder a world that nuka run with the same --env flags would start has no value for: {port} or {url} in a world with neither serve nor url, {condition.<name>} in one whose environment does not declare that condition, or anything but {root} in a build command.",
     "fix": "Remove the placeholder from the field the message names, or give the world what fills it: serve or url for {port} or {url}, the condition under its environment's conditions for {condition.<name>}; in a build command, write only {root}, or move the command to prepare."
   },
   "program-start-failed": {
     "severity": "failed",
-    "description": "The program in nukadoko.program.ts did not start for a world: a build or prepare command failed or did not finish within its timeout_ms, the server did not answer its ready path in time, or setup or the url function threw or did not finish within its timeout_ms. The world's scenarios did not run.",
+    "description": "The program in nukadoko.config.ts did not start for a world: a build or prepare command failed or did not finish within its timeout_ms, the server did not answer its ready path in time, or setup or the url function threw or did not finish within its timeout_ms. The world's scenarios did not run.",
     "fix": "Correct what the message names; the end of the world's program.log is in the message, and the whole file is in the world's directory."
   },
   "proof-run-incomplete": {
@@ -856,8 +861,8 @@
   },
   "unknown-environment": {
     "severity": "refused",
-    "description": "--env names an environment that nukadoko.program.ts does not define.",
-    "fix": "Pass default or an environment nukadoko.program.ts defines, or add it to environments there."
+    "description": "--env names an environment that the program in nukadoko.config.ts does not define.",
+    "fix": "Pass default or an environment the program in nukadoko.config.ts defines, or add it to environments there."
   },
   "unknown-parameter-type": {
     "severity": "error",
@@ -887,7 +892,7 @@
   "version-probe-failed": {
     "severity": "warning",
     "description": "The environment's version probe did not answer, so the records have no target version.",
-    "fix": "Correct the environment's version setting in nukadoko.program.ts, or the endpoint it names."
+    "fix": "Correct the environment's version setting in the program in nukadoko.config.ts, or the endpoint it names."
   },
   "walk-failed": {
     "severity": "failed",

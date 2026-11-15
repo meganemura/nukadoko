@@ -44,7 +44,7 @@ module Nukadoko
       # `environments` is the selection a run without --env starts, for
       # condition-unmet; nil when --env named the selection. `problems` are
       # what the feature loader found that runs nothing.
-      # `config` holds what was found in the config and the program file before
+      # `config` holds what was found in the config and its program before
       # any step loaded, such as an env file that is missing.
       #: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
       def initialize(steps, scenarios, features: true, full: false, conditions: nil, environments: nil, problems: [], config: [])
@@ -467,7 +467,7 @@ module Nukadoko
           if name.nil?
             boolean = tag.match(/\A@with:([A-Za-z0-9_.-]+)=(true|false)\z/)
             message = if boolean
-                        "#{tag} names a boolean as text, which reads two ways: write #{boolean[2] == "true" ? "@with:" : "@without:"}#{boolean[1]}, which reads the boolean the program file declares"
+                        "#{tag} names a boolean as text, which reads two ways: write #{boolean[2] == "true" ? "@with:" : "@without:"}#{boolean[1]}, which reads the boolean the program declares"
                       else
                         "#{tag} does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition"
                       end
@@ -475,7 +475,7 @@ module Nukadoko
           elsif conditions && !conditions.include?(name)
             on, off = tag.start_with?("@without:") ? %w[off on] : %w[on off]
             findings << Finding.new("error", "condition-unknown", uri, line, nil,
-                                    %(#{tag} names the condition "#{name}", and no environment in nukadoko.program.rb declares it under conditions. ) +
+                                    %(#{tag} names the condition "#{name}", and no environment in nukadoko.config.rb declares it under conditions. ) +
                                       "If #{name} was removed and its #{on} side kept, remove the tag, so the scenario holds everywhere; if its #{off} side was kept, delete the scenario.",
                                     Codes.fix("condition-unknown"), nil)
           end

@@ -6,6 +6,12 @@
 module Nukadoko
   module Engine
     CONFIG = "nukadoko.config.rb"
-    PROGRAM = "nukadoko.program.rb"
+    # The program file of releases before the program moved into the
+    # config. A project may no longer hold one; a `--base` ref may.
+    LEGACY_PROGRAM = "nukadoko.program.rb"
+    # What a `--base` run writes into a tree for the program it runs:
+    # another config whose program the tree runs, or a ref's legacy file.
+    TREE_PROGRAM = "nukadoko.tree-program.rb"
+    TREE_LEGACY_PROGRAM = "nukadoko.tree-legacy-program.rb"
   end
 end

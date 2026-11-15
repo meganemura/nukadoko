@@ -6,14 +6,19 @@
 #
 # - base: the ref's code with head's features/ and config, so a new or
 #   changed criterion runs where its behaviour should be absent. The ref's
-#   program file starts it, or head's when the ref has none.
+#   program starts it, or head's when the ref has none: the program goes
+#   with the code, so the run writes the ref's config beside head's as
+#   nukadoko.tree-program.rb (or the ref's program file from before the
+#   program moved into the config as nukadoko.tree-legacy-program.rb).
 # - old: head's working tree with the ref's features/ and config, so an
 #   unchanged criterion over a changed mapping runs under the steps it was
-#   approved with.
+#   approved with. Head's config goes beside it as nukadoko.tree-program.rb,
+#   so head's program starts it.
 #
 # The mapping is every file under features/ but a .feature file, the config
-# file's bytes, and the program file's conditions and defaultEnvironments,
-# which decide where a criterion is required. Every git command runs with
+# file's bytes with its program lambda cut out, and the program's
+# conditions and defaultEnvironments, which decide where a criterion is
+# required. Every git command runs with
 # hooks off, since a checkout's hook is the project's code and not the
 # run's. Both trees are removed when the run ends.
 module Nukadoko
@@ -79,7 +84,7 @@ module Nukadoko
       def prepare: (Array[[ String, Integer ]], Array[String]?, Array[String], Hash[Symbol, untyped]?) -> void
 
       # The environments the old world runs in, with the conditions the ref's
-      # program file gives each; nil when the ref has no program file, so
+      # program gives each; nil when the ref has no program, so
       # head's environments are the old world's too.
       # : (Hash[Symbol, untyped]?, Array[String]) -> Array[Environment]?
       def old_environments_of: (Hash[Symbol, untyped]?, Array[String]) -> Array[Environment]?
@@ -104,10 +109,11 @@ module Nukadoko
       # : (Array[String], String) -> Hash[String, String]
       def mapping_files: (Array[String], String) -> Hash[String, String]
 
-      # The ref's program file read in a process of its own, since loading
-      # it here would replace head's: its conditions and defaultEnvironments.
-      # : (String) -> Hash[Symbol, untyped]
-      def read_program: (String) -> Hash[Symbol, untyped]
+      # The ref's program: its program file from before the program moved
+      # into the config, or its config's program, read in a process of its
+      # own (ProjectProgram.elsewhere). nil when the ref has neither.
+      # : (String) -> Hash[Symbol, untyped]?
+      def read_program: (String) -> Hash[Symbol, untyped]?
 
       # : (Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
       def program_mapping: (Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
@@ -118,13 +124,17 @@ module Nukadoko
       # : (String, String) -> void
       def copy: (String, String) -> void
 
-      # The ref's checkout loses the ref's mapping and gains head's; the
-      # ref's program file stays, or head's comes in when the ref has none.
-      # : (Array[String], Array[String]) -> void
-      def overlay_base_tree: (Array[String], Array[String]) -> void
+      # The ref's checkout loses the ref's mapping and gains head's. The
+      # ref's program stays: its program file under the tree's own name, or
+      # its config `ref_config` beside head's. When the ref has no program,
+      # head's config brings head's.
+      # : (Array[String], Array[String], String?) -> void
+      def overlay_base_tree: (Array[String], Array[String], String?) -> void
 
       # Head's working tree with the ref's mapping in place of its own,
-      # written before the base checkout is overlaid.
+      # written before the base checkout is overlaid. Head's program stays:
+      # head's config goes beside the ref's, or a file that names no
+      # program when head has no config.
       # : (Array[String], Array[String]) -> void
       def write_old_tree: (Array[String], Array[String]) -> void
     end

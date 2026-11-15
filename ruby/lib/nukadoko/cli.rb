@@ -98,9 +98,10 @@ module Nukadoko
       return skill if @command == "skill"
       return init if @command == "init"
 
-      [Engine::CONFIG, Engine::PROGRAM].each do |name|
-        file = File.join(@project, name)
-        load file if File.exist?(file)
+      begin
+        Nukadoko.load_project(@project)
+      rescue Engine::Refusal => e
+        return refuse(e)
       end
       steps = Nukadoko.load_steps(File.join(@project, "features", "steps"))
       problems = []
@@ -367,7 +368,7 @@ module Nukadoko
                               world: plan[:world], dir: plan[:dir], out: @out, head: plan[:head])
         { results: run.tree_pass, worlds: run.world_entries }
       rescue Engine::Refusal => e
-        { not_run: "the #{plan[:world]} tree's program file does not give this environment: #{e.message}" }
+        { not_run: "the #{plan[:world]} tree's program does not give this environment: #{e.message}" }
       end
       File.write(plan[:result], JSON.generate(result))
       0
@@ -524,7 +525,7 @@ module Nukadoko
 
     # Why --env left out every selected scenario, and the run that meets
     # them: the run without --env when it does, else the first environment
-    # of the program file that meets each, or else one that meets some.
+    # of the program that meets each, or else one that meets some.
     #: (Array[Engine::Scenario], Engine::Program) -> Hash[Symbol, String]
     def left_out_stop(left_out, program)
       envs = @options["--env"]
@@ -541,7 +542,7 @@ module Nukadoko
       candidates = [*program.declared.keys, *(program.declared.key?("default") ? [] : ["default"])] - envs
       other = candidates.find { meets_each.([_1]) } || candidates.find { |name| left_out.any? { meets?(_1, [program.environment(name)]) } }
       unless other
-        return finding.merge(fix: "#{without}, which does not meet #{them} either, and no environment of nukadoko.program.rb meets #{them}. " \
+        return finding.merge(fix: "#{without}, which does not meet #{them} either, and no environment of nukadoko.config.rb meets #{them}. " \
                                   "Declare the conditions #{count == 1 ? "it needs" : "they need"} on an environment, or change #{count == 1 ? "its" : "their"} tags.")
       end
 
