@@ -26,6 +26,7 @@ module Nukadoko
       module_function
 
       # Every word of the pattern, with whether a matching sentence always holds it.
+      #: (String) -> Array[[String, bool]]
       def words(pattern)
         list = []
         word = +""
@@ -38,9 +39,9 @@ module Nukadoko
         end
         i = 0
         while i < pattern.length
-          ch = pattern[i]
+          ch = pattern[i].to_s
           if ch == "\\" && i + 1 < pattern.length
-            word << pattern[i + 1]
+            word << pattern[i + 1].to_s
             i += 2
           elsif ch.match?(/\s/)
             finish.()
@@ -61,6 +62,7 @@ module Nukadoko
         list
       end
 
+      #: (untyped) -> String?
       def text(literal)
         case literal
         when String then literal
@@ -70,13 +72,16 @@ module Nukadoko
         end
       end
 
+      #: (String) -> Integer?
       def number_of(word)
         lower = word.downcase
         NUMBERS.index(lower) || TIMES[lower]
       end
 
+      #: (untyped, untyped) -> bool
       def same?(a, b) = a.is_a?(Array) && b.is_a?(Array) ? a.empty? && b.empty? : a.instance_of?(b.class) && a == b
 
+      #: (String, untyped) -> Statement?
       def statement(pattern, literal)
         all = words(pattern)
         fixed = all.select(&:last).map(&:first)
@@ -89,7 +94,7 @@ module Nukadoko
         all.each_with_index do |(word, is_fixed), index|
           next unless is_fixed
           next unless WORDS.fetch(word.downcase, []).any? { same?(literal, _1) }
-          next if word.downcase == "neither" && all[(index + 1)..].any? { |w, f| f && w.downcase == "nor" }
+          next if word.downcase == "neither" && all.drop(index + 1).any? { |w, f| f && w.downcase == "nor" }
 
           before = (index.positive? ? all[index - 1] : nil) #: [String, bool]?
           return Statement.new(word, true, "not-equal", before[0]) if before && before[1] && NEGATING.include?(before[0].downcase)
@@ -99,21 +104,25 @@ module Nukadoko
         nil
       end
 
+      #: (Array[String], String) -> bool
       def run_of?(words, text)
-        (0...words.size).any? { |start| (start + 1..words.size).any? { words[start...(_1)].join(" ") == text } }
+        (0...words.size).any? { |start| (start + 1..words.size).any? { words[start...(_1)].to_a.join(" ") == text } }
       end
 
       # How every pattern states `literal`, or nil when one does not: a line
       # may bind any of them, and the first pattern's words name it.
+      #: (Array[String], untyped) -> Statement?
       def statement_of_all(patterns, literal)
         return nil if patterns.empty?
 
-        stated = patterns.map { statement(_1, literal) }
-        return nil unless stated.all?
+        stated = patterns.filter_map { statement(_1, literal) }
+        first = stated.first
+        return nil unless first && stated.size == patterns.size
 
-        Statement.new(stated[0].words, stated.any?(&:by_table), stated[0].compare, stated[0].negated_by)
+        Statement.new(first.words, stated.any? { _1.by_table }, first.compare, first.negated_by)
       end
 
+      #: (Array[String], untyped) -> untyped
       def stated_by_all(patterns, literal) = statement_of_all(patterns, literal)&.words
     end
   end

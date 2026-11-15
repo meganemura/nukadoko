@@ -7,14 +7,14 @@
 module Nukadoko
   class Schema
     class Field < Data
-      attr_reader name(): untyped
+      attr_reader name(): Symbol
 
       attr_reader type(): untyped
 
-      attr_reader description(): untyped
+      attr_reader description(): String?
 
-      def self.new: (untyped name, untyped type, untyped description) -> instance
-                  | (name: untyped, type: untyped, description: untyped) -> instance
+      def self.new: (Symbol name, untyped type, String? description) -> instance
+                  | (name: Symbol, type: untyped, description: String?) -> instance
 
       def self.members: () -> [ :name, :type, :description ]
 
@@ -24,9 +24,10 @@ module Nukadoko
     # : () ?{ () [self: Schema] -> void } -> Schema
     def self.build: () ?{ () [self: Schema] -> void } -> Schema
 
-    attr_reader fields: untyped
+    attr_reader fields: Array[Field]
 
-    def initialize: (?untyped fields) -> untyped
+    # : (?Array[Field]) -> void
+    def initialize: (?Array[Field]) -> void
 
     # `null: true` lets the value be nil as well, as zod's `.nullable()` does.
     # : (Symbol, ?String?, ?null: bool) -> void
@@ -64,55 +65,73 @@ module Nukadoko
     # : (Symbol | String) -> Field?
     def []: (Symbol | String) -> Field?
 
-    def without: (untyped names) -> untyped
+    # : (Array[String]) -> Schema
+    def without: (Array[String]) -> Schema
 
+    # : () -> untyped
     def data_class: () -> untyped
 
-    def load: (untyped hash) -> untyped
+    # : (Hash[String, untyped]) -> untyped
+    def load: (Hash[String, untyped]) -> untyped
 
     # Every way `value` departs from the schema, as `path: problem` lines.
     # A key the schema does not declare is no problem: as a zod object does,
     # the schema drops it (`strip`), and `dropped` names where.
-    def problems: (untyped value, ?untyped path) -> untyped
+    # : (untyped, ?String?) -> Array[String]
+    def problems: (untyped, ?String?) -> Array[String]
 
     # The value with every key the schema does not declare left out, at any
     # depth, with string keys. Assumes `problems` found none.
-    def strip: (untyped value) -> untyped
+    # : (Hash[untyped, untyped]) -> Hash[String, untyped]
+    def strip: (Hash[untyped, untyped]) -> Hash[String, untyped]
 
-    def self.strip_type: (untyped type, untyped value) -> untyped
+    # : (untyped, untyped) -> untyped
+    def self.strip_type: (untyped, untyped) -> untyped
 
     # The paths of the keys `strip` leaves out, so a record can say what the
     # step returned and the contract did not keep.
-    def dropped: (untyped value, ?untyped path) -> untyped
+    # : (Hash[untyped, untyped], ?String?) -> Array[String]
+    def dropped: (Hash[untyped, untyped], ?String?) -> Array[String]
 
     # The keys the schema dropped, one entry per place that dropped any:
     # `at` is the place as its keys and indexes, as the TypeScript engine's
     # `returns_dropped` names it.
-    def drops: (untyped value, ?untyped at) -> untyped
+    # : (untyped, ?Array[String]) -> Array[Hash[Symbol, untyped]]
+    def drops: (untyped, ?Array[String]) -> Array[Hash[Symbol, untyped]]
 
-    def self.drops_type: (untyped type, untyped value, untyped at) -> untyped
+    # : (untyped, untyped, Array[String]) -> Array[Hash[Symbol, untyped]]
+    def self.drops_type: (untyped, untyped, Array[String]) -> Array[Hash[Symbol, untyped]]
 
-    def self.dropped_type: (untyped type, untyped value, untyped path) -> untyped
+    # : (untyped, untyped, String) -> Array[String]
+    def self.dropped_type: (untyped, untyped, String) -> Array[String]
 
-    def self.type_problems: (untyped type, untyped value, untyped path) -> untyped
+    # : (untyped, untyped, String) -> Array[String]
+    def self.type_problems: (untyped, untyped, String) -> Array[String]
 
     # The JSON Schema `nuka describe` prints, as zod's own conversion gives it:
     # the root is closed, and an inner object is closed only on the output
     # side (`returns`), where zod drops the keys it does not declare.
-    def json_schema: (?root: untyped, ?output: untyped) -> untyped
+    # : (?root: bool, ?output: bool) -> Hash[Symbol, untyped]
+    def json_schema: (?root: bool, ?output: bool) -> Hash[Symbol, untyped]
 
-    def self.json_type: (untyped type, ?untyped output) -> untyped
+    # : (untyped, ?bool) -> Hash[Symbol, untyped]
+    def self.json_type: (untyped, ?bool) -> Hash[Symbol, untyped]
 
-    def rbs_fields: () -> untyped
+    # : () -> Array[String]
+    def rbs_fields: () -> Array[String]
 
-    def rbs_record: () -> untyped
+    # : () -> String
+    def rbs_record: () -> String
 
-    def self.rbs_type: (untyped type) -> untyped
+    # : (untyped) -> String
+    def self.rbs_type: (untyped) -> String
 
     private
 
-    def add: (untyped name, untyped type, untyped description, ?untyped null) -> untyped
+    # : (Symbol, untyped, String?, ?bool) -> void
+    def add: (Symbol, untyped, String?, ?bool) -> void
 
-    def join: (untyped path, untyped name) -> untyped
+    # : (String?, Symbol | String) -> String
+    def join: (String?, Symbol | String) -> String
   end
 end

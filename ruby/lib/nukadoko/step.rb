@@ -11,12 +11,14 @@ module Nukadoko
       #: () -> String
       def file = @file
 
+      #: (singleton(Step)) -> void
       def inherited(subclass)
         super
         subclass.instance_variable_set(:@file, caller_locations(1, 1)&.first&.absolute_path)
         Step.registry << subclass
       end
 
+      #: () -> Array[singleton(Step)]
       def registry = (@registry ||= [])
 
       #: (String) -> String
@@ -61,19 +63,25 @@ module Nukadoko
 
       # observe never sees the args a claim compares with, so it cannot pick
       # what to read by the answer it will be judged against.
+      #: () -> Schema
       def inputs
         claims = self.claims
         claims ? args.without(Engine::ClaimRules.withheld_keys(claims, from.keys).keys) : args
       end
 
+      #: () -> String
       def step_name = File.basename(file, ".rb").tr("_", "-")
 
       # A step that runs code may change the world unless it says it does
       # not; a claim step has no action, so it never does.
+      #: () -> bool
       def mutating? = claims ? false : mutates != false
+      #: () -> Symbol
       def body = claims ? :observe : :run
+      #: () -> Integer?
       def line = method_defined?(body) ? instance_method(body).source_location&.last : nil
 
+      #: () -> Array[Symbol]
       def fixtures
         return [] unless method_defined?(body)
 
@@ -83,6 +91,7 @@ module Nukadoko
       # The fixtures the engine builds before the body runs: the step's own,
       # and those of every part it can reach, since the bag is closed before
       # any call happens.
+      #: (?Array[singleton(Step)]) -> Array[Symbol]
       def bag(seen = [])
         return [] if seen.include?(self)
 
@@ -94,6 +103,7 @@ module Nukadoko
 
   # Each step file is registered for autoload under its class name first, so a
   # step can name another in `from` or `field` whatever order the files load in.
+  #: (String) -> Array[singleton(Step)]
   def self.load_steps(dir)
     files = Dir.glob(File.join(dir, "**/*.rb")).sort.map { File.expand_path(_1) }
     files.each { Object.autoload(File.basename(_1, ".rb").split("_").map(&:capitalize).join.to_sym, _1) }

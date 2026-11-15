@@ -21,32 +21,39 @@ module Nukadoko
     end
 
     class Response
+      # : () -> untyped
       def json: () -> untyped
 
-      def ok?: () -> untyped
+      # : () -> bool
+      def ok?: () -> bool
     end
 
     class Request
-      attr_reader log: untyped
+      attr_reader log: Array[Hash[Symbol, untyped]]
 
-      def initialize: (untyped base_url) -> untyped
+      # : (String) -> void
+      def initialize: (String) -> void
 
       BODY_TEXT: untyped
 
-      def self.since: (untyped started) -> untyped
+      # : (Float) -> Integer
+      def self.since: (Float) -> Integer
 
       # A body as http.jsonl keeps it: its text, at most 16 KiB, and its
       # size; none when there was none.
-      def self.body: (untyped name, untyped bytes) -> untyped
+      # : (Symbol, String?) -> Hash[Symbol, untyped]
+      def self.body: (Symbol, String?) -> Hash[Symbol, untyped]
     end
 
     # Opened only for a step whose body names page or context, as in the
     # TypeScript engine. Requests the page sends are recorded by the engine's
     # own listener, and each step gets a trace chunk.
     class Browser
-      def initialize: (untyped base_url, ?untyped launch_options) -> untyped
+      # : (String?, ?Hash[Symbol, untyped]) -> void
+      def initialize: (String?, ?Hash[Symbol, untyped]) -> void
 
-      def page_for: (untyped step_dir, untyped log) -> untyped
+      # : (String, Array[Hash[Symbol, untyped]]) -> [untyped, ^() -> void]
+      def page_for: (String, Array[Hash[Symbol, untyped]]) -> [ untyped, ^() -> void ]
 
       STAMPED_TYPES: untyped
 
@@ -55,7 +62,7 @@ module Nukadoko
       # The step that runs now, as a page request names it: set for every
       # step, a page or not, so a request a page sends during a step is
       # that step's.
-      attr_writer step: untyped
+      attr_writer step: Hash[Symbol, untyped]?
 
       # Which requests to the world the page had finished receiving the
       # response of, and which were in flight, around a claim step's
@@ -63,32 +70,39 @@ module Nukadoko
       # claim that the page drew from a response. Only a document, a
       # fetch, and an XMLHttpRequest count; an EventSource stays open, so
       # it would be in flight on every reading.
-      def watch_requests: (untyped context) -> untyped
+      # : (untyped) -> void
+      def watch_requests: (untyped) -> void
 
       # Runs one reading of a claim step and keeps when it began and ended.
       # : [T] () { () -> T } -> T
       def reading: [T] () { () -> T } -> T
 
-      def begin_step: () -> untyped
+      # : () -> nil
+      def begin_step: () -> nil
 
       # A claim step's `pages`, `page_requests`, and `judged_view`, after
       # the reading its claims were judged on, when a page was open.
-      def judged: (untyped dir, untyped step_record_id, ?aria_in_claims: untyped) -> untyped
+      # : (String, String, ?aria_in_claims: bool) -> Hash[Symbol, untyped]
+      def judged: (String, String, ?aria_in_claims: bool) -> Hash[Symbol, untyped]
 
-      def request_record: (untyped entry, untyped step_record_id) -> untyped
+      # : (Hash[Symbol, untyped], String) -> Hash[Symbol, untyped]
+      def request_record: (Hash[Symbol, untyped], String) -> Hash[Symbol, untyped]
 
       # What the page showed right after the judged reading: its title, a
       # viewport screenshot, and its ARIA snapshot, each with how long after
       # the reading it was taken. The claims judged what observe returned,
       # not these files.
       # In a trace group of its own, so the step's actions leave these calls out.
-      def view: (untyped dir, untyped ended, untyped aria_in_claims) -> untyped
+      # : (String, Float, bool) -> Hash[Symbol, untyped]
+      def view: (String, Float, bool) -> Hash[Symbol, untyped]
 
       # A step whose claims judge a tree nukadoko took keeps that tree in its
       # claims, so the view takes no second one.
-      def view_files: (untyped dir, untyped ended, untyped aria_in_claims) -> untyped
+      # : (String, Float, bool) -> Hash[Symbol, untyped]
+      def view_files: (String, Float, bool) -> Hash[Symbol, untyped]
 
-      def monotonic: () -> untyped
+      # : () -> Float
+      def monotonic: () -> Float
 
       # A page's documents, fetches, and XMLHttpRequests to the world get
       # the running step's traceparent through the Chrome DevTools
@@ -97,7 +111,8 @@ module Nukadoko
       # turns the browser's cache off. Images, scripts, and stylesheets are
       # left out, since each paused request costs a round trip. A session
       # that cannot be opened leaves the page's requests unstamped.
-      def stamp: (untyped page) -> untyped
+      # : (untyped) -> void
+      def stamp: (untyped) -> void
 
       # How long a pause waits for each capture of the page's view. A page
       # whose main thread is stuck answers none of them, and without a
@@ -109,24 +124,29 @@ module Nukadoko
       # under `recorded_as` as run.json names them. From now until
       # `release`, the requests the page sends go to the pause's own
       # http.jsonl, never to the step's record. `[]` when no page is open.
-      def hold: (untyped dir, untyped recorded_as) -> untyped
+      # : (String, String) -> Array[Hash[Symbol, untyped]]
+      def hold: (String, String) -> Array[Hash[Symbol, untyped]]
 
       # The pause is answered: the page's requests are the next step's again.
-      def release: () -> untyped
+      # : () -> void
+      def release: () -> void
 
       # Each scenario gets a browser context of its own, so cookies and storage
       # never carry from one scenario to the next.
       # The browser the scenario opened a page in, as run.json names it, or
       # nil when it opened none.
-      def scenario_browser: () -> untyped
+      # : () -> Hash[Symbol, untyped]?
+      def scenario_browser: () -> Hash[Symbol, untyped]?
 
       # Closes the scenario's context, and returns the screenshot of its
       # page as the scenario ended, `final.png` in `dir`, when it opened
       # one. A page a failed step left unusable has none, and that costs
       # the screenshot only.
-      def end_scenario: (?untyped dir) -> untyped
+      # : (?String?) -> Array[Hash[Symbol, untyped]]
+      def end_scenario: (?String?) -> Array[Hash[Symbol, untyped]]
 
-      def close: () -> untyped
+      # : () -> void
+      def close: () -> void
     end
   end
 end

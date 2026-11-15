@@ -19,26 +19,32 @@ module Nukadoko
     # The processes the running step started, kept per thread so a step
     # that calls run_command from a helper is still measured.
     module Processes
-      def self.current: () -> untyped
+      # : () -> Array[untyped]?
+      def self.current: () -> Array[untyped]?
 
       # Fills `into` even when the step raises, so a failed step still names
       # the processes it ran.
       # : [T] (Array[untyped]) { () -> T } -> T
       def self.collect: [T] (Array[untyped]) { () -> T } -> T
 
-      def self.groups?: () -> untyped
+      # : () -> bool
+      def self.groups?: () -> bool
 
       # Runs the command to its close, its stdin closed after `input`.
-      def self.spawn: (untyped env, untyped argv, untyped cwd, untyped input, untyped timeout, group: untyped) -> untyped
+      # : (Hash[String, String], Array[String], String, String?, Numeric?, group: bool) -> [String, String, Process::Status, bool?]
+      def self.spawn: (Hash[String, String], Array[String], String, String?, Numeric?, group: bool) -> [ String, String, Process::Status, bool? ]
 
       # `ended` when no process of the group still runs as the leader closed.
-      def self.group_state: (untyped pid) -> untyped
+      # : (Integer) -> String
+      def self.group_state: (Integer) -> String
 
       # The child's environment against the runner's: every name the step
       # set, and a value only when it cannot be a credential.
-      def self.env_entry: (untyped env) -> untyped
+      # : (Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+      def self.env_entry: (Hash[untyped, untyped]) -> Hash[Symbol, untyped]
 
-      def self.shown_value: (untyped value) -> untyped
+      # : (String) -> (String | Hash[Symbol, Integer])
+      def self.shown_value: (String) -> (String | Hash[Symbol, Integer])
     end
 
     # A directory's files as their identities, before and after something
@@ -48,22 +54,26 @@ module Nukadoko
 
       LIMIT: ::Integer
 
-      def self.snapshot: (untyped dir) -> untyped
+      # : (String) -> Hash[Symbol, untyped]
+      def self.snapshot: (String) -> Hash[Symbol, untyped]
 
-      def self.difference: (untyped before, untyped after) -> untyped
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self.difference: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
     end
 
     # The `scratch` fixture: `dir` makes a fresh directory, and the engine
     # removes every one of them when the scenario ends, passed or failed.
     class Scratch
-      def initialize: () -> untyped
+      # : () -> void
+      def initialize: () -> void
 
       # A directory under the system's temporary directory, named
       # `<prefix>-` and six characters, as the TypeScript engine names it.
       # : (?String) -> String
       def dir: (?String) -> String
 
-      def dirs: () -> untyped
+      # : () -> Array[String]
+      def dirs: () -> Array[String]
 
       FILE_TEXT: untyped
 
@@ -71,15 +81,18 @@ module Nukadoko
 
       # Each scratch directory's paths as identities, to compare a step's
       # start with its end.
-      def snapshot: () -> untyped
+      # : () -> Hash[String, Hash[Symbol, untyped]]
+      def snapshot: () -> Hash[String, Hash[Symbol, untyped]]
 
       # What the step changed in the scratch directories, absolute and
       # sorted, each file with its size and text after the step: a
       # directory made during the step is compared with an empty one. The
       # step reads at most 64 KiB of content in all, 8 KiB of each file.
-      def changes: (untyped before) -> untyped
+      # : (Hash[String, Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def changes: (Hash[String, Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
 
-      def remove_all: () -> untyped
+      # : () -> void
+      def remove_all: () -> void
     end
   end
 end

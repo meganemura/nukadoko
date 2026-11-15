@@ -41,23 +41,31 @@ module Nukadoko
       EDGE: ::Regexp
 
       # Every word of the pattern, with whether a matching sentence always holds it.
-      def self?.words: (untyped pattern) -> untyped
+      # : (String) -> Array[[String, bool]]
+      def self?.words: (String) -> Array[[ String, bool ]]
 
-      def self?.text: (untyped literal) -> untyped
+      # : (untyped) -> String?
+      def self?.text: (untyped) -> String?
 
-      def self?.number_of: (untyped word) -> untyped
+      # : (String) -> Integer?
+      def self?.number_of: (String) -> Integer?
 
-      def self?.same?: (untyped a, untyped b) -> untyped
+      # : (untyped, untyped) -> bool
+      def self?.same?: (untyped, untyped) -> bool
 
-      def self?.statement: (untyped pattern, untyped literal) -> untyped
+      # : (String, untyped) -> Statement?
+      def self?.statement: (String, untyped) -> Statement?
 
-      def self?.run_of?: (untyped words, untyped text) -> untyped
+      # : (Array[String], String) -> bool
+      def self?.run_of?: (Array[String], String) -> bool
 
       # How every pattern states `literal`, or nil when one does not: a line
       # may bind any of them, and the first pattern's words name it.
-      def self?.statement_of_all: (untyped patterns, untyped literal) -> untyped
+      # : (Array[String], untyped) -> Statement?
+      def self?.statement_of_all: (Array[String], untyped) -> Statement?
 
-      def self?.stated_by_all: (untyped patterns, untyped literal) -> untyped
+      # : (Array[String], untyped) -> untyped
+      def self?.stated_by_all: (Array[String], untyped) -> untyped
     end
   end
 end

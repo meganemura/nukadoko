@@ -10,37 +10,47 @@ module Nukadoko
     class Verdict
       FIXES: untyped
 
-      attr_reader judged: untyped
+      attr_reader judged: String
 
-      attr_reader findings: untyped
+      attr_reader findings: Array[Hash[Symbol, untyped]]
 
-      attr_reader newest: untyped
+      attr_reader newest: Hash[Symbol, untyped]?
 
-      attr_reader working_tree: untyped
+      attr_reader working_tree: String?
 
-      def initialize: (untyped project) -> untyped
+      # : (String) -> void
+      def initialize: (String) -> void
 
       # The run with the latest start; a run.json whose run_id is not its
       # directory's name, or that does not parse, is no run.
-      def self.newest_run: (untyped project) -> untyped
+      # : (String) -> Hash[Symbol, untyped]?
+      def self.newest_run: (String) -> Hash[Symbol, untyped]?
 
-      def open?: () -> untyped
+      # : () -> bool
+      def open?: () -> bool
 
-      def envelope_fields: () -> untyped
+      # : () -> Hash[Symbol, untyped]
+      def envelope_fields: () -> Hash[Symbol, untyped]
 
-      def headline: () -> untyped
+      # : () -> String
+      def headline: () -> String
 
       private
 
-      def recorded: () -> untyped
+      # : () -> String?
+      def recorded: () -> String?
 
-      def again: () -> untyped
+      # : () -> String
+      def again: () -> String
 
-      def judge: () -> untyped
+      # : () -> [String, Array[Hash[Symbol, untyped]]]
+      def judge: () -> [ String, Array[Hash[Symbol, untyped]] ]
 
-      def note: (untyped code, untyped message) -> untyped
+      # : (String, String) -> Hash[Symbol, untyped]
+      def note: (String, String) -> Hash[Symbol, untyped]
 
-      def stale_message: () -> untyped
+      # : () -> String
+      def stale_message: () -> String
     end
   end
 end

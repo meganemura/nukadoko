@@ -7,7 +7,11 @@
 # scalar, `[:array, type]` for a list, or a nested Schema for an object.
 module Nukadoko
   class Schema
-    Field = Data.define(:name, :type, :description)
+    Field = Data.define(
+      :name, #: Symbol
+      :type, #: untyped
+      :description, #: String?
+    )
 
     #: () ?{ () [self: Schema] -> void } -> Schema
     def self.build(&block)
@@ -16,8 +20,9 @@ module Nukadoko
       schema
     end
 
-    attr_reader :fields
+    attr_reader :fields #: Array[Field]
 
+    #: (?Array[Field]) -> void
     def initialize(fields = [])
       @fields = fields
     end
@@ -50,12 +55,15 @@ module Nukadoko
     #: (Symbol | String) -> Field?
     def [](name) = fields.find { _1.name == name.to_sym }
 
+    #: (Array[String]) -> Schema
     def without(names) = Schema.new(fields.reject { names.include?(_1.name.to_s) })
 
+    #: () -> untyped
     def data_class
       @data_class ||= fields.empty? ? Data.define : Data.define(*fields.map(&:name))
     end
 
+    #: (Hash[String, untyped]) -> untyped
     def load(hash)
       data_class.new(**fields.to_h { [_1.name, hash.fetch(_1.name.to_s)] })
     end
@@ -63,6 +71,7 @@ module Nukadoko
     # Every way `value` departs from the schema, as `path: problem` lines.
     # A key the schema does not declare is no problem: as a zod object does,
     # the schema drops it (`strip`), and `dropped` names where.
+    #: (untyped, ?String?) -> Array[String]
     def problems(value, path = nil)
       return ["#{path || "value"} must be an object, got #{value.inspect}"] unless value.is_a?(Hash)
 
@@ -75,11 +84,13 @@ module Nukadoko
 
     # The value with every key the schema does not declare left out, at any
     # depth, with string keys. Assumes `problems` found none.
+    #: (Hash[untyped, untyped]) -> Hash[String, untyped]
     def strip(value)
       hash = value.transform_keys(&:to_s)
       fields.to_h { [_1.name.to_s, Schema.strip_type(_1.type, hash[_1.name.to_s])] }
     end
 
+    #: (untyped, untyped) -> untyped
     def self.strip_type(type, value)
       case type
       in [:nullable, inner] then value.nil? ? nil : strip_type(inner, value)
@@ -91,6 +102,7 @@ module Nukadoko
 
     # The paths of the keys `strip` leaves out, so a record can say what the
     # step returned and the contract did not keep.
+    #: (Hash[untyped, untyped], ?String?) -> Array[String]
     def dropped(value, path = nil)
       hash = value.transform_keys(&:to_s)
       names = fields.map { _1.name.to_s }
@@ -100,6 +112,7 @@ module Nukadoko
     # The keys the schema dropped, one entry per place that dropped any:
     # `at` is the place as its keys and indexes, as the TypeScript engine's
     # `returns_dropped` names it.
+    #: (untyped, ?Array[String]) -> Array[Hash[Symbol, untyped]]
     def drops(value, at = [])
       return [] unless value.is_a?(Hash)
 
@@ -109,6 +122,7 @@ module Nukadoko
       own + fields.flat_map { Schema.drops_type(_1.type, hash[_1.name.to_s], [*at, _1.name.to_s]) }
     end
 
+    #: (untyped, untyped, Array[String]) -> Array[Hash[Symbol, untyped]]
     def self.drops_type(type, value, at)
       case type
       in [:nullable, inner] then value.nil? ? [] : drops_type(inner, value, at)
@@ -118,6 +132,7 @@ module Nukadoko
       end
     end
 
+    #: (untyped, untyped, String) -> Array[String]
     def self.dropped_type(type, value, path)
       case type
       in [:nullable, inner] then value.nil? ? [] : dropped_type(inner, value, path)
@@ -127,6 +142,7 @@ module Nukadoko
       end
     end
 
+    #: (untyped, untyped, String) -> Array[String]
     def self.type_problems(type, value, path)
       ok =
         case type
@@ -149,14 +165,16 @@ module Nukadoko
     # The JSON Schema `nuka describe` prints, as zod's own conversion gives it:
     # the root is closed, and an inner object is closed only on the output
     # side (`returns`), where zod drops the keys it does not declare.
+    #: (?root: bool, ?output: bool) -> Hash[Symbol, untyped]
     def json_schema(root: true, output: false)
-      schema = { type: "object", properties: fields.to_h { [_1.name, Schema.json_type(_1.type, output).merge(_1.description ? { description: _1.description } : {})] } }
+      schema = { type: "object", properties: fields.to_h { [_1.name, Schema.json_type(_1.type, output).merge(_1.description ? { description: _1.description } : {})] } } #: Hash[Symbol, untyped]
       schema[:required] = fields.map(&:name) if fields.any?
       return { "$schema": "https://json-schema.org/draft/2020-12/schema", **schema, additionalProperties: false } if root
 
       output ? schema.merge(additionalProperties: false) : schema
     end
 
+    #: (untyped, ?bool) -> Hash[Symbol, untyped]
     def self.json_type(type, output = false)
       case type
       in :string then { type: "string" }
@@ -171,9 +189,12 @@ module Nukadoko
       end
     end
 
+    #: () -> Array[String]
     def rbs_fields = fields.map { "attr_reader #{_1.name}: #{Schema.rbs_type(_1.type)}" }
+    #: () -> String
     def rbs_record = "{ #{fields.map { "#{_1.name}: #{Schema.rbs_type(_1.type)}" }.join(", ")} }"
 
+    #: (untyped) -> String
     def self.rbs_type(type)
       case type
       in :string then "String"
@@ -190,7 +211,9 @@ module Nukadoko
 
     private
 
+    #: (Symbol, untyped, String?, ?bool) -> void
     def add(name, type, description, null = false) = fields << Field.new(name.to_sym, null ? [:nullable, type] : type, description)
+    #: (String?, Symbol | String) -> String
     def join(path, name) = path ? "#{path}.#{name}" : name.to_s
   end
 end

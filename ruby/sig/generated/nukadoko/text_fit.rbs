@@ -32,31 +32,39 @@ module Nukadoko
       end
 
       # A `[..` that `]`, or `:`, a name, and `]`, do not follow is text.
-      def self?.fixed_line: (untyped line) -> untyped
+      # : (String) -> Fixed
+      def self?.fixed_line: (String) -> Fixed
 
       # A text's lines, at "\n" or "\r\n", with one final empty line dropped.
-      def self?.lines: (untyped text) -> untyped
+      # : (String) -> Array[String]
+      def self?.lines: (String) -> Array[String]
 
       # Each part between the first and the last is found leftmost after
       # the one before it, which is enough when a stand-in takes anything.
-      def self?.parts_fit: (untyped parts, untyped line, ?untyped reads) -> untyped
+      # : (Array[String], String, ?Array[String?]?) -> bool
+      def self?.parts_fit: (Array[String], String, ?Array[String?]?) -> bool
 
-      def self?.line_fits: (untyped pattern, untyped line) -> untyped
+      # : (String, String) -> bool
+      def self?.line_fits: (String, String) -> bool
 
       # { fits: true }, or where the text stopped fitting: `fitted` expected
       # lines fit, `expected` fit nothing from actual line `at` on, which is
       # `actual`; or `readings`, the two named stand-ins that disagree.
-      def self?.fit: (untyped actual, untyped expected) -> untyped
+      # : (String, String) -> Hash[Symbol, untyped]
+      def self?.fit: (String, String) -> Hash[Symbol, untyped]
 
       # The actual line each expected line takes in the first way the text
       # fits, each `...` taking as few lines as it can from the top: a walk
       # from the end learns which lines the rest can start at.
-      def self?.first_fit: (untyped have, untyped want) -> untyped
+      # : (Array[String], Array[Fixed?]) -> Array[Integer?]
+      def self?.first_fit: (Array[String], Array[Fixed?]) -> Array[Integer?]
 
-      def self?.names_fit: (untyped have, untyped want, untyped taken) -> untyped
+      # : (Array[String], Array[Fixed?], Array[Integer?]) -> Hash[Symbol, untyped]
+      def self?.names_fit: (Array[String], Array[Fixed?], Array[Integer?]) -> Hash[Symbol, untyped]
 
       # Whether an expected text states nothing beyond its stand-ins.
-      def self?.only_stand_ins?: (untyped expected) -> untyped
+      # : (String) -> bool
+      def self?.only_stand_ins?: (String) -> bool
     end
   end
 end

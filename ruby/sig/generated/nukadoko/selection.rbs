@@ -8,19 +8,22 @@
 module Nukadoko
   module Engine
     class Refusal < StandardError
-      attr_reader code: untyped
+      attr_reader code: String
 
-      attr_reader severity: untyped
+      attr_reader severity: String
 
       # `fix` and `run` are this refusal's own way past it; without either,
       # the code's registry fix and the command's --help stand in.
-      def initialize: (untyped code, untyped message, ?severity: untyped, ?fix: untyped, ?run: untyped) -> untyped
+      # : (String, String, ?severity: String, ?fix: String?, ?run: String?) -> void
+      def initialize: (String, String, ?severity: String, ?fix: String?, ?run: String?) -> void
 
       # A refusal stops before anything runs (exit 2); a selection that kept
       # no scenario ran and found nothing to do (exit 1).
-      def exit_code: () -> untyped
+      # : () -> Integer
+      def exit_code: () -> Integer
 
-      def to_h: (?untyped command) -> untyped
+      # : (?String) -> Hash[Symbol, untyped]
+      def to_h: (?String) -> Hash[Symbol, untyped]
     end
 
     class Selection
@@ -28,45 +31,43 @@ module Nukadoko
 
       # `whole_files` are the files a target named whole and --tag left
       # whole, which a rerun line may name as a file.
-      attr_reader scenarios: untyped
+      attr_reader scenarios: Array[Scenario]
 
-      # `whole_files` are the files a target named whole and --tag left
-      # whole, which a rerun line may name as a file.
-      attr_reader selection: untyped
+      attr_reader selection: String
 
-      # `whole_files` are the files a target named whole and --tag left
-      # whole, which a rerun line may name as a file.
-      attr_reader tag_selection: untyped
+      attr_reader tag_selection: Hash[Symbol, untyped]?
 
-      # `whole_files` are the files a target named whole and --tag left
-      # whole, which a rerun line may name as a file.
-      attr_reader whole_files: untyped
+      attr_reader whole_files: Array[String]
 
-      # `whole_files` are the files a target named whole and --tag left
-      # whole, which a rerun line may name as a file.
-      attr_reader problems: untyped
+      attr_reader problems: Array[FeatureProblem]
 
-      def initialize: (untyped project, untyped targets, untyped tags, ?features_dir: untyped) -> untyped
+      # : (String, Array[String], Array[String], ?features_dir: String) -> void
+      def initialize: (String, Array[String], Array[String], ?features_dir: String) -> void
 
       SHELL_SAFE: ::Regexp
 
       # A word as a POSIX shell reads it back: as it is when it holds no
       # character the shell treats apart, otherwise in single quotes.
-      def self.shell_word: (untyped word) -> untyped
+      # : (String) -> String
+      def self.shell_word: (String) -> String
 
       private
 
-      def parse_tag: (untyped expression) -> untyped
+      # : (String) -> [bool, String]
+      def parse_tag: (String) -> [ bool, String ]
 
-      def add: (untyped target, untyped whole, untyped lines) -> untyped
+      # : (String, Array[String], Hash[String, Array[Integer]]) -> void
+      def add: (String, Array[String], Hash[String, Array[Integer]]) -> void
 
       # Every .feature file below dir, skipping node_modules and any directory
       # whose name starts with a dot, as step discovery skips them.
-      def walk: (untyped dir) -> untyped
+      # : (String) -> Array[String]
+      def walk: (String) -> Array[String]
 
       # Two spellings of one file are one file: a target is named by its real
       # path relative to the project, so it is selected once.
-      def relative: (untyped absolute) -> untyped
+      # : (String) -> String
+      def relative: (String) -> String
     end
   end
 end

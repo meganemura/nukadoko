@@ -62,6 +62,7 @@ module Nukadoko
         lines.join
       end
 
+      #: (String) -> Hash[Symbol, untyped]
       def meta(version)
         os = RbConfig::CONFIG["host_os"].to_s
         cpu = RbConfig::CONFIG["host_cpu"].to_s
@@ -74,6 +75,7 @@ module Nukadoko
           cpu: { name: { "x86_64" => "x64", "aarch64" => "arm64" }.fetch(cpu, cpu) } }
       end
 
+      #: (Array[ReportRun::Scenario]) -> Hash[Integer, Hash[String, Hash[String, untyped]]]
       def environment_pickles(scenarios)
         return {} if scenarios.map { _1.json[:environment] }.uniq.size <= 1
 
@@ -90,12 +92,16 @@ module Nukadoko
         copies
       end
 
+      #: (untyped) -> Integer
       def ms_of(time) = (Time.iso8601(time.to_s).to_r * 1000).floor
 
+      #: (untyped) -> Hash[Symbol, Integer]
       def timestamp(time) = stamp(ms_of(time))
 
+      #: (Integer) -> Hash[Symbol, Integer]
       def stamp(ms) = { seconds: ms.div(1000), nanos: (ms % 1000) * 1_000_000 }
 
+      #: (ReportRun::Scenario, Hash[String, untyped], ^(Hash[Symbol, untyped]) -> void) -> void
       def test_case(scenario, pickle, append)
         json = scenario.json
         start = ms_of(json[:started_at])
@@ -138,6 +144,7 @@ module Nukadoko
 
       # `exception` is set for a broken claim only: its type is a fact
       # nukadoko decided, and any other failure carries a message alone.
+      #: (Integer, Integer, String, String?, ?bool) -> Hash[Symbol, untyped]
       def result(from, to, status, message, broken = false)
         span = [to - from, 0].max
         { status: status, duration: stamp(span), **(message ? { message: message } : {}),
@@ -146,6 +153,7 @@ module Nukadoko
 
       # The readings go with the claims: a value that walked toward the
       # expected one across a poll is visible only in them.
+      #: (Hash[String, untyped], String, String) -> Array[Hash[Symbol, untyped]]
       def claims_attachment(record, started_id, step_id)
         return [] unless record.key?("claims")
 

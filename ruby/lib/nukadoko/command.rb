@@ -35,7 +35,7 @@ module Nukadoko
     stdout, stderr, status, timed_out = Engine::Processes.spawn(env, [command, *args], cwd, stdin, timeout, group: !recording.nil?)
     duration = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
     changes = Engine::FileWalk.difference(before, Engine::FileWalk.snapshot(cwd)) if before
-    signal = status.termsig && "SIG#{Signal.signame(status.termsig)}"
+    signal = (number = status.termsig) && "SIG#{Signal.signame(number)}"
     recording&.push(
       { command: [command, *args], cwd: cwd, exit_code: status.exitstatus, signal: signal, timed_out: timed_out || nil,
         group: (Engine::Processes.group_state(status.pid) if Engine::Processes.groups?), duration_ms: duration, files: changes,
@@ -50,6 +50,7 @@ module Nukadoko
     # The processes the running step started, kept per thread so a step
     # that calls run_command from a helper is still measured.
     module Processes
+      #: () -> Array[untyped]?
       def self.current = Thread.current[:nukadoko_processes]
 
       # Fills `into` even when the step raises, so a failed step still names
@@ -62,11 +63,13 @@ module Nukadoko
         Thread.current[:nukadoko_processes] = nil
       end
 
+      #: () -> bool
       def self.groups? = !Gem.win_platform?
 
       # Runs the command to its close, its stdin closed after `input`.
+      #: (Hash[String, String], Array[String], String, String?, Numeric?, group: bool) -> [String, String, Process::Status, bool?]
       def self.spawn(env, argv, cwd, input, timeout, group:)
-        options = { chdir: cwd }
+        options = { chdir: cwd } #: Hash[Symbol, untyped]
         options[:pgroup] = true if group && groups?
         Open3.popen3(env, *argv, **options) do |stdin, out, err, thread|
           stdin.write(input.to_s)
@@ -86,6 +89,7 @@ module Nukadoko
       end
 
       # `ended` when no process of the group still runs as the leader closed.
+      #: (Integer) -> String
       def self.group_state(pid)
         Process.kill(0, -pid)
         "running"
@@ -95,6 +99,7 @@ module Nukadoko
 
       # The child's environment against the runner's: every name the step
       # set, and a value only when it cannot be a credential.
+      #: (Hash[untyped, untyped]) -> Hash[Symbol, untyped]
       def self.env_entry(env)
         return { inherited: true } if env.empty?
 
@@ -107,6 +112,7 @@ module Nukadoko
         { added: added, changed: changed, removed: [] }
       end
 
+      #: (String) -> (String | Hash[Symbol, Integer])
       def self.shown_value(value)
         safe = (value.start_with?("/") && !value.match?(/[[:cntrl:]]/) && File.exist?(value)) || value.match?(/\A-?\d+\z/) || %w[true false].include?(value)
         safe ? value : { hidden_bytes: value.bytesize }
@@ -119,6 +125,7 @@ module Nukadoko
       SKIPPED = %w[node_modules .git .nukadoko].freeze
       LIMIT = 20_000
 
+      #: (String) -> Hash[Symbol, untyped]
       def self.snapshot(dir)
         entries = {}
         skipped = []
@@ -132,20 +139,25 @@ module Nukadoko
             end
             key = "#{relative}#{name}#{"/" if stat.directory?}"
             entries[key] = [stat.size, stat.mtime.to_r, stat.ctime.to_r, stat.ino]
-            return :too_many if entries.size > LIMIT
+            throw :too_many if entries.size > LIMIT
 
             walk.(path, key) if stat.directory?
           rescue Errno::ENOENT
             nil
           end
         end
-        return { unmeasured: "#{dir} holds more than #{LIMIT} entries" } if walk.(dir, "") == :too_many
+        whole = catch(:too_many) do
+          walk.(dir, "")
+          true
+        end
+        return { unmeasured: "#{dir} holds more than #{LIMIT} entries" } unless whole
 
         { entries: entries, skipped: skipped.sort }
       rescue SystemCallError => e
         { unmeasured: "#{dir} could not be read: #{e.message}" }
       end
 
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def self.difference(before, after)
         return { unmeasured: before[:unmeasured] || after[:unmeasured] } if before[:unmeasured] || after[:unmeasured]
 
@@ -159,6 +171,7 @@ module Nukadoko
     # The `scratch` fixture: `dir` makes a fresh directory, and the engine
     # removes every one of them when the scenario ends, passed or failed.
     class Scratch
+      #: () -> void
       def initialize
         @dirs = []
       end
@@ -177,6 +190,7 @@ module Nukadoko
         retry
       end
 
+      #: () -> Array[String]
       def dirs = @dirs.dup
 
       FILE_TEXT = 8 * 1024
@@ -184,12 +198,14 @@ module Nukadoko
 
       # Each scratch directory's paths as identities, to compare a step's
       # start with its end.
+      #: () -> Hash[String, Hash[Symbol, untyped]]
       def snapshot = @dirs.to_h { [_1, FileWalk.snapshot(_1)] }
 
       # What the step changed in the scratch directories, absolute and
       # sorted, each file with its size and text after the step: a
       # directory made during the step is compared with an empty one. The
       # step reads at most 64 KiB of content in all, 8 KiB of each file.
+      #: (Hash[String, Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
       def changes(before)
         budget = STEP_TEXT
         @dirs.flat_map do |dir|
@@ -218,6 +234,7 @@ module Nukadoko
         end.sort_by { _1[:path] }
       end
 
+      #: () -> void
       def remove_all
         @dirs.each { FileUtils.rm_rf(_1) }
       end

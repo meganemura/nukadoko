@@ -18,13 +18,16 @@ module Nukadoko
     )
 
     class Response
+      #: () -> untyped
       def json = JSON.parse(body)
+      #: () -> bool
       def ok? = status.between?(200, 299)
     end
 
     class Request
-      attr_reader :log
+      attr_reader :log #: Array[Hash[Symbol, untyped]]
 
+      #: (String) -> void
       def initialize(base_url)
         @base = URI(base_url)
         @log = []
@@ -32,15 +35,17 @@ module Nukadoko
 
       BODY_TEXT = 16 * 1024
 
+      #: (Float) -> Integer
       def self.since(started) = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
 
       # A body as http.jsonl keeps it: its text, at most 16 KiB, and its
       # size; none when there was none.
+      #: (Symbol, String?) -> Hash[Symbol, untyped]
       def self.body(name, bytes)
         return {} if bytes.nil? || bytes.empty?
 
         raw = bytes.b
-        text = raw.byteslice(0, BODY_TEXT).force_encoding("UTF-8")
+        text = raw.byteslice(0, BODY_TEXT).to_s.force_encoding("UTF-8")
         text = text.scrub("") if raw.bytesize > BODY_TEXT
         return { name => { bytes: raw.bytesize, binary: true } } unless text.valid_encoding?
 
@@ -84,11 +89,13 @@ module Nukadoko
     # TypeScript engine. Requests the page sends are recorded by the engine's
     # own listener, and each step gets a trace chunk.
     class Browser
+      #: (String?, ?Hash[Symbol, untyped]) -> void
       def initialize(base_url, launch_options = {})
         @base_url = base_url
         @launch_options = launch_options
       end
 
+      #: (String, Array[Hash[Symbol, untyped]]) -> [untyped, ^() -> void]
       def page_for(step_dir, log)
         require "playwright"
         @execution ||= Playwright.create(playwright_cli_executable_path: ENV.fetch("PLAYWRIGHT_CLI", "npx playwright"))
@@ -116,7 +123,7 @@ module Nukadoko
       # The step that runs now, as a page request names it: set for every
       # step, a page or not, so a request a page sends during a step is
       # that step's.
-      attr_writer :step
+      attr_writer :step #: Hash[Symbol, untyped]?
 
       # Which requests to the world the page had finished receiving the
       # response of, and which were in flight, around a claim step's
@@ -124,6 +131,7 @@ module Nukadoko
       # claim that the page drew from a response. Only a document, a
       # fetch, and an XMLHttpRequest count; an EventSource stays open, so
       # it would be in flight on every reading.
+      #: (untyped) -> void
       def watch_requests(context)
         @requests = []
         @by_request = {}
@@ -155,10 +163,12 @@ module Nukadoko
         @reading ||= [started, monotonic] if started
       end
 
+      #: () -> nil
       def begin_step = (@reading = nil)
 
       # A claim step's `pages`, `page_requests`, and `judged_view`, after
       # the reading its claims were judged on, when a page was open.
+      #: (String, String, ?aria_in_claims: bool) -> Hash[Symbol, untyped]
       def judged(dir, step_record_id, aria_in_claims: false)
         return {} unless @page && @reading
 
@@ -179,6 +189,7 @@ module Nukadoko
         {}
       end
 
+      #: (Hash[Symbol, untyped], String) -> Hash[Symbol, untyped]
       def request_record(entry, step_record_id)
         # @type var trace: String?
         trace = begin
@@ -202,6 +213,7 @@ module Nukadoko
       # the reading it was taken. The claims judged what observe returned,
       # not these files.
       # In a trace group of its own, so the step's actions leave these calls out.
+      #: (String, Float, bool) -> Hash[Symbol, untyped]
       def view(dir, ended, aria_in_claims)
         @context.tracing.group(TraceActions::JUDGED_VIEW_GROUP)
         view_files(dir, ended, aria_in_claims)
@@ -211,6 +223,7 @@ module Nukadoko
 
       # A step whose claims judge a tree nukadoko took keeps that tree in its
       # claims, so the view takes no second one.
+      #: (String, Float, bool) -> Hash[Symbol, untyped]
       def view_files(dir, ended, aria_in_claims)
         FileUtils.mkdir_p(File.join(dir, "judged"))
         title = (@page.title rescue nil)
@@ -230,6 +243,7 @@ module Nukadoko
         { pages: [{ as: nil, page: 1, url: @page.url, title: title, screenshot: shot, aria: aria }], **(aria_in_claims ? { aria_in_claims: true } : {}) }
       end
 
+      #: () -> Float
       def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
 
@@ -240,6 +254,7 @@ module Nukadoko
       # turns the browser's cache off. Images, scripts, and stylesheets are
       # left out, since each paused request costs a round trip. A session
       # that cannot be opened leaves the page's requests unstamped.
+      #: (untyped) -> void
       def stamp(page)
         session = @context.new_cdp_session(page)
         session.on("Fetch.requestPaused", lambda do |event|
@@ -275,6 +290,7 @@ module Nukadoko
       # under `recorded_as` as run.json names them. From now until
       # `release`, the requests the page sends go to the pause's own
       # http.jsonl, never to the step's record. `[]` when no page is open.
+      #: (String, String) -> Array[Hash[Symbol, untyped]]
       def hold(dir, recorded_as)
         return [] unless @page
 
@@ -303,6 +319,7 @@ module Nukadoko
       end
 
       # The pause is answered: the page's requests are the next step's again.
+      #: () -> void
       def release
         @page.off("request", @held) if @page && @held
         @held = nil
@@ -312,6 +329,7 @@ module Nukadoko
       # never carry from one scenario to the next.
       # The browser the scenario opened a page in, as run.json names it, or
       # nil when it opened none.
+      #: () -> Hash[Symbol, untyped]?
       def scenario_browser
         @context && @browser ? { type: "chromium", version: @browser.version } : nil
       end
@@ -320,6 +338,7 @@ module Nukadoko
       # page as the scenario ended, `final.png` in `dir`, when it opened
       # one. A page a failed step left unusable has none, and that costs
       # the screenshot only.
+      #: (?String?) -> Array[Hash[Symbol, untyped]]
       def end_scenario(dir = nil)
         shots = [] #: Array[Hash[Symbol, untyped]]
         if dir && @page
@@ -337,6 +356,7 @@ module Nukadoko
         shots
       end
 
+      #: () -> void
       def close
         @browser&.close
         @execution&.stop

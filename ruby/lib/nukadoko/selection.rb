@@ -11,10 +11,12 @@ require "pathname"
 module Nukadoko
   module Engine
     class Refusal < StandardError
-      attr_reader :code, :severity
+      attr_reader :code #: String
+      attr_reader :severity #: String
 
       # `fix` and `run` are this refusal's own way past it; without either,
       # the code's registry fix and the command's --help stand in.
+      #: (String, String, ?severity: String, ?fix: String?, ?run: String?) -> void
       def initialize(code, message, severity: "refused", fix: nil, run: nil)
         super(message)
         @code = code
@@ -25,8 +27,10 @@ module Nukadoko
 
       # A refusal stops before anything runs (exit 2); a selection that kept
       # no scenario ran and found nothing to do (exit 1).
+      #: () -> Integer
       def exit_code = severity == "refused" ? 2 : 1
 
+      #: (?String) -> Hash[Symbol, untyped]
       def to_h(command = "run")
         own = @fix || @run ? { fix: @fix || Codes.fix(code), do: @run }.compact : { fix: Codes.fix(code), do: "nuka #{command} --help" }
         { severity: severity, code: code, message: message, **own }
@@ -38,8 +42,13 @@ module Nukadoko
 
       # `whole_files` are the files a target named whole and --tag left
       # whole, which a rerun line may name as a file.
-      attr_reader :scenarios, :selection, :tag_selection, :whole_files, :problems
+      attr_reader :scenarios #: Array[Scenario]
+      attr_reader :selection #: String
+      attr_reader :tag_selection #: Hash[Symbol, untyped]?
+      attr_reader :whole_files #: Array[String]
+      attr_reader :problems #: Array[FeatureProblem]
 
+      #: (String, Array[String], Array[String], ?features_dir: String) -> void
       def initialize(project, targets, tags, features_dir: "features")
         @project = project
         @tags = tags.map { parse_tag(_1) }
@@ -83,10 +92,12 @@ module Nukadoko
 
       # A word as a POSIX shell reads it back: as it is when it holds no
       # character the shell treats apart, otherwise in single quotes.
+      #: (String) -> String
       def self.shell_word(word) = SHELL_SAFE.match?(word) ? word : "'#{word.gsub("'") { %q('\'') }}'"
 
       private
 
+      #: (String) -> [bool, String]
       def parse_tag(expression)
         match = TAG.match(expression)
         unless match
@@ -97,8 +108,11 @@ module Nukadoko
         [!match[1].nil?, match[2]]
       end
 
+      #: (String, Array[String], Hash[String, Array[Integer]]) -> void
       def add(target, whole, lines)
-        path, line = target.match(/\A(.*?)(?::(\d+))?\z/).captures
+        parsed = target.match(/\A(.*?)(?::(\d+))?\z/) #: MatchData
+        path = parsed[1].to_s
+        line = parsed[2]
         absolute = File.expand_path(path, @project)
         if File.directory?(absolute)
           if line
@@ -126,6 +140,7 @@ module Nukadoko
 
       # Every .feature file below dir, skipping node_modules and any directory
       # whose name starts with a dot, as step discovery skips them.
+      #: (String) -> Array[String]
       def walk(dir)
         Dir.children(dir).sort.flat_map do |name|
           full = File.join(dir, name)
@@ -139,6 +154,7 @@ module Nukadoko
 
       # Two spellings of one file are one file: a target is named by its real
       # path relative to the project, so it is selected once.
+      #: (String) -> String
       def relative(absolute)
         Pathname.new(File.realpath(absolute)).relative_path_from(Pathname.new(File.realpath(@project))).to_s
       end

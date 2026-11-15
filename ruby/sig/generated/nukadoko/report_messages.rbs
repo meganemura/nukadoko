@@ -36,25 +36,33 @@ module Nukadoko
       # : (ReportRun) -> String
       def self?.render: (ReportRun) -> String
 
-      def self?.meta: (untyped version) -> untyped
+      # : (String) -> Hash[Symbol, untyped]
+      def self?.meta: (String) -> Hash[Symbol, untyped]
 
-      def self?.environment_pickles: (untyped scenarios) -> untyped
+      # : (Array[ReportRun::Scenario]) -> Hash[Integer, Hash[String, Hash[String, untyped]]]
+      def self?.environment_pickles: (Array[ReportRun::Scenario]) -> Hash[Integer, Hash[String, Hash[String, untyped]]]
 
-      def self?.ms_of: (untyped time) -> untyped
+      # : (untyped) -> Integer
+      def self?.ms_of: (untyped) -> Integer
 
-      def self?.timestamp: (untyped time) -> untyped
+      # : (untyped) -> Hash[Symbol, Integer]
+      def self?.timestamp: (untyped) -> Hash[Symbol, Integer]
 
-      def self?.stamp: (untyped ms) -> untyped
+      # : (Integer) -> Hash[Symbol, Integer]
+      def self?.stamp: (Integer) -> Hash[Symbol, Integer]
 
-      def self?.test_case: (untyped scenario, untyped pickle, untyped append) -> untyped
+      # : (ReportRun::Scenario, Hash[String, untyped], ^(Hash[Symbol, untyped]) -> void) -> void
+      def self?.test_case: (ReportRun::Scenario, Hash[String, untyped], ^(Hash[Symbol, untyped]) -> void) -> void
 
       # `exception` is set for a broken claim only: its type is a fact
       # nukadoko decided, and any other failure carries a message alone.
-      def self?.result: (untyped from, untyped to, untyped status, untyped message, ?untyped broken) -> untyped
+      # : (Integer, Integer, String, String?, ?bool) -> Hash[Symbol, untyped]
+      def self?.result: (Integer, Integer, String, String?, ?bool) -> Hash[Symbol, untyped]
 
       # The readings go with the claims: a value that walked toward the
       # expected one across a poll is visible only in them.
-      def self?.claims_attachment: (untyped record, untyped started_id, untyped step_id) -> untyped
+      # : (Hash[String, untyped], String, String) -> Array[Hash[Symbol, untyped]]
+      def self?.claims_attachment: (Hash[String, untyped], String, String) -> Array[Hash[Symbol, untyped]]
     end
   end
 end

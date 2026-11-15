@@ -32,11 +32,13 @@ module Nukadoko
 
       module_function
 
+      #: (Array[String]) -> Array[String]
       def content_tags(tags) = tags.select { _1 == HELD || _1.match?(/\A@(with|without|expects):/) }.uniq.sort
 
       # The criteria of each feature file under `root` that `paths` names,
       # relative to it. A file that does not parse is returned apart, with
       # why, since its criteria cannot be compared.
+      #: (String, Array[String]) -> [Array[Criterion], Array[Hash[Symbol, untyped]]]
       def of_files(root, paths)
         criteria = []
         unparsed = []
@@ -52,6 +54,7 @@ module Nukadoko
         [criteria, unparsed]
       end
 
+      #: (String, untyped, Array[untyped]) -> Array[Criterion]
       def of_feature(feature, document, pickles)
         places = places_of(document)
         rows = {}
@@ -85,6 +88,7 @@ module Nukadoko
         end
       end
 
+      #: (untyped) -> Hash[String, Hash[Symbol, untyped]]
       def places_of(document)
         places = {}
         feature = document.feature or return places
@@ -99,8 +103,10 @@ module Nukadoko
         places
       end
 
+      #: (untyped) -> String
       def row_line(row) = "| #{row.cells.map { _1.value.gsub("\\", "\\\\\\\\").gsub("|", "\\|") }.join(" | ")} |"
 
+      #: (untyped) -> Array[String]
       def step_lines(step)
         lines = ["#{step.keyword.strip} #{step.text}"]
         if (doc = step.doc_string)
@@ -110,17 +116,21 @@ module Nukadoko
         lines
       end
 
+      #: (Criterion) -> [untyped, untyped]
       def identity(criterion) = [criterion.feature, criterion.name]
 
+      #: (String, Integer) -> [String, Integer]
       def key(feature, line) = [feature, line]
 
       # Each head criterion's change, by `key`, and the ref's criteria that
       # head no longer has.
+      #: (Array[Criterion], Array[Criterion]) -> Hash[Symbol, untyped]
       def compare(base, head)
         changes = {}
         unmatched = base.dup
         take = lambda do |found, criterion, renamed|
-          unmatched.delete_at(unmatched.index { _1.equal?(found) })
+          at = unmatched.index { _1.equal?(found) } #: Integer
+          unmatched.delete_at(at)
           change = { change: "unchanged", at: { feature: found.feature, line: found.line } } #: Hash[Symbol, untyped]
           change[:renamed_from] = { feature: found.feature, name: found.name } if renamed
           change[:retagged] = true if found.all_tags != criterion.all_tags
@@ -149,7 +159,10 @@ module Nukadoko
         left.group_by { identity(_1) }.each do |id, group|
           earlier = before.fetch(id, [])
           paired = group.size == 1 && earlier.size == 1
-          unmatched.delete_at(unmatched.index { _1.equal?(earlier.first) }) if paired
+          if paired
+            at = unmatched.index { _1.equal?(earlier.first) } #: Integer
+            unmatched.delete_at(at)
+          end
           group.each { changes[key(_1.feature, _1.line)] = { change: paired ? "changed" : "new" } }
         end
         { changes: changes, removed: base.select { |criterion| unmatched.any? { _1.equal?(criterion) } } }

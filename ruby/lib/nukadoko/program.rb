@@ -10,9 +10,14 @@ require "net/http"
 # environment's state never reaches another's scenarios.
 module Nukadoko
   module Engine
-    Environment = Data.define(:name, :conditions, :env)
+    Environment = Data.define(
+      :name, #: String
+      :conditions, #: Hash[String, untyped]
+      :env, #: Hash[untyped, untyped]
+    )
 
     class Program
+      #: (Hash[Symbol, untyped]) -> void
       def initialize(options)
         @options = options
       end
@@ -21,6 +26,7 @@ module Nukadoko
       # defaultEnvironments in its order, else every environment that
       # declares conditions, else the top level under the name default.
       # default is always a name, whether or not the file defines it.
+      #: (?Array[String]) -> Array[Environment]
       def environments(selected = [])
         declared = self.declared
         (selected.any? ? selected : default_names).map do |name|
@@ -37,15 +43,19 @@ module Nukadoko
       end
 
       # Whether a program file gave any options, so each step names its world.
+      #: () -> bool
       def file? = !@options.empty?
 
+      #: () -> Hash[String, untyped]
       def declared = (@options[:environments] || {}).transform_keys(&:to_s)
 
+      #: (String) -> Environment
       def environment(name)
         e = declared[name] || {}
         Environment.new(name, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {})
       end
 
+      #: () -> Array[String]
       def default_names
         return @options[:defaultEnvironments].map(&:to_s) if @options[:defaultEnvironments]
 
@@ -54,6 +64,7 @@ module Nukadoko
       end
 
       # Why a run without --env starts the environments it starts.
+      #: () -> String
       def chosen_by
         if @options[:defaultEnvironments] then "defaultEnvironments in nukadoko.program.rb"
         elsif default_names == ["default"] then "no environment declares conditions"
@@ -61,6 +72,7 @@ module Nukadoko
         end
       end
 
+      #: (Environment, String, String) -> World
       def start(environment, dir, project)
         port = if @options[:serve]
           server = TCPServer.new("127.0.0.1", 0)
@@ -88,6 +100,7 @@ module Nukadoko
 
       private
 
+      #: (String, Integer?, String, Environment) -> String
       def placeholders(text, port, dir, environment)
         text.gsub("{port}", port.to_s).gsub("{dir}", dir).gsub(/\{condition\.([\w.-]+)\}/) do
           environment.conditions.fetch(Regexp.last_match(1), "").to_s
@@ -109,6 +122,7 @@ module Nukadoko
     )
 
     class World
+      #: (String) -> void
       def wait_ready(path)
         uri = URI.join(base_url, path)
         deadline = Time.now + 30
@@ -122,6 +136,7 @@ module Nukadoko
         end
       end
 
+      #: () -> void
       def stop
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         begin

@@ -47,28 +47,37 @@ module Nukadoko
 
       HELD: ::String
 
-      def self?.content_tags: (untyped tags) -> untyped
+      # : (Array[String]) -> Array[String]
+      def self?.content_tags: (Array[String]) -> Array[String]
 
       # The criteria of each feature file under `root` that `paths` names,
       # relative to it. A file that does not parse is returned apart, with
       # why, since its criteria cannot be compared.
-      def self?.of_files: (untyped root, untyped paths) -> untyped
+      # : (String, Array[String]) -> [Array[Criterion], Array[Hash[Symbol, untyped]]]
+      def self?.of_files: (String, Array[String]) -> [ Array[Criterion], Array[Hash[Symbol, untyped]] ]
 
-      def self?.of_feature: (untyped feature, untyped document, untyped pickles) -> untyped
+      # : (String, untyped, Array[untyped]) -> Array[Criterion]
+      def self?.of_feature: (String, untyped, Array[untyped]) -> Array[Criterion]
 
-      def self?.places_of: (untyped document) -> untyped
+      # : (untyped) -> Hash[String, Hash[Symbol, untyped]]
+      def self?.places_of: (untyped) -> Hash[String, Hash[Symbol, untyped]]
 
-      def self?.row_line: (untyped row) -> untyped
+      # : (untyped) -> String
+      def self?.row_line: (untyped) -> String
 
-      def self?.step_lines: (untyped step) -> untyped
+      # : (untyped) -> Array[String]
+      def self?.step_lines: (untyped) -> Array[String]
 
-      def self?.identity: (untyped criterion) -> untyped
+      # : (Criterion) -> [untyped, untyped]
+      def self?.identity: (Criterion) -> [ untyped, untyped ]
 
-      def self?.key: (untyped feature, untyped line) -> untyped
+      # : (String, Integer) -> [String, Integer]
+      def self?.key: (String, Integer) -> [ String, Integer ]
 
       # Each head criterion's change, by `key`, and the ref's criteria that
       # head no longer has.
-      def self?.compare: (untyped base, untyped head) -> untyped
+      # : (Array[Criterion], Array[Criterion]) -> Hash[Symbol, untyped]
+      def self?.compare: (Array[Criterion], Array[Criterion]) -> Hash[Symbol, untyped]
     end
   end
 end

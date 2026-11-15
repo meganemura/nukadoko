@@ -235,7 +235,8 @@ module Nukadoko
       File.write(File.join(@project, result[:run_dir], "summary.md"), Engine::Summary.render(written))
       # After run.json, so a `nuka step` that reads the walk as ended finds
       # the run's record there.
-      stopped = envelope[:scenarios].find { _1[:stopped] }&.dig(:stopped)
+      scenarios = envelope[:scenarios] #: Array[Hash[Symbol, untyped]]
+      stopped = scenarios.find { _1[:stopped] }&.dig(:stopped)
       @walk&.end({ how: "finished", exit_code: passed ? 0 : 1, findings: findings, **(stopped ? { stopped: stopped } : {}) })
       unless @json
         progress.puts "summary   #{File.join(result[:run_dir], "summary.md")}"

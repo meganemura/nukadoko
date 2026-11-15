@@ -32,10 +32,19 @@ module Nukadoko
       PROGRAM = "nukadoko.program.rb"
       STATE = ".nukadoko"
 
-      attr_reader :ref, :commit, :changes, :removed, :mapping, :base_root, :old_root, :old_environments, :program_from_head
+      attr_reader :ref #: String
+      attr_reader :commit #: String
+      attr_reader :changes #: Hash[untyped, Hash[Symbol, untyped]]
+      attr_reader :removed #: Array[Criteria::Criterion]
+      attr_reader :mapping #: Hash[Symbol, untyped]
+      attr_reader :base_root #: String?
+      attr_reader :old_root #: String?
+      attr_reader :old_environments #: Array[Environment]?
+      attr_reader :program_from_head #: bool?
 
       # The commit `ref` names, or a Refusal with the TypeScript engine's
       # code: outside git, a shallow clone that lacks it, or no such commit.
+      #: (String, String) -> String
       def self.resolve(project, ref)
         shallow, ok = git(project, "rev-parse", "--is-shallow-repository")
         raise Refusal.new("base-outside-git", "nuka run --base #{ref} needs a git repository, and the project directory is not inside one") unless ok
@@ -51,6 +60,7 @@ module Nukadoko
         raise Refusal.new("base-ref-unknown", "--base #{ref} names no commit in the project's repository", run: "git log --oneline")
       end
 
+      #: (String, *String, ?strip: bool) -> [String, bool]
       def self.git(dir, *argv, strip: true)
         out, status = Open3.capture2({ "LC_ALL" => "C" }, "git", *NO_HOOKS, "-C", dir, *argv, err: File::NULL)
         [strip ? out.strip : out, status.success?]
@@ -60,6 +70,7 @@ module Nukadoko
 
       # `selected` is each selected scenario's [feature, line]; `targets` the
       # run's targets without a line, or nil for the features directory.
+      #: (project: String, ref: String, commit: String, run_dir: String, selected: Array[[String, Integer]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?) -> void
       def initialize(project:, ref:, commit:, run_dir:, selected:, targets:, envs:, head_program:)
         @project = project
         @ref = ref
@@ -75,6 +86,7 @@ module Nukadoko
         raise
       end
 
+      #: () -> void
       def cleanup
         if @worktree
           @worktree = false
@@ -86,10 +98,13 @@ module Nukadoko
 
       # The ref's place of an unchanged head row, and the head row a place
       # at the ref is.
+      #: ([String, Integer]) -> Hash[Symbol, untyped]?
       def at(key) = @changes[key]&.then { _1[:change] == "unchanged" ? _1[:at] : nil }
 
+      #: (String, Integer) -> [String, Integer]?
       def row_of(feature, line) = @changes.find { |_, change| change[:at] == { feature: feature, line: line } }&.first
 
+      #: () -> Hash[Symbol, untyped]
       def mapping_changes
         { files: @mapping[:files].map { File.join(FEATURES, _1) }, config: @mapping[:config], conditions: @mapping[:conditions],
           default_environments: @mapping[:default_environments], unseen: [] }
@@ -97,8 +112,10 @@ module Nukadoko
 
       private
 
+      #: (String) -> String
       def in_repo(path) = @prefix.empty? ? path : File.join(@prefix, path)
 
+      #: (Array[[String, Integer]], Array[String]?, Array[String], Hash[Symbol, untyped]?) -> void
       def prepare(selected, targets, envs, head_program)
         FileUtils.mkdir_p(@trees)
         _, ok = Base.git(@top, "worktree", "add", "--detach", "--quiet", @base_top, @commit)
@@ -106,9 +123,9 @@ module Nukadoko
 
         @worktree = true
         base_project = File.join(@base_top, @prefix)
-        ref_paths = feature_files(base_project, [FEATURES, *targets])
+        ref_paths = feature_files(base_project, [FEATURES, *targets.to_a])
         ref_criteria, @unparsed = Criteria.of_files(base_project, ref_paths)
-        head_criteria, = Criteria.of_files(@project, feature_files(@project, [FEATURES, *targets]))
+        head_criteria, = Criteria.of_files(@project, feature_files(@project, [FEATURES, *targets.to_a]))
         compared = Criteria.compare(ref_criteria, head_criteria)
         @changes = compared[:changes]
         targeted = targets && feature_files(base_project, targets)
@@ -138,6 +155,7 @@ module Nukadoko
       # The environments the old world runs in, with the conditions the ref's
       # program file gives each; nil when the ref has no program file, so
       # head's environments are the old world's too.
+      #: (Hash[Symbol, untyped]?, Array[String]) -> Array[Environment]?
       def old_environments_of(program, envs)
         return nil if program.nil? || program[:problem]
 
@@ -151,6 +169,7 @@ module Nukadoko
         names.map { |name| Environment.new(name, (declared.dig(name, :conditions) || {}).transform_keys(&:to_s), {}) }
       end
 
+      #: (String, Array[String]) -> Array[String]
       def feature_files(root, targets)
         targets.flat_map do |target|
           absolute = File.join(root, target)
@@ -163,17 +182,22 @@ module Nukadoko
 
       # Head's working tree as a copy holds it: tracked files and untracked
       # ones git does not ignore, on disk, outside the state directory.
+      #: () -> Array[String]
       def working_tree_files
         listed = Base.git(@top, "ls-files", "-z", "--cached", "--others", "--exclude-standard", strip: false).first.split("\0").reject(&:empty?)
         listed.uniq.reject { within?(_1, in_repo(STATE)) }.select { File.exist?(File.join(@top, _1)) || File.symlink?(File.join(@top, _1)) }
       end
 
+      #: (String, String) -> bool
       def within?(file, dir) = dir.empty? || file == dir || file.start_with?("#{dir}/")
 
+      #: (String) -> bool
       def mapping?(file) = within?(file, in_repo(FEATURES)) || file == in_repo(CONFIG)
 
+      #: (String) -> String
       def hash_of(file) = File.symlink?(file) ? "link:#{File.readlink(file)}" : Digest::SHA256.file(file).hexdigest
 
+      #: (Array[String], String) -> Hash[String, String]
       def mapping_files(files, top)
         dir = in_repo(FEATURES)
         files.select { within?(_1, dir) && !_1.end_with?(".feature") && File.file?(File.join(top, _1)) }
@@ -182,6 +206,7 @@ module Nukadoko
 
       # The ref's program file read in a process of its own, since loading
       # it here would replace head's: its conditions and defaultEnvironments.
+      #: (String) -> Hash[Symbol, untyped]
       def read_program(root)
         script = 'require "nukadoko"; load ARGV[0]; o = Nukadoko.program_options; ' \
                  'puts JSON.generate(environments: (o[:environments] || {}).to_h { |k, v| [k, { conditions: v[:conditions] }] }, defaultEnvironments: o[:defaultEnvironments])'
@@ -193,11 +218,13 @@ module Nukadoko
         program
       end
 
+      #: (Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
       def program_mapping(program)
         environments = (program && program[:environments]) || {}
         { conditions: environments.to_h { |name, e| [name.to_s, JSON.generate(e[:conditions])] }, defaults: JSON.generate(program && program[:defaultEnvironments]) }
       end
 
+      #: (Array[String], Array[String], String, Hash[Symbol, untyped]?, Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
       def compare_mapping(head_files, ref_files, base_project, head_program, ref_program)
         head = mapping_files(head_files, @top)
         ref = mapping_files(ref_files, @base_top)
@@ -218,6 +245,7 @@ module Nukadoko
         { changed: changed, files: files, config: config, conditions: conditions, default_environments: defaults }
       end
 
+      #: (String, String) -> void
       def copy(from, to)
         FileUtils.mkdir_p(File.dirname(to))
         FileUtils.rm_rf(to)
@@ -226,6 +254,7 @@ module Nukadoko
 
       # The ref's checkout loses the ref's mapping and gains head's; the
       # ref's program file stays, or head's comes in when the ref has none.
+      #: (Array[String], Array[String]) -> void
       def overlay_base_tree(head_files, ref_files)
         ref_files.select { mapping?(_1) }.each { FileUtils.rm_f(File.join(@base_top, _1)) }
         head_files.select { mapping?(_1) }.each { copy(File.join(@top, _1), File.join(@base_top, _1)) }
@@ -235,6 +264,7 @@ module Nukadoko
 
       # Head's working tree with the ref's mapping in place of its own,
       # written before the base checkout is overlaid.
+      #: (Array[String], Array[String]) -> void
       def write_old_tree(head_files, ref_files)
         head_files.reject { mapping?(_1) }.each { copy(File.join(@top, _1), File.join(@old_top, _1)) }
         ref_files.select { mapping?(_1) }.each { copy(File.join(@base_top, _1), File.join(@old_top, _1)) }

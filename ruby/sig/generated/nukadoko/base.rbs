@@ -29,86 +29,108 @@ module Nukadoko
 
       STATE: ::String
 
-      attr_reader ref: untyped
+      attr_reader ref: String
 
-      attr_reader commit: untyped
+      attr_reader commit: String
 
-      attr_reader changes: untyped
+      attr_reader changes: Hash[untyped, Hash[Symbol, untyped]]
 
-      attr_reader removed: untyped
+      attr_reader removed: Array[Criteria::Criterion]
 
-      attr_reader mapping: untyped
+      attr_reader mapping: Hash[Symbol, untyped]
 
-      attr_reader base_root: untyped
+      attr_reader base_root: String?
 
-      attr_reader old_root: untyped
+      attr_reader old_root: String?
 
-      attr_reader old_environments: untyped
+      attr_reader old_environments: Array[Environment]?
 
-      attr_reader program_from_head: untyped
+      attr_reader program_from_head: bool?
 
       # The commit `ref` names, or a Refusal with the TypeScript engine's
       # code: outside git, a shallow clone that lacks it, or no such commit.
-      def self.resolve: (untyped project, untyped ref) -> untyped
+      # : (String, String) -> String
+      def self.resolve: (String, String) -> String
 
-      def self.git: (untyped dir, *untyped argv, ?strip: untyped) -> untyped
+      # : (String, *String, ?strip: bool) -> [String, bool]
+      def self.git: (String, *String, ?strip: bool) -> [ String, bool ]
 
       # `selected` is each selected scenario's [feature, line]; `targets` the
       # run's targets without a line, or nil for the features directory.
-      def initialize: (project: untyped, ref: untyped, commit: untyped, run_dir: untyped, selected: untyped, targets: untyped, envs: untyped, head_program: untyped) -> untyped
+      # : (project: String, ref: String, commit: String, run_dir: String, selected: Array[[String, Integer]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?) -> void
+      def initialize: (project: String, ref: String, commit: String, run_dir: String, selected: Array[[ String, Integer ]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?) -> void
 
-      def cleanup: () -> untyped
+      # : () -> void
+      def cleanup: () -> void
 
       # The ref's place of an unchanged head row, and the head row a place
       # at the ref is.
-      def at: (untyped key) -> untyped
+      # : ([String, Integer]) -> Hash[Symbol, untyped]?
+      def at: ([ String, Integer ]) -> Hash[Symbol, untyped]?
 
-      def row_of: (untyped feature, untyped line) -> untyped
+      # : (String, Integer) -> [String, Integer]?
+      def row_of: (String, Integer) -> [ String, Integer ]?
 
-      def mapping_changes: () -> untyped
+      # : () -> Hash[Symbol, untyped]
+      def mapping_changes: () -> Hash[Symbol, untyped]
 
       private
 
-      def in_repo: (untyped path) -> untyped
+      # : (String) -> String
+      def in_repo: (String) -> String
 
-      def prepare: (untyped selected, untyped targets, untyped envs, untyped head_program) -> untyped
+      # : (Array[[String, Integer]], Array[String]?, Array[String], Hash[Symbol, untyped]?) -> void
+      def prepare: (Array[[ String, Integer ]], Array[String]?, Array[String], Hash[Symbol, untyped]?) -> void
 
       # The environments the old world runs in, with the conditions the ref's
       # program file gives each; nil when the ref has no program file, so
       # head's environments are the old world's too.
-      def old_environments_of: (untyped program, untyped envs) -> untyped
+      # : (Hash[Symbol, untyped]?, Array[String]) -> Array[Environment]?
+      def old_environments_of: (Hash[Symbol, untyped]?, Array[String]) -> Array[Environment]?
 
-      def feature_files: (untyped root, untyped targets) -> untyped
+      # : (String, Array[String]) -> Array[String]
+      def feature_files: (String, Array[String]) -> Array[String]
 
       # Head's working tree as a copy holds it: tracked files and untracked
       # ones git does not ignore, on disk, outside the state directory.
-      def working_tree_files: () -> untyped
+      # : () -> Array[String]
+      def working_tree_files: () -> Array[String]
 
-      def within?: (untyped file, untyped dir) -> untyped
+      # : (String, String) -> bool
+      def within?: (String, String) -> bool
 
-      def mapping?: (untyped file) -> untyped
+      # : (String) -> bool
+      def mapping?: (String) -> bool
 
-      def hash_of: (untyped file) -> untyped
+      # : (String) -> String
+      def hash_of: (String) -> String
 
-      def mapping_files: (untyped files, untyped top) -> untyped
+      # : (Array[String], String) -> Hash[String, String]
+      def mapping_files: (Array[String], String) -> Hash[String, String]
 
       # The ref's program file read in a process of its own, since loading
       # it here would replace head's: its conditions and defaultEnvironments.
-      def read_program: (untyped root) -> untyped
+      # : (String) -> Hash[Symbol, untyped]
+      def read_program: (String) -> Hash[Symbol, untyped]
 
-      def program_mapping: (untyped program) -> untyped
+      # : (Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
+      def program_mapping: (Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
 
-      def compare_mapping: (untyped head_files, untyped ref_files, untyped base_project, untyped head_program, untyped ref_program) -> untyped
+      # : (Array[String], Array[String], String, Hash[Symbol, untyped]?, Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
+      def compare_mapping: (Array[String], Array[String], String, Hash[Symbol, untyped]?, Hash[Symbol, untyped]?) -> Hash[Symbol, untyped]
 
-      def copy: (untyped from, untyped to) -> untyped
+      # : (String, String) -> void
+      def copy: (String, String) -> void
 
       # The ref's checkout loses the ref's mapping and gains head's; the
       # ref's program file stays, or head's comes in when the ref has none.
-      def overlay_base_tree: (untyped head_files, untyped ref_files) -> untyped
+      # : (Array[String], Array[String]) -> void
+      def overlay_base_tree: (Array[String], Array[String]) -> void
 
       # Head's working tree with the ref's mapping in place of its own,
       # written before the base checkout is overlaid.
-      def write_old_tree: (untyped head_files, untyped ref_files) -> untyped
+      # : (Array[String], Array[String]) -> void
+      def write_old_tree: (Array[String], Array[String]) -> void
     end
   end
 end

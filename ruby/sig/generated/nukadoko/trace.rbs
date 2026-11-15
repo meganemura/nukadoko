@@ -17,54 +17,65 @@ module Nukadoko
 
       MAX_SPANS: ::Integer
 
-      def self.new_prefix: () -> untyped
+      # : () -> String
+      def self.new_prefix: () -> String
 
       # W3C reserves an id of all zeros as invalid, so one is drawn again.
-      def self.new_id: (untyped prefix) -> untyped
+      # : (String) -> String
+      def self.new_id: (String) -> String
 
-      def self.new_span: () -> untyped
+      # : () -> String
+      def self.new_span: () -> String
 
-      def self.traceparent: (untyped trace_id, untyped span) -> untyped
+      # : (String, String) -> String
+      def self.traceparent: (String, String) -> String
 
       # The trace id of the world `prefix` names that `line` carries, or nil.
-      def self.id_in: (untyped line, untyped prefix) -> untyped
+      # : (String, String) -> String?
+      def self.id_in: (String, String) -> String?
 
-      def self.origin: (untyped uri) -> untyped
+      # : (URI::Generic) -> String
+      def self.origin: (URI::Generic) -> String
 
       # Only the world's origin gets the header: a third party's server may
       # answer a header it did not expect differently. A world at localhost
       # also answers at each name below localhost on the same port.
-      def self.stamps?: (untyped world, untyped target) -> untyped
+      # : (untyped, untyped) -> bool
+      def self.stamps?: (untyped, untyped) -> bool
 
       # The step that runs now, kept per thread as the processes are.
-      def self.current: () -> untyped
+      # : () -> Boundary?
+      def self.current: () -> Boundary?
 
       # : [T] (Boundary) { () -> T } -> T
       def self.within: [T] (Boundary) { () -> T } -> T
 
       # One step's trace: what it stamped, and when it last did.
       class Boundary
-        attr_reader trace_id: untyped
+        attr_reader trace_id: String
 
-        attr_reader origin: untyped
+        attr_reader origin: String
 
-        attr_reader stamped: untyped
+        attr_reader stamped: Integer
 
-        attr_reader spans: untyped
+        attr_reader spans: Array[String]
 
-        attr_reader process_spans: untyped
+        attr_reader process_spans: Array[String]
 
-        attr_reader last_stamp_at: untyped
+        attr_reader last_stamp_at: Float?
 
-        def initialize: (untyped trace_id, untyped origin) -> untyped
+        # : (String, String) -> void
+        def initialize: (String, String) -> void
 
         # The traceparent a request to `url` goes out with, or nil when it
         # is not the world's.
-        def stamp: (untyped url) -> untyped
+        # : (untyped) -> String?
+        def stamp: (untyped) -> String?
 
         # A process's TRACEPARENT is not a stamped request: nothing waits
         # for the request it may send, but the log is read a little longer.
-        def process_traceparent: () -> untyped
+        # : () -> String
+        def process_traceparent: () -> String
       end
 
       # program.log read forward as the steps run: each step takes the
@@ -85,22 +96,26 @@ module Nukadoko
 
         KEPT: untyped
 
-        attr_reader path: untyped
+        attr_reader path: String
 
-        attr_reader prefix: untyped
+        attr_reader prefix: String
 
-        def initialize: (untyped path, untyped prefix) -> untyped
+        # : (String, String) -> void
+        def initialize: (String, String) -> void
 
-        def slice: (untyped dir, untyped boundary) -> untyped
+        # : (String, Boundary) -> Hash[Symbol, untyped]
+        def slice: (String, Boundary) -> Hash[Symbol, untyped]
 
         # Once the world stopped: how many lines carry a trace id of the
         # world, and each step's lines that its slice did not read, written
         # beside its record. `steps` maps a trace id to [lines read, dir].
-        def late: (untyped steps) -> untyped
+        # : (Hash[String, [Integer, String]]) -> Hash[Symbol, untyped]
+        def late: (Hash[String, [ Integer, String ]]) -> Hash[Symbol, untyped]
 
         private
 
-        def now: () -> untyped
+        # : () -> Float
+        def now: () -> Float
 
         # A line still being written, after the last newline, is left for
         # the next read.

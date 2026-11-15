@@ -17,8 +17,12 @@ module Nukadoko
         "working-tree-unknown" => "No change is necessary. In a git repository with a commit, nuka verdict compares the tree with the one the run judged."
       }.freeze
 
-      attr_reader :judged, :findings, :newest, :working_tree
+      attr_reader :judged #: String
+      attr_reader :findings #: Array[Hash[Symbol, untyped]]
+      attr_reader :newest #: Hash[Symbol, untyped]?
+      attr_reader :working_tree #: String?
 
+      #: (String) -> void
       def initialize(project)
         # The tree is read before the runs: a run that ends in between is
         # judged against the tree before it, which can only make the answer
@@ -30,6 +34,7 @@ module Nukadoko
 
       # The run with the latest start; a run.json whose run_id is not its
       # directory's name, or that does not parse, is no run.
+      #: (String) -> Hash[Symbol, untyped]?
       def self.newest_run(project)
         Dir.glob(File.join(project, ".nukadoko", "runs", "*", "run.json")).filter_map do |file|
           run = JSON.parse(File.read(file), symbolize_names: true)
@@ -40,13 +45,16 @@ module Nukadoko
         end.max_by { [Time.iso8601(_1[:started_at]), _1[:run_id]] }
       end
 
+      #: () -> bool
       def open? = findings.any? { %w[failed error].include?(_1[:severity]) }
 
+      #: () -> Hash[Symbol, untyped]
       def envelope_fields
         { judged: judged, working_tree: working_tree, run_id: newest&.fetch(:run_id), run_dir: newest&.fetch(:run_dir, nil),
           run_working_tree: newest && recorded, base: newest&.dig(:table, :base) }
       end
 
+      #: () -> String
       def headline
         id = newest && newest[:run_id]
         case judged
@@ -61,13 +69,17 @@ module Nukadoko
 
       private
 
+      #: () -> String?
       def recorded
-        tree = newest.dig(:commit, :working_tree) if newest[:commit].is_a?(Hash)
+        run = newest or return nil
+        tree = run.dig(:commit, :working_tree) if run[:commit].is_a?(Hash)
         tree.is_a?(String) && !tree.empty? ? tree : nil
       end
 
+      #: () -> String
       def again = "nuka run"
 
+      #: () -> [String, Array[Hash[Symbol, untyped]]]
       def judge
         unless newest
           return ["missing", [{ severity: "failed", code: "run-missing", message: "no nuka run has ended in this project, so nothing judged this working tree", do: again }]]
@@ -98,13 +110,18 @@ module Nukadoko
         [working_tree ? "judged" : "unknown", findings]
       end
 
+      #: (String, String) -> Hash[Symbol, untyped]
       def note(code, message) = { severity: "note", code: code, message: message, fix: FIXES.fetch(code) }
 
+      #: () -> String
       def stale_message
-        head = "the newest run #{newest[:run_id]} (started #{newest[:started_at]})"
-        return "#{head} recorded no working tree id (outside git then, or written by an earlier nukadoko), so it cannot be matched to the working tree #{working_tree[0, 12]}" unless recorded
+        run = newest || {}
+        tree = working_tree.to_s[0, 12]
+        head = "the newest run #{run[:run_id]} (started #{run[:started_at]})"
+        ran = recorded
+        return "#{head} recorded no working tree id (outside git then, or written by an earlier nukadoko), so it cannot be matched to the working tree #{tree}" unless ran
 
-        "#{head} judged working tree #{recorded[0, 12]}, and the working tree is now #{working_tree[0, 12]}: its verdicts say nothing about what changed since"
+        "#{head} judged working tree #{ran[0, 12]}, and the working tree is now #{tree}: its verdicts say nothing about what changed since"
       end
     end
   end

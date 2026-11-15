@@ -88,6 +88,7 @@ module Nukadoko
 
       private
 
+      #: (String) -> Hash[Symbol, untyped]?
       def parse_target(target)
         match = /\A(.+):([1-9][0-9]*)\z/.match(target) or return nil
         { feature: match[1].to_s, line: match[2].to_i }
@@ -95,6 +96,7 @@ module Nukadoko
 
       # The run a name names (its id or its directory), or the newest run
       # that ended.
+      #: (String?) -> Hash[Symbol, untyped]?
       def run_named(name)
         runs = Dir.glob(File.join(@project, RUNS, "*", "run.json")).sort.filter_map do |file|
           document = JSON.parse(File.read(file, encoding: "UTF-8"), symbolize_names: true)
@@ -107,6 +109,7 @@ module Nukadoko
         runs.max_by { [(Time.iso8601(_1[:started_at].to_s) rescue Time.at(0)), _1[:run_id]] }
       end
 
+      #: (Hash[Symbol, untyped]?, String, Hash[Symbol, untyped], Array[untyped]) -> String?
       def unjudgeable(row, target, run, values)
         return "#{run[:run_id]} ran no criterion at #{target}" unless row
 
@@ -121,6 +124,7 @@ module Nukadoko
 
       # Why the value a step record holds for a read is not the one run.json
       # recorded, or nil when the two agree.
+      #: (Hash[Symbol, untyped], untyped) -> String?
       def record_disagrees(read, record)
         name = read[:record] || "the step record"
         claims = record.is_a?(Hash) ? record["claims"] : nil
@@ -132,17 +136,20 @@ module Nukadoko
         digest == read[:value_digest] ? nil : "#{name} holds a value whose digest is #{digest}, and run.json recorded #{read[:value_digest]}, so the two records disagree"
       end
 
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Array[String]
       def seen_of(run, read)
         scenario = run[:scenarios].find { |entry| !entry[:world] && entry[:environment] == read[:environment] && entry[:steps].any? { _1[:line] == read[:line] && _1[:text] == read[:step] } }
         step = scenario && scenario[:steps].find { _1[:line] == read[:line] && _1[:text] == read[:step] }
         (step&.dig(:judged_view, :pages) || []).flat_map { [_1.dig(:screenshot, :file), _1.dig(:aria, :file)].grep(String) }
       end
 
+      #: (untyped) -> Array[String]
       def value_block(value)
         text = value.is_a?(String) ? value : JSON.pretty_generate(value)
         text.split("\n", -1).map { "    #{_1}" }
       end
 
+      #: (String, Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Integer
       def show(target, row, run, shown, place)
         if @json
           values = shown.map { |entry| { **entry[:read], value: entry[:value], seen: entry[:seen] } }
@@ -169,6 +176,7 @@ module Nukadoko
         0
       end
 
+      #: (String, Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], String, String) -> Integer
       def record(target, row, run, shown, place, entries, verdict, rerun)
         at = Time.now.utc.iso8601(3)
         shown.each do |entry|
@@ -190,11 +198,13 @@ module Nukadoko
         0
       end
 
+      #: (Hash[Symbol, untyped]) -> Integer
       def emit(fields)
         @out.puts JSON.pretty_generate({ schema_version: Engine::RunRecord::SCHEMA_VERSION, nukadoko: VERSION, command: "judge", **fields, verdict: "passed", findings: [] })
         0
       end
 
+      #: (String, ?fix: String?, ?run: String?) -> Integer
       def refused(message, fix: nil, run: nil)
         finding = Engine::Refusal.new("judgment-refused", message, fix: fix, run: run).to_h("judge")
         if @json

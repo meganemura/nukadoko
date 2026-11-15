@@ -23,6 +23,7 @@ module Nukadoko
       module_function
 
       # A `[..` that `]`, or `:`, a name, and `]`, do not follow is text.
+      #: (String) -> Fixed
       def fixed_line(line)
         parts = []
         names = {}
@@ -30,15 +31,12 @@ module Nukadoko
         open = line.index("[..")
         while open
           close = line.index("]", open + 3)
-          name = if close == open + 3 then nil
-                 elsif line[open + 3] == ":" && close && line[(open + 4)...close].match?(STAND_IN_NAME) then line[(open + 4)...close]
-                 else :text
-                 end
-          if name == :text
+          inner = close && line[(open + 3)...close]
+          unless close && (inner == "" || (inner.to_s.start_with?(":") && inner.to_s[1..].to_s.match?(STAND_IN_NAME)))
             open = line.index("[..", open + 1)
             next
           end
-          names[parts.size] = name if name
+          names[parts.size] = inner.to_s[1..] unless inner == ""
           parts << line[from...open]
           from = close + 1
           open = line.index("[..", from)
@@ -48,6 +46,7 @@ module Nukadoko
       end
 
       # A text's lines, at "\n" or "\r\n", with one final empty line dropped.
+      #: (String) -> Array[String]
       def lines(text)
         split = text.split(/\r?\n/, -1)
         split.pop if split.last == ""
@@ -56,6 +55,7 @@ module Nukadoko
 
       # Each part between the first and the last is found leftmost after
       # the one before it, which is enough when a stand-in takes anything.
+      #: (Array[String], String, ?Array[String?]?) -> bool
       def parts_fit(parts, line, reads = nil)
         return parts[0] == line if parts.size == 1
 
@@ -65,7 +65,7 @@ module Nukadoko
 
         at = first.size
         stop = line.size - last.size
-        parts[1...-1].each do |part|
+        parts[1...-1].to_a.each do |part|
           found = line.index(part, at)
           return false if found.nil? || found + part.size > stop
 
@@ -76,11 +76,13 @@ module Nukadoko
         true
       end
 
+      #: (String, String) -> bool
       def line_fits(pattern, line) = parts_fit(fixed_line(pattern).parts, line)
 
       # { fits: true }, or where the text stopped fitting: `fitted` expected
       # lines fit, `expected` fit nothing from actual line `at` on, which is
       # `actual`; or `readings`, the two named stand-ins that disagree.
+      #: (String, String) -> Hash[Symbol, untyped]
       def fit(actual, expected)
         have = lines(actual)
         want_lines = lines(expected)
@@ -112,16 +114,17 @@ module Nukadoko
       # The actual line each expected line takes in the first way the text
       # fits, each `...` taking as few lines as it can from the top: a walk
       # from the end learns which lines the rest can start at.
+      #: (Array[String], Array[Fixed?]) -> Array[Integer?]
       def first_fit(have, want)
         rests = []
-        rest = { at: [have.size] }
+        rest = { at: [have.size] } #: Hash[Symbol, untyped]
         (want.size - 1).downto(0) do |index|
           line = want[index]
           if line.nil?
             rest = { up_to: rest[:up_to] || rest[:at][-1] }
           else
             candidates = rest[:up_to] ? (0...rest[:up_to]).to_a : rest[:at].select(&:positive?).map { _1 - 1 }
-            rest = { at: candidates.select { _1 < have.size && parts_fit(line.parts, have[_1]) } }
+            rest = { at: candidates.select { _1 < have.size && parts_fit(line.parts, have.fetch(_1)) } }
           end
           rests[index] = rest
         end
@@ -142,15 +145,16 @@ module Nukadoko
         taken
       end
 
+      #: (Array[String], Array[Fixed?], Array[Integer?]) -> Hash[Symbol, untyped]
       def names_fit(have, want, taken)
         by_name = {}
         by_text = {}
         want.each_with_index do |line, index|
           next if line.nil? || line.names.empty?
 
-          at = taken[index]
-          reads = []
-          parts_fit(line.parts, have[at], reads)
+          at = taken[index] #: Integer
+          reads = [] #: Array[String?]
+          parts_fit(line.parts, have[at].to_s, reads)
           line.names.each do |place, name|
             reading = { name: name, text: reads[place], at: at + 1, line: have[at] }
             before = by_name[name] || by_text[reading[:text]]
@@ -166,6 +170,7 @@ module Nukadoko
       end
 
       # Whether an expected text states nothing beyond its stand-ins.
+      #: (String) -> bool
       def only_stand_ins?(expected)
         lines(expected).all? { _1 == ANY_LINES || fixed_line(_1).parts.join.strip.empty? }
       end

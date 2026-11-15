@@ -26,29 +26,39 @@ module Nukadoko
 
       private
 
-      def parse_target: (untyped target) -> untyped
+      # : (String) -> Hash[Symbol, untyped]?
+      def parse_target: (String) -> Hash[Symbol, untyped]?
 
       # The run a name names (its id or its directory), or the newest run
       # that ended.
-      def run_named: (untyped name) -> untyped
+      # : (String?) -> Hash[Symbol, untyped]?
+      def run_named: (String?) -> Hash[Symbol, untyped]?
 
-      def unjudgeable: (untyped row, untyped target, untyped run, untyped values) -> untyped
+      # : (Hash[Symbol, untyped]?, String, Hash[Symbol, untyped], Array[untyped]) -> String?
+      def unjudgeable: (Hash[Symbol, untyped]?, String, Hash[Symbol, untyped], Array[untyped]) -> String?
 
       # Why the value a step record holds for a read is not the one run.json
       # recorded, or nil when the two agree.
-      def record_disagrees: (untyped read, untyped record) -> untyped
+      # : (Hash[Symbol, untyped], untyped) -> String?
+      def record_disagrees: (Hash[Symbol, untyped], untyped) -> String?
 
-      def seen_of: (untyped run, untyped read) -> untyped
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Array[String]
+      def seen_of: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Array[String]
 
-      def value_block: (untyped value) -> untyped
+      # : (untyped) -> Array[String]
+      def value_block: (untyped) -> Array[String]
 
-      def show: (untyped target, untyped row, untyped run, untyped shown, untyped place) -> untyped
+      # : (String, Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Integer
+      def show: (String, Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Integer
 
-      def record: (untyped target, untyped row, untyped run, untyped shown, untyped place, untyped entries, untyped verdict, untyped rerun) -> untyped
+      # : (String, Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], String, String) -> Integer
+      def record: (String, Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], String, String) -> Integer
 
-      def emit: (untyped fields) -> untyped
+      # : (Hash[Symbol, untyped]) -> Integer
+      def emit: (Hash[Symbol, untyped]) -> Integer
 
-      def refused: (untyped message, ?fix: untyped, ?run: untyped) -> untyped
+      # : (String, ?fix: String?, ?run: String?) -> Integer
+      def refused: (String, ?fix: String?, ?run: String?) -> Integer
     end
   end
 end

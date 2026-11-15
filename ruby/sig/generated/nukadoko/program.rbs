@@ -6,14 +6,14 @@
 module Nukadoko
   module Engine
     class Environment < Data
-      attr_reader name(): untyped
+      attr_reader name(): String
 
-      attr_reader conditions(): untyped
+      attr_reader conditions(): Hash[String, untyped]
 
-      attr_reader env(): untyped
+      attr_reader env(): Hash[untyped, untyped]
 
-      def self.new: (untyped name, untyped conditions, untyped env) -> instance
-                  | (name: untyped, conditions: untyped, env: untyped) -> instance
+      def self.new: (String name, Hash[String, untyped] conditions, Hash[untyped, untyped] env) -> instance
+                  | (name: String, conditions: Hash[String, untyped], env: Hash[untyped, untyped]) -> instance
 
       def self.members: () -> [ :name, :conditions, :env ]
 
@@ -21,31 +21,40 @@ module Nukadoko
     end
 
     class Program
-      def initialize: (untyped options) -> untyped
+      # : (Hash[Symbol, untyped]) -> void
+      def initialize: (Hash[Symbol, untyped]) -> void
 
       # The worlds a run starts: each --env in the order given; without one,
       # defaultEnvironments in its order, else every environment that
       # declares conditions, else the top level under the name default.
       # default is always a name, whether or not the file defines it.
-      def environments: (?untyped selected) -> untyped
+      # : (?Array[String]) -> Array[Environment]
+      def environments: (?Array[String]) -> Array[Environment]
 
       # Whether a program file gave any options, so each step names its world.
-      def file?: () -> untyped
+      # : () -> bool
+      def file?: () -> bool
 
-      def declared: () -> untyped
+      # : () -> Hash[String, untyped]
+      def declared: () -> Hash[String, untyped]
 
-      def environment: (untyped name) -> untyped
+      # : (String) -> Environment
+      def environment: (String) -> Environment
 
-      def default_names: () -> untyped
+      # : () -> Array[String]
+      def default_names: () -> Array[String]
 
       # Why a run without --env starts the environments it starts.
-      def chosen_by: () -> untyped
+      # : () -> String
+      def chosen_by: () -> String
 
-      def start: (untyped environment, untyped dir, untyped project) -> untyped
+      # : (Environment, String, String) -> World
+      def start: (Environment, String, String) -> World
 
       private
 
-      def placeholders: (untyped text, untyped port, untyped dir, untyped environment) -> untyped
+      # : (String, Integer?, String, Environment) -> String
+      def placeholders: (String, Integer?, String, Environment) -> String
     end
 
     # A started program: where it answers, its env, the prefix of every
@@ -76,9 +85,11 @@ module Nukadoko
     end
 
     class World
-      def wait_ready: (untyped path) -> untyped
+      # : (String) -> void
+      def wait_ready: (String) -> void
 
-      def stop: () -> untyped
+      # : () -> void
+      def stop: () -> void
     end
   end
 end

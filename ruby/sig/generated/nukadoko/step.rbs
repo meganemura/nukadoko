@@ -9,9 +9,11 @@ module Nukadoko
     # : () -> String
     def self.file: () -> String
 
-    def self.inherited: (untyped subclass) -> untyped
+    # : (singleton(Step)) -> void
+    def self.inherited: (singleton(Step)) -> void
 
-    def self.registry: () -> untyped
+    # : () -> Array[singleton(Step)]
+    def self.registry: () -> Array[singleton(Step)]
 
     # : (String) -> String
     # : () -> String?
@@ -65,27 +67,35 @@ module Nukadoko
 
     # observe never sees the args a claim compares with, so it cannot pick
     # what to read by the answer it will be judged against.
-    def self.inputs: () -> untyped
+    # : () -> Schema
+    def self.inputs: () -> Schema
 
-    def self.step_name: () -> untyped
+    # : () -> String
+    def self.step_name: () -> String
 
     # A step that runs code may change the world unless it says it does
     # not; a claim step has no action, so it never does.
-    def self.mutating?: () -> untyped
+    # : () -> bool
+    def self.mutating?: () -> bool
 
-    def self.body: () -> untyped
+    # : () -> Symbol
+    def self.body: () -> Symbol
 
-    def self.line: () -> untyped
+    # : () -> Integer?
+    def self.line: () -> Integer?
 
-    def self.fixtures: () -> untyped
+    # : () -> Array[Symbol]
+    def self.fixtures: () -> Array[Symbol]
 
     # The fixtures the engine builds before the body runs: the step's own,
     # and those of every part it can reach, since the bag is closed before
     # any call happens.
-    def self.bag: (?untyped seen) -> untyped
+    # : (?Array[singleton(Step)]) -> Array[Symbol]
+    def self.bag: (?Array[singleton(Step)]) -> Array[Symbol]
   end
 
   # Each step file is registered for autoload under its class name first, so a
   # step can name another in `from` or `field` whatever order the files load in.
-  def self.load_steps: (untyped dir) -> untyped
+  # : (String) -> Array[singleton(Step)]
+  def self.load_steps: (String) -> Array[singleton(Step)]
 end
