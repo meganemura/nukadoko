@@ -137,6 +137,10 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - `nuka init` adds a `scenarios` task that runs `bundle exec nuka run` to
   a Rakefile that has none, and the config file it writes points at the
   spec online, since the gem ships no `docs/`.
+- `nuka --help` lists the commands by what they are for (Everyday,
+  Exploring, Upkeep), as the TypeScript engine does, and `--version`
+  prints the version. A command nuka does not have is refused, pointing at
+  `nuka --help`.
 - A step definition `nuka check` refuses is named by the step's class
   (`CountMatches claims[0] ...`) instead of `defineStep`, which a Ruby
   step does not have.

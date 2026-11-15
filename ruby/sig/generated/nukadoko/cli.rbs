@@ -13,6 +13,12 @@ module Nukadoko
     # : (Array[String], ?project: String, ?out: IO) -> void
     def initialize: (Array[String], ?project: String, ?out: IO) -> void
 
+    # The commands by what a user reaches them for, in the TypeScript
+    # engine's words, so `nuka --help` reads the same in both.
+    HELP: ::String
+
+    COMMANDS: untyped
+
     # : () -> Integer
     def call: () -> Integer
 

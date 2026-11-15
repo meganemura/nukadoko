@@ -24,8 +24,70 @@ module Nukadoko
       @out = out
     end
 
+    # The commands by what a user reaches them for, in the TypeScript
+    # engine's words, so `nuka --help` reads the same in both.
+    HELP = <<~TEXT
+      nuka <command>
+
+      Everyday:
+        nuka init               set up a project; ends with a self-check
+        nuka scaffold [name]    typed step template that fails until implemented
+        nuka check [feature..]  static checks: pattern/schema mismatches, claim steps
+                                and where they are bound, undefined steps per feature,
+                                duplicate patterns, config coherence, and notes on
+                                unused declarations
+        nuka run [feature..]    check, then execute scenarios from a feature file or a
+                                directory of them (features/ when none is given);
+                                step records + run.json
+        nuka report [run]       render a finished run as Markdown, Allure results, or
+                                a cucumber-messages stream, from its run directory
+                                alone
+        nuka verdict            say whether the newest run judged the working tree as
+                                it is now and left nothing red; exits 1 when it did
+                                not, and never starts a run
+        nuka judge <target>     show the values a run read for a criterion whose Then
+                                asks for a judgment (<feature file>:<scenario line>),
+                                or record a judgment of them with --meets or --misses
+        nuka steps              list the whole vocabulary: name, patterns,
+                                description, mutates
+        nuka describe <name>    full contract, schemas as JSON Schema
+
+      Exploring:
+        nuka do <name>          execute one typed step; step record to stdout
+        nuka step               follow and answer a walk of nuka run --step, one pause
+                                at a time
+
+      Upkeep:
+        nuka clean              delete accumulated runs, do records, and what nuka
+                                report wrote under export/, in the state directory
+        nuka skill              path the agent-facing skills' source directory
+        nuka sig                write sig/nukadoko/steps.rbs, the RBS of each step's
+                                args and returns, for Steep
+
+      Options:
+        --version  Show version number
+        --help     Show help
+
+      An agent starts at the llms.txt in the gem's directory, the one above what
+      nuka skill path prints: the loop, every command, and every finding code.
+    TEXT
+    COMMANDS = %w[init scaffold check run report verdict judge steps describe do step clean skill sig __tree].freeze
+
     #: () -> Integer
     def call
+      if @command == "--help"
+        @out.write(HELP)
+        return 0
+      end
+      if @command == "--version"
+        @out.puts VERSION
+        return 0
+      end
+      unless COMMANDS.include?(@command)
+        @out = $stderr
+        message = @command.nil? ? "Not enough non-option arguments: got 0, need at least 1" : "Unknown argument: #{@command}"
+        return refuse(Engine::Refusal.new("invalid-arguments", message, run: "nuka --help"))
+      end
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: #{@unknown.first}")) if @unknown.any?
       return verdict if @command == "verdict"
       return Judge.new(@project, @rest, @options, json: @json, out: @out).call if @command == "judge"
@@ -77,8 +139,7 @@ module Nukadoko
       when "scaffold" then scaffold(steps, scenarios)
       when "__tree" then tree(steps)
       else
-        warn "usage: nuka check|run|verdict|steps|describe <step>|sig [--json] [--no-check]"
-        2
+        raise "unreachable: #{@command} is in COMMANDS but has no branch"
       end
     end
 
