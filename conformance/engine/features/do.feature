@@ -129,7 +129,7 @@ Feature: nuka do runs one typed step alone
       do: nuka do --help
       """
 
-  Scenario: an environment the program file does not define
+  Scenario: an environment the program does not define
     Given the project "chain"
     When nuka runs 'do double --args {"n":3} --env nope'
     Then it exits with 2
@@ -137,6 +137,6 @@ Feature: nuka do runs one typed step alone
       """
       severity: refused
       code: unknown-environment
-      message: Unknown environment "nope": not defined in nukadoko.program.*'s "environments"
-      fix: Leave out --env or pass --env default (nukadoko.program.* defines no other environment), or add environments.nope to nukadoko.program.*.
+      message: Unknown environment "nope": not defined in the environments of the program in nukadoko.config.*
+      fix: Leave out --env or pass --env default (the program in nukadoko.config.* defines no other environment), or add environments.nope to the program in nukadoko.config.*.
       """

@@ -33,7 +33,7 @@ Messages and timings are left out.
 
 A case holds what a run of one project concludes. What the `nuka` command does with its arguments (which scenarios a target and `--tag` select, which worlds `--env` starts, which mistakes it refuses, with which code and fix, and what `summary.md`, `nuka report`, `nuka verdict`, and `nuka clean` say) is not a case's result, so it lives in `engine/` as scenarios.
 `engine/` is a nukadoko project of its own, run by the TypeScript engine.
-Its program file has two worlds, `typescript` and `ruby`, so every scenario runs once against each engine, and a behavior holds only when both show it.
+Its program has two worlds, `typescript` and `ruby`, so every scenario runs once against each engine, and a behavior holds only when both show it.
 A scenario builds a project from `engine/projects/<name>/` (its `features/`, and `steps-ts/` or `steps-rb/` for the engine at hand), runs that engine's `nuka` in it, and claims on the exit code and the `--json` envelope.
 Where `docs/spec.md` says what the TypeScript engine does, a scenario restates it.
 Where it does not, the scenario is where the behavior is written down, and the TypeScript engine is what it was read from.

@@ -25,16 +25,16 @@ def project(case_dir, dir)
   FileUtils.cp_r(File.join(case_dir, "steps-rb"), File.join(dir, "features", "steps"))
   files = File.join(case_dir, "files")
   FileUtils.cp_r("#{files}/.", dir) if File.directory?(files)
-  config = ENV["NUKADOKO_CHROMIUM"] ? "Nukadoko.config(browser: { executablePath: #{ENV["NUKADOKO_CHROMIUM"].inspect} })\n" : ""
-  # A case that declares fixtures brings its own config, after the browser line.
+  program_file = File.join(case_dir, "program.json")
+  program = (JSON.parse(File.read(program_file).gsub("{root}", ROOT), symbolize_names: true) if File.exist?(program_file))
+  options = []
+  options << "browser: { executablePath: #{ENV["NUKADOKO_CHROMIUM"].inspect} }" if ENV["NUKADOKO_CHROMIUM"]
+  options << "program: -> { #{program.inspect} }" if program
+  config = options.empty? ? "" : "Nukadoko.config(#{options.join(", ")})\n"
+  # A case that declares fixtures brings its own config, after the config line.
   own = File.join(case_dir, "config.rb")
   config += File.read(own) if File.exist?(own)
   File.write(File.join(dir, "nukadoko.config.rb"), config) unless config.empty?
-  program_file = File.join(case_dir, "program.json")
-  return unless File.exist?(program_file)
-
-  program = JSON.parse(File.read(program_file).gsub("{root}", ROOT), symbolize_names: true)
-  File.write(File.join(dir, "nukadoko.program.rb"), "Nukadoko.program(**#{program.inspect})\n")
 end
 
 def finding(f)

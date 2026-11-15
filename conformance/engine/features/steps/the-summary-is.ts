@@ -16,7 +16,7 @@ function steady(text: string): string {
     .replace(/^- browser: chromium \S+$/m, "- browser: chromium <version>")
     .replace(/ \(taken \d+ ms after the reading\)/g, "")
     .replace(/`[0-9a-f]{7}`/g, "`<commit>`")
-    .replace(/nukadoko\.program\.(ts|rb)/g, "nukadoko.program.*")
+    .replace(/nukadoko\.(program|config)\.(ts|rb)/g, "nukadoko.$1.*")
     .trimEnd();
 }
 

@@ -1,10 +1,10 @@
 Feature: nuka run --env chooses the worlds a run starts
 
-  A project with no program file, or no defaultEnvironments, runs one world named default.
+  A project with no program, or no defaultEnvironments, runs one world named default.
   defaultEnvironments names the worlds a run without --env starts, in its order.
   Each --env names one more, in the order given; default is always a name.
 
-  Scenario: a project with no program file runs the default world
+  Scenario: a project with no program runs the default world
     Given the project "tagged"
     When nuka runs "run features/other.feature --json"
     Then it exits with 0

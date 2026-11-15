@@ -7,7 +7,7 @@ type Finding = { severity: string; code: string; file?: string; line?: number; m
 
 export default defineStep({
   description:
-    "The --json envelope's findings, one line each as severity, code, where, and message, sorted, are exactly the docstring; a step file is written as features/steps/<name>.* with no line, the config and program files as nukadoko.config.* and nukadoko.program.*, and a step file's definition, which the TypeScript engine names as defineStep and the Ruby engine by the step's class, as <step>",
+    "The --json envelope's findings, one line each as severity, code, where, and message, sorted, are exactly the docstring; a step file is written as features/steps/<name>.* with no line, the config as nukadoko.config.*, and a step file's definition, which the TypeScript engine names as defineStep and the Ruby engine by the step's class, as <step>",
   pattern: "the check reports",
   args: z.object({
     expected: z.string().describe("One finding per line, sorted"),

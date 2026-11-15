@@ -3,7 +3,7 @@ Feature: a refusal says what to change, in the same words in each engine
   A command line nuka run cannot carry out stops before anything runs, with exit 2.
   A selection that keeps no scenario stops with exit 1.
   Either way the finding names a code, says why, and gives a fix, and a do line when one command gets past it.
-  Each engine names its own program file, written here as nukadoko.program.*.
+  Each engine names its own config file, written here as nukadoko.config.*.
 
   Scenario: a line that is no scenario names the lines that are
     Given the project "tagged"
@@ -129,7 +129,7 @@ Feature: a refusal says what to change, in the same words in each engine
       do: nuka run --help
       """
 
-  Scenario: an environment the program file does not define
+  Scenario: an environment the program does not define
     Given the project "worlds"
     When nuka runs "run --env nope --json"
     Then it exits with 2
@@ -137,8 +137,20 @@ Feature: a refusal says what to change, in the same words in each engine
       """
       severity: refused
       code: unknown-environment
-      message: Unknown environment "nope": not defined in nukadoko.program.*'s "environments"
-      fix: Pass --env with a name it accepts (blue, default, green, staging), or add environments.nope to nukadoko.program.*.
+      message: Unknown environment "nope": not defined in the environments of the program in nukadoko.config.*
+      fix: Pass --env with a name it accepts (blue, default, green, staging), or add environments.nope to the program in nukadoko.config.*.
+      """
+
+  Scenario: a program file of an earlier release stops every command that reads the project
+    Given the project "program-file"
+    When nuka runs "check --json"
+    Then it exits with 2
+    And the stop is
+      """
+      severity: refused
+      code: program-file-moved
+      message: nukadoko.program.* is no longer read: the program under test is part of nukadoko.config.* now, so nukadoko does not start what nukadoko.program.* describes.
+      fix: Move what nukadoko.program.* describes into nukadoko.config.* as its program, and delete nukadoko.program.*; CHANGELOG.md, under "The program moves into the config", shows the move.
       """
 
   Scenario: an error nuka check reports

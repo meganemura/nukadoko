@@ -37,13 +37,11 @@ function project(caseDir) {
   const browser = process.env.NUKADOKO_CHROMIUM ? `browser: { executablePath: ${JSON.stringify(process.env.NUKADOKO_CHROMIUM)} }` : "";
   const ownConfig = path.join(caseDir, "config.ts");
   // A case that declares fixtures brings its own config; the rest get one that only names the browser.
-  if (existsSync(ownConfig)) cpSync(ownConfig, path.join(dir, "nukadoko.config.ts"));
-  else writeFileSync(path.join(dir, "nukadoko.config.ts"), `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ ${browser} });\n`);
+  // A program goes into the config as its program function.
+  const config = existsSync(ownConfig) ? readFileSync(ownConfig, "utf8") : `import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ ${browser} });\n`;
   const programFile = path.join(caseDir, "program.json");
-  if (existsSync(programFile)) {
-    const program = readFileSync(programFile, "utf8").replaceAll("{root}", root);
-    writeFileSync(path.join(dir, "nukadoko.program.ts"), `import { defineProgram } from "nukadoko";\n\nexport default defineProgram(${program});\n`);
-  }
+  const program = existsSync(programFile) ? readFileSync(programFile, "utf8").replaceAll("{root}", root).trim() : null;
+  writeFileSync(path.join(dir, "nukadoko.config.ts"), program === null ? config : config.replace("defineConfig({", `defineConfig({\n  program: () => (${program}),\n`));
   return dir;
 }
 

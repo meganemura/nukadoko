@@ -66,7 +66,7 @@ export default defineStep({
     printed: z.string().describe("stdout, then stderr, with each step file written as features/steps/<name>.*"),
     stop: z
       .string()
-      .describe("The last refused or failed finding as lines of field: value (severity, code, message, fix, do), with the program file named nukadoko.program.*: the --json envelope's, or else the findings nuka printed on stderr"),
+      .describe("The last refused or failed finding as lines of field: value (severity, code, message, fix, do), with the config file named nukadoko.config.*: the --json envelope's, or else the findings nuka printed on stderr"),
   }),
   // nuka writes its run directory inside the scratch project only.
   mutates: false,
@@ -76,7 +76,7 @@ export default defineStep({
     parsed.findings ??= textFindings(ran.stderr);
     const scenarios = (parsed.scenarios ?? []).map((s) => `${s.feature}:${s.line} ${s.environment} ${s.status}`).join("\n");
     const stops = (parsed.findings ?? []).filter((f) => f.severity === "refused" || f.severity === "failed").map((f) => f.code).join(" ");
-    // Each engine names its own program file; the rest of the text is the same.
+    // Each engine names its own config file; the rest of the text is the same.
     const last = (parsed.findings ?? []).filter((f) => f.severity === "refused" || f.severity === "failed").at(-1);
     const fields = ["severity", "code", "message", "fix", "do"] as const;
     const stop = last === undefined ? "" : fields.flatMap((key) => (last[key] === undefined ? [] : [`${key}: ${last[key]}`])).join("\n").replace(/nukadoko\.(program|config)\.(ts|rb)/g, "nukadoko.$1.*");
