@@ -27,7 +27,13 @@ class BrowserMaskTest < Minitest::Test
     } }
   JS
 
+  # The TypeScript engine's Playwright, whose browser CI installed: `npx
+  # playwright` from this directory would fetch the newest one instead.
+  DRIVER = File.expand_path("../../typescript/node_modules/.bin/playwright", __dir__)
+
   def test_a_screenshot_covers_what_shows_a_secret
+    driver = ENV.fetch("PLAYWRIGHT_CLI", nil)
+    ENV["PLAYWRIGHT_CLI"] ||= DRIVER if File.executable?(DRIVER)
     Dir.mktmpdir do |dir|
       secrets = Nukadoko::Engine::Secrets.new("TOKEN" => "s3cr3t-value")
       launch = ENV["NUKADOKO_CHROMIUM"] ? { executablePath: ENV["NUKADOKO_CHROMIUM"] } : {}
@@ -50,5 +56,7 @@ class BrowserMaskTest < Minitest::Test
       browser&.end_scenario
       browser&.close
     end
+  ensure
+    ENV["PLAYWRIGHT_CLI"] = driver
   end
 end
