@@ -112,4 +112,25 @@ class CompareTest < Minitest::Test
     refute J.compare("lacks-field", { "password" => nil }, "password")[:holds]
     assert_equal 'field "password" is present and holds null', L.present_field_difference({ "password" => nil }, "password")
   end
+
+  SCALARS = [nil, false, true, 0, 1, 1.5, "", "a", [], {}].freeze
+
+  # An array that holds the expected value has it, whatever the value is:
+  # false and null are items like any other.
+  def test_has_item_holds_for_an_array_that_holds_it
+    check do |tc|
+      expected = tc.draw(sampled_from(SCALARS))
+      others = tc.draw(arrays(sampled_from(SCALARS), max_size: 4))
+      items = others.insert(tc.draw(integers(min_value: 0, max_value: others.size)), expected)
+      assert_equal({ holds: true }, J.compare("has-item", items, expected), items.inspect)
+    end
+  end
+  # A non-empty array with no item of the expected value's type breaks
+  # with that reason, also when every item is false or null.
+  def test_has_item_names_an_array_with_no_item_of_the_type
+    check do |tc|
+      items = tc.draw(arrays(sampled_from([nil, false, true, 0]), min_size: 1, max_size: 4))
+      assert_equal({ reason: "has-item looks for a string, and no item is one" }, J.compare("has-item", items, "a"), items.inspect)
+    end
+  end
 end

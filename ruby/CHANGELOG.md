@@ -37,6 +37,10 @@ notes come from the section below whose heading starts with `## [<version>]`.
   and a pattern JavaScript refuses (`(?i)`, `a*+`, `(?#...)`) does not
   build, with V8's reason. A lookbehind Ruby cannot run (one of unbounded
   length) is refused with Ruby's reason.
+- A `has-item` claim on an array whose items are all `false` or `null`,
+  none of them of the expected value's type, breaks with the reason that
+  no item is of that type, as the TypeScript engine says, instead of
+  simply breaking.
 
 ## [0.2.0] - 2026-11-15
 

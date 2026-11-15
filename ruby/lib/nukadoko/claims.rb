@@ -595,7 +595,7 @@ module Nukadoko
           { holds: !normal(actual).key?(expected) }
         when "has-item"
           return { reason: "has-item reads an array, and the actual value is #{article(a_type)}" } unless a_type == "array"
-          return { reason: "has-item looks for #{article(e_type)}, and no item is one" } if actual.any? && actual.none? { json_type(_1) == e_type }
+          return { reason: "has-item looks for #{article(e_type)}, and no item is one" } if !actual.empty? && actual.none? { json_type(_1) == e_type }
 
           { holds: actual.any? { deep_equal?(_1, expected) } }
         when "has-same-items"
