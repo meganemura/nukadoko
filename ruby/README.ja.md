@@ -61,6 +61,9 @@ Feature の行に `@nukadoko:serial` があるファイルは、ほかのファ�
 `--repeat` は選んだシナリオをその回数だけ実行し、`--proof-runs` は control を何回実行するかを決め、`--records` はシナリオの記録を終わるたびに stdout に書きます。
 - `nuka verdict [--json]` は、いちばん新しい run が今の作業ツリーを判定し、赤を残さなかったかを答えます。
 run は始めません。
+- `nuka judge <feature>:<line> [--run <id>] [--json]` は、Then が判断を求める基準(`judged-as` の claim)について、run が読んだ値を見せます。
+`--meets` か `--misses` に `--by <who>` と `--because <一文>` を付けると、その値の判断を `judgments/<feature>.json` に記録します。
+次の run は、この記録と照らして基準を読みます。
 - `nuka report [run] --format markdown [--out <file>] [--json]` は、run の `summary.md` を `run.json` だけからもう一度書きます。
 run を名指ししなければ、いちばん新しい run を使います。
 - `nuka clean [--dry-run] [--json]` は、`.nukadoko/` の下の run ディレクトリを消します。

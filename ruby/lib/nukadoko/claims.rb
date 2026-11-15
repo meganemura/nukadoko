@@ -26,11 +26,25 @@ module Nukadoko
       # fits-aria-snapshot claim reads, once per reading. One path's failure
       # is that path's read, so taking them never raises.
       def self.take_aria_snapshots(claims, observed)
-        paths = claims.filter_map { _1[:actual].to_s if !_1[:each] && _1[:compare] == "fits-aria-snapshot" }.uniq
-        return observed if paths.empty? || !observed.is_a?(Hash)
+        paths = claims.filter_map { _1[:actual].to_s if !_1[:each] && _1[:compare] == "fits-aria-snapshot" }
+        judged = claims.filter_map { judged_path(_1) if !_1[:each] && _1[:compare] == "judged-as" }
+        return observed if (paths + judged).empty? || !observed.is_a?(Hash)
 
-        ARIA_TAKEN[observed] = paths.to_h { [_1, aria_snapshot_at(observed, _1.split("."))] }
+        taken = paths.uniq.to_h { [_1, aria_snapshot_at(observed, _1.split("."))] }
+        # A judged value is read as the tree the browser printed when it is
+        # a locator or a page, and as its plain value when it is not, so a
+        # judged path that holds neither keeps no entry.
+        judged.uniq.each do |path|
+          read = aria_snapshot_at(observed, path.split("."))
+          taken["judged:#{path}"] = read unless read[:broken]
+        end
+        ARIA_TAKEN[observed] = taken
         observed
+      end
+
+      # The path a judged-as claim reads: its actual and, with no view, its at.
+      def self.judged_path(claim)
+        [claim[:actual], (claim[:at] unless claim[:view])].compact.join(".")
       end
 
       def self.aria_snapshot_at(root, segments)
@@ -95,6 +109,7 @@ module Nukadoko
         actual = dig(view(claim[:view], claim[:actual].nil? ? observed : read(observed, claim[:actual])), claim[:at])
         return judge_each(claim[:each], actual, args, top) if claim[:each]
         return judge_aria(claim, observed, args, top) if claim[:compare] == "fits-aria-snapshot"
+        return judge_judged(claim, observed, args, top) if claim[:compare] == "judged-as" && aria_judged(claim, observed)
 
         if claim[:count]
           unless actual.is_a?(Array)
@@ -106,7 +121,7 @@ module Nukadoko
         end
         expected = expected_value(claim, args, top)
         result = compare(claim[:compare], actual, expected)
-        { actual: actual, compare: claim[:compare], expected: expected, holds: result[:holds] == true,
+        { actual: actual, compare: claim[:compare], expected: expected, holds: result[:holds] == true, **(result[:for_judgment] ? { for_judgment: true } : {}),
           **(result[:reason] ? { reason: result[:reason] } : {}), **(result[:stopped] ? { reason: result[:stopped], unjudged: true } : {}) }
       end
 
@@ -119,6 +134,19 @@ module Nukadoko
         result = compare(claim[:compare], side[:text], expected)
         { actual: side[:text], compare: claim[:compare], expected: expected, holds: result[:holds] == true,
           **(result[:reason] ? { reason: result[:reason] } : {}), **(result[:stopped] ? { reason: result[:stopped], unjudged: true } : {}) }
+      end
+
+      # The tree nukadoko took of a judged value that is a locator or a page.
+      def self.aria_judged(claim, observed)
+        observed.is_a?(Hash) ? ARIA_TAKEN[observed]&.[]("judged:#{judged_path(claim)}") : nil
+      end
+
+      def self.judge_judged(claim, observed, args, top)
+        taken = aria_judged(claim, observed) || {}
+        expected = expected_value(claim, args, top)
+        return { compare: claim[:compare], expected: expected, holds: false, reason: "observe:#{judged_path(claim)} #{taken[:unjudged]}", unjudged: true, aria: true } if taken[:unjudged]
+
+        { actual: taken[:text], compare: claim[:compare], expected: expected, holds: true, for_judgment: true, aria: true }
       end
 
       def self.judge_each(each, items, args, top)
@@ -408,7 +436,10 @@ module Nukadoko
 
           { holds: actual.send({ "greater-than" => :>, "at-least" => :>=, "less-than" => :<, "at-most" => :<= }[compare], expected) }
         when "judged-as"
-          { stopped: "the Ruby engine does not read judgments yet, so nothing judged this value" }
+          # The run reads a judged value and compares nothing: whether it
+          # meets the quality is a judgment the table reads later
+          # (lib/nukadoko/judgments.rb), so it holds the step up nowhere.
+          { holds: true, for_judgment: true }
         end
       end
 

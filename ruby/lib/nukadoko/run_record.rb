@@ -54,6 +54,7 @@ module Nukadoko
                end
         actual_from = counted(place(base, declared[:view], declared[:at]), declared[:count])
         actual_from = "ARIA snapshot of #{base}" if declared[:compare] == "fits-aria-snapshot"
+        actual_from = "ARIA snapshot of observe:#{Claims.judged_path(declared)}" if judged[:aria]
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
         { **judged.slice(:actual), actual_from: actual_from, **{ view: declared[:view], at: declared[:at]&.to_s, count: declared[:count] }.compact,
           compare: declared[:compare], **judged.slice(:expected), expected_from: expected_from,
@@ -213,9 +214,21 @@ module Nukadoko
                  **outcome(judged))
       end
 
+      # The claims of a scenario's step records, counted by outcome, in the
+      # fields run.json gives them.
+      def claim_counts(records)
+        outcomes = records.flat_map { _1[:claim_records] || [] }.map { _1[:outcome] }
+        counts = { held: outcomes.count("held"), broken: outcomes.count("broken") } #: Hash[Symbol, Integer]
+        { unobserved: "unobserved", unjudged: "unjudged", for_judgment: "for-judgment" }.each do |key, outcome|
+          counts[key] = outcomes.count(outcome) if outcomes.include?(outcome)
+        end
+        counts
+      end
+
       # A claim's outcome and, when the two sides could not be compared or
       # nothing judged them, why.
       def outcome(judged)
+        return { outcome: "for-judgment" } if judged[:for_judgment]
         return { outcome: "held" } if judged[:holds]
 
         { outcome: judged[:unjudged] ? "unjudged" : "broken", **(judged[:reason] ? { reason: judged[:reason] } : {}) }
@@ -316,6 +329,9 @@ module Nukadoko
           return { base: [], old: old_roles.select { _1[:role] == "required" }.map { _1[:environment] } }
         end
         return none if !context[:held] && head_cells.any? { proves?(_1) }
+        # A Then a judgment decides compares nothing, so a base cell passes
+        # whatever the base does and cannot change the verdict.
+        return none if !context[:held] && context[:then_judges_no_claim] == "judgment"
 
         { base: required.map { _1[:environment] }, old: [] }
       end
@@ -412,6 +428,14 @@ module Nukadoko
         end
         absent = [*base.map { "base #{_1[:environment]}: #{cell_text(_1)}#{" (#{_1[:reason]})" if _1[:outcome] == "not-run" && _1[:reason]}" },
                   *controls.map { "control #{_1[:environment]}: #{cell_text(_1)}" }]
+        # A Then whose claims a reader judges compares nothing, so no world
+        # can prove it, and no world can leave it unproven either: the
+        # judgment column decides it, and the row is held on what the
+        # machine compared, which is everything before that Then.
+        if context[:then_judges_no_claim] == "judgment"
+          return ["held", "passes in #{passed_in}, and its Then asks for a judgment and compares nothing, so no world can show it failing where its behaviour is absent: " \
+                          "its judgment decides it"]
+        end
         if context[:then_judges_no_claim]
           return ["unproven", "passes in #{passed_in}, but no claim step stands in its Then position, so no world can show a Then failing where its behaviour is absent" \
                               "#{absent.empty? ? "" : " (#{absent.join(", ")})"}"]

@@ -115,6 +115,12 @@ module Nukadoko
       # run.json's other fields, never read from a stored list.
       def self?.limits: (untyped doc) -> untyped
 
+      # One entry per row a judgment holds green: nukadoko checked that the
+      # value is the one judged, and nothing of the judgment itself. A value
+      # judged as an ARIA snapshot names what that leaves out: a change only
+      # to how the page looks keeps the snapshot, and so the judgment.
+      def self?.judgment_limits: (untyped rows) -> untyped
+
       def self?.control_limit: (untyped row, untyped head) -> untyped
 
       def self?.closer_text: (untyped limit) -> untyped

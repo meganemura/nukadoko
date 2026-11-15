@@ -1,0 +1,39 @@
+# Generated from lib/nukadoko/judgment_file.rb with RBS::Inline
+
+# Where the judgments of a feature file live, reading and writing them,
+# and, under `--base`, which of them changed since the ref (docs/spec.md
+# "Judgments"). What an entry means is lib/nukadoko/judgments.rb's.
+#
+# The files sit in `judgments/` at the project root, one per feature file
+# at the same relative path with `.json` added, outside the features
+# directory on purpose: there every file is mapping, so a judgment added
+# would make `--base` run each unchanged criterion again in the old world,
+# when a judgment changes no step. Nor do they live in the run directory,
+# which retention removes and nobody reviews: a judgment is committed, and
+# the commit and its review are the record of who judged.
+module Nukadoko
+  module Engine
+    module JudgmentFile
+      DIR: ::String
+
+      # : (String) -> String
+      def self?.of: (String) -> String
+
+      # What a feature's judgment file holds: its entries, none when there
+      # is no file, or why it could not be read.
+      # : (String, String) -> Hash[Symbol, untyped]
+      def self?.read: (String, String) -> Hash[Symbol, untyped]
+
+      # Writes a feature's judgment file whole, and returns its path
+      # relative to the project root.
+      # : (String, String, Array[Hash[Symbol, untyped]]) -> String
+      def self?.write: (String, String, Array[Hash[Symbol, untyped]]) -> String
+
+      # Each judgment file the working tree and `commit` hold with other
+      # text, or one holds and the other does not, relative to the project
+      # root and sorted. nil when git does not answer.
+      # : (String, String) -> Array[String]?
+      def self?.changed: (String, String) -> Array[String]?
+    end
+  end
+end

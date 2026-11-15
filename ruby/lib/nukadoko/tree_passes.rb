@@ -19,7 +19,10 @@ module Nukadoko
       EXE = File.expand_path("../../exe/nuka", __dir__.to_s)
       LIB = File.expand_path("..", __dir__.to_s)
 
-      def initialize(base, scenarios, head_cells, environments, dir, out)
+      # `judged_by` says why head's passing executions of a row judged no
+      # claim in Then position (Run.then_judged_by).
+      def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {})
+        @judged_by = judged_by
         @base = base
         @scenarios = scenarios
         @head_cells = head_cells
@@ -69,7 +72,7 @@ module Nukadoko
       def plan(scenario)
         change = @base.changes[Criteria.key(scenario.uri, scenario.line)]
         context = change && { change: change[:change], held: scenario.tags.include?(Criteria::HELD), mapping_changed: @base.mapping[:changed],
-                              retagged: change[:retagged] == true, renamed: !change[:renamed_from].nil? }
+                              retagged: change[:retagged] == true, renamed: !change[:renamed_from].nil?, then_judges_no_claim: @judged_by.(scenario) }
         tags = Table.condition_tags(scenario.tags)
         old_roles = @old_environments.map { { environment: _1.name, role: Table.role(tags, _1.conditions) } }
         RunRecord.planned_world_cells(@head_cells[scenario], context, old_roles)

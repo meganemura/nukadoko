@@ -1,0 +1,54 @@
+# Generated from lib/nukadoko/judge.rb with RBS::Inline
+
+# `nuka judge <file>:<line>`, the one way a judgment gets into a judgment
+# file (docs/spec.md "Judgments"). Without a verdict flag it shows what the
+# criterion asks a judge: each value its Then read, the quality the
+# sentence names, and where the record keeps the value. With `--meets` or
+# `--misses`, `--by`, and `--because` it records one judgment of each.
+#
+# It checks what a machine can, and only that: the run judged this
+# criterion, its required head cells passed, each value is in a channel
+# nukadoko recorded, and the value the step record holds has the digest
+# run.json recorded, so a judgment can only cite a value a run wrote down.
+# It never checks the judgment, nor who made it: `--by` is a name, and the
+# commit that adds the file, with its review, is the record of who judged.
+# It shows and records; it never runs.
+module Nukadoko
+  class CLI
+    class Judge
+      RUNS: untyped
+
+      # : (String, Array[String], Hash[String, Array[String]], json: bool, out: IO) -> void
+      def initialize: (String, Array[String], Hash[String, Array[String]], json: bool, out: IO) -> void
+
+      # : () -> Integer
+      def call: () -> Integer
+
+      private
+
+      def parse_target: (untyped target) -> untyped
+
+      # The run a name names (its id or its directory), or the newest run
+      # that ended.
+      def run_named: (untyped name) -> untyped
+
+      def unjudgeable: (untyped row, untyped target, untyped run, untyped values) -> untyped
+
+      # Why the value a step record holds for a read is not the one run.json
+      # recorded, or nil when the two agree.
+      def record_disagrees: (untyped read, untyped record) -> untyped
+
+      def seen_of: (untyped run, untyped read) -> untyped
+
+      def value_block: (untyped value) -> untyped
+
+      def show: (untyped target, untyped row, untyped run, untyped shown, untyped place) -> untyped
+
+      def record: (untyped target, untyped row, untyped run, untyped shown, untyped place, untyped entries, untyped verdict, untyped rerun) -> untyped
+
+      def emit: (untyped fields) -> untyped
+
+      def refused: (untyped message, ?fix: untyped, ?run: untyped) -> untyped
+    end
+  end
+end

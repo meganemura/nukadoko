@@ -40,7 +40,7 @@ module Nukadoko
             sleep INTERVAL
           end
         ensure
-          record[:readings] = readings.map { _1.except(:value, :raised) }
+          record[:readings] = readings.map { _1.except(:value, :raised, :judged_now) }
           record[:poll] = { readings: readings.size, stop: stop || "timeout", conditions: @settled.map { RunRecord.describe_comparison(_1) } }
         end
         raise readings.last[:raised] if readings.last[:raised]
@@ -59,7 +59,8 @@ module Nukadoko
 
       def judge(value, attempt)
         judged = Claims.judge(@claims, value, @args)
-        reading = { attempt: attempt, at: Time.now.utc.iso8601(3), holds: judged.all? { _1[:holds] }, actuals: judged.map { _1[:actual] }, value: value }
+        reading = { attempt: attempt, at: Time.now.utc.iso8601(3), holds: judged.all? { _1[:holds] }, actuals: judged.map { _1[:actual] }, value: value,
+                    judged_now: judged.select { _1[:for_judgment] }.map { _1[:actual] } }
         reading[:settled] = @settled.all? { Claims.judge_one(_1, value, {})[:holds] } if @settled.any?
         reading
       end
@@ -67,7 +68,10 @@ module Nukadoko
       def stop_for(readings)
         last, before = readings.last(2).reverse
         return nil unless before
-        return "held" if last[:holds] && before[:holds]
+        # A value read for a judgment holds a poll only once two readings
+        # read it the same: a judge judges the last reading, and a page
+        # still changing would hand them a frame it then left.
+        return "held" if last[:holds] && before[:holds] && last[:judged_now] == before[:judged_now]
 
         "settled" if last[:settled] && before[:settled]
       end

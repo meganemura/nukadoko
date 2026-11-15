@@ -17,6 +17,9 @@ module Nukadoko
       # is that path's read, so taking them never raises.
       def self.take_aria_snapshots: (untyped claims, untyped observed) -> untyped
 
+      # The path a judged-as claim reads: its actual and, with no view, its at.
+      def self.judged_path: (untyped claim) -> untyped
+
       def self.aria_snapshot_at: (untyped root, untyped segments) -> untyped
 
       # Only Playwright's own locator and page: a value step code wrote with
@@ -41,6 +44,11 @@ module Nukadoko
       def self.judge_one: (untyped claim, untyped observed, untyped args, ?untyped top) -> untyped
 
       def self.judge_aria: (untyped claim, untyped observed, untyped args, untyped top) -> untyped
+
+      # The tree nukadoko took of a judged value that is a locator or a page.
+      def self.aria_judged: (untyped claim, untyped observed) -> untyped
+
+      def self.judge_judged: (untyped claim, untyped observed, untyped args, untyped top) -> untyped
 
       def self.judge_each: (untyped each, untyped items, untyped args, untyped top) -> untyped
 

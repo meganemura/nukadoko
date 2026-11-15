@@ -1,0 +1,119 @@
+# Generated from lib/nukadoko/judgments.rb with RBS::Inline
+
+# Judgments (docs/spec.md "Judgments"): the verdicts on a criterion that no
+# compare can give, such as whether a text is friendly. A Then asks for one
+# with a `judged-as` claim; the run reads the value and records it, and a
+# reader judges it after the run and commits the judgment. nukadoko checks
+# two things alone, both exactly: that a judgment cites a value this run's
+# records hold (by its digest), and that the value did not change since.
+# The judgment itself is never checked, and never folded into the machine
+# verdict: a row keeps its verdict from the cells, and gains a `judgment`
+# beside it, whose state has a gate of its own.
+#
+# Pure, and in the words the TypeScript engine uses. The files on disk are
+# lib/nukadoko/judgment_file.rb's, and recording one is the judge command's.
+#
+# The digest is of the value's JSON with object keys sorted, so a program
+# that writes its keys in another order does not make a judgment stale,
+# and with numbers written the way JavaScript writes them, so both engines
+# give one value one digest.
+module Nukadoko
+  module Engine
+    module Judgments
+      # The order a row's state is chosen in: a judge's no first, then what
+      # no judgment can fix, then what a new judgment fixes.
+      STATE_ORDER: untyped
+
+      # The states in the order the summary's title counts them.
+      TITLE_ORDER: untyped
+
+      ARIA_LABEL: ::String
+
+      RECORD_FIX: ::String
+
+      UNCITABLE_FIX: ::String
+
+      ENTRY_STRINGS: untyped
+
+      # : (untyped) -> String
+      def self?.canonical_json: (untyped) -> String
+
+      # : (untyped) -> String
+      def self?.value_digest: (untyped) -> String
+
+      # Where a judged value was measured, as a read names it: the channel,
+      # with the step record that holds it when that is another step's,
+      # `aria-snapshot` for a tree nukadoko took, or nil.
+      # : (Hash[Symbol, untyped], String?) -> String?
+      def self?.measured_of: (Hash[Symbol, untyped], String?) -> String?
+
+      # Every value the passing required head executions of `row` read for a
+      # judgment, once per Then, claim, and value.
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.judged_values: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # : (Hash[Symbol, untyped], ?Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.cited: (Hash[Symbol, untyped], ?Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # Where one value stands against the judgments of its criterion: a
+      # value in no recorded channel is `uncitable` whatever a file says; an
+      # entry with its digest decides it; entries of the same claim that
+      # cite only values this run did not read make it `stale`, citing the
+      # latest of them; otherwise it is `pending`. `read_now` is every digest
+      # the run read for the same claim, so a value one environment reads
+      # beside a judged value another reads is a value of its own to judge.
+      # : (Hash[Symbol, untyped], String, Array[Hash[Symbol, untyped]], ?Array[String]?) -> Hash[Symbol, untyped]
+      def self?.read_against: (Hash[Symbol, untyped], String, Array[Hash[Symbol, untyped]], ?Array[String]?) -> Hash[Symbol, untyped]
+
+      # : (Array[Hash[Symbol, untyped]], String, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.read_each: (Array[Hash[Symbol, untyped]], String, Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # A value as a reason quotes it, cut at 120 characters of its JSON.
+      # : (untyped) -> String
+      def self?.value_preview: (untyped) -> String
+
+      def self?.quality: (untyped read) -> untyped
+
+      # : (Hash[Symbol, untyped], untyped) -> String
+      def self?.read_clause: (Hash[Symbol, untyped], untyped) -> String
+
+      # The judgment of one row, or nil for a row that read no value for a
+      # judgment.
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
+      def self?.row_judgment: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
+
+      # The table's rows with a `judgment` on each row whose required head
+      # cells all passed and read a value for a judgment. The verdict is
+      # never touched.
+      # : (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(String) -> Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.with_judgments: (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(String) -> Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # : (Array[Hash[Symbol, untyped]]) -> bool
+      def self?.open?: (Array[Hash[Symbol, untyped]]) -> bool
+
+      # : (Hash[Symbol, untyped], String) -> String
+      def self?.show_command: (Hash[Symbol, untyped], String) -> String
+
+      # One finding per row whose judgment leaves the gate red.
+      # : (Array[Hash[Symbol, untyped]], String) -> Array[Hash[Symbol, untyped]]
+      def self?.findings: (Array[Hash[Symbol, untyped]], String) -> Array[Hash[Symbol, untyped]]
+
+      # `entries` with `entry` in: it replaces an entry that judged the same
+      # value of the same claim, and is added beside the entries of others.
+      # : (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.add: (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
+      # A judgment file's text: its entries ordered by criterion, Then,
+      # claim, and time, so two judges who add one each make a diff of two
+      # hunks. Keys keep the order the TypeScript engine writes.
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self?.file_text: (Array[Hash[Symbol, untyped]]) -> String
+
+      # A judgment file's entries, or why its text holds none: a file a
+      # person edited by hand can break, and a judgment it no longer holds
+      # must read as unread, never as absent.
+      # : (String) -> Hash[Symbol, untyped]
+      def self?.parse_file: (String) -> Hash[Symbol, untyped]
+    end
+  end
+end

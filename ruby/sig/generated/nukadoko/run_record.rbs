@@ -58,6 +58,10 @@ module Nukadoko
 
       def self?.item_comparison: (untyped entry, untyped item, untyped at, untyped args, untyped origins, untyped texts, untyped patterns, untyped top) -> untyped
 
+      # The claims of a scenario's step records, counted by outcome, in the
+      # fields run.json gives them.
+      def self?.claim_counts: (untyped records) -> untyped
+
       # A claim's outcome and, when the two sides could not be compared or
       # nothing judged them, why.
       def self?.outcome: (untyped judged) -> untyped

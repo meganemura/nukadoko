@@ -85,6 +85,11 @@ module Nukadoko
       # Then position.
       def context_of: (untyped scenario, untyped change, untyped executions) -> untyped
 
+      # Why head's passing required executions of a row judged no claim in
+      # Then position, from the first that says: `nothing`, or `judgment`
+      # when its only claims there are judged-as claims.
+      def self.then_judged_by: (untyped scenario, untyped executions) -> untyped
+
       def removed_rows: () -> untyped
 
       # A finding for each unproven and moved row, which has no failed

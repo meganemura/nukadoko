@@ -36,6 +36,8 @@ module Nukadoko
         "control-not-proving" => ["Held, and no control failed at a Then",
                                   "a control of each criterion below ran where its conditions do not hold, and none failed at a Then, so nothing shows its Then notices the behaviour is absent"],
         "no-claim" => ["Scenarios with no claim", "in each scenario below, no claim on a Then line was judged (held, broken, or unjudged)"],
+        "judgment" => ["Held on a judgment",
+                       "each criterion below asks a reader to judge a value its Then read, and a committed judgment cites that value; nukadoko checks the citation, never the judgment"],
         "unmeasured" => ["Unmeasured actions", "each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did"]
       }.freeze
 
@@ -126,9 +128,16 @@ module Nukadoko
         envs = doc[:environments].size
         parts = [envs > 1 ? "#{criteria} in #{envs} environments" : criteria, "#{count.("held")} held"]
         %w[proven removed failed unproven moved].each { parts << "#{count.(_1)} #{_1}" if count.(_1).positive? }
+        # Judgments are counted apart from the verdicts they stand beside, so
+        # a reader never adds a judged row to the held ones it is counted in.
+        Judgments::TITLE_ORDER.each do |state|
+          judged = rows.count { _1.dig(:judgment, :state) == state }
+          parts << "#{judged} #{judged == 1 ? "judgment" : "judgments"} #{state}" if judged.positive?
+        end
         lines = ["# nukadoko run #{doc[:verdict]}: #{parts.join(", ")}"]
         explained = rows.any? do |row|
           next true if %w[unproven moved].include?(row[:verdict])
+          next true if row[:judgment] && row[:judgment][:state] != "judged"
           next false unless row[:verdict] == "failed"
 
           required = row[:cells].select { _1[:role] == "required" }
@@ -163,11 +172,13 @@ module Nukadoko
           ["#{row[:change]}#{renamed}#{", retagged" if row[:retagged]}"]
         end
         seen = seen_column(doc)
+        # The judgment column only when a row has one.
+        judged = rows.any? { _1[:judgment] }
         [
           *base_line(doc),
           "",
-          "| verdict | criterion | #{"change | " if base}#{worlds.map { cell_text(heading.(_1)) }.join(" | ")}#{" | seen" if seen} |",
-          "| --- | --- | #{"--- | " if base}#{worlds.map { "---" }.join(" | ")}#{" | ---" if seen} |",
+          "| verdict | #{"judgment | " if judged}criterion | #{"change | " if base}#{worlds.map { cell_text(heading.(_1)) }.join(" | ")}#{" | seen" if seen} |",
+          "| --- | #{"--- | " if judged}--- | #{"--- | " if base}#{worlds.map { "---" }.join(" | ")}#{" | ---" if seen} |",
           *rows.map do |row|
             written = [*row[:conditions], *row[:expects]]
             tags = written.empty? ? "" : " #{written.map { cell_code(_1) }.join(" ")}"
@@ -175,7 +186,8 @@ module Nukadoko
               cell = row[:cells].find { _1[:world] == column[:world] && _1[:environment] == column[:environment] }
               cell ? table_cell(cell) : ""
             end
-            "| #{[row[:verdict], "#{cell_code("#{row[:feature]}:#{row[:line]}")} #{cell_text(row[:name])}#{tags}", *change.(row), *cells, *(seen ? [seen.(row)] : [])].join(" | ")} |"
+            judgment = judged ? [row.dig(:judgment, :state).to_s] : []
+            "| #{[row[:verdict], *judgment, "#{cell_code("#{row[:feature]}:#{row[:line]}")} #{cell_text(row[:name])}#{tags}", *change.(row), *cells, *(seen ? [seen.(row)] : [])].join(" | ")} |"
           end
         ]
       end
@@ -210,7 +222,13 @@ module Nukadoko
                        else "The mapping did not change, so no unchanged criterion needed the old world."
                        end
         compared = base[:commit].start_with?(base[:ref]) ? cell_code(base[:ref]) : "#{cell_code(base[:ref])} (`#{base[:commit][0, 7]}`)"
-        ["", "Compared with #{compared}: #{changes}. #{mapping_line}"]
+        # Judgments are not mapping, so the line names them apart: a reviewer
+        # approves what a judge said beside what the steps do.
+        judgments = doc[:table][:judgments_changed] || []
+        judgment_line = if judgments.empty? then ""
+                        else " #{judgments.size == 1 ? "A judgment file" : "Judgment files"} changed since the base: #{judgments.map { cell_code(_1) }.join(", ")}."
+                        end
+        ["", "Compared with #{compared}: #{changes}. #{mapping_line}#{judgment_line}"]
       end
 
       # Each criterion the base holds and head does not, with its sentences
@@ -285,9 +303,15 @@ module Nukadoko
 
       def reasons(doc)
         red = doc[:table][:rows].select { RED.include?(_1[:verdict]) }
-        return [] if red.empty?
+        # A row the judgments leave red says why on a line of its own, before
+        # the verdicts' reasons: its verdict may be green.
+        open = doc[:table][:rows].select { _1[:judgment] && _1[:judgment][:state] != "judged" }
+        return [] if red.empty? && open.empty?
 
         lines = [""]
+        open.each do |row|
+          lines << "- #{code_span("#{row[:feature]}:#{row[:line]}")} #{cell_text(row[:name])}: judgment #{row[:judgment][:state]}: #{cell_text(row[:judgment][:reason])}"
+        end
         red.each do |row|
           lines << "- #{code_span("#{row[:feature]}:#{row[:line]}")} #{cell_text(row[:name])}: #{cell_text(row[:reason])}"
           world = { "moved" => "old", "unproven" => "base" }.fetch(row[:verdict], "head")
@@ -364,8 +388,11 @@ module Nukadoko
         red = rows.select { RED.include?(_1[:verdict]) }.map { [_1[:feature], _1[:line]] }
         unjudged = head.select { _1[:role] != "control" && _1[:judged_by] && _1[:judged_by] != "judgment" && !red.include?([_1[:feature], _1[:line]]) }
         places = unjudged.map { [_1[:feature], _1[:line]] }
+        # A row a judgment decides compares nothing in its Then, so no
+        # control of it could fail there: its entry is the judgment's.
+        judged_rows = rows.select { _1[:judgment] }.map { [_1[:feature], _1[:line]] }
         rows.each do |row|
-          next if row[:verdict] != "held" || places.include?([row[:feature], row[:line]])
+          next if row[:verdict] != "held" || places.include?([row[:feature], row[:line]]) || judged_rows.include?([row[:feature], row[:line]])
 
           limit = control_limit(row, head)
           list << limit if limit
@@ -375,7 +402,24 @@ module Nukadoko
           { kind: "no-claim", feature: scenario[:feature], line: scenario[:line], text: scenario[:scenario],
             detail: "no claim on a Then line was judged in it", fix: "end the scenario with a Then whose step declares claims" }
         end.sort(&by_place))
+        list.concat(judgment_limits(rows))
         list.sort_by.with_index { |limit, index| [LIMIT_KINDS.index(limit[:kind]), index] }
+      end
+
+      # One entry per row a judgment holds green: nukadoko checked that the
+      # value is the one judged, and nothing of the judgment itself. A value
+      # judged as an ARIA snapshot names what that leaves out: a change only
+      # to how the page looks keeps the snapshot, and so the judgment.
+      def judgment_limits(rows)
+        rows.filter_map do |row|
+          judgment = row[:judgment]
+          next unless judgment && judgment[:state] == "judged"
+
+          by = judgment[:reads].map { _1.dig(:judgment, :by) || "" }.uniq.map { code_span(_1) }.join(", ")
+          aria = judgment[:reads].any? { _1[:measured] == "aria-snapshot" } ? "; it is bound to the ARIA snapshot, so a change only to how the page looks keeps it current" : ""
+          { kind: "judgment", feature: row[:feature], line: row[:line], text: row[:name],
+            detail: "stands on a judgment by #{by}: nukadoko checked that the value is the one judged, not the judgment#{aria}" }
+        end
       end
 
       def control_limit(row, head)

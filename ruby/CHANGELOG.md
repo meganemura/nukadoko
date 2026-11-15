@@ -214,8 +214,7 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `matches` pattern that ran out of time, is `unjudged`. A broken claim's
   line names the field that does not fit, the field that is present, or
   the line where a text stopped fitting. `nuka check` reports
-  `claim-kind-unknown`. `judged-as` is `unjudged` until the Ruby engine
-  reads judgments.
+  `claim-kind-unknown`.
 - The gem ships the signature of the whole engine, written by rbs-inline
   from `lib/`'s comments into `sig/generated`, and CI checks `lib/` with
   Steep. A step author's Steep reads the same `Step`, `Schema`, and fixture
@@ -228,6 +227,7 @@ notes come from the section below whose heading starts with `## [<version>]`.
 - `nuka check` reports, as the TypeScript engine does, a path into an each item its producer does not return, a from path the step's own args drops, a count of a value that is never an array, and an observe that receives the value its claim is compared with.
 - A claim on an each item with no actual reads the item itself, and a record keeps an actual value of null.
 - `fits-aria-snapshot` is judged as the TypeScript engine judges it: nukadoko takes the ARIA snapshot of the Playwright locator or page observe returns, right after each reading, and a broken claim's line shows the actual lines where the two trees part and names the first expected line that fits nothing and the nearest actual node. `nuka check` reports `claim-aria-snapshot-unreadable` and `claim-aria-snapshot-names-nothing` for a docstring or capture that states a tree no page can be judged on. A step whose claims judge a tree takes no second one into its judged view, and the run summary links each Then's judged view and names the browser the run launched.
+- A `judged-as` claim reads its value for a judgment, as the TypeScript engine does: it compares nothing, and the run records the value with the digest a judgment cites (`for-judgment`, `value_digest`). Each row whose Then asks for one gains a `judgment` beside its verdict, read against `judgments/<feature>.json`: `pending` until a judgment cites the value, `judged` or `misses` once one does, `stale` when the value changed since, and `uncitable` when no channel of a step record holds it. A judgment other than `judged` fails the run with `judgment-<state>`, the summary counts and explains each, and under `--base` the run names the judgment files that changed. `nuka judge <file>:<line> [--run <id>] [--json]` shows the values a criterion asks a judge to read, and with `--meets` or `--misses`, `--by`, and `--because` records a judgment of them. A locator or a page is judged as its ARIA snapshot. run.json gains `limits`, and the text output ends with their counts.
 - A control's proof runs come after every scenario of the pass has run
   once, as in the TypeScript engine, rather than right after the control's
   first run.

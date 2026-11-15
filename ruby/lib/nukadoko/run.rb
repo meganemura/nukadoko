@@ -51,7 +51,7 @@ module Nukadoko
         tree_cells = {}
         if @base
           begin
-            trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out)
+            trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out, ->(scenario) { Run.then_judged_by(scenario, executions) })
             tree_cells = trees.call(executions)
             @world_entries.concat(trees.worlds)
           ensure
@@ -288,14 +288,42 @@ module Nukadoko
                       .map { { world: world, environment: _1 } }
         end
         judged = @base ? judged_findings(rows) : []
+        # Judgments sit beside the verdicts, read after the table is built
+        # and never folded into a row's verdict. A file that cannot be read
+        # is a failed finding of its own, and its rows read as judged by
+        # nothing.
+        problems = [] #: Array[Hash[Symbol, untyped]]
+        entries = {} #: Hash[String, Array[Hash[Symbol, untyped]]]
+        entries_of = lambda do |feature|
+          entries[feature] ||= begin
+            read = JudgmentFile.read(@project, feature)
+            if read[:problem]
+              problems << { severity: "failed", code: "judgments-unread", file: JudgmentFile.of(feature),
+                            message: "the judgments of #{feature} were not read: #{read[:problem]}, so its criteria read as judged by nothing",
+                            fix: "repair #{JudgmentFile.of(feature)} by hand, or remove it and judge the criteria again with nuka judge" }
+            end
+            read[:entries] || []
+          end
+        end
+        rows = Judgments.with_judgments(rows, scenarios, entries_of)
+        # Under --base a reviewer reads which judgments the change added or
+        # replaced, as the summary lists the mapping files that changed.
+        warnings = [] #: Array[Hash[Symbol, untyped]]
+        changed = @base && JudgmentFile.changed(@project, @base.commit)
+        if @base && changed.nil?
+          warnings << { severity: "warning", code: "judgments-not-compared", message: "the judgment files were not compared with the base: git did not answer" }
+        end
+        judged += Judgments.findings(rows, @id) + problems
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
           environments: @environments.map { environment_entry(_1) }, worlds: @world_entries, order: @order,
           counts: RunRecord.counts(scenarios.reject { _1[:world] }), scenarios: scenarios,
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
-                   mapping_changes: @base&.mapping_changes, **(@base ? { judgments_changed: [] } : {}),
+                   mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
                    worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },
-          failures: executions.filter_map { _1[:failure] } + judged + @incomplete,
-          passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } }
+          failures: warnings + executions.filter_map { _1[:failure] } + judged + @incomplete,
+          # A criterion whose Then asks for a judgment holds only once one
+          # cites what it read: the judgment column has a gate of its own.
+          passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty? }
       end
 
       # What `--base` knows of one row: its change, whether it carries
@@ -305,13 +333,18 @@ module Nukadoko
       def context_of(scenario, change, executions)
         return nil unless change
 
-        no_claim = executions.any? do |execution|
-          json = execution[:json]
-          json[:feature] == scenario.uri && json[:line] == scenario.line && !json[:world] && json[:role] == "required" &&
-            json[:status] == "passed" && json[:judged_by] == "nothing"
-        end
+        no_claim = Run.then_judged_by(scenario, executions)
         { change: change[:change], held: scenario.tags.include?(Criteria::HELD), mapping_changed: @base.mapping[:changed],
-          retagged: change[:retagged] == true, renamed: !change[:renamed_from].nil?, then_judges_no_claim: no_claim ? "nothing" : nil }
+          retagged: change[:retagged] == true, renamed: !change[:renamed_from].nil?, then_judges_no_claim: no_claim }
+      end
+
+      # Why head's passing required executions of a row judged no claim in
+      # Then position, from the first that says: `nothing`, or `judgment`
+      # when its only claims there are judged-as claims.
+      def self.then_judged_by(scenario, executions)
+        executions.lazy.map { _1[:json] }.filter_map do |json|
+          json[:judged_by] if json[:feature] == scenario.uri && json[:line] == scenario.line && !json[:world] && json[:role] == "required" && json[:status] == "passed"
+        end.first
       end
 
       def removed_rows
@@ -392,13 +425,15 @@ module Nukadoko
                  environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
         json[:do] = again(scenario, environment) if failed && role != "control"
-        held = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "held" } }
-        broken = records.sum { (_1[:claim_records] || []).count { |c| c[:outcome] == "broken" } }
-        json[:claims] = { held: held, broken: broken }
+        json[:claims] = RunRecord.claim_counts(records)
         # A scenario in which no claim on a Then line was judged says so,
-        # since a pass there shows only that nothing raised.
-        then_claims = scenario.steps.zip(records).select { |line, _| line_kind(line) == :then }.sum { (_2[:claim_records] || []).size }
-        json[:judged_by] = "nothing" if then_claims.zero?
+        # since a pass there shows only that nothing raised. A Then whose
+        # only claims a reader judges compared nothing: its judgment is
+        # what decides it.
+        then_claims = scenario.steps.zip(records).select { |line, _| line_kind(line) == :then }.flat_map { _2[:claim_records] || [] }
+        unless then_claims.any? { !%w[unobserved for-judgment].include?(_1[:outcome]) }
+          json[:judged_by] = then_claims.any? { _1[:outcome] == "for-judgment" } ? "judgment" : "nothing"
+        end
         json[:role] = role
         failure = if failed && role != "control"
                     { severity: "failed", code: "scenario-failed", file: scenario.uri, line: scenario.line,
@@ -423,7 +458,10 @@ module Nukadoko
         # Only a failed step names what it read: a reader then sees the value it broke on.
         entry[:used] = record[:used] if record[:used]&.any? && record[:status] == "failed"
         if record[:claim_records]
-          entry[:claims] = record[:claim_records]
+          # A judgment cites a judged-as value by the digest of the whole value.
+          entry[:claims] = record[:claim_records].map do |claim|
+            claim[:outcome] == "for-judgment" && claim.key?(:actual) && !claim[:each] ? { **claim, value_digest: Judgments.value_digest(claim[:actual]) } : claim
+          end
           entry[:observation] = record[:observation] || "observed"
           entry.merge!(RunRecord.poll_fields(record).except(:readings), **RunRecord.page_fields(record, File.join("steps", record[:step_record_id].to_s)))
         end
@@ -605,7 +643,7 @@ module Nukadoko
               RunRecord.claim(declared, result, origins, texts, observed: observes && !from_values.key?(declared[:actual].to_s.split(".").first), patterns: patterns)
             end
           end
-          broken = record[:claim_records].index { _1[:outcome] != "held" }
+          broken = record[:claim_records].index { !%w[held for-judgment].include?(_1[:outcome]) }
           return unless broken
 
           message = RunRecord.broken_message(record[:claim_records])
@@ -652,7 +690,7 @@ module Nukadoko
         step.claims.zip(record[:claim_records], record[:raw_actuals] || []).each do |declared, claim, raw|
           next if claim.nil? || claim[:outcome] == "unobserved" || declared[:each]
           # A tree nukadoko took is a measurement of the page, not a value a channel carried.
-          next claim[:measured] = nil if declared[:compare] == "fits-aria-snapshot"
+          next claim[:measured] = nil if declared[:compare] == "fits-aria-snapshot" || claim[:actual_from].to_s.start_with?(Judgments::ARIA_LABEL)
 
           measured = Measured.channel_for(from_of.(declared[:actual]) || own, raw, channels_of)
           claim[:measured] = measured

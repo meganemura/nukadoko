@@ -5,9 +5,10 @@
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
-    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records].freeze
+    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records --meets --misses].freeze
     REPEATED = %w[--tag --env --use].freeze
-    VALUED = %w[--format --out --base --repeat --concurrency --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv].freeze
+    VALUED = %w[--format --out --base --repeat --concurrency --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv
+                --run --by --because].freeze
 
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
@@ -25,6 +26,7 @@ module Nukadoko
     def call
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: #{@unknown.first}")) if @unknown.any?
       return verdict if @command == "verdict"
+      return Judge.new(@project, @rest, @options, json: @json, out: @out).call if @command == "judge"
       return report if @command == "report"
       return clean if @command == "clean"
       return init if @command == "init"
@@ -163,6 +165,10 @@ module Nukadoko
       envelope = { **head("run", passed ? "passed" : "failed", findings, check: @no_check ? "skipped" : "ran"),
                    **started, selection: selection.selection, tag_selection: selection.tag_selection, **rest }
       envelope.delete(:tag_selection) unless envelope[:tag_selection]
+      # The limits restate the fields above, so they are read from them,
+      # and a run with none has no field.
+      limits = Engine::Summary.limits(JSON.parse(JSON.generate(envelope), symbolize_names: true))
+      envelope[:limits] = limits if limits.any?
       File.write(File.join(@project, result[:run_dir], "run.json"), "#{JSON.pretty_generate(envelope)}\n")
       # The summary is rendered from run.json as written, so it can say
       # nothing the record does not.
@@ -173,6 +179,9 @@ module Nukadoko
         progress.puts "run       #{File.join(result[:run_dir], "run.json")}"
       end
       emit(envelope, findings, "run", io: records ? $stderr : @out)
+      if limits.any? && !@json
+        progress.puts "limits: #{limits.group_by { _1[:kind] }.map { |kind, group| "#{group.size} #{kind}" }.join(", ")} (run.json limits)"
+      end
       repeat_tallies(envelope[:scenarios], progress) if repeat > 1 && !@json
       passed ? 0 : 1
     rescue Engine::Refusal => e
