@@ -6,6 +6,8 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-15
+
 ### Added
 
 - `Nukadoko.run_command` takes `input:`, the TypeScript engine's name for
