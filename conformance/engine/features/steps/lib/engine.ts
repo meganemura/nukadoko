@@ -59,7 +59,16 @@ export async function nuka(dir: string, argv: string[], timeout?: number): Promi
   }
   return await runCommand("bundle", ["exec", "ruby", path.join(root, "ruby", "exe", "nuka"), ...argv], {
     cwd: dir,
-    env: { ...process.env, BUNDLE_GEMFILE: path.join(root, "ruby", "Gemfile") },
+    // The Ruby engine drives Chromium through a Playwright driver it starts as
+    // `npx playwright` unless PLAYWRIGHT_CLI names one. From a scratch project
+    // with no node_modules, npx fetches the newest Playwright, whose browser
+    // build CI never installed; the TypeScript engine's own copy is the one
+    // whose browser `npx playwright install` put there, as run-rb.rb uses.
+    env: {
+      ...process.env,
+      BUNDLE_GEMFILE: path.join(root, "ruby", "Gemfile"),
+      PLAYWRIGHT_CLI: path.join(root, "typescript", "node_modules", ".bin", "playwright"),
+    },
     ...limit,
   });
 }
