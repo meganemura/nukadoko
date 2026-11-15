@@ -705,7 +705,7 @@ module Nukadoko
           Trace.within(boundary) do
             fixtures, finish = build_fixtures(step, dir, log, world, record)
             HttpRecording.collect(log) do
-              Processes.collect(processes) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) }
+              Processes.collect(processes) { RedactedOutput.around(secrets) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) } }
             end
           end
           record[:page_view] = @browser.judged(dir, record[:step_record_id], aria_in_claims: step.claims.to_a.any? { !_1[:each] && _1[:compare] == "fits-aria-snapshot" }) if step.claims && fixtures[:page] && record[:observation] != "unobserved"

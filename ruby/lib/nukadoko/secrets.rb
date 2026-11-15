@@ -3,6 +3,7 @@
 
 require "json"
 require "open3"
+require "stringio"
 
 # Env files and the secrets they hold, as docs/spec.md "Environments and
 # secrets" describes and the TypeScript engine reads them: one KEY=VALUE
@@ -284,6 +285,75 @@ module Nukadoko
           char.match?(kept) ? char : char.bytes.map { format("%%%02X", _1) }.join
         end.join
       end
+    end
+
+    # What project code prints while a step runs reaches stderr, with the
+    # run's secrets redacted, so `nuka do`'s stdout stays the record alone
+    # and a printed token is no plainer than the record it was kept out of.
+    # A value split across two writes is not found, and a child process
+    # that writes to the file descriptors itself is not seen.
+    class RedactedOutput
+      #: [T] (Secrets) { () -> T } -> T
+      def self.around(secrets)
+        out = $stdout
+        err = $stderr
+        writer = new(err, secrets)
+        $stdout = writer
+        $stderr = writer
+        yield
+      ensure
+        $stdout = out if out
+        $stderr = err if err
+      end
+
+      #: (untyped, Secrets) -> void
+      def initialize(to, secrets)
+        @to = to
+        @secrets = secrets
+      end
+
+      #: (*untyped) -> Integer
+      def write(*parts) = @to.write(*parts.map { @secrets.redact_string(_1.to_s) })
+
+      #: (*untyped) -> nil
+      def puts(*lines)
+        text = StringIO.new
+        text.puts(*lines)
+        write(text.string)
+        nil
+      end
+
+      #: (*untyped) -> nil
+      def print(*parts)
+        write(*parts)
+        nil
+      end
+
+      #: (String, *untyped) -> nil
+      def printf(format, *values) = print(Kernel.format(format, *values))
+
+      #: (untyped) -> self
+      def <<(part)
+        write(part)
+        self
+      end
+
+      #: () -> self
+      def flush
+        @to.flush
+        self
+      end
+
+      #: () -> bool
+      def sync = true
+
+      #: (bool) -> bool
+      def sync=(value)
+        value
+      end
+
+      #: () -> bool
+      def tty? = false
     end
   end
 end

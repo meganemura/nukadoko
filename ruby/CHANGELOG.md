@@ -16,7 +16,8 @@ notes come from the section below whose heading starts with `## [<version>]`.
   fill the `env` fixture, with the same parser; a file git does not track,
   or one that differs from HEAD, is a secret source whose values are
   written as `{{secret.NAME}}` in step records, `http.jsonl`, the process
-  output files, and what `nuka do` prints; `secrets: { public:, redact: }`
+  output files, and what `nuka do` prints, and what a step prints goes to
+  stderr with them redacted; `secrets: { public:, redact: }`
   adjusts one key. `nuka check` reports `env-file-missing`,
   `environment-env-file-missing`, `env-file-skipped-line`,
   `secrets-public-key-unknown`, `secrets-redact-key-unknown`,

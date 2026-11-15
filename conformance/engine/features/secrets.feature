@@ -26,3 +26,13 @@ Feature: env files fill the env fixture, and what a secret source holds is redac
         "token": "s3cr3t-value"
       }
       """
+
+  Scenario: what a step prints reaches stderr with the secret redacted, and stdout stays the record
+    Given the project "secrets"
+    When nuka runs 'do print-the-token --args {}'
+    Then it exits with 0
+    And the envelope at "result" is
+      """
+      {}
+      """
+    And stderr holds "token is {{secret.API_TOKEN}}"
