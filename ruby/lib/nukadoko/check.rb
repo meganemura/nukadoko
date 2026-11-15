@@ -44,8 +44,10 @@ module Nukadoko
       # `environments` is the selection a run without --env starts, for
       # condition-unmet; nil when --env named the selection. `problems` are
       # what the feature loader found that runs nothing.
-      #: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem]) -> void
-      def initialize(steps, scenarios, features: true, full: false, conditions: nil, environments: nil, problems: [])
+      # `config` holds what was found in the config and the program file before
+      # any step loaded, such as an env file that is missing.
+      #: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
+      def initialize(steps, scenarios, features: true, full: false, conditions: nil, environments: nil, problems: [], config: [])
         @steps = steps
         @scenarios = scenarios
         @conditions = conditions
@@ -59,6 +61,7 @@ module Nukadoko
           @findings << Finding.new("error", "no-step-files-found", "features", nil, nil,
                                    %(no .rb step file was found while scanning "features"; no step can ever be registered), Codes.fix("no-step-files-found"), nil)
         end
+        @findings.concat(config)
         @usable = steps.reject { definition_broken?(_1) }
         @usable.each { check_contract(_1) }
         check_duplicate_patterns
@@ -77,7 +80,10 @@ module Nukadoko
           check_unbound
           check_from_unused
         end
-        @findings = @findings.uniq { [_1.code, _1.file, _1.line, _1.message] }
+        # Errors, then warnings, then notes, each kind in the order found, as
+        # the TypeScript engine reports them.
+        rank = { "error" => 0, "warning" => 1, "note" => 2 }
+        @findings = @findings.uniq { [_1.code, _1.file, _1.line, _1.message] }.each_with_index.sort_by { |f, i| [rank.fetch(f.severity, 3), i] }.map(&:first)
       end
 
       #: () -> bool
@@ -206,10 +212,7 @@ module Nukadoko
       # description is what a person picking a step would read.
       #: () -> void
       def check_unbound
-        bound = @scenarios.flat_map(&:steps).filter_map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first.first : nil }
-        # A step whose file failed to load is out of the vocabulary, so it is not unbound either.
-        unread = findings.select { _1.code == "step-file-import-failed" }.map(&:step)
-        @steps.select(&:pattern).reject { bound.include?(_1) || unread.include?(_1.step_name) }.sort_by(&:file).each do |step|
+        unbound_steps.each do |step|
           findings << Finding.new("note", "pattern-unbound", step.file, nil, step.step_name,
                                   %(Step "#{step.step_name}" declares a pattern, but no feature line under the scanned directories (features) binds it. It has no place in any scenario right now.),
                                   Codes.fix("pattern-unbound"), nil)
@@ -588,6 +591,30 @@ module Nukadoko
                                 Codes.fix("scenario-without-then"), nil)
       end
 
+      # The steps with a pattern that no line binds alone. A step whose file
+      # failed to load is out of the vocabulary, so it is not unbound either.
+      #: () -> Array[singleton(Step)]
+      def unbound_steps
+        @unbound_steps ||= begin
+          bound = @scenarios.flat_map(&:steps).filter_map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first.first : nil }
+          unread = findings.select { _1.code == "step-file-import-failed" }.map(&:step)
+          @steps.select(&:pattern).reject { bound.include?(_1) || unread.include?(_1.step_name) }.sort_by(&:file)
+        end
+      end
+
+      # A renamed sentence or pattern leaves one line undefined and one step
+      # unbound at once, so an undefined line names the unbound steps, at
+      # most three, beside the scaffold command that would write a duplicate.
+      #: () -> String
+      def unbound_suffix
+        steps = unbound_steps
+        return "" if steps.empty?
+
+        named = steps.first(3).map { %(#{_1.step_name} ("#{_1.pattern}", #{_1.file})) }
+        rest = steps.size - named.size
+        "; patterned steps no scanned feature line binds: #{rest.positive? ? "#{named.join(", ")}, and #{rest} more" : named.join(", ")}"
+      end
+
       # While a step definition is broken, a line it would have matched looks
       # undefined. Saying so would send the reader after the wrong fix, so the
       # judgment waits for the broken definition, with one warning.
@@ -602,7 +629,7 @@ module Nukadoko
         end
         undefined.each do |scenario, line|
           findings << Finding.new("error", "undefined-step", scenario.uri, line.line, nil,
-                                  %(No step definition matches "#{line.text}"), nil, "nuka scaffold --feature #{Selection.shell_word(scenario.uri)}")
+                                  %(No step definition matches "#{line.text}"#{unbound_suffix}), nil, "nuka scaffold --feature #{Selection.shell_word(scenario.uri)}")
         end
       end
 

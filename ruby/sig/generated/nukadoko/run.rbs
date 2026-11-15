@@ -182,6 +182,10 @@ module Nukadoko
       # : (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
       def do_step: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
 
+      # What `nuka do` writes its stdout and its record through.
+      # : (untyped) -> untyped
+      def redact: (untyped) -> untyped
+
       private
 
       # Runs one step whose args the block binds, and writes its record and
@@ -225,6 +229,20 @@ module Nukadoko
       # lists it: built here with its setup time, or reused from its scope.
       # : (Symbol, Symbol, Integer?, String?) -> void
       def note_fixture: (Symbol, Symbol, Integer?, String?) -> void
+
+      # The secrets of the environment running now, which every record
+      # surface is written through.
+      # : () -> Secrets
+      def secrets: () -> Secrets
+
+      # What the env fixture holds: the env files, then the world's own env.
+      # : (World) -> Hash[String, String]
+      def step_env: (World) -> Hash[String, String]
+
+      # Reads an environment's env files into the env fixture and the secret
+      # set, from the same read, so the two agree on what was loaded.
+      # : (Environment) -> void
+      def read_env: (Environment) -> void
 
       # : (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
       def build_fixtures: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [ Hash[Symbol, untyped], (^() -> void)? ]

@@ -32,7 +32,8 @@ The `nukadoko` gem is a second engine that reads the same feature files and judg
 - A Then step has `claims [{ actual: "body", compare: "equal", expected: { from: "created" } }]` and `def observe(...)` in place of `run`, with `poll timeout_ms: 3000` when it waits.
 - The keyword arguments of `run` or `observe` name the fixtures, with `args:` only when the body reads them: `request`, `page`, `scratch` (`dir` and `copy`), `call`, and each `Nukadoko.fixture(:name) { |use| use.(value) }` in `nukadoko.config.rb`.
 - `Nukadoko.run_command(command, args, cwd:)` runs a program and returns `{ exitCode:, stdout:, stderr: }`, kept in the step record.
-- `nukadoko.program.rb` holds `Nukadoko.program(serve: { command: "... {port}", ready: "/up" }, environments: { ... })`.
+- `nukadoko.program.rb` holds `Nukadoko.program(serve: { command: "... {port}", ready: "/up" }, environments: { ... })`, an environment's own env files under `envFiles:`.
+- `Nukadoko.config(envFiles: [".env"], secrets: { public: [...], redact: [...] })` loads env files and classifies their secrets as above.
 - The gem has one command the npm package does not, `sig`: it writes `sig/nukadoko/steps.rbs`, the RBS of each step's args and returns, so Steep checks the step bodies.
 - Not in the gem yet: `requires`, `gives`, and `ends`, `measureMcp`, the `nukadoko/compat` door, and `nuka init --allure`.
 

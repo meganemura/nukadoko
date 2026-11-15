@@ -141,6 +141,11 @@ module Nukadoko
     # : () -> Integer
     def verdict: () -> Integer
 
+    # What check says about the env files; a file it cannot read, or a key
+    # both secrets lists name, stops the command instead.
+    # : () -> Array[Engine::Finding]
+    def env_findings: () -> Array[Engine::Finding]
+
     # : (Engine::Refusal) -> Integer
     def refuse: (Engine::Refusal) -> Integer
 

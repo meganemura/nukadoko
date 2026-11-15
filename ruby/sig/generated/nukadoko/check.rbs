@@ -51,8 +51,10 @@ module Nukadoko
       # `environments` is the selection a run without --env starts, for
       # condition-unmet; nil when --env named the selection. `problems` are
       # what the feature loader found that runs nothing.
-      # : (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem]) -> void
-      def initialize: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem]) -> void
+      # `config` holds what was found in the config and the program file before
+      # any step loaded, such as an env file that is missing.
+      # : (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
+      def initialize: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
 
       # : () -> bool
       def passed?: () -> bool
@@ -176,6 +178,17 @@ module Nukadoko
       # step, passes whenever its steps run.
       # : (Scenario) -> void
       def judging_nothing: (Scenario) -> void
+
+      # The steps with a pattern that no line binds alone. A step whose file
+      # failed to load is out of the vocabulary, so it is not unbound either.
+      # : () -> Array[singleton(Step)]
+      def unbound_steps: () -> Array[singleton(Step)]
+
+      # A renamed sentence or pattern leaves one line undefined and one step
+      # unbound at once, so an undefined line names the unbound steps, at
+      # most three, beside the scaffold command that would write a duplicate.
+      # : () -> String
+      def unbound_suffix: () -> String
 
       # While a step definition is broken, a line it would have matched looks
       # undefined. Saying so would send the reader after the wrong fix, so the

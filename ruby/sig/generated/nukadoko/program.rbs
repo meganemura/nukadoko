@@ -12,12 +12,14 @@ module Nukadoko
 
       attr_reader env(): Hash[untyped, untyped]
 
-      def self.new: (String name, Hash[String, untyped] conditions, Hash[untyped, untyped] env) -> instance
-                  | (name: String, conditions: Hash[String, untyped], env: Hash[untyped, untyped]) -> instance
+      attr_reader env_files(): Array[String]
 
-      def self.members: () -> [ :name, :conditions, :env ]
+      def self.new: (String name, Hash[String, untyped] conditions, Hash[untyped, untyped] env, Array[String] env_files) -> instance
+                  | (name: String, conditions: Hash[String, untyped], env: Hash[untyped, untyped], env_files: Array[String]) -> instance
 
-      def members: () -> [ :name, :conditions, :env ]
+      def self.members: () -> [ :name, :conditions, :env, :env_files ]
+
+      def members: () -> [ :name, :conditions, :env, :env_files ]
     end
 
     class Program
@@ -40,6 +42,10 @@ module Nukadoko
 
       # : (String) -> Environment
       def environment: (String) -> Environment
+
+      # The config's envFiles, then the environment's own: later files win.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self.env_files: (Hash[Symbol, untyped]) -> Array[String]
 
       # : () -> Array[String]
       def default_names: () -> Array[String]

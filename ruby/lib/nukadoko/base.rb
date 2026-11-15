@@ -166,7 +166,7 @@ module Nukadoko
                   conditioned = declared.select { |_, e| e[:conditions] }.keys
                   conditioned.any? ? conditioned : ["default"]
                 end
-        names.map { |name| Environment.new(name, (declared.dig(name, :conditions) || {}).transform_keys(&:to_s), {}) }
+        names.map { |name| Environment.new(name, (declared.dig(name, :conditions) || {}).transform_keys(&:to_s), {}, Program.env_files(declared[name] || {})) }
       end
 
       #: (String, Array[String]) -> Array[String]

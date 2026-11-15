@@ -110,7 +110,7 @@ module Nukadoko
       # starts; a selection --env names is a choice of where to run.
       selected = (Engine::Program.new(Nukadoko.program_options).environments if Array(@options["--env"]).empty?) rescue nil
       check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")), full: @command == "check",
-                                conditions: declared, environments: selected, problems: problems)
+                                conditions: declared, environments: selected, problems: problems, config: env_findings)
       findings = check.findings.map { relative(_1).to_h }
       case @command
       when "check" then finish("check", check.passed?, findings: findings)
@@ -260,7 +260,7 @@ module Nukadoko
       default = @options["--env"].empty?
       declared = program.declared.values.flat_map { (_1[:conditions] || {}).keys.map(&:to_s) }
       check = Engine::Check.new(steps, default ? selection.scenarios : kept, conditions: declared,
-                                environments: (environments if default), problems: selection.problems)
+                                environments: (environments if default), problems: selection.problems, config: env_findings)
       # Only the check's errors hold a run back, so only they are reported.
       findings = @no_check ? [] : check.findings.map { relative(_1).to_h }.select { _1[:severity] == "error" }
       unless @no_check || check.passed?
@@ -438,7 +438,7 @@ module Nukadoko
       run = Engine::Run.new(@project, check.usable, [], Nukadoko.program_options, environments: [environment], dir: dir, out: $stderr)
       texts = given.to_h { |key, value| [key, JSON.generate(value)] }
       record = run.do_step(step, args, origins, texts, environment)
-      written = do_record(record, id, step, given, origins, used, environment)
+      written = run.redact(do_record(record, id, step, given, origins, used, environment))
       File.write(File.join(dir, "record.json"), JSON.pretty_generate(written))
       $stdout.puts JSON.pretty_generate(written)
       record[:status] == "passed" ? 0 : 1
@@ -753,6 +753,16 @@ module Nukadoko
       answer.open? ? 1 : 0
     end
 
+    # What check says about the env files; a file it cannot read, or a key
+    # both secrets lists name, stops the command instead.
+    #: () -> Array[Engine::Finding]
+    def env_findings
+      Engine::EnvCheck.validate!
+      Engine::EnvCheck.findings(@project)
+    rescue Engine::EnvFile::Unreadable => e
+      raise Engine::Refusal.new("env-file-unreadable", e.message)
+    end
+
     #: (Engine::Refusal) -> Integer
     def refuse(refusal)
       finish(@command, false, findings: [refusal.to_h(@command)], verdict: refusal.severity, exit_code: refusal.exit_code)
@@ -760,7 +770,7 @@ module Nukadoko
 
     #: (Engine::Finding) -> Engine::Finding
     def relative(finding)
-      finding.with(file: finding.file&.delete_prefix("#{@project}/"))
+      finding.with(file: finding.file&.delete_prefix("#{@project}/"), message: finding.message.gsub("#{@project}/", ""))
     end
 
     # Every envelope opens the same way, in the TypeScript engine's order.

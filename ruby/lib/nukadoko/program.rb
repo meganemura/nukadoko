@@ -14,6 +14,7 @@ module Nukadoko
       :name, #: String
       :conditions, #: Hash[String, untyped]
       :env, #: Hash[untyped, untyped]
+      :env_files, #: Array[String]
     )
 
     class Program
@@ -52,8 +53,12 @@ module Nukadoko
       #: (String) -> Environment
       def environment(name)
         e = declared[name] || {}
-        Environment.new(name, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {})
+        Environment.new(name, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {}, Program.env_files(e))
       end
+
+      # The config's envFiles, then the environment's own: later files win.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def self.env_files(environment) = [*Nukadoko.config_options[:envFiles], *environment[:envFiles]].map(&:to_s)
 
       #: () -> Array[String]
       def default_names

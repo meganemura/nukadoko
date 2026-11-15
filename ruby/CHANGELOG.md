@@ -8,6 +8,17 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- Env files and secrets, as the TypeScript engine reads them:
+  `Nukadoko.config(envFiles: [...])` and an environment's own `envFiles:`
+  fill the `env` fixture, with the same parser; a file git does not track,
+  or one that differs from HEAD, is a secret source whose values are
+  written as `{{secret.NAME}}` in step records, `http.jsonl`, the process
+  output files, and what `nuka do` prints; `secrets: { public:, redact: }`
+  adjusts one key. `nuka check` reports `env-file-missing`,
+  `environment-env-file-missing`, `env-file-skipped-line`,
+  `secrets-public-key-unknown`, `secrets-redact-key-unknown`,
+  `secrets-redact-key-too-short`, and `tracked-secret-looking-key`, and an
+  env file that cannot be read stops a command with `env-file-unreadable`.
 - `scratch.copy(source)` gives a step a fresh scratch directory that holds
   a copy of a file or directory of the project, as the TypeScript engine's
   does. A missing source raises before any directory is made.
@@ -140,6 +151,9 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Changed
 
+- `nuka check` lists errors, then warnings, then notes, as the TypeScript
+  engine does, and `undefined-step` names the patterned steps no line
+  binds, so a renamed sentence points at the step it was meant for.
 - `nuka init` ends with `next:` naming the gem's `llms.txt`, as the
   TypeScript engine names the package's, and `nuka --help` says its Ruby
   section is how a Ruby step is written.

@@ -1,0 +1,38 @@
+# Generated from lib/nukadoko/env_check.rb with RBS::Inline
+
+# What `nuka check` says about the env files the config and the program
+# name, as the TypeScript engine says it. A missing file is a warning, since
+# a run reads it as empty; a line that loads nothing, and a `secrets` key
+# that reaches nothing, are warnings too. None of it prints a value: the
+# files hold secrets. The one guess here, whether a key's name looks like a
+# secret, decides only a warning and never what is redacted.
+module Nukadoko
+  module Engine
+    module EnvCheck
+      CONFIG: ::String
+
+      PROGRAM: ::String
+
+      # `KEY` counts only as a whole underscore-delimited word, so MONKEY,
+      # KEYWORD, and APIKEY are not guessed to be secrets.
+      SECRET_LOOKING: ::Regexp
+
+      # A key in both lists is two opposite instructions, so the config is
+      # refused before anything reads it.
+      # : () -> void
+      def self.validate!: () -> void
+
+      # : (Symbol) -> Array[String]
+      def self.keys: (Symbol) -> Array[String]
+
+      # : (String) -> Array[Finding]
+      def self.findings: (String) -> Array[Finding]
+
+      # : (String, String, String, ?String?) -> Finding
+      def self.warning: (String, String, String, ?String?) -> Finding
+
+      # : (String, String) -> String?
+      def self.readable: (String, String) -> String?
+    end
+  end
+end

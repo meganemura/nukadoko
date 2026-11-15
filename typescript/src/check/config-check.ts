@@ -245,7 +245,7 @@ export async function checkConfig(
     if (allDefinedEnv[key]!.length < MIN_REDACTABLE_LENGTH) {
       warnings.push({
         code: "secrets-redact-key-too-short",
-        message: `secrets.redact names "${key}", but its value is shorter than ${MIN_REDACTABLE_LENGTH} characters, so build-secret-set.ts will never actually redact it`,
+        message: `secrets.redact names "${key}", but its value is shorter than ${MIN_REDACTABLE_LENGTH} characters, so nukadoko never redacts it`,
         file: configFile,
       });
     }

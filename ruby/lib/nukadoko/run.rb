@@ -46,6 +46,8 @@ module Nukadoko
 
       #: () -> Hash[Symbol, untyped]
       def call
+        # An env file that cannot be read stops the run before anything starts.
+        @environments.each { read_env(_1) }
         FileUtils.mkdir_p(File.join(@dir, "steps"))
         @started_at = now
         write_sources
@@ -103,6 +105,7 @@ module Nukadoko
           end
           world_dir = File.join(@dir, "worlds", @world == "head" ? environment.name : "#{environment.name}@#{@world}")
           FileUtils.mkdir_p(world_dir)
+          read_env(environment)
           world = @program.start(environment, world_dir, @project)
           @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
           @base_urls[environment.name] = world.base_url
@@ -651,6 +654,7 @@ module Nukadoko
       #: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
       def do_step(step, args, origins, texts, environment)
         FileUtils.mkdir_p(@dir)
+        read_env(environment)
         world = @program.start(environment, @dir, @project)
         @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
         @scratch = Scratch.new(@project)
@@ -666,6 +670,10 @@ module Nukadoko
         @scratch&.remove_all
         world&.stop
       end
+
+      # What `nuka do` writes its stdout and its record through.
+      #: (untyped) -> untyped
+      def redact(value) = secrets.redact(value)
 
       private
 
@@ -718,7 +726,7 @@ module Nukadoko
             %i[stdout stderr stdin].each do |stream|
               next if output[stream].to_s.empty?
 
-              File.write(File.join(dir, "process-#{n}.#{stream}.txt"), output[stream])
+              File.write(File.join(dir, "process-#{n}.#{stream}.txt"), secrets.redact(output[stream]))
               process[stream] = "process-#{n}.#{stream}.txt"
             end
           end
@@ -732,7 +740,7 @@ module Nukadoko
           record[:calls] = fixtures[:call].calls if fixtures[:call]&.calls&.any?
           # A page's own traffic is in http.jsonl and the trace, not counted as the step's.
           record[:http_count] = log.count { _1[:via] != "page" }
-          File.write(File.join(dir, "http.jsonl"), "#{log.map { JSON.generate(_1) }.join("\n")}\n") if log.any?
+          File.write(File.join(dir, "http.jsonl"), "#{log.map { JSON.generate(secrets.redact(_1)) }.join("\n")}\n") if log.any?
           record[:http_file] = log.any?
           if (traced = TraceActions.read(File.join(dir, "trace.zip")))
             record[:trace] = "trace.zip"
@@ -740,7 +748,7 @@ module Nukadoko
             record[:actions_truncated] = traced[:truncated] if traced[:truncated]
           end
           measure(step, record, dir) if record[:claim_records]
-          File.write(File.join(dir, "record.json"), JSON.pretty_generate(@step_file ? @step_file.(record) : record))
+          File.write(File.join(dir, "record.json"), JSON.pretty_generate(secrets.redact(@step_file ? @step_file.(record) : record)))
         end
         record
       end
@@ -940,6 +948,27 @@ module Nukadoko
         @fixture_usage << { name: name.to_s, scope: scope.to_s, reused: setup_ms.nil?, setup_ms: setup_ms, at: at }.compact
       end
 
+      # The secrets of the environment running now, which every record
+      # surface is written through.
+      #: () -> Secrets
+      def secrets = @secrets || Secrets.new
+
+      # What the env fixture holds: the env files, then the world's own env.
+      #: (World) -> Hash[String, String]
+      def step_env(world) = (@env_vars || {}).merge(world.env)
+
+      # Reads an environment's env files into the env fixture and the secret
+      # set, from the same read, so the two agree on what was loaded.
+      #: (Environment) -> void
+      def read_env(environment)
+        EnvCheck.validate!
+        config = Nukadoko.config_options.fetch(:secrets, {}) #: Hash[Symbol, untyped]
+        @env_vars = EnvFile.load(@project, environment.env_files)
+        @secrets = Secrets.of(@project, environment.env_files, public_keys: (config[:public] || []).map(&:to_s), redact_keys: (config[:redact] || []).map(&:to_s))
+      rescue EnvFile::Unreadable => e
+        raise Refusal.new("env-file-unreadable", e.message)
+      end
+
       #: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
       def build_fixtures(step, dir, log, world, record)
         finish = nil
@@ -948,8 +977,8 @@ module Nukadoko
           case name
           when :request then [name, Request.new(world.base_url)]
           when :baseURL then [name, world.base_url]
-          when :env then [name, world.env]
-          when :requireEnv then [name, ->(key) { world.env.fetch(key.to_s) { raise %(requireEnv("#{key}"): the world's env has no #{key}) } }]
+          when :env then [name, step_env(world)]
+          when :requireEnv then [name, ->(key) { step_env(world).fetch(key.to_s) { raise %(requireEnv("#{key}"): the world's env has no #{key}) } }]
           when :scratch then [name, @scratch]
           when :page
             page, finish = @browser.page_for(dir, log)
