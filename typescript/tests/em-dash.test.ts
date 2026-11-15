@@ -17,7 +17,7 @@ import { sharedRoot } from "./helpers/fixtures.js";
 //
 // A fenced code block (```) is excluded: an em-dash inside an example's own
 // comment, or inside a block of text a reader copies verbatim (e.g. the
-// evaluation prompt in README.md), is not this project's prose. Inline
+// evaluation prompt in docs/guide.md), is not this project's prose. Inline
 // code spans (`like this`) are checked, not excluded: nothing in the
 // covered files currently puts an em-dash inside one, so exempting them
 // would only open an evasion route (wrap the em-dash in backticks to dodge

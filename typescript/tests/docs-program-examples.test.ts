@@ -25,8 +25,8 @@ import { createCaptureSink, removeTempDir, repoRoot, testsDir } from "./helpers/
 // is not called, since nothing here starts a world.
 
 const DOCS = [
-  "README.md",
-  "README.ja.md",
+  "docs/guide.md",
+  "docs/guide.ja.md",
   "docs/spec.md",
   "docs/spec.ja.md",
   "docs/migration.md",
@@ -92,9 +92,9 @@ function projectFor(block: ProgramBlock): string {
 describe("the program files the docs show", () => {
   const blocks = DOCS.flatMap(programBlocks);
 
-  it("are found in the spec and the README", () => {
+  it("are found in the spec and the guide", () => {
     expect(blocks.filter((block) => block.file === "docs/spec.md").length).toBeGreaterThanOrEqual(4);
-    expect(blocks.some((block) => block.file === "README.md")).toBe(true);
+    expect(blocks.some((block) => block.file === "docs/guide.md")).toBe(true);
   });
 
   for (const block of blocks) {

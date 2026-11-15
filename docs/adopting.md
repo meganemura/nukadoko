@@ -3,7 +3,7 @@
 This guide takes a project that already has code and unit tests to its
 first scenario that runs green, in CI, with a run summary on the pull
 request. It assumes a Node project; a repository without a `package.json`
-starts with the note under [Setup details](../README.md#setup-details).
+starts with the note under [Setup details](guide.md#setup-details).
 
 Each step names the command and what it writes. The outputs below are
 copied from a real run of the packed package in a scratch project whose
@@ -64,7 +64,7 @@ Decide the optional flags now. `nuka init` refuses to run again once
 
 A program under test that serves HTTP goes in a second file,
 `nukadoko.program.ts`, which `nuka init` does not write. See
-[An HTTP API](../README.md#an-http-api).
+[An HTTP API](guide.md#an-http-api).
 
 A CommonJS project (no `"type": "module"`) gets `nukadoko.config.mts`
 instead, and `nuka scaffold` writes its step files as `.mts`. When the
@@ -217,7 +217,7 @@ npx nuka report --format messages --out messages.ndjson  # a cucumber-messages s
 
 Allure results need Allure 3's CLI to become a report. The commands, and
 why each one takes `--output`, are in
-[Reports fill themselves](../README.md#reports-fill-themselves).
+[Reports fill themselves](guide.md#reports-fill-themselves).
 
 ## 8. Add it to CI
 

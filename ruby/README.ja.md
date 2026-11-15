@@ -5,12 +5,13 @@ Gherkin のステップに型付きの契約を付け、シナリオのまちが
 TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必要があります。
 [`../conformance/`](../conformance/README.md) のケースがそれを確かめます。
 
-状態: 初期の核です。
-`conformance/` の 10 のケースを通します。
+状態: `conformance/engine/` のすべてのシナリオを通します。
+これらのシナリオは、`nuka` の各コマンドを両方のエンジンに対して実行します。
+`conformance/` の 10 のケースも通します。
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`--step`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-`nuka scaffold --command` など、TypeScript 版の機能の一部はまだありません。
+`nuka scaffold --command`、`--request`、`--from` など、TypeScript 版の機能の一部はまだありません。
 
 ## インストール
 

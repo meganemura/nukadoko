@@ -196,6 +196,16 @@ just until 0.1.
 
 ### Changed
 
+- **The README is shorter, and its reference sections moved to
+  `docs/guide.md`.** The README now reads in the order a new reader needs:
+  what nukadoko is and why, the install for each engine, the first
+  scenario, how a run is judged (the check before a run, claims, and the
+  verdict table), CI in one step, the skills, the way in for an existing
+  suite, what nukadoko does not do, and the status. An HTTP API, setup
+  details, upgrading, secrets, the before and after of a promoted step,
+  reports, self-healing, the compat door audit, the evaluation prompt, CI
+  runs in depth, and the notes `nuka check` adds are in the guide, with
+  their text unchanged. `docs/guide.ja.md` follows it.
 - **The TypeScript engine moved to `typescript/`, beside `ruby/`.** The
   repository holds one engine per language now: `typescript/` is the npm
   package (`src/`, `tests/`, `scripts/`, `selftest-suite/`, `examples/`,

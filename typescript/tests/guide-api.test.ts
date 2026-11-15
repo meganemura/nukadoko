@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { httpLogLines, latestRunJson, repoRoot, stepRecordDir, withoutCheckNotes } from "./helpers/fixtures.js";
+import { httpLogLines, latestRunJson, repoRoot, sharedRoot, stepRecordDir, withoutCheckNotes } from "./helpers/fixtures.js";
 
-// Responsibility: README.md's two HTTP sections work as written.
+// Responsibility: the two HTTP sections of docs/guide.md work as written.
 //
 // "An HTTP API": its program file, its install line, and its two scaffold
 // lines, run as written in a project with Playwright after a plain
@@ -17,7 +17,7 @@ import { httpLogLines, latestRunJson, repoRoot, stepRecordDir, withoutCheckNotes
 // program file the section above shows, compiles under `tsc --strict`,
 // with `skipLibCheck: false`, in a project with no Playwright installed.
 // The Then step comes from the scaffold command the section names, and
-// `nuka run` takes the feature it shows to green. README.ja.md carries the
+// `nuka run` takes the feature it shows to green. docs/guide.ja.md carries the
 // same blocks for both.
 //
 // `src/server.ts` is the one file each section describes without showing,
@@ -140,7 +140,7 @@ beforeAll(async () => {
   await mkdir(path.join(projectDir, "src"), { recursive: true });
   await writeFile(path.join(projectDir, "src", "server.ts"), SERVER);
   await writeFile(path.join(projectDir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({});\n');
-  const readme = await readFile(path.join(repoRoot, "README.md"), "utf8");
+  const readme = await readFile(path.join(sharedRoot, "docs", "guide.md"), "utf8");
   const [program] = sectionBlocks(readme, HTTP_API);
   blocks = [program!, ...sectionBlocks(readme, FETCH)];
   for (const block of blocks) {
@@ -164,10 +164,10 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-describe(`README.md: ${FETCH}`, () => {
-  it("README.ja.md shows the same blocks", async () => {
-    const en = sectionBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"), FETCH);
-    const ja = sectionBlocks(await readFile(path.join(repoRoot, "README.ja.md"), "utf8"), FETCH);
+describe(`docs/guide.md: ${FETCH}`, () => {
+  it("docs/guide.ja.md shows the same blocks", async () => {
+    const en = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.md"), "utf8"), FETCH);
+    const ja = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.ja.md"), "utf8"), FETCH);
     expect(en.map((block) => block.lang)).toEqual(["ts", "gherkin"]);
     expect(en.map(filePath)).toEqual(["features/steps/get-greeting.ts", "features/greet.feature"]);
     expect(ja).toEqual(en);
@@ -226,7 +226,7 @@ function shellWords(line: string): string[] {
   return [...line.matchAll(/"([^"]*)"|(\S+)/g)].map((match) => match[1] ?? match[2]!);
 }
 
-describe(`README.md: ${HTTP_API}`, () => {
+describe(`docs/guide.md: ${HTTP_API}`, () => {
   let apiRoot: string;
   let apiDir: string;
   let apiCli: string;
@@ -266,15 +266,15 @@ describe(`README.md: ${HTTP_API}`, () => {
         '  res.end(`Hello, ${decodeURIComponent((req.url ?? "").replace(/^\\/greet\\//, ""))}!`);\n' +
         "}).listen(Number(process.env.PORT));\n",
     );
-    apiBlocks = sectionBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"), HTTP_API);
+    apiBlocks = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.md"), "utf8"), HTTP_API);
   }, 120_000);
 
   afterAll(async () => {
     await rm(apiRoot, { recursive: true, force: true });
   });
 
-  it("README.ja.md shows the same blocks", async () => {
-    const ja = sectionBlocks(await readFile(path.join(repoRoot, "README.ja.md"), "utf8"), HTTP_API);
+  it("docs/guide.ja.md shows the same blocks", async () => {
+    const ja = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.ja.md"), "utf8"), HTTP_API);
     expect(apiBlocks.map((block) => block.lang)).toEqual(["ts", "gherkin", "sh"]);
     expect(apiBlocks.slice(0, 2).map(filePath)).toEqual(["nukadoko.program.ts", "features/greet.feature"]);
     expect(ja).toEqual(apiBlocks);

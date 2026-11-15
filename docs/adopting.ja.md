@@ -5,7 +5,7 @@
 
 このガイドは、コードとユニットテストをすでに持つプロジェクトを、最初の scenario が green になり、CI で走り、pull request に run サマリが載るところまで進めます。
 Node のプロジェクトを前提にしています。
-`package.json` のないリポジトリは、[Setup details](../README.ja.md#setup-details) の注記から始めてください。
+`package.json` のないリポジトリは、[Setup details](guide.ja.md#setup-details) の注記から始めてください。
 
 各手順は、実行するコマンドと、それが書くものを示します。
 以下の出力は、パックしたパッケージを scratch プロジェクトで実際に実行して写したものです。
@@ -64,7 +64,7 @@ next: read node_modules/nukadoko/llms.txt, written for an agent: the loop, every
 
 HTTP を提供するテスト対象のプログラムは、2 つ目のファイル `nukadoko.program.ts` に書きます。
 `nuka init` はこのファイルを書きません。
-[An HTTP API](../README.ja.md#an-http-api) を参照してください。
+[An HTTP API](guide.ja.md#an-http-api) を参照してください。
 
 CommonJS のプロジェクト(`"type": "module"` がないもの)では、代わりに `nukadoko.config.mts` が書かれ、`nuka scaffold` は step ファイルを `.mts` で書きます。
 package.json に `"type"` がまったくなければ、`.ts` の step ファイルもそこで動きますが、読み込むたびに Node が `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
@@ -203,7 +203,7 @@ npx nuka report --format messages --out messages.ndjson  # a cucumber-messages s
 ```
 
 Allure results をレポートにするには Allure 3 の CLI が要ります。
-そのコマンドと、各コマンドに `--output` を付ける理由は [Reports fill themselves](../README.ja.md#reports-fill-themselves) にあります。
+そのコマンドと、各コマンドに `--output` を付ける理由は [Reports fill themselves](guide.ja.md#reports-fill-themselves) にあります。
 
 ## 8. CI に加える
 
