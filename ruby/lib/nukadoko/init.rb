@@ -12,8 +12,11 @@ require "fileutils"
 # looked at and fixed.
 #
 # The TypeScript engine also adds a package.json script and tsconfig
-# entries; a Ruby project has neither, so the Gemfile is what init looks
-# at: a Gemfile that does not name nukadoko gets a line on stderr.
+# entries. A Ruby project's one command for people and CI is a rake task,
+# so a Rakefile with no `scenarios` task gets one that runs `nuka run`; a
+# project with no Rakefile gets none, since a Rakefile written only for
+# this would be a second place to look. The Gemfile is read too: one that
+# does not name nukadoko gets a line on stderr.
 module Nukadoko
   module Engine
     class Init
@@ -23,6 +26,14 @@ module Nukadoko
       # a secret source; `!.env.example` must follow `.env.*` to re-include it.
       IGNORED = [".nukadoko/", ".env", ".env.*", "!.env.example"].freeze
       README = File.expand_path("../../README.md", __dir__.to_s)
+      # The gem ships no docs/, so the config file points at the spec online.
+      SPEC = "https://github.com/meganemura/nukadoko/blob/main/docs/spec.md"
+      TASK = <<~RUBY
+        desc "Run the acceptance scenarios: nuka check, then every scenario under features/"
+        task :scenarios do
+          sh "bundle exec nuka run"
+        end
+      RUBY
 
       #: (String, out: IO, err: IO) -> void
       def initialize(project, out:, err:)
@@ -40,13 +51,14 @@ module Nukadoko
         end
 
         File.write(config, <<~RUBY)
-          # Every config key nukadoko reads, one line each: docs/spec.md, "Environments and secrets"
+          # Every config key nukadoko reads, one line each: #{SPEC}, "Environments and secrets"
           Nukadoko.config
         RUBY
         @out.puts CONFIG
         FileUtils.mkdir_p(File.join(@project, STEPS))
         @out.puts STEPS
         @out.puts ".gitignore" if ignore_entries
+        @out.puts "Rakefile" if scenarios_task
         gemfile_note
         self_check
       end
@@ -64,6 +76,20 @@ module Nukadoko
 
         prefix = existing.empty? || existing.end_with?("\n") ? existing : "#{existing}\n"
         File.write(path, "#{prefix}#{missing.join("\n")}\n")
+        true
+      end
+
+      # Appends the `scenarios` task to a Rakefile that has none; true when it wrote.
+      #: () -> bool
+      def scenarios_task
+        path = File.join(@project, "Rakefile")
+        return false unless File.exist?(path)
+
+        existing = File.read(path)
+        return false if existing.match?(/^\s*task\s*\(?\s*(:scenarios|["']scenarios["'])/)
+
+        prefix = existing.empty? || existing.end_with?("\n") ? existing : "#{existing}\n"
+        File.write(path, "#{prefix}#{"\n" unless prefix.empty?}#{TASK}")
         true
       end
 

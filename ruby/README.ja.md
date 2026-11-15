@@ -51,6 +51,7 @@ end
 ## コマンド
 
 - `nuka init` は、`nukadoko.config.rb`、空の `features/steps/`、`.nukadoko/` と `.env` のための `.gitignore` の行を書きます。
+Rakefile に `scenarios` タスクがなければ、`bundle exec nuka run` を実行するタスクを足すので、人も CI も `rake scenarios` を実行します。
 設定ファイルがすでにあれば断ります。
 - `nuka check [--json]` は、実行前にまちがいを報告します。
 - `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--concurrency <n>] [--proof-runs <n>] [--step] [--records] [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。

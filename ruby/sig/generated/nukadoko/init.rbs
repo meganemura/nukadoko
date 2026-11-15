@@ -9,8 +9,11 @@
 # looked at and fixed.
 #
 # The TypeScript engine also adds a package.json script and tsconfig
-# entries; a Ruby project has neither, so the Gemfile is what init looks
-# at: a Gemfile that does not name nukadoko gets a line on stderr.
+# entries. A Ruby project's one command for people and CI is a rake task,
+# so a Rakefile with no `scenarios` task gets one that runs `nuka run`; a
+# project with no Rakefile gets none, since a Rakefile written only for
+# this would be a second place to look. The Gemfile is read too: one that
+# does not name nukadoko gets a line on stderr.
 module Nukadoko
   module Engine
     class Init
@@ -24,6 +27,11 @@ module Nukadoko
 
       README: untyped
 
+      # The gem ships no docs/, so the config file points at the spec online.
+      SPEC: ::String
+
+      TASK: ::String
+
       # : (String, out: IO, err: IO) -> void
       def initialize: (String, out: IO, err: IO) -> void
 
@@ -36,6 +44,10 @@ module Nukadoko
       # Appends each entry no line already ignores; true when it wrote.
       # : () -> bool
       def ignore_entries: () -> bool
+
+      # Appends the `scenarios` task to a Rakefile that has none; true when it wrote.
+      # : () -> bool
+      def scenarios_task: () -> bool
 
       # A root directory entry is also ignored by `/name`, `name`, or `name/**`.
       # : (String, String) -> bool
