@@ -87,6 +87,14 @@ module Nukadoko
     # : () -> Array[Symbol]
     def self.fixtures: () -> Array[Symbol]
 
+    # What `run` gave back, checked against `returns`, as problems to
+    # report. A Ruby method always gives back its last value, so a step
+    # with no returns that ends on a call (an Integer, a String, nil)
+    # returns nothing; a Hash with keys would lose them from the record,
+    # so that is refused, as the TypeScript engine refuses it.
+    # : (untyped) -> [untyped, Array[String]]
+    def self.returned: (untyped) -> [ untyped, Array[String] ]
+
     # The keywords the body is called with: `args` only when it names
     # them, as a TypeScript step that does not destructure `args` never
     # sees them, so `def run(scratch:)` is a whole step.

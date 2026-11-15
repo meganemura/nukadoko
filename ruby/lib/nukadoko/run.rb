@@ -817,11 +817,10 @@ module Nukadoko
           record.merge!(status: "failed", outcome: then_line ? :fail : :broke, claim: broken,
                         broken_actual: judged[broken][:actual], error_kind: "claim_broken", error: message)
         else
-          value = step.new.run(**step.keywords(fixtures.slice(*step.fixtures), step.inputs.load(args)))
-          problems = step.returns ? step.returns.problems(value) : []
+          value, problems = step.returned(step.new.run(**step.keywords(fixtures.slice(*step.fixtures), step.inputs.load(args))))
           if problems.any?
             record[:error_kind] = "result_invalid"
-            raise TypeError, "returns: #{problems.join("; ")}"
+            raise TypeError, "returns validation failed: #{problems.join("; ")}"
           end
 
           record[:returns_dropped] = step.returns ? step.returns.drops(value) : []

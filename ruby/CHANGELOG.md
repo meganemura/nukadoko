@@ -155,6 +155,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Changed
 
+- A step with no `returns` keeps nothing of what `run` gives back, so a
+  body that ends on a call (`register.set_discount(10)`) passes instead of
+  failing inside the engine; a Hash with keys fails with the TypeScript
+  engine's message, which names the keys the record would lose. A returns
+  failure now reads `returns validation failed:`, as there.
 - `nuka check` lists errors, then warnings, then notes, as the TypeScript
   engine does, and `undefined-step` names the patterned steps no line
   binds, so a renamed sentence points at the step it was meant for.

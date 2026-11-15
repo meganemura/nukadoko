@@ -88,6 +88,22 @@ module Nukadoko
         instance_method(body).parameters.filter_map { |kind, name| name if kind == :keyreq && name != :args }
       end
 
+      # What `run` gave back, checked against `returns`, as problems to
+      # report. A Ruby method always gives back its last value, so a step
+      # with no returns that ends on a call (an Integer, a String, nil)
+      # returns nothing; a Hash with keys would lose them from the record,
+      # so that is refused, as the TypeScript engine refuses it.
+      #: (untyped) -> [untyped, Array[String]]
+      def returned(value)
+        schema = returns
+        return [value, schema.problems(value)] if schema
+        return [{}, []] unless value.is_a?(Hash)
+        return [value, []] if value.empty?
+
+        one = value.size == 1
+        [value, ["this step declares no returns, so #{value.keys.join(", ")} would be dropped from the step record; declare returns with #{one ? "that key" : "those keys"}, or stop returning #{one ? "it" : "them"}"]]
+      end
+
       # The keywords the body is called with: `args` only when it names
       # them, as a TypeScript step that does not destructure `args` never
       # sees them, so `def run(scratch:)` is a whole step.

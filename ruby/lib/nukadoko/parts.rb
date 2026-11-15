@@ -73,9 +73,9 @@ module Nukadoko
           @stack.pop
           @into.pop
         end
-        problems = part.returns ? part.returns.problems(value) : []
+        value, problems = part.returned(value)
         if problems.any?
-          message = "returns: #{problems.join("; ")}"
+          message = "returns validation failed: #{problems.join("; ")}"
           fail_with.("result_invalid", message)
           raise TypeError, message
         end

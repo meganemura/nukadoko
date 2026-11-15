@@ -103,6 +103,7 @@ gem が入れる実行ファイルには、`bundle binstubs <gem>` が `bin/<nam
 - `parts [CreateTodo, CompleteById]` で、ステップが呼べるステップを宣言します。`call.(CreateTodo, title: args.title)` で 1 つを実行し、args と返り値を確かめます。パターンのない part も書けます。呼び出しは、呼んだステップの記録の `calls` に残ります。`nuka check` は、`parts` の循環と、`mutates false` なのに `mutates true` の part を持つステップを報告します。
 - `poll timeout_ms: 3000` は、すべての claim が 2 回続けて成り立つか時間切れになるまで、100 ミリ秒おきに `observe` を読み直します。`settled:` には、一度なったら変わらない状態を書きます。2 回続けてその状態なら、壊れた claim を待つのをやめます。読んだ結果はすべてステップの記録に残ります。
 - `nuka steps [--json]` は語彙の一覧を出します。`nuka describe <step>` は 1 つのステップを、args と返り値の JSON Schema とともに出します。項目は TypeScript 版と同じです。
+- `returns` の無いステップは、`run` が返したものを残しません。そのため本体の最後はどんな呼び出しでもかまいません。キーのある Hash を返すと、失うキーを名指しして失敗します。
 - 契約が宣言していない返り値のキーは、zod のオブジェクトと同じく捨てられます。ステップの記録の `returns_dropped` に、捨てたキーが残ります。
 - `nuka sig` は `sig/nukadoko/steps.rbs` を書きます。Steep を使うと、宣言していない args のキーを読む本体や、形のちがう値を返す本体がエラーになります。
 
