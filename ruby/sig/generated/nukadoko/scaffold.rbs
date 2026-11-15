@@ -42,103 +42,132 @@ module Nukadoko
       UNPORTED: untyped
 
       class Capture < Data
-        attr_reader key(): untyped
+        attr_reader key(): String
 
-        attr_reader type(): untyped
+        attr_reader type(): String
 
-        def self.new: (untyped key, untyped type) -> instance
-                    | (key: untyped, type: untyped) -> instance
+        def self.new: (String key, String type) -> instance
+                    | (key: String, type: String) -> instance
 
         def self.members: () -> [ :key, :type ]
 
         def members: () -> [ :key, :type ]
       end
 
-      def self.refusal: (untyped message, ?untyped code, **untyped hint) -> untyped
+      # : (String, ?String, **untyped) -> Refusal
+      def self.refusal: (String, ?String, **untyped) -> Refusal
 
       # The captures of `pattern`, or the reason no step could hold it.
-      def self.read_pattern: (untyped pattern) -> untyped
+      # : (String) -> (Array[Capture] | Refusal)
+      def self.read_pattern: (String) -> (Array[Capture] | Refusal)
 
       # The class `load_steps` autoloads from the step's file.
-      def self.class_name: (untyped name) -> untyped
+      # : (String) -> String
+      def self.class_name: (String) -> String
 
-      def self.class_refusal: (untyped name) -> untyped
+      # : (String) -> String?
+      def self.class_refusal: (String) -> String?
 
-      def self.file_of: (untyped name) -> untyped
+      # : (String) -> String
+      def self.file_of: (String) -> String
 
-      def self.ruby: (untyped text) -> untyped
+      # : (String) -> String
+      def self.ruby: (String) -> String
 
-      def self.field_line: (untyped capture) -> untyped
+      # : (Capture) -> String
+      def self.field_line: (Capture) -> String
 
-      def self.template: (name: untyped, pattern: untyped, captures: untyped, then_step: untyped, attachment: untyped, description: untyped) -> untyped
+      # : (name: String, pattern: String?, captures: Array[Capture], then_step: bool, attachment: String?, description: String?) -> String
+      def self.template: (name: String, pattern: String?, captures: Array[Capture], then_step: bool, attachment: String?, description: String?) -> String
 
-      def self.when_lines: (untyped name, untyped keys) -> untyped
+      # : (String, Array[String]) -> Array[String]
+      def self.when_lines: (String, Array[String]) -> Array[String]
 
       # The expected value is the first one the line states; observe raises
       # until someone writes the reading, so the step records as unobserved
       # instead of passing.
-      def self.then_lines: (untyped name, untyped keys) -> untyped
+      # : (String, Array[String]) -> Array[String]
+      def self.then_lines: (String, Array[String]) -> Array[String]
 
       # Whether `source` is a stub this command writes for `name`: some
       # reading of its own pattern and description draws it byte for byte.
-      def self.unedited?: (untyped source, untyped name) -> untyped
+      # : (String, String) -> bool
+      def self.unedited?: (String, String) -> bool
 
       # The string a `  <call> "..."` line passes, nil when there is no such
       # line, false when the line holds something else.
-      def self.literal: (untyped source, untyped call) -> untyped
+      # : (String, String) -> (String | false | nil)
+      def self.literal: (String, String) -> (String | false | nil)
 
-      def self.words: (untyped pattern) -> untyped
+      # : (String?) -> Array[String]
+      def self.words: (String?) -> Array[String]
 
       # Each word of the pattern that states a literal, with its values.
-      def self.literal_words: (untyped pattern) -> untyped
+      # : (String?) -> Array[[String, Array[untyped]]]
+      def self.literal_words: (String?) -> Array[[ String, Array[untyped] ]]
 
-      def self.states_value?: (untyped pattern, untyped captures, untyped attachment) -> untyped
+      # : (String?, Array[Capture], String?) -> bool
+      def self.states_value?: (String?, Array[Capture], String?) -> bool
 
       # Without a chained value no word's literal has a JSON type to pick.
-      def self.literal_refusal: (untyped pattern, untyped captures, untyped attachment) -> untyped
+      # : (String?, Array[Capture], String?) -> String?
+      def self.literal_refusal: (String?, Array[Capture], String?) -> String?
 
-      def initialize: (untyped project, untyped options, untyped rest, untyped steps, untyped scenarios) -> untyped
+      # : (String, Hash[String, Array[String]], Array[String], Array[singleton(Step)], Array[Scenario]) -> void
+      def initialize: (String, Hash[String, Array[String]], Array[String], Array[singleton(Step)], Array[Scenario]) -> void
 
       # The paths written, and the lines for stderr, or a Refusal.
-      def call: () -> untyped
+      # : () -> ([Array[String], Array[String]] | Refusal)
+      def call: () -> ([ Array[String], Array[String] ] | Refusal)
 
-      def single: () -> untyped
+      # : () -> ([Array[String], Array[String]] | Refusal)
+      def single: () -> ([ Array[String], Array[String] ] | Refusal)
 
       # The command line after `nuka scaffold`, as typed, for a refusal's do.
-      attr_writer argv_words: untyped
+      attr_writer argv_words: Array[String]
 
-      def feature: (untyped target) -> untyped
+      # : (String) -> ([Array[String], Array[String]] | Refusal)
+      def feature: (String) -> ([ Array[String], Array[String] ] | Refusal)
 
       # How cucumber-expressions reads a line: with captures when every
       # reading hands the step the same kind of value, otherwise as the line
       # itself, with the readings it could not choose between.
-      def self.infer: (untyped text) -> untyped
+      # : (String) -> Hash[Symbol, untyped]
+      def self.infer: (String) -> Hash[Symbol, untyped]
 
       # The generator escapes `(`, `{`, and `/` but leaves a backslash bare,
       # which the parser then refuses, so each backslash is doubled first.
-      def self.generate: (untyped text, untyped registry) -> untyped
+      # : (String, untyped) -> Array[untyped]
+      def self.generate: (String, untyped) -> Array[untyped]
 
       # The line as a pattern that matches it and nothing else.
-      def self.literal_pattern: (untyped text) -> untyped
+      # : (String) -> String
+      def self.literal_pattern: (String) -> String
 
-      def self.name_captures: (untyped source) -> untyped
+      # : (String) -> String
+      def self.name_captures: (String) -> String
 
-      def self.name_for: (untyped pattern) -> untyped
+      # : (String) -> String
+      def self.name_for: (String) -> String
 
       private
 
       # : (String) { (String) -> boolish } -> String
       def distinct: (String) { (String) -> boolish } -> String
 
-      def attachment_of: (untyped line) -> untyped
+      # : (PickleStep) -> String?
+      def attachment_of: (PickleStep) -> String?
 
       # What every feature line the pattern matches carries, or nil when no
       # line matches or the lines disagree.
-      def attachment_in_features: (untyped pattern) -> untyped
+      # : (String) -> String?
+      def attachment_in_features: (String) -> String?
 
-      def target_paths: (untyped target) -> untyped
+      # : (String) -> (Array[String] | Refusal)
+      def target_paths: (String) -> (Array[String] | Refusal)
 
-      def write: (untyped relative, untyped source) -> untyped
+      # : (String, String) -> void
+      def write: (String, String) -> void
     end
   end
 end

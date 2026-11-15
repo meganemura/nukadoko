@@ -38,11 +38,16 @@ module Nukadoko
                     "--replace overwrites the stub while nobody has edited it:"
       UNPORTED = %w[--command --request --from --cwd --body --argv].freeze
 
-      Capture = Data.define(:key, :type)
+      Capture = Data.define(
+        :key, #: String
+        :type, #: String
+      )
 
+      #: (String, ?String, **untyped) -> Refusal
       def self.refusal(message, code = "invalid-value", **hint) = Refusal.new(code, message, **hint)
 
       # The captures of `pattern`, or the reason no step could hold it.
+      #: (String) -> (Array[Capture] | Refusal)
       def self.read_pattern(pattern)
         return refusal("Refusing to scaffold: the pattern is empty") if pattern.empty?
 
@@ -53,10 +58,10 @@ module Nukadoko
           close = rest.index("}", open)
           return refusal(%(Refusing to scaffold: Pattern has an unterminated "{" starting at: #{rest[open..]})) unless close
 
-          key, type = rest[open + 1...close].split(":", 2)
+          key, type = rest[open + 1...close].to_s.split(":", 2)
           return refusal(%(Refusing to scaffold: Parameter "{#{key}}" has no name; every parameter in a pattern must be written {key:type} (docs/spec.md "Typed steps"))) unless type
 
-          captures << Capture.new(key, type)
+          captures << Capture.new(key.to_s, type)
           open = rest.index("{", close)
         end
         repeated = captures.map(&:key).tally.select { _2 > 1 }.keys
@@ -77,8 +82,10 @@ module Nukadoko
       end
 
       # The class `load_steps` autoloads from the step's file.
+      #: (String) -> String
       def self.class_name(name) = name.split("-").map(&:capitalize).join
 
+      #: (String) -> String?
       def self.class_refusal(name)
         constant = class_name(name)
         return "#{constant} is not a Ruby constant" unless constant.match?(/\A[A-Z]\w*\z/)
@@ -87,17 +94,21 @@ module Nukadoko
         "#{constant} is already a Ruby constant that is not a step" if existing && !(existing.is_a?(Class) && existing < Step)
       end
 
+      #: (String) -> String
       def self.file_of(name) = File.join("features", "steps", "#{name.tr("-", "_")}.rb")
 
       # --- the stub ---
 
+      #: (String) -> String
       def self.ruby(text) = text.inspect
 
+      #: (Capture) -> String
       def self.field_line(capture)
         type = CAPTURED.fetch(capture.type, :string)
         "#{type} :#{capture.key}"
       end
 
+      #: (name: String, pattern: String?, captures: Array[Capture], then_step: bool, attachment: String?, description: String?) -> String
       def self.template(name:, pattern:, captures:, then_step:, attachment:, description:)
         fields = captures.map { field_line(_1) } + [ATTACHMENT[attachment]].compact
         keys = captures.map(&:key) + [attachment].compact
@@ -119,6 +130,7 @@ module Nukadoko
         [*lines, "end", ""].join("\n")
       end
 
+      #: (String, Array[String]) -> Array[String]
       def self.when_lines(name, keys)
         message = keys.empty? ? ruby("not implemented: #{name}") : %("not implemented: #{name}; args \#{JSON.generate(args.to_h)}")
         [
@@ -135,6 +147,7 @@ module Nukadoko
       # The expected value is the first one the line states; observe raises
       # until someone writes the reading, so the step records as unobserved
       # instead of passing.
+      #: (String, Array[String]) -> Array[String]
       def self.then_lines(name, keys)
         actual = "actual"
         actual = actual.succ while keys.include?(actual)
@@ -151,24 +164,29 @@ module Nukadoko
 
       # Whether `source` is a stub this command writes for `name`: some
       # reading of its own pattern and description draws it byte for byte.
+      #: (String, String) -> bool
       def self.unedited?(source, name)
         pattern = literal(source, "pattern")
         description = literal(source, "description")
         return false if description.nil? || pattern == false
 
-        captures = pattern ? read_pattern(pattern) : []
+        text = pattern.is_a?(String) ? pattern : nil
+        # A description that is no plain string draws the TODO, as nil does.
+        said = description.is_a?(String) ? description : nil
+        captures = text ? read_pattern(text) : []
         return false if captures.is_a?(Refusal)
 
         [false, true].product([nil, "docstring", "table"]).any? do |then_step, attachment|
-          next false if then_step && !states_value?(pattern, captures, attachment)
+          next false if then_step && !states_value?(text, captures, attachment)
 
-          template(name: name, pattern: pattern, captures: captures, then_step: then_step, attachment: attachment,
-                   description: description == "#{DESCRIPTION_TODO} #{name}" ? nil : description) == source
+          template(name: name, pattern: text, captures: captures, then_step: then_step, attachment: attachment,
+                   description: said == "#{DESCRIPTION_TODO} #{name}" ? nil : said) == source
         end
       end
 
       # The string a `  <call> "..."` line passes, nil when there is no such
       # line, false when the line holds something else.
+      #: (String, String) -> (String | false | nil)
       def self.literal(source, call)
         line = source[/^  #{call} (".*")$/, 1] or return nil
         node = Prism.parse(line).value.statements.body.first
@@ -177,6 +195,7 @@ module Nukadoko
 
       # --- Then lines and the words that state a value ---
 
+      #: (String?) -> Array[String]
       def self.words(pattern)
         return [] unless pattern
 
@@ -189,6 +208,7 @@ module Nukadoko
       end
 
       # Each word of the pattern that states a literal, with its values.
+      #: (String?) -> Array[[String, Array[untyped]]]
       def self.literal_words(pattern)
         fixed = words(pattern)
         fixed.each_with_index.filter_map do |word, index|
@@ -202,9 +222,11 @@ module Nukadoko
         end
       end
 
-      def self.states_value?(pattern, captures, attachment) = captures.any? || attachment || literal_words(pattern).any?
+      #: (String?, Array[Capture], String?) -> bool
+      def self.states_value?(pattern, captures, attachment) = captures.any? || !attachment.nil? || literal_words(pattern).any?
 
       # Without a chained value no word's literal has a JSON type to pick.
+      #: (String?, Array[Capture], String?) -> String?
       def self.literal_refusal(pattern, captures, attachment)
         return nil if captures.any? || attachment
 
@@ -212,13 +234,14 @@ module Nukadoko
         return nil unless word
 
         shown = values.map { JSON.generate(_1) }
-        listed = shown.size == 1 ? shown.first : "#{shown[0...-1].join(", ")} or #{shown.last}"
+        listed = shown.size == 1 ? shown.first : "#{shown[0...-1].to_a.join(", ")} or #{shown.last}"
         %(the line states its value only with the word "#{word}", which fixes #{listed}, and no --from names the value it is compared with, ) +
           "so that value's JSON type is unknown; a literal of another JSON type would never hold"
       end
 
       # --- one stub ---
 
+      #: (String, Hash[String, Array[String]], Array[String], Array[singleton(Step)], Array[Scenario]) -> void
       def initialize(project, options, rest, steps, scenarios)
         @project = project
         @options = options
@@ -228,6 +251,7 @@ module Nukadoko
       end
 
       # The paths written, and the lines for stderr, or a Refusal.
+      #: () -> ([Array[String], Array[String]] | Refusal)
       def call
         unported = UNPORTED.find { @options.key?(_1) }
         if unported
@@ -239,6 +263,7 @@ module Nukadoko
         single
       end
 
+      #: () -> ([Array[String], Array[String]] | Refusal)
       def single
         name = @rest.first.to_s
         return Scaffold.refusal(%(Invalid step name "#{name}": must match [a-z0-9-]+ (kebab-case; it becomes the step's file name))) unless name.match?(VALID_NAME)
@@ -286,10 +311,11 @@ module Nukadoko
       end
 
       # The command line after `nuka scaffold`, as typed, for a refusal's do.
-      attr_writer :argv_words
+      attr_writer :argv_words #: Array[String]
 
       # --- --feature ---
 
+      #: (String) -> ([Array[String], Array[String]] | Refusal)
       def feature(target)
         paths = target_paths(target)
         return paths if paths.is_a?(Refusal)
@@ -348,6 +374,10 @@ module Nukadoko
           kinds = lines.map { attachment_of(_2) }.uniq
           attachment = kinds.size == 1 ? kinds.first : nil
           captures = Scaffold.read_pattern(pattern)
+          # Every pattern here was read from a line or escaped from one, so
+          # a refusal is a fault of this command, not of the feature file.
+          raise captures if captures.is_a?(Refusal)
+
           if then_step && !Scaffold.states_value?(pattern, captures, attachment)
             notes << "#{where}: #{STATES_NO_VALUE}, so no stub was written; state the value this line checks in the line, such as a number or a quoted text, and scaffold again"
             next
@@ -374,6 +404,7 @@ module Nukadoko
       # How cucumber-expressions reads a line: with captures when every
       # reading hands the step the same kind of value, otherwise as the line
       # itself, with the readings it could not choose between.
+      #: (String) -> Hash[Symbol, untyped]
       def self.infer(text)
         generated = generate(text, Pattern::REGISTRY)
         first = generated.first
@@ -394,13 +425,16 @@ module Nukadoko
 
       # The generator escapes `(`, `{`, and `/` but leaves a backslash bare,
       # which the parser then refuses, so each backslash is doubled first.
+      #: (String, untyped) -> Array[untyped]
       def self.generate(text, registry)
         Cucumber::CucumberExpressions::CucumberExpressionGenerator.new(registry).generate_expressions(text.gsub("\\", "\\\\\\\\"))
       end
 
       # The line as a pattern that matches it and nothing else.
+      #: (String) -> String
       def self.literal_pattern(text) = text.gsub("\\", "\\\\\\\\").gsub(/([({\/])/) { "\\#{Regexp.last_match(1)}" }
 
+      #: (String) -> String
       def self.name_captures(source)
         index = 0
         source.gsub(/\\.|\{([^}]*)\}/) do |match|
@@ -412,15 +446,16 @@ module Nukadoko
         end
       end
 
+      #: (String) -> String
       def self.name_for(pattern)
         literal = pattern.gsub(/\\(.)|\{[^}]*\}/) { Regexp.last_match(1) || " " }
         words = literal.downcase.gsub(/[^a-z0-9]+/, "-").gsub(/\A-+|-+\z/, "")
         return "step" if words.empty?
         return words if words.size <= NAME_LIMIT
 
-        cut = words[0, NAME_LIMIT + 1]
+        cut = words[0, NAME_LIMIT + 1].to_s
         dash = cut.rindex("-")
-        (dash&.positive? ? cut[0, dash] : cut[0, NAME_LIMIT]).sub(/-+\z/, "")
+        (dash&.positive? ? cut[0, dash] : cut[0, NAME_LIMIT]).to_s.sub(/-+\z/, "")
       end
 
       private
@@ -434,10 +469,12 @@ module Nukadoko
         "#{base}-#{suffix}"
       end
 
+      #: (PickleStep) -> String?
       def attachment_of(line) = line.doc_string ? "docstring" : (line.table ? "table" : nil)
 
       # What every feature line the pattern matches carries, or nil when no
       # line matches or the lines disagree.
+      #: (String) -> String?
       def attachment_in_features(pattern)
         expression = Pattern.new(pattern)
         kinds = @scenarios.flat_map(&:steps).select { expression.match(_1.text) }.map { attachment_of(_1) }.uniq
@@ -446,6 +483,7 @@ module Nukadoko
         nil
       end
 
+      #: (String) -> (Array[String] | Refusal)
       def target_paths(target)
         absolute = File.join(@project, target)
         return Dir.glob("**/*.feature", base: absolute).sort.map { File.join(target, _1) } if File.directory?(absolute)
@@ -454,6 +492,7 @@ module Nukadoko
         Scaffold.refusal("nuka scaffold --feature: feature file not found: #{target}", "target-not-found")
       end
 
+      #: (String, String) -> void
       def write(relative, source)
         path = File.join(@project, relative)
         FileUtils.mkdir_p(File.dirname(path))
