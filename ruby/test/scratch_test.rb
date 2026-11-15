@@ -37,3 +37,17 @@ class ScratchTest < Minitest::Test
     end
   end
 end
+
+# A secret the step holds itself is written as its token in the record, and
+# the program still gets the real value.
+class RunCommandRedactTest < Minitest::Test
+  def test_redact_hides_a_held_secret_from_the_record
+    recorded = []
+    ran = Nukadoko::Engine::Processes.collect(recorded) do
+      Nukadoko.run_command("echo", ["token=held-secret"], input: "", redact: { TOKEN: "held-secret" })
+    end
+    assert_equal "token=held-secret\n", ran[:stdout]
+    assert_equal ["echo", "token={{secret.TOKEN}}"], recorded.first[:command]
+    assert_equal "token={{secret.TOKEN}}\n", recorded.first[:output][:stdout]
+  end
+end

@@ -18,9 +18,13 @@ module Nukadoko
   # while it ran, which the result gives as `files` too; `files: true`
   # measures that outside a step as well. `env` is added to the runner's
   # environment. A run that `timeout` seconds stopped raises, since it has
-  # no exit code to read.
-  #: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?, ?timeout: Numeric?, ?files: bool) -> Hash[Symbol, untyped]
-  def self.run_command(command, args = [], cwd: Dir.pwd, env: {}, stdin: nil, timeout: nil, files: false)
+  # no exit code to read. `input` (or `stdin`) is written to the program's
+  # stdin. `redact` names secrets the step holds itself, which the record
+  # writes as `{{secret.NAME}}` while the program still gets the real value.
+  #: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool) -> Hash[Symbol, untyped]
+  def self.run_command(command, args = [], cwd: Dir.pwd, env: {}, input: nil, stdin: nil, timeout: nil, redact: {}, files: false)
+    stdin = input.nil? ? stdin : input
+    held = Engine::Secrets.new(redact.to_h { |name, value| [name.to_s, value.to_s] })
     recording = Engine::Processes.current
     cwd = File.expand_path(cwd)
     # A tool that copies TRACEPARENT into its requests makes the program's
@@ -37,9 +41,9 @@ module Nukadoko
     changes = Engine::FileWalk.difference(before, Engine::FileWalk.snapshot(cwd)) if before
     signal = (number = status.termsig) && "SIG#{Signal.signame(number)}"
     recording&.push(
-      { command: [command, *args], cwd: cwd, exit_code: status.exitstatus, signal: signal, timed_out: timed_out || nil,
+      { command: held.redact([command, *args]), cwd: cwd, exit_code: status.exitstatus, signal: signal, timed_out: timed_out || nil,
         group: (Engine::Processes.group_state(status.pid) if Engine::Processes.groups?), duration_ms: duration, files: changes,
-        env: Engine::Processes.env_entry(chosen), traceparent: traceparent }.compact.merge(output: { stdout: stdout, stderr: stderr, stdin: stdin })
+        env: Engine::Processes.env_entry(chosen), traceparent: traceparent }.compact.merge(output: held.redact({ stdout: stdout, stderr: stderr, stdin: stdin }))
     )
     raise Timeout::Error, "#{command} did not finish in #{timeout} seconds, so it has no exit code" if timed_out
 

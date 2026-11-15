@@ -8,6 +8,9 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- `Nukadoko.run_command` takes `input:`, the TypeScript engine's name for
+  `stdin:`, and `redact:`, the secrets a step holds itself, written as
+  `{{secret.NAME}}` in the record while the program gets the real value.
 - Env files and secrets, as the TypeScript engine reads them:
   `Nukadoko.config(envFiles: [...])` and an environment's own `envFiles:`
   fill the `env` fixture, with the same parser; a file git does not track,

@@ -11,9 +11,11 @@ module Nukadoko
   # while it ran, which the result gives as `files` too; `files: true`
   # measures that outside a step as well. `env` is added to the runner's
   # environment. A run that `timeout` seconds stopped raises, since it has
-  # no exit code to read.
-  # : (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?, ?timeout: Numeric?, ?files: bool) -> Hash[Symbol, untyped]
-  def self.run_command: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?stdin: String?, ?timeout: Numeric?, ?files: bool) -> Hash[Symbol, untyped]
+  # no exit code to read. `input` (or `stdin`) is written to the program's
+  # stdin. `redact` names secrets the step holds itself, which the record
+  # writes as `{{secret.NAME}}` while the program still gets the real value.
+  # : (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool) -> Hash[Symbol, untyped]
+  def self.run_command: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool) -> Hash[Symbol, untyped]
 
   module Engine
     # The processes the running step started, kept per thread so a step
