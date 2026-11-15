@@ -9,13 +9,15 @@ module Nukadoko
   module Signature
     FIXTURE_TYPES = { request: "Nukadoko::Engine::Request", scratch: "Nukadoko::Engine::Scratch", call: "Nukadoko::Engine::Caller", baseURL: "String", page: "untyped", context: "untyped" }.freeze
 
+    #: (Array[singleton(Nukadoko::Step)]) -> String
     def self.of(steps)
       steps.map { of_step(_1) }.join("\n")
     end
 
+    #: (singleton(Nukadoko::Step)) -> String
     def self.of_step(step)
       params = step.fixtures.map { "#{_1}: #{FIXTURE_TYPES.fetch(_1, "untyped")}" } + ["args: Args"]
-      returns = step.returns ? step.returns.rbs_record : "Hash[Symbol, untyped]"
+      returns = (schema = step.returns) ? schema.rbs_record : "Hash[Symbol, untyped]"
       [
         "class #{step.name} < Nukadoko::Step",
         "  class Args",

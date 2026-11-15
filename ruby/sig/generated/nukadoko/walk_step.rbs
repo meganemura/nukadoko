@@ -23,21 +23,28 @@ module Nukadoko
       private
 
       # A whole number of 1 or more, as the command line gave it, or nil.
-      def whole: (untyped word) -> untyped
+      # : (String?) -> Integer?
+      def whole: (String?) -> Integer?
 
-      def call_of: () -> untyped
+      # : () -> Hash[Symbol, untyped]
+      def call_of: () -> Hash[Symbol, untyped]
 
-      def joined: (untyped run_dir, untyped relative) -> untyped
+      # : (String, String) -> String
+      def joined: (String, String) -> String
 
       # What a person reads at a pause: where the step is, what it
       # recorded, the views of the page it left open, and the two answers.
-      def text: (untyped seen, untyped fields) -> untyped
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
+      def text: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
 
-      def envelope: (untyped command, untyped exit_code, untyped findings, untyped fields) -> untyped
+      # : (String, Integer, Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def envelope: (String, Integer, Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
-      def refuse: (untyped command, untyped code, untyped message, ?run: untyped, ?fields: untyped) -> untyped
+      # : (String, String, String, ?run: String?, ?fields: Hash[Symbol, untyped]) -> Integer
+      def refuse: (String, String, String, ?run: String?, ?fields: Hash[Symbol, untyped]) -> Integer
 
-      def print_finding: (untyped finding) -> untyped
+      # : (Hash[Symbol, untyped]) -> void
+      def print_finding: (Hash[Symbol, untyped]) -> void
     end
   end
 end

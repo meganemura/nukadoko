@@ -133,6 +133,7 @@ module Nukadoko
         text.size > 120 ? "#{text[0, 117]}..." : text
       end
 
+      #: (Hash[Symbol, untyped]) -> String
       def quality(read) = read[:quality] || "what the sentence says"
 
       #: (Hash[Symbol, untyped], untyped) -> String

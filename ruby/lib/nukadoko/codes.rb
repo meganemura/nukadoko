@@ -12,6 +12,7 @@ module Nukadoko
     module Codes
       ALL = JSON.parse(File.read(File.join(__dir__.to_s, "codes.json"), encoding: "UTF-8")).freeze
 
+      #: (String) -> String?
       def self.fix(code) = ALL.dig(code, "fix")
     end
   end

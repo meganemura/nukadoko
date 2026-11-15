@@ -14,9 +14,11 @@ module Nukadoko
 
       attr_reader calls: untyped
 
-      def initialize: (untyped step, untyped fixtures) -> untyped
+      # : (singleton(Nukadoko::Step), Hash[Symbol, untyped]) -> void
+      def initialize: (singleton(Nukadoko::Step), Hash[Symbol, untyped]) -> void
 
-      def to_proc: () -> untyped
+      # : () -> Proc
+      def to_proc: () -> Proc
 
       # A refused call starts nothing, so it records nothing. Every other
       # call is recorded in the order it started, with its result or its
@@ -26,7 +28,8 @@ module Nukadoko
 
       private
 
-      def run: (untyped part, untyped args, untyped entry, untyped started) -> untyped
+      # : (untyped, Hash[String, untyped], Hash[Symbol, untyped], String) -> untyped
+      def run: (untyped, Hash[String, untyped], Hash[Symbol, untyped], String) -> untyped
     end
   end
 end

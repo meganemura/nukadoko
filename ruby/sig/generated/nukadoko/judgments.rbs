@@ -72,7 +72,8 @@ module Nukadoko
       # : (untyped) -> String
       def self?.value_preview: (untyped) -> String
 
-      def self?.quality: (untyped read) -> untyped
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.quality: (Hash[Symbol, untyped]) -> String
 
       # : (Hash[Symbol, untyped], untyped) -> String
       def self?.read_clause: (Hash[Symbol, untyped], untyped) -> String

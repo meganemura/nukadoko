@@ -15,18 +15,21 @@ module Nukadoko
 
       attr_reader :source, :keys
 
+      #: (String) -> void
       def initialize(source)
         @source = source
-        @keys = source.scan(NAMED).map(&:first)
+        @keys = source.scan(NAMED).map { Array(_1).first.to_s }
         @expression = Cucumber::CucumberExpressions::CucumberExpression.new(source.gsub(NAMED, '{\2}'), REGISTRY)
       end
 
+      #: (String) -> Hash[String, untyped]?
       def match(text)
         found = @expression.match(text)
         found && keys.zip(found.map { _1.value(nil) }).to_h
       end
 
       # Each capture's text as the line wrote it, quotes included.
+      #: (String) -> Hash[String, String]?
       def texts(text)
         found = @expression.match(text)
         found && keys.zip(found.map { _1.group.value }).to_h

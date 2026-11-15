@@ -39,6 +39,7 @@ module Nukadoko
       class Handle
         attr_reader :number
 
+        #: (String, String, Integer, Hash[Symbol, untyped], (^(String) -> void)?) -> void
         def initialize(project, dir, number, state, announce)
           @project = project
           @dir = dir
@@ -51,6 +52,7 @@ module Nukadoko
         end
 
         # The run has its directory and its one scenario.
+        #: (Hash[Symbol, untyped]) -> void
         def begin(run)
           @run_dir = run[:run_dir]
           apply(kind: "begun", run: run)
@@ -73,11 +75,7 @@ module Nukadoko
           apply(kind: "paused", pause: pause)
           @announce&.call(Walk.pause_lines(@number, pause))
           answer_path = File.join(WalkFiles.answers_dir(@project, @run_dir), "#{k}.json")
-          answer = WalkFiles.read_answer(answer_path)
-          until answer
-            sleep POLL
-            answer = WalkFiles.read_answer(answer_path)
-          end
+          answer = WalkFiles.wait_answer(answer_path)
           @pauses << { pause: k, line: facts[:line], step_record_id: facts[:step_record_id], paused_at: pause[:paused_at],
                        answered_at: answer[:answered_at], answer: answer[:answer], views: views }
           apply(kind: "answered", pause: k, answer: answer[:answer])
@@ -86,6 +84,7 @@ module Nukadoko
 
         # run.json's `walk`: each pause so far, and its answer. It names only
         # files that are there when it is written.
+        #: () -> Hash[Symbol, untyped]
         def record
           there = ->(file) { file && @run_dir && File.exist?(File.join(@project, @run_dir, file)) ? file : nil }
           pauses = @pauses.map do |entry|
@@ -98,6 +97,7 @@ module Nukadoko
 
         # Records how the walk ended and releases the lock. The first call
         # wins: a signal's cleanup and the run's own end can both reach it.
+        #: (Hash[Symbol, untyped]) -> void
         def end(finish)
           return if @ended
 
@@ -111,6 +111,7 @@ module Nukadoko
 
         private
 
+        #: (Hash[Symbol, untyped]) -> void
         def apply(event)
           @state = Walk.advance(@state, event)
           WalkFiles.replace_file(File.join(@dir, STATE_FILE), "#{JSON.pretty_generate(@state)}\n")
@@ -119,6 +120,7 @@ module Nukadoko
 
       module_function
 
+      #: () -> String
       def now = Time.now.utc.iso8601(3)
 
       # Whether `pid` is a live process. EPERM is a process this one may
@@ -133,10 +135,13 @@ module Nukadoko
         false
       end
 
+      #: (String) -> String
       def state_dir(project) = File.join(project, ".nukadoko")
 
+      #: (String, String) -> String
       def answers_dir(project, run_dir) = File.join(project, run_dir, "answers")
 
+      #: (String, String) -> void
       def replace_file(path, text)
         aside = "#{path}.#{Process.pid}.tmp"
         File.write(aside, text)
@@ -163,6 +168,7 @@ module Nukadoko
       end
 
       # The whole-number names in a directory, and none when it is missing.
+      #: (String) -> Array[Integer]
       def numbered(dir)
         Dir.children(dir).grep(/\A\d+\z/).map(&:to_i)
       rescue Errno::ENOENT
@@ -172,6 +178,7 @@ module Nukadoko
       # One past every walk this project recorded, in walk.json or as a
       # reported end, so a walk.json lost cannot give a new walk the number
       # of one whose end a `nuka step` call already printed.
+      #: (String) -> Integer
       def highest_recorded(dir)
         stored = read_state(File.join(dir, STATE_FILE))[:state]
         [stored ? stored[:number] : 0, *numbered(File.join(dir, REPORTED_DIR))].max
@@ -181,6 +188,7 @@ module Nukadoko
       # a file that holds neither. Only a number below the highest is ever
       # removed, so a file gone between the listing and the read means a
       # higher one exists: list again.
+      #: (String) -> Hash[Symbol, untyped]?
       def lock_top(lock_dir)
         100.times do
           walks = numbered(lock_dir)
@@ -202,6 +210,7 @@ module Nukadoko
       # exclusive, and the file appears with its whole text: a process
       # killed between an exclusive create and its write would leave an
       # empty lock no reader could tell from one being written.
+      #: (String, String) -> bool
       def link_whole(target, text)
         aside = "#{target}.#{Process.pid}.#{SecureRandom.uuid}.tmp"
         File.write(aside, text)
@@ -213,6 +222,7 @@ module Nukadoko
         File.unlink(aside) if aside && File.exist?(aside)
       end
 
+      #: (String) -> void
       def remove_quietly(path)
         File.unlink(path)
       rescue Errno::ENOENT
@@ -221,6 +231,7 @@ module Nukadoko
 
       # The pid of a live process, not this one, that holds a lock file
       # below `walk`, or nil.
+      #: (String, Integer) -> Integer?
       def live_holder_below(lock_dir, walk)
         numbered(lock_dir).each do |lower|
           next if lower >= walk
@@ -243,6 +254,7 @@ module Nukadoko
       # dead or released, only one creates the next number. A file is
       # removed only once a higher one exists, and only by the process that
       # created that higher one, or by its own creator giving way.
+      #: (String) -> Hash[Symbol, untyped]
       def take_lock(dir)
         lock_dir = File.join(dir, LOCK_DIR)
         FileUtils.mkdir_p(lock_dir)
@@ -275,6 +287,7 @@ module Nukadoko
 
       # The file stays, so the highest number never goes back down; it says
       # `released`, which the next run takes over like a dead pid.
+      #: (String, Integer) -> void
       def release_lock(dir, walk)
         file = File.join(dir, LOCK_DIR, walk.to_s)
         held = begin
@@ -288,6 +301,7 @@ module Nukadoko
       # An answer file is created exclusively and written in one call, so a
       # reader can catch it empty for a moment: that reads as not answered
       # yet, and the next poll reads it whole.
+      #: (String) -> Hash[Symbol, String]?
       def read_answer(path)
         value = JSON.parse(File.read(path, encoding: "UTF-8"), symbolize_names: true)
         return nil unless value.is_a?(Hash) && %w[next stop].include?(value[:answer]) && value[:answered_at].is_a?(String)
@@ -297,10 +311,22 @@ module Nukadoko
         nil
       end
 
+      # The answer at `path`, once `nuka step` has written it.
+      #: (String) -> Hash[Symbol, String]
+      def wait_answer(path)
+        loop do
+          answer = read_answer(path)
+          return answer if answer
+
+          sleep POLL
+        end
+      end
+
       # Starts the run's side of a walk: takes the lock, which numbers the
       # walk one past every walk recorded, and writes it as starting. A
       # Handle, or { refused: } with why. `announce` gets the lines of each
       # pause, outside --json.
+      #: (String, String, ?announce: (^(String) -> void)?) -> (Handle | Hash[Symbol, untyped])
       def open(project, target, announce: nil)
         dir = state_dir(project)
         FileUtils.mkdir_p(dir)
@@ -320,6 +346,7 @@ module Nukadoko
       # project root: a walk running or paused whose pid is alive, nil for
       # none. A walk still starting has no run directory yet, so for it
       # "starting" is returned. `nuka clean` keeps what this names.
+      #: (String) -> Hash[Symbol, untyped]?
       def live_run(project)
         path = File.join(state_dir(project), STATE_FILE)
         read = read_state(path)
@@ -338,12 +365,15 @@ module Nukadoko
         nil
       end
 
+      #: (String, Hash[Symbol, untyped], Integer) -> Hash[Integer, String]
       def answers_of(project, seen, target)
         return {} if seen[:state] == "none"
 
         state = seen[:state] == "gone" ? seen[:last] : seen #: Hash[Symbol, untyped]
-        run_dir = state[:state] == "starting" ? nil : state[:run_dir]
-        return {} unless state[:number] == target && run_dir
+        return {} if state[:state] == "starting" || state[:number] != target
+
+        run_dir = state[:run_dir] #: String?
+        return {} unless run_dir
 
         dir = answers_dir(project, run_dir)
         names = begin
@@ -361,8 +391,10 @@ module Nukadoko
       # One empty file per walk whose end a `nuka step` call printed.
       # Created exclusively, so two calls that print the same end leave one
       # file.
+      #: (String, Integer) -> bool
       def end_reported?(dir, walk) = File.exist?(File.join(dir, REPORTED_DIR, walk.to_s))
 
+      #: (String, Integer) -> void
       def mark_end_reported(dir, walk)
         FileUtils.mkdir_p(File.join(dir, REPORTED_DIR))
         File.open(File.join(dir, REPORTED_DIR, walk.to_s), File::WRONLY | File::CREAT | File::EXCL, &:close)
@@ -370,6 +402,7 @@ module Nukadoko
         nil
       end
 
+      #: (String, String, Integer, String) -> void
       def write_answer(project, run_dir, pause, answer)
         dir = answers_dir(project, run_dir)
         FileUtils.mkdir_p(dir)

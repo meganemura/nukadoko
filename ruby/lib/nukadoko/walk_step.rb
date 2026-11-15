@@ -61,11 +61,13 @@ module Nukadoko
       private
 
       # A whole number of 1 or more, as the command line gave it, or nil.
+      #: (String?) -> Integer?
       def whole(word)
         number = word && Integer(word, 10, exception: false)
         number if number && number >= 1
       end
 
+      #: () -> Hash[Symbol, untyped]
       def call_of
         walk = whole(@walk)
         return { refused: "--walk needs the number of a walk, a whole number of 1 or more (got #{@walk})" } if @walk && walk.nil?
@@ -82,10 +84,12 @@ module Nukadoko
         { kind: "answer", walk: walk, pause: pause, answer: @action }
       end
 
+      #: (String, String) -> String
       def joined(run_dir, relative) = "#{run_dir}/#{relative.tr("\\", "/")}"
 
       # What a person reads at a pause: where the step is, what it
       # recorded, the views of the page it left open, and the two answers.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
       def text(seen, fields)
         case seen[:state]
         when "gone" then "walk #{seen[:last][:number]} #{Engine::Walk.standing(seen)}\n"
@@ -119,11 +123,13 @@ module Nukadoko
         end
       end
 
+      #: (String, Integer, Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
       def envelope(command, exit_code, findings, fields)
         verdict = { 0 => "passed", 1 => "failed" }.fetch(exit_code, "refused")
         { schema_version: Engine::RunRecord::SCHEMA_VERSION, nukadoko: VERSION, command: command, **fields, verdict: verdict, findings: findings }
       end
 
+      #: (String, String, String, ?run: String?, ?fields: Hash[Symbol, untyped]) -> Integer
       def refuse(command, code, message, run: nil, fields: {})
         finding = Engine::Refusal.new(code, message, run: run).to_h(command)
         if @json then @out.puts JSON.pretty_generate(envelope(command, 2, [finding], fields))
@@ -132,6 +138,7 @@ module Nukadoko
         2
       end
 
+      #: (Hash[Symbol, untyped]) -> void
       def print_finding(finding)
         @err.puts [finding[:severity], finding[:code], Engine::Summary.where_of(finding), finding[:message]].join("\t")
         @err.puts "  fix: #{finding[:fix]}" if finding[:fix]

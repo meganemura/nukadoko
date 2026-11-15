@@ -9,7 +9,8 @@ module Nukadoko
     module Codes
       ALL: untyped
 
-      def self.fix: (untyped code) -> untyped
+      # : (String) -> String?
+      def self.fix: (String) -> String?
     end
   end
 end

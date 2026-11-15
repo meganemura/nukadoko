@@ -735,7 +735,7 @@ module Nukadoko
 
     #: (Array[singleton(Step)], String) -> Array[[singleton(Step), Hash[String, untyped]]]
     def self.matches(steps, text)
-      steps.filter_map { |step| step.pattern && (captures = Pattern.new(step.pattern).match(text)) && [step, captures] }
+      steps.filter_map { |step| (pattern = step.pattern) && (captures = Pattern.new(pattern).match(text)) && [step, captures] }
     end
   end
 end

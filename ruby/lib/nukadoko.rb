@@ -51,8 +51,12 @@ require_relative "nukadoko/init"
 require_relative "nukadoko/skill"
 
 module Nukadoko
+  #: (**untyped) -> Hash[Symbol, untyped]
   def self.program(**options) = (@program = options)
+  #: () -> Hash[Symbol, untyped]
   def self.program_options = @program || {}
+  #: (**untyped) -> Hash[Symbol, untyped]
   def self.config(**options) = (@config = options)
+  #: () -> Hash[Symbol, untyped]
   def self.config_options = @config || {}
 end

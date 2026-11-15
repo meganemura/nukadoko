@@ -8,8 +8,10 @@ module Nukadoko
   module Signature
     FIXTURE_TYPES: untyped
 
-    def self.of: (untyped steps) -> untyped
+    # : (Array[singleton(Nukadoko::Step)]) -> String
+    def self.of: (Array[singleton(Nukadoko::Step)]) -> String
 
-    def self.of_step: (untyped step) -> untyped
+    # : (singleton(Nukadoko::Step)) -> String
+    def self.of_step: (singleton(Nukadoko::Step)) -> String
   end
 end

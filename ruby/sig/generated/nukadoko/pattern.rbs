@@ -14,12 +14,15 @@ module Nukadoko
 
       attr_reader keys: untyped
 
-      def initialize: (untyped source) -> untyped
+      # : (String) -> void
+      def initialize: (String) -> void
 
-      def match: (untyped text) -> untyped
+      # : (String) -> Hash[String, untyped]?
+      def match: (String) -> Hash[String, untyped]?
 
       # Each capture's text as the line wrote it, quotes included.
-      def texts: (untyped text) -> untyped
+      # : (String) -> Hash[String, String]?
+      def texts: (String) -> Hash[String, String]?
     end
   end
 end

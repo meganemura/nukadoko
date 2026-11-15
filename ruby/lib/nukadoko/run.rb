@@ -560,7 +560,7 @@ module Nukadoko
         origins = {}
         execute(step, record, dir, world, then_line: line_kind(line) == :then, at_line: line.line, results: results, origins: origins) do
           args = bind_args(step, captures, line, results, origins, record)
-          [args, (Pattern.new(step.pattern).texts(line.text) || {}).merge(attachment_texts(step, captures, line))]
+          [args, (Pattern.new(step.pattern.to_s).texts(line.text) || {}).merge(attachment_texts(step, captures, line))]
         end
       end
 

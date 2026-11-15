@@ -470,8 +470,9 @@ module Nukadoko
         legacy: %w[cache records].select { File.directory?(File.join(state, _1)) }.map { ".nukadoko/#{_1}" },
         kept: kept
       }
+      walk = live&.dig(:walk)
       notes = kept.map do |dir|
-        { severity: "note", code: "walk-run-kept", message: "kept #{dir}: walk #{live[:walk]} is live and its run writes there", do: Engine::Walk.wait_command(live[:walk]) }
+        { severity: "note", code: "walk-run-kept", message: "kept #{dir}: walk #{walk} is live and its run writes there", do: Engine::Walk.wait_command(walk.to_i) }
       end
       dry_run = @options.key?("--dry-run")
       gone = plan[:records] + plan[:export] + plan[:legacy]

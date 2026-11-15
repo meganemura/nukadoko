@@ -16,6 +16,7 @@ module Nukadoko
 
       attr_reader :calls
 
+      #: (singleton(Nukadoko::Step), Hash[Symbol, untyped]) -> void
       def initialize(step, fixtures)
         @fixtures = fixtures
         @stack = [step]
@@ -24,6 +25,7 @@ module Nukadoko
       end
 
 
+      #: () -> Proc
       def to_proc = method(:call).to_proc
 
       # A refused call starts nothing, so it records nothing. Every other
@@ -47,6 +49,7 @@ module Nukadoko
 
       private
 
+      #: (untyped, Hash[String, untyped], Hash[Symbol, untyped], String) -> untyped
       def run(part, args, entry, started)
         nested = []
         fail_with = lambda do |kind, message|

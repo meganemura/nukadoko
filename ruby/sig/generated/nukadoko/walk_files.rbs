@@ -38,10 +38,12 @@ module Nukadoko
       class Handle
         attr_reader number: untyped
 
-        def initialize: (untyped project, untyped dir, untyped number, untyped state, untyped announce) -> untyped
+        # : (String, String, Integer, Hash[Symbol, untyped], (^(String) -> void)?) -> void
+        def initialize: (String, String, Integer, Hash[Symbol, untyped], (^(String) -> void)?) -> void
 
         # The run has its directory and its one scenario.
-        def begin: (untyped run) -> untyped
+        # : (Hash[Symbol, untyped]) -> void
+        def begin: (Hash[Symbol, untyped]) -> void
 
         # Writes the pause and waits for its answer. `hold` takes the pause's
         # directory and the path the run records it as, and returns the
@@ -51,29 +53,36 @@ module Nukadoko
 
         # run.json's `walk`: each pause so far, and its answer. It names only
         # files that are there when it is written.
-        def record: () -> untyped
+        # : () -> Hash[Symbol, untyped]
+        def record: () -> Hash[Symbol, untyped]
 
         # Records how the walk ended and releases the lock. The first call
         # wins: a signal's cleanup and the run's own end can both reach it.
-        def end: (untyped finish) -> untyped
+        # : (Hash[Symbol, untyped]) -> void
+        def end: (Hash[Symbol, untyped]) -> void
 
         private
 
-        def apply: (untyped event) -> untyped
+        # : (Hash[Symbol, untyped]) -> void
+        def apply: (Hash[Symbol, untyped]) -> void
       end
 
-      def self?.now: () -> untyped
+      # : () -> String
+      def self?.now: () -> String
 
       # Whether `pid` is a live process. EPERM is a process this one may
       # not signal, which is alive.
       # : (Integer) -> bool
       def self?.alive?: (Integer) -> bool
 
-      def self?.state_dir: (untyped project) -> untyped
+      # : (String) -> String
+      def self?.state_dir: (String) -> String
 
-      def self?.answers_dir: (untyped project, untyped run_dir) -> untyped
+      # : (String, String) -> String
+      def self?.answers_dir: (String, String) -> String
 
-      def self?.replace_file: (untyped path, untyped text) -> untyped
+      # : (String, String) -> void
+      def self?.replace_file: (String, String) -> void
 
       # walk.json as one read found it: { state: } (nil for no file), or
       # { unreadable: } with why. walk.json has one writer, so a reader
@@ -82,30 +91,36 @@ module Nukadoko
       def self?.read_state: (String) -> Hash[Symbol, untyped]
 
       # The whole-number names in a directory, and none when it is missing.
-      def self?.numbered: (untyped dir) -> untyped
+      # : (String) -> Array[Integer]
+      def self?.numbered: (String) -> Array[Integer]
 
       # One past every walk this project recorded, in walk.json or as a
       # reported end, so a walk.json lost cannot give a new walk the number
       # of one whose end a `nuka step` call already printed.
-      def self?.highest_recorded: (untyped dir) -> untyped
+      # : (String) -> Integer
+      def self?.highest_recorded: (String) -> Integer
 
       # The highest lock file and its holder: a pid, "released", or nil for
       # a file that holds neither. Only a number below the highest is ever
       # removed, so a file gone between the listing and the read means a
       # higher one exists: list again.
-      def self?.lock_top: (untyped lock_dir) -> untyped
+      # : (String) -> Hash[Symbol, untyped]?
+      def self?.lock_top: (String) -> Hash[Symbol, untyped]?
 
       # Creates `target` with `text` only when it does not exist. A link is
       # exclusive, and the file appears with its whole text: a process
       # killed between an exclusive create and its write would leave an
       # empty lock no reader could tell from one being written.
-      def self?.link_whole: (untyped target, untyped text) -> untyped
+      # : (String, String) -> bool
+      def self?.link_whole: (String, String) -> bool
 
-      def self?.remove_quietly: (untyped path) -> untyped
+      # : (String) -> void
+      def self?.remove_quietly: (String) -> void
 
       # The pid of a live process, not this one, that holds a lock file
       # below `walk`, or nil.
-      def self?.live_holder_below: (untyped lock_dir, untyped walk) -> untyped
+      # : (String, Integer) -> Integer?
+      def self?.live_holder_below: (String, Integer) -> Integer?
 
       # The lock is a directory with one file per walk that took it, named
       # by the walk's number; the highest number holds it. A run takes the
@@ -114,39 +129,52 @@ module Nukadoko
       # dead or released, only one creates the next number. A file is
       # removed only once a higher one exists, and only by the process that
       # created that higher one, or by its own creator giving way.
-      def self?.take_lock: (untyped dir) -> untyped
+      # : (String) -> Hash[Symbol, untyped]
+      def self?.take_lock: (String) -> Hash[Symbol, untyped]
 
       # The file stays, so the highest number never goes back down; it says
       # `released`, which the next run takes over like a dead pid.
-      def self?.release_lock: (untyped dir, untyped walk) -> untyped
+      # : (String, Integer) -> void
+      def self?.release_lock: (String, Integer) -> void
 
       # An answer file is created exclusively and written in one call, so a
       # reader can catch it empty for a moment: that reads as not answered
       # yet, and the next poll reads it whole.
-      def self?.read_answer: (untyped path) -> untyped
+      # : (String) -> Hash[Symbol, String]?
+      def self?.read_answer: (String) -> Hash[Symbol, String]?
+
+      # The answer at `path`, once `nuka step` has written it.
+      # : (String) -> Hash[Symbol, String]
+      def self?.wait_answer: (String) -> Hash[Symbol, String]
 
       # Starts the run's side of a walk: takes the lock, which numbers the
       # walk one past every walk recorded, and writes it as starting. A
       # Handle, or { refused: } with why. `announce` gets the lines of each
       # pause, outside --json.
-      def self?.open: (untyped project, untyped target, ?announce: untyped) -> untyped
+      # : (String, String, ?announce: (^(String) -> void)?) -> (Handle | Hash[Symbol, untyped])
+      def self?.open: (String, String, ?announce: (^(String) -> void)?) -> (Handle | Hash[Symbol, untyped])
 
       # The run directory of the walk that is live now, relative to the
       # project root: a walk running or paused whose pid is alive, nil for
       # none. A walk still starting has no run directory yet, so for it
       # "starting" is returned. `nuka clean` keeps what this names.
-      def self?.live_run: (untyped project) -> untyped
+      # : (String) -> Hash[Symbol, untyped]?
+      def self?.live_run: (String) -> Hash[Symbol, untyped]?
 
-      def self?.answers_of: (untyped project, untyped seen, untyped target) -> untyped
+      # : (String, Hash[Symbol, untyped], Integer) -> Hash[Integer, String]
+      def self?.answers_of: (String, Hash[Symbol, untyped], Integer) -> Hash[Integer, String]
 
       # One empty file per walk whose end a `nuka step` call printed.
       # Created exclusively, so two calls that print the same end leave one
       # file.
-      def self?.end_reported?: (untyped dir, untyped walk) -> untyped
+      # : (String, Integer) -> bool
+      def self?.end_reported?: (String, Integer) -> bool
 
-      def self?.mark_end_reported: (untyped dir, untyped walk) -> untyped
+      # : (String, Integer) -> void
+      def self?.mark_end_reported: (String, Integer) -> void
 
-      def self?.write_answer: (untyped project, untyped run_dir, untyped pause, untyped answer) -> untyped
+      # : (String, String, Integer, String) -> void
+      def self?.write_answer: (String, String, Integer, String) -> void
 
       # One `nuka step` call: reads walk.json until the walk reaches a state
       # the call can report, writing the call's answer once when the walk

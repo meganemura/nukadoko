@@ -1,11 +1,15 @@
 # Generated from lib/nukadoko.rb with RBS::Inline
 
 module Nukadoko
-  def self.program: (**untyped options) -> untyped
+  # : (**untyped) -> Hash[Symbol, untyped]
+  def self.program: (**untyped) -> Hash[Symbol, untyped]
 
-  def self.program_options: () -> untyped
+  # : () -> Hash[Symbol, untyped]
+  def self.program_options: () -> Hash[Symbol, untyped]
 
-  def self.config: (**untyped options) -> untyped
+  # : (**untyped) -> Hash[Symbol, untyped]
+  def self.config: (**untyped) -> Hash[Symbol, untyped]
 
-  def self.config_options: () -> untyped
+  # : () -> Hash[Symbol, untyped]
+  def self.config_options: () -> Hash[Symbol, untyped]
 end
