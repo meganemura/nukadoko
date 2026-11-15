@@ -172,7 +172,7 @@ module Nukadoko
       # Whether an expected text states nothing beyond its stand-ins.
       #: (String) -> bool
       def only_stand_ins?(expected)
-        lines(expected).all? { _1 == ANY_LINES || fixed_line(_1).parts.join.strip.empty? }
+        lines(expected).all? { _1 == ANY_LINES || Spaces.blank?(fixed_line(_1).parts.join) }
       end
     end
   end

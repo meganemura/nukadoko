@@ -13,6 +13,12 @@ notes come from the section below whose heading starts with `## [<version>]`.
   and `|` in a path or a fragment, and extra slashes after the scheme. It
   refuses a port past 65535 and a label that decodes to no letter, which
   Ruby's URI took. Both engines now judge the same texts the same way.
+- The `text`, `lines`, and `comma-list` views, an `is-a` kind name, and a
+  blank expected text trim the spaces JavaScript's trim takes, as the
+  TypeScript engine does: a no-break space, an ideographic space, a byte
+  order mark, and a line separator. They no longer take a NUL or a next
+  line (U+0085). A `comma-list` keeps the empty item after a comma at the
+  end, and a docstring that ends in an empty line keeps it in a criterion.
 
 ## [0.2.0] - 2026-11-15
 

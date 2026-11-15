@@ -36,8 +36,8 @@ module Nukadoko
     module AriaSnapshot
       FRAGMENT = "fragment"
       # JavaScript's \s, which the TypeScript engine's texts are cut by.
-      SPACE = "\\s\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff"
-      WS = /[#{SPACE}]/
+      SPACE = Spaces::CLASS
+      WS = Spaces::SPACE
       # YAML's indicators: a plain scalar may not start with one, since
       # YAML reads it as structure.
       PLAIN_START_REFUSED = [",", "[", "]", "{", "}", "&", "*", "!", "|", ">", "%", "@", "`"].freeze
@@ -66,10 +66,10 @@ module Nukadoko
       def problem_at(line, message) = Problem.new("line #{line} #{message}")
 
       #: (String) -> String
-      def trim(text) = text.sub(/\A#{WS}+/, "").sub(/#{WS}+\z/, "")
+      def trim(text) = Spaces.trim(text)
 
       #: (String) -> String
-      def trim_end(text) = text.sub(/#{WS}+\z/, "")
+      def trim_end(text) = Spaces.trim_end(text)
 
       #: (String?) -> bool
       def space?(char) = !char.nil? && char.match?(/\A#{WS}\z/)

@@ -190,9 +190,9 @@ module Nukadoko
         raise ArgumentError, "view #{name} reads a string, and the value is #{value.inspect}" unless value.is_a?(String)
 
         case name
-        when "text" then value.rstrip
-        when "lines" then value.rstrip.empty? ? [] : value.rstrip.split(/\r?\n/)
-        when "comma-list" then value.strip.empty? ? [] : value.strip.split(",").map(&:strip)
+        when "text" then Spaces.trim_end(value)
+        when "lines" then (text = Spaces.trim_end(value)).empty? ? [] : text.split(/\r?\n/, -1)
+        when "comma-list" then (text = Spaces.trim(value)).empty? ? [] : text.split(",", -1).map { Spaces.trim(_1) }
         when "json" then JSON.parse(value)
         else raise ArgumentError, "unknown view #{name}"
         end
@@ -433,7 +433,7 @@ module Nukadoko
 
       # The test of the kind `name` names, read trimmed and in any case.
       #: (String) -> untyped
-      def self.value_kind(name) = KIND_TESTS[name.strip.downcase]
+      def self.value_kind(name) = KIND_TESTS[Spaces.trim(name).downcase]
 
       #: (untyped) -> String
       def self.json_type(value)
@@ -452,7 +452,7 @@ module Nukadoko
 
       # JavaScript's trim, which takes Unicode spaces and a byte order mark.
       #: (String) -> bool
-      def self.blank?(text) = text.match?(/\A[[:space:]\u{feff}]*\z/)
+      def self.blank?(text) = Spaces.blank?(text)
 
       # Structural equality over JSON values: key order does not count, and
       # 1 equals 1.0, as JSON writes one number.

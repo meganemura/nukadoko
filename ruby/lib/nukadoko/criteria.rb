@@ -110,7 +110,7 @@ module Nukadoko
       def step_lines(step)
         lines = ["#{step.keyword.strip} #{step.text}"]
         if (doc = step.doc_string)
-          lines.push("#{doc.delimiter}#{doc.media_type}", *doc.content.split("\n"), doc.delimiter)
+          lines.push("#{doc.delimiter}#{doc.media_type}", *doc.content.split("\n", -1), doc.delimiter)
         end
         step.data_table&.rows&.each { lines << row_line(_1) }
         lines

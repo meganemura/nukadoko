@@ -131,9 +131,9 @@ module Nukadoko
         expected = entry[:expected]
         name = if expected.is_a?(Hash) then expected[:literal].is_a?(String) ? expected[:literal] : nil
                elsif [nil, "text"].include?(entry[:expected_view]) && step.args[expected]&.type == :string && captures[expected].is_a?(String)
-                 entry[:expected_view] == "text" ? captures[expected].rstrip : captures[expected]
+                 entry[:expected_view] == "text" ? Spaces.trim_end(captures[expected]) : captures[expected]
                end
-        name.nil? || name.strip.empty? ? nil : name
+        name.nil? || Spaces.blank?(name) ? nil : name
       end
 
       # The segments a claim reads before its view, as the run reads them:
