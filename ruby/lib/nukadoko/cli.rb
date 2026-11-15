@@ -5,10 +5,10 @@
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
-    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records --meets --misses].freeze
+    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records --meets --misses --step].freeze
     REPEATED = %w[--tag --env --use].freeze
     VALUED = %w[--format --out --base --repeat --concurrency --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv
-                --run --by --because].freeze
+                --run --by --because --walk --timeout].freeze
 
     def initialize(argv, project: Dir.pwd, out: $stdout)
       @command, *rest = argv
@@ -29,6 +29,7 @@ module Nukadoko
       return Judge.new(@project, @rest, @options, json: @json, out: @out).call if @command == "judge"
       return report if @command == "report"
       return clean if @command == "clean"
+      return Walked.new(@project, @rest, @options, json: @json, out: @out).call if @command == "step"
       return init if @command == "init"
 
       %w[nukadoko.config.rb nukadoko.program.rb].each do |name|
@@ -68,7 +69,7 @@ module Nukadoko
         end
 
         finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
-      when "run" then run(steps)
+      when "run" then @options.key?("--step") ? walk(steps) : run(steps)
       when "do" then run_one(check)
       when "scaffold" then scaffold(steps, scenarios)
       when "__tree" then tree(steps)
@@ -99,6 +100,57 @@ module Nukadoko
       end
     end
 
+    # `nuka run --step`: a run of one scenario that pauses after each step
+    # until `nuka step` answers. The walk is recorded before anything else,
+    # so every way the run stops reaches a `nuka step` waiting for it: a
+    # refusal or nothing selected ends it as not run, with what the run
+    # printed; a signal, which is what ends a pause nobody answers, as
+    # interrupted; an exception as an error.
+    def walk(steps)
+      targets = @rest.empty? ? ["features"] : @rest
+      @walk_target = [*targets, *@options["--env"].flat_map { ["--env", _1] }].map { Engine::Selection.shell_word(_1) }.join(" ")
+      opened = Engine::WalkFiles.open(@project, @walk_target, announce: @json ? nil : ->(text) { $stderr.write(text) })
+      if opened.is_a?(Hash)
+        return refuse(Engine::Refusal.new("walk-in-progress", opened[:message], run: "nuka step wait"))
+      end
+
+      @walk = opened
+      previous = { "INT" => 130, "TERM" => 143 }.to_h do |name, code|
+        [name, Signal.trap(name) do
+          opened.end({ how: "interrupted", exit_code: code, signal: "SIG#{name}" })
+          exit(code)
+        end]
+      end
+      code = run(steps)
+      opened.end({ how: "not-run", exit_code: code, findings: @stopped_with || [] })
+      code
+    rescue StandardError => e
+      opened.end({ how: "error", exit_code: 1, findings: [{ severity: "error", code: "unexpected-error", message: e.message }] }) if opened.is_a?(Engine::WalkFiles::Handle)
+      raise
+    ensure
+      previous&.each { |name, handler| Signal.trap(name, handler || "DEFAULT") }
+    end
+
+    # Why a walk cannot walk this run, raised as step-needs-one-scenario: a
+    # walk is one execution of one scenario, in one environment, where its
+    # conditions hold, since a control would run again for its proof.
+    def one_execution(kept, environments)
+      first = kept.first
+      at = Engine::Selection.shell_word("#{first.uri}:#{first.line}")
+      envs = @options["--env"].flat_map { ["--env", Engine::Selection.shell_word(_1)] }
+      reason, again = if kept.size > 1
+                        ["the targets select #{kept.size} scenarios", Engine::Walk.restart_command([at, *envs].join(" "))]
+                      elsif environments.size > 1
+                        ["it runs in #{environments.size} environments (#{environments.map(&:name).join(", ")})",
+                         Engine::Walk.restart_command([at, "--env", Engine::Selection.shell_word(environments.first.name)].join(" "))]
+                      elsif Engine::Table.role(Engine::Table.condition_tags(first.tags), environments.first.conditions) == "control"
+                        ["the scenario's conditions do not hold in #{environments.first.name}, so it would run as a control"]
+                      end
+      return unless reason
+
+      raise Engine::Refusal.new("step-needs-one-scenario", "nuka run --step walks one execution of one scenario, and #{reason}", run: again)
+    end
+
     # A run checks the scenarios it selected, then runs them in each world
     # it selected; a target or a world it cannot reach is refused first.
     def run(steps)
@@ -114,6 +166,11 @@ module Nukadoko
       records = @options.key?("--records") ? @out : nil
       progress = @json || records ? $stderr : @out
       ref = @options["--base"].last
+      if @walk && (repeat > 1 || ref)
+        why = repeat > 1 ? "--repeat #{repeat} runs it #{repeat} times" : "--base runs it in more than one world"
+        raise Engine::Refusal.new("step-needs-one-scenario", "nuka run --step walks one execution of one scenario, and #{why}",
+                                  run: Engine::Walk.restart_command(@walk_target))
+      end
       commit = ref && Engine::Base.resolve(@project, ref)
       selection = Engine::Selection.new(@project, @rest, @options["--tag"])
       program = Engine::Program.new(Nukadoko.program_options)
@@ -140,6 +197,7 @@ module Nukadoko
       if kept.empty? && left_out.any?
         return finish("run", false, findings: [left_out_stop(left_out, program)], verdict: "failed", exit_code: 1)
       end
+      one_execution(kept, environments) if @walk && kept.any?
 
       dir = File.join(@project, ".nukadoko", "runs", "run-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}")
       base = if commit
@@ -156,7 +214,7 @@ module Nukadoko
       result = Engine::Run.new(@project, check.usable, kept, Nukadoko.program_options,
                                environments: environments, left_out: left_out.size, out: progress,
                                dir: dir, base: base, env_flags: @options["--env"].flat_map { ["--env", _1] },
-                               repeat: repeat, concurrency: concurrency, order: order, records: records,
+                               repeat: repeat, concurrency: concurrency, order: order, records: records, walk: @walk,
                                rerun: { targets: @rest, tags: @options["--tag"].flat_map { ["--tag", _1] }, whole_files: selection.whole_files }).call
       passed = result.delete(:passed)
       findings += result.delete(:failures)
@@ -174,6 +232,10 @@ module Nukadoko
       # nothing the record does not.
       written = JSON.parse(JSON.generate(envelope), symbolize_names: true)
       File.write(File.join(@project, result[:run_dir], "summary.md"), Engine::Summary.render(written))
+      # After run.json, so a `nuka step` that reads the walk as ended finds
+      # the run's record there.
+      stopped = envelope[:scenarios].find { _1[:stopped] }&.dig(:stopped)
+      @walk&.end({ how: "finished", exit_code: passed ? 0 : 1, findings: findings, **(stopped ? { stopped: stopped } : {}) })
       unless @json
         progress.puts "summary   #{File.join(result[:run_dir], "summary.md")}"
         progress.puts "run       #{File.join(result[:run_dir], "run.json")}"
@@ -391,19 +453,33 @@ module Nukadoko
       state = File.join(@project, ".nukadoko")
       listed = ->(dir) { Dir.children(File.join(state, dir)).select { File.directory?(File.join(state, dir, _1)) }.sort.map { ".nukadoko/#{dir}/#{_1}" } rescue [] }
       results = File.join(state, "export", "allure-results")
+      # The run of a live walk stays: it still writes there, and `nuka
+      # step` answers through it. A walk still starting may have made its
+      # directory without naming it yet, so every run with no run.json
+      # stays while it starts.
+      live = Engine::WalkFiles.live_run(@project)
+      runs, kept = listed.("runs").partition do |dir|
+        next true unless live
+
+        live[:run_dir] == "starting" ? File.exist?(File.join(@project, dir, "run.json")) : dir != live[:run_dir]
+      end
       plan = {
-        records: listed.("runs") + listed.("do"),
+        records: runs + listed.("do"),
         export: File.directory?(results) && !Dir.empty?(results) ? [".nukadoko/export/allure-results"] : [],
         legacy: %w[cache records].select { File.directory?(File.join(state, _1)) }.map { ".nukadoko/#{_1}" },
-        kept: []
+        kept: kept
       }
+      notes = kept.map do |dir|
+        { severity: "note", code: "walk-run-kept", message: "kept #{dir}: walk #{live[:walk]} is live and its run writes there", do: Engine::Walk.wait_command(live[:walk]) }
+      end
       dry_run = @options.key?("--dry-run")
       gone = plan[:records] + plan[:export] + plan[:legacy]
       if @json
-        emit({ **head("clean", "passed", []), **plan, dry_run: dry_run }, [], "clean")
+        emit({ **head("clean", "passed", notes), **plan, dry_run: dry_run }, notes, "clean")
       else
         gone.each { @out.puts _1 }
         @out.puts "ok: nothing to clean" if gone.empty?
+        notes.each { $stderr.puts [_1[:severity], _1[:code], Engine::Summary.where_of(_1), _1[:message]].join("\t"), "  do: #{_1[:do]}" }
       end
       return 0 if dry_run
 
@@ -576,6 +652,8 @@ module Nukadoko
     end
 
     def finish(command, passed, findings:, verdict: passed ? "passed" : "failed", exit_code: passed ? 0 : 1, **rest)
+      # What a walk that stops here ends with.
+      @stopped_with = findings
       emit({ **head(command, verdict, findings), **rest }, findings, command)
       exit_code
     end

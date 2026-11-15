@@ -8,9 +8,9 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 状態: 初期の核です。
 `conformance/` の 10 のケースを通します。
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
-`--base`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
+`--base`、`--step`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-`--step` など、TypeScript 版の機能の多くはまだありません。
+`nuka skill` など、TypeScript 版の機能の一部はまだありません。
 
 ## インストール
 
@@ -52,7 +52,7 @@ end
 - `nuka init` は、`nukadoko.config.rb`、空の `features/steps/`、`.nukadoko/` と `.env` のための `.gitignore` の行を書きます。
 設定ファイルがすでにあれば断ります。
 - `nuka check [--json]` は、実行前にまちがいを報告します。
-- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--concurrency <n>] [--proof-runs <n>] [--records] [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
+- `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--concurrency <n>] [--proof-runs <n>] [--step] [--records] [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
 対象を書かなければ `features/` を実行します。
 `--order shuffled` は、ファイルを、そしてファイルの中のシナリオを、seed が決める順番で実行します。
 seed が同じなら、TypeScript 版と同じ順番です。
@@ -73,6 +73,13 @@ claim のステップの claims と、各基準の判定は attachment として
 `allure` は Allure の結果のディレクトリで、`--out` で別の場所を指定しなければ `.nukadoko/export/allure-results` に書きます。
 1 回の実行が 1 つの結果になり、各 claim はその Then の子ステップになります。
 history id は、同じシナリオについて TypeScript 版が書く結果と同じです。
+- `nuka run <feature>:<line> --step` は、1 つのシナリオを 1 ステップずつ進めます。
+各ステップのあと、`nuka step` が答えるまで待ちます。
+`nuka step wait [--walk <n>] [--timeout <s>] [--json]` は、walk がいまどこにいるかを出します。
+止まったステップ、その記録、開いたままのページのスクリーンショットと ARIA スナップショットです。
+`nuka step next <pause> --walk <n>` は次のステップを実行し、`nuka step stop <pause> --walk <n>` は残りを飛ばします。
+止めたシナリオは stopped になり、その行は赤になります。
+どちらのエンジンの `nuka step` も、どちらのエンジンの walk に答えられます。
 - `nuka clean [--dry-run] [--json]` は、`.nukadoko/` の下の run ディレクトリを消します。
 - `nuka do <step> [--args <json>] [--use <step-id>]...` は、シナリオの外で 1 つのステップを実行し、ステップの記録を出します。
 `--use` は、前の記録(`do` のものでも run のものでも)から、ステップの `from` の args を埋めます。

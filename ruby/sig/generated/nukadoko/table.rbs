@@ -18,7 +18,8 @@ module Nukadoko
       def self.role: (untyped tags, untyped conditions) -> untyped
 
       # What a cell's executions came to. An execution is `[:pass]`,
-      # `[:fail, line, claim]`, or `[:broke, line]`.
+      # `[:fail, line, claim]`, `[:broke, line]`, or `[:stopped, line]`
+      # for a walk a person stopped after that line.
       def self.cell: (untyped executions) -> untyped
 
       def self.verdict: (untyped cells) -> untyped

@@ -1,0 +1,161 @@
+# Generated from lib/nukadoko/walk_files.rb with RBS::Inline
+
+# The files a walk of `nuka run --step` and `nuka step` share, read and
+# written from both sides, in the TypeScript engine's layout
+# (src/run/walk-files.ts), so either engine's `nuka step` answers either
+# engine's walk. Nothing else names these files, and nothing here decides
+# anything: Walk says what a state becomes and what a call does next, Run
+# says when a step is done, and the CLI prints.
+#
+# Each file has one writer, so no write needs a lock of its own:
+#
+#   .nukadoko/walk.lock/<n>        the run of walk n, created exclusively, holding its pid, then `released`
+#   .nukadoko/walk.json            the run, replaced whole (written aside, then renamed)
+#   <run_dir>/answers/<n>.json     nuka step, created exclusively, never rewritten
+#   <run_dir>/pauses/<n>/          the run: the views, and the open page's requests
+#   .nukadoko/walks-reported/<n>   nuka step, created exclusively once it printed how walk n ended
+#
+# A process that holds the lock and is gone (a crash, a SIGKILL) leaves a
+# walk.json that is not ended and a pid that is not alive: a reader sees the
+# walk as gone, and the next `nuka run --step` takes the lock over. A pid
+# check, not a lease a process renews: it needs no clock of its own.
+module Nukadoko
+  module Engine
+    module WalkFiles
+      LOCK_DIR: ::String
+
+      RELEASED: ::String
+
+      STATE_FILE: ::String
+
+      REPORTED_DIR: ::String
+
+      POLL: ::Float
+
+      STATES: untyped
+
+      # The run's side of one walk.
+      class Handle
+        attr_reader number: untyped
+
+        def initialize: (untyped project, untyped dir, untyped number, untyped state, untyped announce) -> untyped
+
+        # The run has its directory and its one scenario.
+        def begin: (untyped run) -> untyped
+
+        # Writes the pause and waits for its answer. `hold` takes the pause's
+        # directory and the path the run records it as, and returns the
+        # views of the open page.
+        # : (Hash[Symbol, untyped]) { (String, String) -> Array[Hash[Symbol, untyped]] } -> String
+        def pause_after: (Hash[Symbol, untyped]) { (String, String) -> Array[Hash[Symbol, untyped]] } -> String
+
+        # run.json's `walk`: each pause so far, and its answer. It names only
+        # files that are there when it is written.
+        def record: () -> untyped
+
+        # Records how the walk ended and releases the lock. The first call
+        # wins: a signal's cleanup and the run's own end can both reach it.
+        def end: (untyped finish) -> untyped
+
+        private
+
+        def apply: (untyped event) -> untyped
+      end
+
+      def self?.now: () -> untyped
+
+      # Whether `pid` is a live process. EPERM is a process this one may
+      # not signal, which is alive.
+      # : (Integer) -> bool
+      def self?.alive?: (Integer) -> bool
+
+      def self?.state_dir: (untyped project) -> untyped
+
+      def self?.answers_dir: (untyped project, untyped run_dir) -> untyped
+
+      def self?.replace_file: (untyped path, untyped text) -> untyped
+
+      # walk.json as one read found it: { state: } (nil for no file), or
+      # { unreadable: } with why. walk.json has one writer, so a reader
+      # checks only the fields every state carries and trusts the rest.
+      # : (String) -> Hash[Symbol, untyped]
+      def self?.read_state: (String) -> Hash[Symbol, untyped]
+
+      # The whole-number names in a directory, and none when it is missing.
+      def self?.numbered: (untyped dir) -> untyped
+
+      # One past every walk this project recorded, in walk.json or as a
+      # reported end, so a walk.json lost cannot give a new walk the number
+      # of one whose end a `nuka step` call already printed.
+      def self?.highest_recorded: (untyped dir) -> untyped
+
+      # The highest lock file and its holder: a pid, "released", or nil for
+      # a file that holds neither. Only a number below the highest is ever
+      # removed, so a file gone between the listing and the read means a
+      # higher one exists: list again.
+      def self?.lock_top: (untyped lock_dir) -> untyped
+
+      # Creates `target` with `text` only when it does not exist. A link is
+      # exclusive, and the file appears with its whole text: a process
+      # killed between an exclusive create and its write would leave an
+      # empty lock no reader could tell from one being written.
+      def self?.link_whole: (untyped target, untyped text) -> untyped
+
+      def self?.remove_quietly: (untyped path) -> untyped
+
+      # The pid of a live process, not this one, that holds a lock file
+      # below `walk`, or nil.
+      def self?.live_holder_below: (untyped lock_dir, untyped walk) -> untyped
+
+      # The lock is a directory with one file per walk that took it, named
+      # by the walk's number; the highest number holds it. A run takes the
+      # lock by creating the next number, so it never removes a file
+      # another process may hold: of two runs that find the same holder
+      # dead or released, only one creates the next number. A file is
+      # removed only once a higher one exists, and only by the process that
+      # created that higher one, or by its own creator giving way.
+      def self?.take_lock: (untyped dir) -> untyped
+
+      # The file stays, so the highest number never goes back down; it says
+      # `released`, which the next run takes over like a dead pid.
+      def self?.release_lock: (untyped dir, untyped walk) -> untyped
+
+      # An answer file is created exclusively and written in one call, so a
+      # reader can catch it empty for a moment: that reads as not answered
+      # yet, and the next poll reads it whole.
+      def self?.read_answer: (untyped path) -> untyped
+
+      # Starts the run's side of a walk: takes the lock, which numbers the
+      # walk one past every walk recorded, and writes it as starting. A
+      # Handle, or { refused: } with why. `announce` gets the lines of each
+      # pause, outside --json.
+      def self?.open: (untyped project, untyped target, ?announce: untyped) -> untyped
+
+      # The run directory of the walk that is live now, relative to the
+      # project root: a walk running or paused whose pid is alive, nil for
+      # none. A walk still starting has no run directory yet, so for it
+      # "starting" is returned. `nuka clean` keeps what this names.
+      def self?.live_run: (untyped project) -> untyped
+
+      def self?.answers_of: (untyped project, untyped seen, untyped target) -> untyped
+
+      # One empty file per walk whose end a `nuka step` call printed.
+      # Created exclusively, so two calls that print the same end leave one
+      # file.
+      def self?.end_reported?: (untyped dir, untyped walk) -> untyped
+
+      def self?.mark_end_reported: (untyped dir, untyped walk) -> untyped
+
+      def self?.write_answer: (untyped project, untyped run_dir, untyped pause, untyped answer) -> untyped
+
+      # One `nuka step` call: reads walk.json until the walk reaches a state
+      # the call can report, writing the call's answer once when the walk
+      # waits at its pause. Repeating a call is safe. `timeout` (seconds)
+      # bounds the wait: a walk still running then is reported as running,
+      # with the call itself as its `do`, and a wait that never found its
+      # walk is refused as walk-not-found.
+      # : (String, Hash[Symbol, untyped], Numeric, ?alive: ^(Integer) -> bool) -> Hash[Symbol, untyped]
+      def self?.step_call: (String, Hash[Symbol, untyped], Numeric, ?alive: ^(Integer) -> bool) -> Hash[Symbol, untyped]
+    end
+  end
+end

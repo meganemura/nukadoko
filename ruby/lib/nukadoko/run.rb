@@ -19,7 +19,7 @@ module Nukadoko
       # given, gets each scenario's run.json entry as one line as it ends,
       # and `rerun` is what a shuffled run's rerun lines name.
       def initialize(project, steps, scenarios, program, environments: nil, left_out: 0, out: $stdout, world: "head", dir: nil, base: nil, env_flags: [],
-                     repeat: 1, concurrency: 1, order: Order::FILE, records: nil, rerun: nil)
+                     repeat: 1, concurrency: 1, order: Order::FILE, records: nil, rerun: nil, walk: nil)
         @project = project
         @steps = steps
         @scenarios = scenarios
@@ -37,6 +37,8 @@ module Nukadoko
         @order = order
         @records = records
         @rerun = rerun || { targets: [], tags: [], whole_files: [] }
+        # Under --step, the walk this run's one scenario pauses for.
+        @walk = walk
         @id = dir ? File.basename(dir) : new_id("run")
         @dir = dir || File.join(project, ".nukadoko", "runs", @id)
       end
@@ -324,7 +326,8 @@ module Nukadoko
           failures: warnings + executions.filter_map { _1[:failure] } + judged + @incomplete,
           # A criterion whose Then asks for a judgment holds only once one
           # cites what it read: the judgment column has a gate of its own.
-          passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty? }
+          passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty?,
+          **(@walk ? { walk: @walk.record } : {}) }
       end
 
       # What `--base` knows of one row: its change, whether it carries
@@ -429,24 +432,43 @@ module Nukadoko
           RunRecord.step_file(record, environment: environment.name, world_name: @program.file? ? environment.name : nil, run_id: @id,
                                       scenario_record_id: scenario_record_id, evidence_dir: File.join(".nukadoko", "runs", @id, "steps", record[:step_record_id]))
         end
-        records = scenario.steps.map do |line|
-          record = stopped ? skipped(line) : play_step(line, results, world)
+        # Where a person stopped the walk, as run.json's `stopped` says it.
+        walk_stopped = nil #: Hash[Symbol, untyped]?
+        @walk&.begin({ run_id: @id, run_dir: File.join(".nukadoko", "runs", @id),
+                       scenario: { feature: scenario.uri, line: scenario.line, name: scenario.name, environment: environment.name },
+                       world: world.base_url ? { url: world.base_url } : nil })
+        records = scenario.steps.each_with_index.map do |line, index|
+          record = stopped || walk_stopped ? skipped(line) : play_step(line, results, world)
           stopped ||= [record[:outcome], line.line, record[:claim], record[:broken_actual]] if record[:status] == "failed"
           @out.puts "  #{record[:status]}  #{line.text}"
           @out.puts "      #{record[:error]}" if record[:error]
+          # A step with a written record ran, so a walk pauses after it.
+          if @walk && record[:step_record_id] && record[:status] != "skipped"
+            remaining = stopped ? 0 : scenario.steps.size - index - 1
+            answer = pause(record, line, index + 1, scenario.steps.size, remaining)
+            walk_stopped = { after_step: index + 1, line: line.line } if answer == "stop" && remaining.positive?
+          end
           record
         end
         browser = @browser.scenario_browser
         final = @browser.end_scenario(File.join(@dir, "scenarios", scenario_record_id))
         @scenario_fixtures.teardown
         @scratch.remove_all
-        execution = stopped ? stopped[0, 3].to_a.compact : [:pass]
+        execution = if stopped then stopped[0, 3].to_a.compact
+                    elsif walk_stopped then [:stopped, walk_stopped[:line]]
+                    else [:pass]
+                    end
         failed = records.find { _1[:status] == "failed" }
+        status = if stopped then "failed"
+                 elsif walk_stopped then "stopped"
+                 else "passed"
+                 end
         json = { scenario_record_id: scenario_record_id, feature: scenario.uri, line: scenario.line, scenario: scenario.name,
-                 environment: environment.name, status: stopped ? "failed" : "passed", started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
+                 status: status, **(walk_stopped && !stopped ? { stopped: walk_stopped } : {}),
+                 environment: environment.name, started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
         json[:evidence] = { dir: File.join("scenarios", scenario_record_id), screenshots: final } if final.any?
-        json[:do] = again(scenario, environment) if failed && role != "control"
+        json[:do] = again(scenario, environment) if (failed || status == "stopped") && role != "control"
         json[:claims] = RunRecord.claim_counts(records)
         # A scenario in which no claim on a Then line was judged says so,
         # since a pass there shows only that nothing raised. A Then whose
@@ -460,8 +482,28 @@ module Nukadoko
         failure = if failed && role != "control"
                     { severity: "failed", code: "scenario-failed", file: scenario.uri, line: scenario.line,
                       message: "#{scenario.name}: #{failed[:error]}", do: json[:do] }
+                  elsif (where = walk_stopped) && status == "stopped" && role != "control"
+                    at = where[:line] ? " (line #{where[:line]})" : ""
+                    { severity: "failed", code: "walk-stopped", file: scenario.uri, line: scenario.line,
+                      message: "#{scenario.name}: the walk was stopped after step #{where[:after_step]}#{at} with nuka step stop, so the steps after it did not run",
+                      do: json[:do] }
                   end
         { execution: execution, actual: stopped && stopped[3], json: json, failure: failure }
+      end
+
+      # The pause after the step that ran `number`th, under --step. Before
+      # the walk waits, the open page's traffic moves to the pause's own
+      # directory: a page that polls while the person reads is not the
+      # step's work, and the step's record is already written. After a
+      # failure nothing runs on `next` either, so nothing remains and a
+      # `stop` there stops nothing.
+      def pause(record, line, number, of, remaining)
+        facts = { step: number, of: of, line: line.line, text: line.text, step_name: record[:step], status: record[:status] == "passed" ? "passed" : "failed",
+                  step_record_id: record[:step_record_id], record: "steps/#{record[:step_record_id]}",
+                  **(record[:error] ? { failure: { by: "step", message: record[:error] } } : {}), remaining: remaining }
+        @walk.pause_after(facts) { |dir, recorded_as| @browser.hold(dir, recorded_as) }
+      ensure
+        @browser&.release
       end
 
       # One step as run.json's scenarios[].steps[] holds it.

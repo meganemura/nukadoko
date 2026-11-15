@@ -10,5 +10,6 @@ Encoding.default_external = Encoding::UTF_8
 require_relative "../lib/nukadoko"
 require_relative "../lib/nukadoko/cli"
 require_relative "../lib/nukadoko/judge"
+require_relative "../lib/nukadoko/walk_step"
 
 exit Nukadoko::CLI.new(ARGV).call

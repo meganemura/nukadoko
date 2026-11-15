@@ -300,6 +300,7 @@ module Nukadoko
         when "not-run" then "did not run #{where}: #{cell[:reason] || "no execution was recorded"}"
         when "fail" then "a claim broke at line #{cell[:line]} #{where}"
         when "broke" then "stopped at line #{cell[:line]} #{where} before a claim there was judged"
+        when "stopped" then "the walk was stopped with nuka step stop after line #{cell[:line]} #{where}, so the steps after it did not run and nothing shows it holds"
         else "its #{runs_text(cell[:runs])} #{where} disagree, the first that did not pass at line #{cell[:line]}"
         end
       end
@@ -343,6 +344,7 @@ module Nukadoko
         when "not-run" then "it did not run #{where}: #{cell[:reason] || "no execution was recorded"}"
         when "pass" then "it passed #{where}"
         when "broke" then "it stopped at #{line} #{where} before a claim there was judged"
+        when "stopped" then "the walk was stopped after #{line} #{where}"
         when "flaky" then "its #{runs_text(cell[:runs])} #{where} disagree, the first that did not pass at #{line}"
         else
           if cell[:world] == "base" && cell[:runs] < Table.proof_runs
@@ -451,7 +453,7 @@ module Nukadoko
         head = scenarios.reject { _1[:role] == "control" }
         controls = scenarios.select { _1[:role] == "control" }
         { scenarios: head.size, passed: head.count { _1[:status] == "passed" }, failed: head.count { _1[:status] == "failed" },
-          stopped: 0, not_run: 0, controls: controls.size, controls_not_run: 0 }
+          stopped: head.count { _1[:status] == "stopped" }, not_run: 0, controls: controls.size, controls_not_run: 0 }
       end
 
       # The commit HEAD named when the run started, whether the tree had an

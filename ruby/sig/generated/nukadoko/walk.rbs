@@ -1,0 +1,139 @@
+# Generated from lib/nukadoko/walk.rb with RBS::Inline
+
+# A walk of `nuka run --step` as data: the states one walk passes through,
+# the one transition the run applies to move it, and what one `nuka step`
+# call does next and prints, in the TypeScript engine's shape
+# (src/run/walk.ts). Pure: no file system, no clock, no process. WalkFiles
+# reads and writes the files both sides share, and Run holds the step that
+# pauses.
+#
+# One walk is one execution of one scenario. Pause k comes after step k, so
+# a pause number names the step a person was shown, and an answer names the
+# walk and the pause it answers: an answer to a pause nobody was shown, or
+# to an earlier walk the same command once answered, is refused, never
+# applied to whichever pause is open. Pause numbers only increase, and
+# `ended` absorbs every later event, so a replayed answer or a late signal
+# cannot move a walk backwards.
+#
+# A state is a hash with symbol keys, as walk.json holds it once parsed:
+# `state` is starting, running (with `after`), paused (with `pause`), or
+# ended (with `end`, `ended_at`, and `reached`).
+module Nukadoko
+  module Engine
+    module Walk
+      # A transition the walk's table does not have: a bug in the run that
+      # applies events, never something a reader of walk.json can cause.
+      class TransitionError < StandardError
+      end
+
+      START_KEYS: untyped
+
+      RUN_KEYS: untyped
+
+      # One line on what failed the scenario at a pause. The Ruby engine has
+      # no AfterStep hooks, but a pause read from a TypeScript walk can
+      # name one.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.failure_text: (Hash[Symbol, untyped]) -> String
+
+      # The walk's first state, before the run knows its scenario.
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.start: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # One transition:
+      #
+      #     starting --begun--> running(after 0) --paused(k > after)--> paused(k)
+      #     paused(k) --answered(k)--> running(after k)
+      #     any live state --ended--> ended, which absorbs every later event
+      #
+      # Raises TransitionError for any other pair.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.advance: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # The one spelling of an answer, for the do lines and the refusals.
+      # : (Integer, Integer, String) -> String
+      def self?.answer_command: (Integer, Integer, String) -> String
+
+      # The one spelling of a wait for one walk.
+      # : (Integer) -> String
+      def self?.wait_command: (Integer) -> String
+
+      # The command a walk that ended has to be started with again.
+      # : (String) -> String
+      def self?.restart_command: (String) -> String
+
+      # walk.json as `nuka step` reads it. A walk whose process is gone
+      # without recording its end is `gone`: killed, or crashed. `none`: no
+      # walk was ever recorded in the project.
+      # : (Hash[Symbol, untyped]?, ^(Integer) -> bool) -> Hash[Symbol, untyped]
+      def self?.see: (Hash[Symbol, untyped]?, ^(Integer) -> bool) -> Hash[Symbol, untyped]
+
+      # : (Hash[Symbol, untyped]) -> Integer
+      def self?.number_of: (Hash[Symbol, untyped]) -> Integer
+
+      # The walk one `nuka step` call is about, fixed when the call starts.
+      # A call is { kind: "wait", walk: Integer? } or { kind: "answer",
+      # walk:, pause:, answer: }. A wait that names no walk is about the
+      # newest walk until some `nuka step` call has reported how that walk
+      # ended, and about the next walk after that, which a `nuka run
+      # --step` started just before the wait may not have recorded yet. So
+      # a walk that ended before anyone looked is still reported, and an
+      # end is not reported in place of the walk that follows it.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], ^(Integer) -> bool) -> Integer
+      def self?.call_target: (Hash[Symbol, untyped], Hash[Symbol, untyped], ^(Integer) -> bool) -> Integer
+
+      # How a walk stands, after its number: "ended: interrupted by SIGTERM,
+      # exit 143", "is at pause 2".
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.standing: (Hash[Symbol, untyped]) -> String
+
+      # What follows "ended" in a walk's standing.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.how_ended: (Hash[Symbol, untyped]) -> String
+
+      # The message of a wait that found no walk to report before its time
+      # ran out: which walk it waited for, and the last walk there is and
+      # how it stands, so the caller is not told that nothing ran.
+      # : (Hash[Symbol, untyped], Integer, Hash[Symbol, untyped]) -> String
+      def self?.nothing_started_message: (Hash[Symbol, untyped], Integer, Hash[Symbol, untyped]) -> String
+
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.where_text: (Hash[Symbol, untyped]) -> String
+
+      # Where the walk walk.json holds stands, for a refusal that names it.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.current_text: (Hash[Symbol, untyped]) -> String
+
+      # A call that names a walk walk.json no longer holds, or does not hold
+      # yet. The do is a wait for the walk there is, which answers nothing.
+      # : (Hash[Symbol, untyped], Integer, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.not_current: (Hash[Symbol, untyped], Integer, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # What one `nuka step` call does next, from walk.json as it stands now
+      # (`seen`), the walk the call is about (`target`), and the answers
+      # that walk's run directory holds, by pause. Pure, so that repeating a
+      # call is a property test: an answer already given the same way
+      # reports where the walk went from it, and writes nothing again.
+      # : (Hash[Symbol, untyped], Integer, Hash[Symbol, untyped], Hash[Integer, String]) -> Hash[Symbol, untyped]
+      def self?.decide: (Hash[Symbol, untyped], Integer, Hash[Symbol, untyped], Hash[Integer, String]) -> Hash[Symbol, untyped]
+
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.run_fields: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # What `nuka step` prints beside the envelope's head: its exit code,
+      # its findings, and its fields. 0 for a walk paused, starting,
+      # running, or ended green; 1 for one paused where its scenario
+      # failed, ended red, interrupted, or gone. A walk starting or running
+      # is one the call's wait ran out on: the call itself is then the
+      # `do`, since repeating it is safe.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.report: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # The lines `nuka run --step` writes on stderr at a pause of walk
+      # `walk`, outside `--json`: the step, what failed when the scenario
+      # failed there, and the answers.
+      # : (Integer, Hash[Symbol, untyped]) -> String
+      def self?.pause_lines: (Integer, Hash[Symbol, untyped]) -> String
+    end
+  end
+end

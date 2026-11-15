@@ -49,14 +49,18 @@ export function buildProject(name: string, dir: string): void {
 
 export type Ran = { exitCode: number | null; stdout: string; stderr: string };
 
-// The engine's own CLI, as a user of that engine runs it.
-export async function nuka(dir: string, argv: string[]): Promise<Ran> {
+// The engine's own CLI, as a user of that engine runs it. `timeout` (ms)
+// ends one that would otherwise wait for good, such as a walk whose
+// scenario failed before it answered every pause.
+export async function nuka(dir: string, argv: string[], timeout?: number): Promise<Ran> {
+  const limit = timeout === undefined ? {} : { timeout };
   if (engine() === "typescript") {
-    return await runCommand(process.execPath, [path.join(root, "typescript", "dist", "cli.js"), ...argv], { cwd: dir });
+    return await runCommand(process.execPath, [path.join(root, "typescript", "dist", "cli.js"), ...argv], { cwd: dir, ...limit });
   }
   return await runCommand("bundle", ["exec", "ruby", path.join(root, "ruby", "exe", "nuka"), ...argv], {
     cwd: dir,
     env: { ...process.env, BUNDLE_GEMFILE: path.join(root, "ruby", "Gemfile") },
+    ...limit,
   });
 }
 

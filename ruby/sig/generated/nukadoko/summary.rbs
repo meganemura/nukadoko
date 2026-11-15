@@ -148,7 +148,16 @@ module Nukadoko
 
       def self?.findings: (untyped doc) -> untyped
 
+      # The heading names what the commands under it rerun: a stopped walk
+      # did not fail, so a heading that called it failed would state
+      # something false.
       def self?.rerun: (untyped doc) -> untyped
+
+      # A walk is a run that paused after each step for an answer: its
+      # verdicts were measured, but between steps the world and the browser
+      # were open to anything, which no record covers. The longest pause
+      # says how long that was.
+      def self?.walk_sentence: (untyped walk) -> untyped
     end
   end
 end

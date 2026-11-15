@@ -1,0 +1,43 @@
+# Generated from lib/nukadoko/walk_step.rb with RBS::Inline
+
+# `nuka step wait`, `nuka step next <pause> --walk <n>`, and `nuka step stop
+# <pause> --walk <n>`, the side of a walk that answers it, in the
+# TypeScript engine's shape (src/cli/step.ts). This class reads its
+# arguments and prints; WalkFiles reads and writes the walk's files, and
+# Walk decides what a call does. Findings go to stderr outside --json, as
+# the TypeScript engine prints them, so stdout holds only where the walk
+# stands.
+module Nukadoko
+  class CLI
+    class Walked
+      ACTIONS: untyped
+
+      DEFAULT_TIMEOUT: ::Integer
+
+      # : (String, Array[String], Hash[String, Array[String]], json: bool, out: IO, ?err: IO) -> void
+      def initialize: (String, Array[String], Hash[String, Array[String]], json: bool, out: IO, ?err: IO) -> void
+
+      # : () -> Integer
+      def call: () -> Integer
+
+      private
+
+      # A whole number of 1 or more, as the command line gave it, or nil.
+      def whole: (untyped word) -> untyped
+
+      def call_of: () -> untyped
+
+      def joined: (untyped run_dir, untyped relative) -> untyped
+
+      # What a person reads at a pause: where the step is, what it
+      # recorded, the views of the page it left open, and the two answers.
+      def text: (untyped seen, untyped fields) -> untyped
+
+      def envelope: (untyped command, untyped exit_code, untyped findings, untyped fields) -> untyped
+
+      def refuse: (untyped command, untyped code, untyped message, ?run: untyped, ?fields: untyped) -> untyped
+
+      def print_finding: (untyped finding) -> untyped
+    end
+  end
+end

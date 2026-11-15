@@ -265,6 +265,49 @@ module Nukadoko
         nil
       end
 
+      # How long a pause waits for each capture of the page's view. A page
+      # whose main thread is stuck answers none of them, and without a
+      # deadline the pause would never reach the person.
+      VIEW_TIMEOUT_MS = 5_000
+
+      # What `nuka run --step` shows at a pause, taken while the run waits:
+      # a viewport screenshot and an ARIA snapshot of the open page, named
+      # under `recorded_as` as run.json names them. From now until
+      # `release`, the requests the page sends go to the pause's own
+      # http.jsonl, never to the step's record. `[]` when no page is open.
+      def hold(dir, recorded_as)
+        return [] unless @page
+
+        log = File.join(dir, "http.jsonl")
+        @held = lambda do |req|
+          File.open(log, "a") { _1.puts JSON.generate({ method: req.method, url: req.url, via: "page" }) }
+        rescue StandardError
+          nil
+        end
+        @page.on("request", @held)
+        shot = begin
+          @page.screenshot(path: File.join(dir, "page.png"), timeout: VIEW_TIMEOUT_MS)
+          "#{recorded_as}/page.png"
+        rescue StandardError
+          nil
+        end
+        aria = begin
+          tree = @page.aria_snapshot(mode: "ai", timeout: VIEW_TIMEOUT_MS)
+          File.write(File.join(dir, "page.aria.yml"), tree.end_with?("\n") ? tree : "#{tree}\n")
+          "#{recorded_as}/page.aria.yml"
+        rescue StandardError
+          nil
+        end
+        title = (@page.title rescue nil)
+        [{ as: nil, page: 1, url: @page.url, title: title, screenshot: shot, aria: aria }]
+      end
+
+      # The pause is answered: the page's requests are the next step's again.
+      def release
+        @page.off("request", @held) if @page && @held
+        @held = nil
+      end
+
       # Each scenario gets a browser context of its own, so cookies and storage
       # never carry from one scenario to the next.
       # The browser the scenario opened a page in, as run.json names it, or

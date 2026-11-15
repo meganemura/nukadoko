@@ -35,7 +35,8 @@ module Nukadoko
       end
 
       # What a cell's executions came to. An execution is `[:pass]`,
-      # `[:fail, line, claim]`, or `[:broke, line]`.
+      # `[:fail, line, claim]`, `[:broke, line]`, or `[:stopped, line]`
+      # for a walk a person stopped after that line.
       def self.cell(executions)
         first = executions.first
         return { outcome: "not-run", runs: 0 } if first.nil?

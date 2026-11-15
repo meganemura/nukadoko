@@ -135,6 +135,7 @@ module Nukadoko
           parts << "#{judged} #{judged == 1 ? "judgment" : "judgments"} #{state}" if judged.positive?
         end
         lines = ["# nukadoko run #{doc[:verdict]}: #{parts.join(", ")}"]
+        lines.push("", walk_sentence(doc[:walk])) if doc[:walk]
         explained = rows.any? do |row|
           next true if %w[unproven moved].include?(row[:verdict])
           next true if row[:judgment] && row[:judgment][:state] != "judged"
@@ -333,6 +334,12 @@ module Nukadoko
       # producers that exited nonzero, the last command that did, the
       # record, and where the Then can be seen.
       def describe_failure(scenario)
+        if scenario[:status] == "stopped" && scenario[:stopped]
+          last = scenario[:steps][scenario[:stopped][:after_step] - 1] || {}
+          parts = ["#{cell_text("step \"#{last[:text]}\"")}: #{code_span("the walk was stopped after this step with nuka step stop")}"]
+          parts << "record #{code_span(last[:record])}" if last[:record]
+          return parts.join("; ")
+        end
         step = scenario[:steps].find { !%w[passed skipped].include?(_1[:status]) }
         return nil unless step
 
@@ -583,11 +590,31 @@ module Nukadoko
         ["", "## Findings", "", *list.map { "- #{_1[:severity]} `#{_1[:code]}` #{cell_text(where_of(_1))}: #{cell_text(_1[:message])}" }]
       end
 
+      # The heading names what the commands under it rerun: a stopped walk
+      # did not fail, so a heading that called it failed would state
+      # something false.
       def rerun(doc)
-        commands = head_scenarios(doc).filter_map { _1[:do] }.uniq
+        named = head_scenarios(doc).select { _1[:do] }
+        commands = named.map { _1[:do] }.uniq
         return [] if commands.empty?
 
-        ["", "## Rerun a failed scenario", "", "```sh", *commands, "```"]
+        stopped = named.any? { _1[:status] == "stopped" }
+        failed = named.any? { _1[:status] != "stopped" }
+        what = if failed && stopped then "failed or stopped"
+               elsif stopped then "stopped"
+               else "failed"
+               end
+        ["", "## Rerun a #{what} scenario", "", "```sh", *commands, "```"]
+      end
+
+      # A walk is a run that paused after each step for an answer: its
+      # verdicts were measured, but between steps the world and the browser
+      # were open to anything, which no record covers. The longest pause
+      # says how long that was.
+      def walk_sentence(walk)
+        longest = [0, *walk[:pauses].map { ((Time.iso8601(_1[:answered_at]) - Time.iso8601(_1[:paused_at])) * 1000).round }].max
+        "Walked one step at a time (`nuka run --step`): #{count_of(walk[:pauses].size, "pause", "pauses")}, the longest #{duration(longest)}. " \
+          "Between steps the world and the browser were open to anything, so this run is not the run a reviewer approves."
       end
     end
   end

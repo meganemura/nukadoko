@@ -13,7 +13,7 @@ module Nukadoko
       # run's order, which every round of every pass keeps; `records`, when
       # given, gets each scenario's run.json entry as one line as it ends,
       # and `rerun` is what a shuffled run's rerun lines name.
-      def initialize: (untyped project, untyped steps, untyped scenarios, untyped program, ?environments: untyped, ?left_out: untyped, ?out: untyped, ?world: untyped, ?dir: untyped, ?base: untyped, ?env_flags: untyped, ?repeat: untyped, ?concurrency: untyped, ?order: untyped, ?records: untyped, ?rerun: untyped) -> untyped
+      def initialize: (untyped project, untyped steps, untyped scenarios, untyped program, ?environments: untyped, ?left_out: untyped, ?out: untyped, ?world: untyped, ?dir: untyped, ?base: untyped, ?env_flags: untyped, ?repeat: untyped, ?concurrency: untyped, ?order: untyped, ?records: untyped, ?rerun: untyped, ?walk: untyped) -> untyped
 
       def call: () -> untyped
 
@@ -115,6 +115,14 @@ module Nukadoko
       def again: (untyped scenario, untyped environment) -> untyped
 
       def play: (untyped scenario, untyped environment, untyped role, untyped world) -> untyped
+
+      # The pause after the step that ran `number`th, under --step. Before
+      # the walk waits, the open page's traffic moves to the pause's own
+      # directory: a page that polls while the person reads is not the
+      # step's work, and the step's record is already written. After a
+      # failure nothing runs on `next` either, so nothing remains and a
+      # `stop` there stops nothing.
+      def pause: (untyped record, untyped line, untyped number, untyped of, untyped remaining) -> untyped
 
       # One step as run.json's scenarios[].steps[] holds it.
       def step_entry: (untyped line, untyped record) -> untyped
