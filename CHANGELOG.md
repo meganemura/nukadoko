@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.27.1 — 2026-11-16
+
 ### Changed
 
 - nukadoko is tested against Playwright 1.63.0, and the `playwright-missing`
