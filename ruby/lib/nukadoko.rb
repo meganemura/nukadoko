@@ -4,6 +4,7 @@
 require "json"
 require_relative "nukadoko/version"
 require_relative "nukadoko/project_files"
+require_relative "nukadoko/error_frames"
 require_relative "nukadoko/spaces"
 require_relative "nukadoko/js_pattern"
 require_relative "nukadoko/schema"

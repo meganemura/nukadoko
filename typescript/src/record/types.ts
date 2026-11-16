@@ -1553,8 +1553,12 @@ export interface StepRecordFailed extends StepRecordBase {
   status: "failed";
   /** `message` is unchanged — the human-readable text this step record
    * always had. `kind` is new: a machine-readable
-   * classification alongside it, never a replacement for it. */
-  error: { message: string; kind: ErrorKind };
+   * classification alongside it, never a replacement for it. `at` is
+   * where a `step_error` threw: the project's own frames of its stack, each
+   * `path:line` relative to the project root, outside `node_modules`, at
+   * most five (src/run/error-frames.ts). Absent when no frame is the
+   * project's own. */
+  error: { message: string; kind: ErrorKind; at?: string[] };
   /** Same field as `StepRecordPassed.used`, but `UsedEntryWithResult`: a failed
    * step's step record is exactly where a reader most needs "what upstream
    * value did this read", without opening a second record.json — so

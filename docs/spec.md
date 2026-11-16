@@ -7809,6 +7809,14 @@ its scenario record's id, so either record leads to the other.
   | `claim_unjudged` | a claim step read its values and nukadoko failed while judging a claim, so nothing is known about that claim |
   | `step_error` | anything else: the step's or hook's own code threw |
 
+  A step record whose `error.kind` is `step_error` also carries `error.at`:
+  where the code threw, as the project's own frames of the stack, each
+  `path:line` relative to the project root. Frames inside `node_modules`,
+  inside the gem, or outside the project are left out, so the first one is
+  the line a reader can open and change. At most five are kept, redacted
+  like the message, and the field is absent when no frame is the
+  project's own.
+
 - `mutates` contains the step's declaration (`null` for a compat step, which
   has none to record, not `false`), sitting beside what the step record
   measured so declared and measured can be compared without a second

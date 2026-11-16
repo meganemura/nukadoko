@@ -25,7 +25,7 @@ module Nukadoko
       def step_file(record, environment:, world_name:, run_id:, scenario_record_id:, evidence_dir:)
         passed = record[:status] == "passed"
         outcome = if passed then { result: record[:result] || {}, returns_dropped: record[:returns_dropped] }.compact
-                  else { error: { message: record[:error], kind: record[:error_kind] } }
+                  else { error: { message: record[:error], kind: record[:error_kind], **(record[:error_at]&.any? ? { at: record[:error_at] } : {}) } }
                   end
         processes = record[:processes]
         used = (record[:used] || []).map do |entry|

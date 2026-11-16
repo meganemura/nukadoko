@@ -55,8 +55,9 @@ import {
 export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
+import { projectFrames } from "./error-frames.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
-import type { ArgOrigin, ErrorKind, FixtureUsageEntry, ProcessEntry, ReturnsDrop, StepRecord } from "../record/types.js";
+import type { ArgOrigin, ErrorKind, FixtureUsageEntry, ProcessEntry, ReturnsDrop, StepRecord, StepRecordFailed } from "../record/types.js";
 import { readStepRecord } from "../record/read-step-record.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
@@ -1150,6 +1151,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * a free one specifically so it can reach all of that without threading
    * every one of those through its own parameter list.
    */
+  // A failed step record's `error`, with where a step_error threw. The
+  // frames are redacted like the message, since a path can hold a secret.
+  function stepError(message: string, kind: ErrorKind, thrown: unknown): StepRecordFailed["error"] {
+    const at = kind === "step_error" ? projectFrames(thrown, rootDir).map((frame) => redactString(frame, secrets)) : [];
+    return { message, kind, ...(at.length > 0 ? { at } : {}) };
+  }
+
   async function finishExecutedStep(
     pickleStep: PickleStep,
     begun: { readonly recordId: string; readonly recordDir: string; readonly relativeRecordDir: string },
@@ -1189,6 +1197,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // What a claim step read and judged; `undefined` for any other step,
     // and for a claim step that failed before it ran (binding or args).
     claimExecution: ClaimExecution | undefined = undefined,
+    // What the step's code threw, for a failed step, so the record can say
+    // where (`error.at`).
+    thrown: unknown = undefined,
   ): Promise<number> {
     const status = initialStatus;
     const errorMessage = initialErrorMessage;
@@ -1368,7 +1379,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             // fallback is a belt-and-braces default only, matching the
             // general principle of defaulting to step_error whenever
             // classification is uncertain — it should never actually be reached.
-            error: { message: errorMessage, kind: errorKind ?? "step_error" },
+            error: stepError(errorMessage, errorKind ?? "step_error", thrown),
             status: "failed",
             environment,
             world_name: programWorld?.name ?? null,
@@ -2177,6 +2188,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           entry.step.mutates,
           fixtureUsage,
           claimExecution,
+          thrown,
         );
         await runAfterStepHooks(stepIndex, {
           pickleStep,
@@ -2308,6 +2320,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           undefined,
           null,
           [],
+          undefined,
+          thrown,
         );
         await runAfterStepHooks(stepIndex, {
           pickleStep,

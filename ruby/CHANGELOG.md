@@ -6,6 +6,13 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Added
+
+- A failed step record whose `error.kind` is `step_error` carries
+  `error.at`: the project's own backtrace frames, each `path:line` relative
+  to the project root, at most five, redacted like the message. A reader
+  finds the line that raised without calling the step again.
+
 ### Fixed
 
 - Every command stopped with `NoMethodError` on a feature file that has a

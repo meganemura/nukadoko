@@ -6059,6 +6059,11 @@ scenario record は独立したファイルではなく、その run の `run.js
   | `claim_unjudged` | claim step が値を読み、nukadoko が claim の判定の途中で失敗したので、その claim について何もわからない |
   | `step_error` | それ以外で、step または hook 自身のコードが throw した |
 
+  `error.kind` が `step_error` の step record には `error.at` も入ります。
+  コードが throw した場所で、スタックのうちプロジェクト自身のフレームを、プロジェクトのルートからの `path:line` で並べたものです。
+  `node_modules` の中、gem の中、プロジェクトの外のフレームは除くので、先頭は読み手が開いて直せる行です。
+  最大 5 つで、メッセージと同じように伏せ字にし、プロジェクト自身のフレームがなければこのフィールドはありません。
+
 - `mutates` は step 自身の宣言を保持します(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)。
   step record が計測したものと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
   claim step は、宣言すべき操作を持たないので `false` を記録します。

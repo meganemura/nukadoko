@@ -7,6 +7,13 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- A failed step record whose `error.kind` is `step_error` carries
+  `error.at`: the project's own stack frames, each `path:line` relative to
+  the project root, outside `node_modules`, at most five, redacted like the
+  message. Both engines write it.
+
 ## 0.27.1 — 2026-11-16
 
 ### Changed

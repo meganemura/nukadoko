@@ -1,0 +1,24 @@
+# Generated from lib/nukadoko/error_frames.rb with RBS::Inline
+
+# Where a step's own code raised, as the project's own frames of the
+# backtrace. A step record's error message says what went wrong but not
+# where, so a reader had to call the step again outside nukadoko to find the
+# line. The frames kept are the ones a reader can open and change: inside
+# the project root, and outside the gem and any installed bundle, as the
+# TypeScript engine leaves out node_modules.
+module Nukadoko
+  module Engine
+    module ErrorFrames
+      # The first few frames are where the code was when it raised; the rest
+      # is the call chain a reader rarely needs.
+      MAX: ::Integer
+
+      GEM_ROOT: untyped
+
+      # Each frame as `path:line` relative to `root`, in backtrace order,
+      # without repeats.
+      # : (Exception, String) -> Array[String]
+      def self?.of: (Exception, String) -> Array[String]
+    end
+  end
+end

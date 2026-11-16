@@ -728,6 +728,7 @@ module Nukadoko
         rescue StandardError => e
           record.merge!(status: "failed", outcome: :broke, error: e.message)
           record[:error_kind] ||= "step_error"
+          record[:error_at] = ErrorFrames.of(e, @project).map { redact(_1) } if record[:error_kind] == "step_error"
         ensure
           @browser&.step = nil
           finish&.call
