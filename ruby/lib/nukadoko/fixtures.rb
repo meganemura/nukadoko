@@ -142,6 +142,12 @@ module Nukadoko
       #: (String, Array[Hash[Symbol, untyped]]) -> [untyped, ^() -> void]
       def page_for(step_dir, log)
         require "playwright"
+        # playwright-ruby-client parses each driver message from a buffer in
+        # the default external encoding. Under US-ASCII (LANG unset) its reader
+        # thread dies on the first non-ASCII byte and the step waits forever.
+        # exe/nuka sets UTF-8, but a run started another way (a Rake task, a
+        # script that calls the CLI) reaches here without it.
+        Encoding.default_external = Encoding::UTF_8 unless @execution
         @execution ||= Playwright.create(playwright_cli_executable_path: ENV.fetch("PLAYWRIGHT_CLI", "npx playwright"))
         @browser ||= @execution.playwright.chromium.launch(**@launch_options)
         @context ||= @browser.new_context(baseURL: @base_url).tap do |context|

@@ -96,7 +96,9 @@ module Nukadoko
     def self.collect_lines(node, lines, background, headers, names)
       node.tags&.each { lines[_1.id] = _1.location.line }
       node.children.each do |child|
-        next collect_lines(child.rule, lines, background, headers, names) if child.rule
+        # A rule's own children are RuleChild values, which hold a background or
+        # a scenario and never another rule.
+        next collect_lines(child.rule, lines, background, headers, names) if child.respond_to?(:rule) && child.rule
 
         scenario = child.scenario || child.background
         next unless scenario

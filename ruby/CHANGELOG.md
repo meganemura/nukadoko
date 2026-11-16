@@ -6,6 +6,17 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Every command stopped with `NoMethodError` on a feature file that has a
+  `Rule:`. The engine now reads the scenarios and the background under each
+  rule.
+- A page step could wait forever when the run did not start through
+  `exe/nuka` and the locale was not UTF-8 (`LANG` unset): the Playwright
+  client read the driver's output as US-ASCII and its reader thread died on
+  the first non-ASCII byte. The engine sets UTF-8 before it starts the
+  driver.
+
 ## [0.4.0] - 2026-11-16
 
 ### Changed
