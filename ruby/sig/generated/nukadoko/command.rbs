@@ -14,8 +14,11 @@ module Nukadoko
   # no exit code to read. `input` (or `stdin`) is written to the program's
   # stdin. `redact` names secrets the step holds itself, which the record
   # writes as `{{secret.NAME}}` while the program still gets the real value.
-  # : (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool) -> Hash[Symbol, untyped]
-  def self.run_command: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool) -> Hash[Symbol, untyped]
+  # `unbundled: true` runs the command with the environment from before
+  # Bundler set up nuka (no BUNDLE_GEMFILE, no -rbundler/setup in RUBYOPT),
+  # for a command in another Ruby project, which has a Gemfile of its own.
+  # : (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool, ?unbundled: bool) -> Hash[Symbol, untyped]
+  def self.run_command: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool, ?unbundled: bool) -> Hash[Symbol, untyped]
 
   module Engine
     # The processes the running step started, kept per thread so a step
@@ -32,9 +35,15 @@ module Nukadoko
       # : () -> bool
       def self.groups?: () -> bool
 
+      # `env` on top of the environment Bundler found when it set up nuka:
+      # each variable Bundler added is unset and each one it changed is put
+      # back. Without Bundler loaded there is nothing to undo.
+      # : (Hash[String, String?]) -> Hash[String, String?]
+      def self.unbundled: (Hash[String, String?]) -> Hash[String, String?]
+
       # Runs the command to its close, its stdin closed after `input`.
-      # : (Hash[String, String], Array[String], String, String?, Numeric?, group: bool) -> [String, String, Process::Status, bool?]
-      def self.spawn: (Hash[String, String], Array[String], String, String?, Numeric?, group: bool) -> [ String, String, Process::Status, bool? ]
+      # : (Hash[String, String?], Array[String], String, String?, Numeric?, group: bool) -> [String, String, Process::Status, bool?]
+      def self.spawn: (Hash[String, String?], Array[String], String, String?, Numeric?, group: bool) -> [ String, String, Process::Status, bool? ]
 
       # `ended` when no process of the group still runs as the leader closed.
       # : (Integer) -> String

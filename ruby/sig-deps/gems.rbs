@@ -59,3 +59,8 @@ end
 class TCPServer
   def initialize: (String, Integer) -> void | ...
 end
+
+# The one Bundler call run_command(unbundled: true) makes.
+module Bundler
+  def self.unbundled_env: () -> Hash[String, String]
+end

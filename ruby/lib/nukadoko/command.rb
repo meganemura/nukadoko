@@ -21,8 +21,11 @@ module Nukadoko
   # no exit code to read. `input` (or `stdin`) is written to the program's
   # stdin. `redact` names secrets the step holds itself, which the record
   # writes as `{{secret.NAME}}` while the program still gets the real value.
-  #: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool) -> Hash[Symbol, untyped]
-  def self.run_command(command, args = [], cwd: Dir.pwd, env: {}, input: nil, stdin: nil, timeout: nil, redact: {}, files: false)
+  # `unbundled: true` runs the command with the environment from before
+  # Bundler set up nuka (no BUNDLE_GEMFILE, no -rbundler/setup in RUBYOPT),
+  # for a command in another Ruby project, which has a Gemfile of its own.
+  #: (String, ?Array[String], ?cwd: String, ?env: Hash[String | Symbol, String], ?input: String?, ?stdin: String?, ?timeout: Numeric?, ?redact: Hash[String | Symbol, String], ?files: bool, ?unbundled: bool) -> Hash[Symbol, untyped]
+  def self.run_command(command, args = [], cwd: Dir.pwd, env: {}, input: nil, stdin: nil, timeout: nil, redact: {}, files: false, unbundled: false)
     stdin = input.nil? ? stdin : input
     held = Engine::Secrets.new(redact.to_h { |name, value| [name.to_s, value.to_s] })
     recording = Engine::Processes.current
@@ -33,6 +36,7 @@ module Nukadoko
     traceparent = (Engine::Trace.current&.process_traceparent unless env.key?("TRACEPARENT"))
     chosen = env
     env = env.merge("TRACEPARENT" => traceparent) if traceparent
+    env = Engine::Processes.unbundled(env) if unbundled
     before = Engine::FileWalk.snapshot(cwd) if recording || files
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     # A group of its own, so its close tells whether anything it started still runs.
@@ -70,12 +74,26 @@ module Nukadoko
       #: () -> bool
       def self.groups? = !Gem.win_platform?
 
+      # `env` on top of the environment Bundler found when it set up nuka:
+      # each variable Bundler added is unset and each one it changed is put
+      # back. Without Bundler loaded there is nothing to undo.
+      #: (Hash[String, String?]) -> Hash[String, String?]
+      def self.unbundled(env)
+        return env unless defined?(::Bundler) && ::Bundler.respond_to?(:unbundled_env)
+
+        original = ::Bundler.unbundled_env
+        added = (ENV.keys - original.keys).to_h { [_1, nil] }
+        changed = original.reject { |key, value| ENV[key] == value }
+        added.merge(changed).merge(env)
+      end
+
       # Runs the command to its close, its stdin closed after `input`.
-      #: (Hash[String, String], Array[String], String, String?, Numeric?, group: bool) -> [String, String, Process::Status, bool?]
+      #: (Hash[String, String?], Array[String], String, String?, Numeric?, group: bool) -> [String, String, Process::Status, bool?]
       def self.spawn(env, argv, cwd, input, timeout, group:)
         options = { chdir: cwd } #: Hash[Symbol, untyped]
         options[:pgroup] = true if group && groups?
-        Open3.popen3(env, *argv, **options) do |stdin, out, err, thread|
+        # A nil value unsets the variable, which Open3's signature leaves out.
+        Open3.popen3(_ = env, *argv, **options) do |stdin, out, err, thread|
           stdin.write(input.to_s)
           stdin.close
           readers = [Thread.new { out.read }, Thread.new { err.read }]

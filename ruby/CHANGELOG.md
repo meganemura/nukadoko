@@ -8,6 +8,10 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- `Nukadoko.run_command(..., unbundled: true)` runs the command with the
+  environment from before Bundler set up nuka, so `bin/rails runner` in
+  another Ruby project loads its own Gemfile instead of nuka's.
+
 - A failed step record whose `error.kind` is `step_error` carries
   `error.at`: the project's own backtrace frames, each `path:line` relative
   to the project root, at most five, redacted like the message. A reader
