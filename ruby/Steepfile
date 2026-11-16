@@ -13,10 +13,13 @@ target :lib do
   library "digest", "fileutils", "ipaddr", "json", "net-http", "open3", "pathname", "securerandom", "shellwords", "socket",
           "time", "timeout", "tmpdir", "uri", "zlib", "prism"
 
-  # Most values here are JSON a step returned, so an empty [] or {} has no
-  # element type worth naming; a warning on each would hide the ones that
-  # say something.
   configure_code_diagnostics(D::Ruby.default) do |hash|
+    # Most values here are JSON a step returned, so an empty [] or {} has no
+    # element type worth naming; a warning on each would hide the ones that
+    # say something.
     hash[D::Ruby::UnannotatedEmptyCollection] = nil
+    # Steep reports a node it cannot type as UnexpectedError and skips the
+    # rest of that node. The default level is hint, so the check would pass.
+    hash[D::Ruby::UnexpectedError] = :error
   end
 end

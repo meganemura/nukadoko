@@ -212,9 +212,13 @@ jobs:
         working-directory: ruby
       - run: git add --intent-to-add sig && git diff --exit-code sig
         working-directory: ruby
-      - run: |
-          bundle exec steep check 2>&1 | tee steep.log
-          test "${PIPESTATUS[0]}" -eq 0
-          ! grep -qE ': (FATAL|ERROR): \[Steep' steep.log
+      - run: bundle exec steep check
+        working-directory: ruby
+      # A file Steep cannot type check at all gets no diagnostic, so `steep
+      # check` passes (soutaro/steep#2356). `steep stats` marks that file
+      # as error.
+      - run: >-
+          bundle exec steep stats --format=csv |
+          awk -F, 'NR > 1 && $3 == "error" { print "Steep did not type check " $2; failed = 1 } END { exit failed }'
         working-directory: ruby
         shell: bash
