@@ -7,6 +7,13 @@ just until 0.1.
 
 ## Unreleased
 
+### Fixed
+
+- `llms.txt` still described the program under test as
+  `nukadoko.program.ts` and `defineProgram`, and the Ruby one as
+  `nukadoko.program.rb`. It now describes `program` in the config, and
+  names `parameterTypes` in the Ruby engine's config.
+
 ## 0.27.0 — 2026-11-16
 
 ### Changed
