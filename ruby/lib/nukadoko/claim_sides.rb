@@ -41,7 +41,17 @@ module Nukadoko
         :from_keys, #: Array[String]
         :labels, #: ^(String) -> String
         :received, #: Array[String]
+        # Why a claim cannot compare with an args key, for each key the
+        # matched pattern fills with a parameter type that has a transformer.
+        :transformed, #: Hash[String, String]
       )
+
+      # A Data block's methods are its own, but rbs-inline reads only a class
+      # body, so they are written in one.
+      class Inputs
+        #: (?transformed: Hash[String, String], **untyped) -> void
+        def initialize(transformed: {}, **rest) = super
+      end
 
       #: (Place, String?) -> Place
       def self.place_at(place, path)
@@ -300,6 +310,8 @@ module Nukadoko
       def self.expected_side(claim, inputs)
         name = ->(place) { "the expected value #{place.label}" }
         case claim[:expected]
+        in String => key if (reason = inputs.transformed[key])
+          [Side.new(place: arg_place(key, inputs), found: { unjudged: reason }), false]
         in String => key then [shaped(arg_side([key], inputs, name), claim[:expected_view], nil), false]
         in { from: String => key } then [arg_side(segments(key), inputs, name), false]
         in { observe: String => path } then [side_of(read_at(inputs.observed, segments(path)), OBSERVE, segments(path), 0, name), true]

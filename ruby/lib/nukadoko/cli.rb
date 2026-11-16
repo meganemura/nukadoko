@@ -270,6 +270,14 @@ module Nukadoko
         stop = { severity: "refused", code: failed.code, message: "#{failed.file}: #{failed.message}", fix: failed.fix, do: "nuka check" }
         return finish("run", false, findings: [stop], verdict: "refused", exit_code: 2)
       end
+      # The TypeScript engine builds its bindings before any scenario starts,
+      # so parameter types that do not register stop a run under --no-check
+      # too.
+      if @no_check && (collision = Engine::Pattern.collision)
+        stop = { severity: "refused", code: "parameter-type-collision", message: collision,
+                 fix: "Rename the parameter type, or remove one of the two registrations.", do: "nuka run --help" }
+        return finish("run", false, findings: [stop], verdict: "refused", exit_code: 2)
+      end
       # Only the check's errors hold a run back, so only they are reported.
       findings = @no_check ? [] : check.findings.map { relative(_1).to_h }.select { _1[:severity] == "error" }
       unless @no_check || check.passed?

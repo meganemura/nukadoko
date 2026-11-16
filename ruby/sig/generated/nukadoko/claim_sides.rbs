@@ -68,12 +68,21 @@ module Nukadoko
 
         attr_reader received(): Array[String]
 
-        def self.new: (untyped observed, untyped args, bool observes, Array[String] from_keys, ^(String) -> String labels, Array[String] received) -> instance
-                    | (observed: untyped, args: untyped, observes: bool, from_keys: Array[String], labels: ^(String) -> String, received: Array[String]) -> instance
+        attr_reader transformed(): Hash[String, String]
 
-        def self.members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received ]
+        def self.new: (untyped observed, untyped args, bool observes, Array[String] from_keys, ^(String) -> String labels, Array[String] received, Hash[String, String] transformed) -> instance
+                    | (observed: untyped, args: untyped, observes: bool, from_keys: Array[String], labels: ^(String) -> String, received: Array[String], transformed: Hash[String, String]) -> instance
 
-        def members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received ]
+        def self.members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received, :transformed ]
+
+        def members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received, :transformed ]
+      end
+
+      # A Data block's methods are its own, but rbs-inline reads only a class
+      # body, so they are written in one.
+      class Inputs
+        # : (?transformed: Hash[String, String], **untyped) -> void
+        def initialize: (?transformed: Hash[String, String], **untyped) -> void
       end
 
       # : (Place, String?) -> Place

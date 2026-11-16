@@ -62,6 +62,11 @@ module Nukadoko
                                    %(no .rb step file was found while scanning "features"; no step can ever be registered), Codes.fix("no-step-files-found"), nil)
         end
         @findings.concat(config)
+        # The config's parameterTypes did not register, so no pattern binds a
+        # line; that is said once, not once per pattern.
+        if (collision = Pattern.collision)
+          @findings << Finding.new("error", "parameter-type-invalid", nil, nil, nil, collision, Codes.fix("parameter-type-invalid"), nil)
+        end
         @usable = steps.reject { definition_broken?(_1) }
         @usable.each { check_contract(_1) }
         check_duplicate_patterns
@@ -79,6 +84,7 @@ module Nukadoko
         if full
           check_unbound
           check_from_unused
+          check_unused_parameter_types
         end
         # Errors, then warnings, then notes, each kind in the order found, as
         # the TypeScript engine reports them.
@@ -137,7 +143,7 @@ module Nukadoko
         Pattern.new(pattern)
         nil
       rescue Cucumber::CucumberExpressions::UndefinedParameterTypeError => e
-        types = Pattern::REGISTRY.parameter_types.map(&:name).reject(&:empty?).sort
+        types = Pattern.registry.parameter_types.map(&:name).reject(&:empty?).sort
         ["unknown-parameter-type", "#{head}: #{e.message} This project's registered parameter types are: #{types.join(", ")}."]
       rescue StandardError => e
         ["pattern-syntax-error", "#{head}: #{e.message}"]
@@ -221,6 +227,54 @@ module Nukadoko
           findings << Finding.new("note", "step-description-todo", step.file, nil, step.step_name,
                                   %(Step "#{step.step_name}" still has the description nuka scaffold wrote ("#{step.description}"); nuka steps and nuka describe show it to whoever picks a step, so say what the step does.),
                                   Codes.fix("step-description-todo"), nil)
+        end
+      end
+
+      # A config parameter type no pattern names.
+      #: () -> void
+      def check_unused_parameter_types
+        used = @steps.flat_map { (pattern = _1.pattern) ? pattern.scan(/\{(?:[^}:]*:)?([^}]*)\}/).flatten : [] }
+        (Nukadoko.config_options[:parameterTypes] || []).each do |type|
+          name = type[:name].to_s
+          next if used.include?(name)
+
+          findings << Finding.new("note", "parameter-type-unused", CONFIG, nil, nil,
+                                  %(Configured parameter type "#{name}" is not referenced by any typed or compat pattern.), Codes.fix("parameter-type-unused"), nil)
+        end
+      end
+
+      # A claim whose expected value is an args key a type with a
+      # transformer fills compares with what code made of the line, while
+      # the record would name the sentence as its source.
+      #: (singleton(Step)) -> void
+      def check_transformed(step)
+        transformed = Pattern.transformed
+        claims = step.claims
+        pattern = step.pattern
+        return if transformed.empty? || claims.nil? || pattern.nil?
+
+        keys = {} #: Hash[String, String]
+        claims.each_with_index do |claim, index|
+          label = "claims[#{index}]"
+          each = claim[:each]
+          unless each
+            keys[claim[:expected].to_s] ||= label if claim[:expected].is_a?(String)
+            next
+          end
+          items = (Array(each[:where]).each_with_index.map { |item, i| ["#{label}.each.where[#{i}]", item] } +
+                  Array(each[:claims]).each_with_index.map { |item, i| ["#{label}.each.claims[#{i}]", item] }) #: Array[[String, Hash[Symbol, untyped]]]
+          items.each { |item_label, item| keys[item[:expected].to_s] ||= item_label if item[:expected].is_a?(String) }
+        end
+        pattern.scan(Pattern::NAMED).each do |match|
+          key, type = Array(match).map(&:to_s)
+          label = keys[key.to_s]
+          next unless label && transformed.include?(type.to_s)
+
+          findings << Finding.about_step("error", "claim-expected-transformed", step,
+                                         %(Step "#{step.step_name}"'s #{label}.expected is args.#{key}, and its pattern "#{pattern}" fills it with the parameter type {#{type}}, ) +
+                                         "whose transformer rewrites the line's text before the claim reads it, so code would decide what the claim compares. " \
+                                         "Capture #{key} with a type that has no transformer, such as {#{key}:string}, and read it with expected_view if it needs one",
+                                         Codes.fix("claim-expected-transformed"))
         end
       end
 
@@ -551,6 +605,7 @@ module Nukadoko
       #: () -> void
       def check_lines
         undefined = []
+        bound = [] #: Array[singleton(Step)]
         @scenarios.each do |scenario|
           scenario.steps.each do |line|
             matches = Engine.matches(@usable, line.text)
@@ -558,6 +613,7 @@ module Nukadoko
             when 0 then undefined << [scenario, line]
             when 1
               step, captures = matches.first
+              bound << step
               check_fill(scenario, line, step, captures)
               check_position(scenario, line, step)
               check_kinds(scenario, line, step, captures)
@@ -569,6 +625,7 @@ module Nukadoko
             end
           end
         end
+        bound.uniq.each { check_transformed(_1) }
         @scenarios.each { check_from_order(_1) }
         @scenarios.each { check_claim_sources(_1) }
         suppress_undefined(undefined)

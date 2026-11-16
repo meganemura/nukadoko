@@ -42,6 +42,7 @@ require_relative "nukadoko/definition"
 require_relative "nukadoko/vocabulary"
 require_relative "nukadoko/program"
 require_relative "nukadoko/project_program"
+require_relative "nukadoko/parameter_types"
 require_relative "nukadoko/table"
 require_relative "nukadoko/order"
 require_relative "nukadoko/run_record"
@@ -76,6 +77,7 @@ module Nukadoko
     config = File.join(root, Engine::CONFIG)
     @legacy_program = nil
     load config if File.exist?(config)
+    Engine::ParameterTypes.read(config_options[:parameterTypes])
     @program_options = Engine::ProjectProgram.read(root)
   end
 

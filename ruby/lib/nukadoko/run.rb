@@ -768,6 +768,21 @@ module Nukadoko
         record
       end
 
+      # The args keys the line fills through a parameter type with a
+      # transformer, each with why a claim does not compare with it: code
+      # made the value, while the record would name the sentence. nuka check
+      # reports such a pattern; a run under --no-check agrees with it.
+      #: (untyped, Hash[String, String]) -> Hash[String, String]
+      def transformed_fills(step, origins)
+        pattern = step.pattern.to_s
+        pattern.scan(Pattern::NAMED).each_with_object({}) do |(key, type), found|
+          next unless Pattern.transformed.include?(type.to_s) && !origins.key?(key.to_s)
+
+          found[key.to_s] = %(the pattern "#{pattern}" fills args.#{key} with the parameter type {#{type}}, whose transformer rewrites the line's text before the claim reads it, ) +
+                            "so code would decide what the claim compares, and the claim was not judged"
+        end
+      end
+
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
       # `step` is a step class whose observe or run its own file defines.
@@ -791,7 +806,7 @@ module Nukadoko
           sides = lambda do |observed|
             ClaimSides::Inputs.new(observed: observed, args: args, observes: observes, from_keys: step.from.keys.map(&:to_s),
                                    labels: ->(key) { origins.fetch(key, "sentence:#{key}") },
-                                   received: observes ? step.inputs.fields.map { _1.name.to_s } : [])
+                                   received: observes ? step.inputs.fields.map { _1.name.to_s } : [], transformed: transformed_fills(step, origins))
           end
           # A reading with a page open is timed, so the record can say what the page had received by then.
           read = (plain = read; -> { @browser.reading(&plain) }) if own[:page]

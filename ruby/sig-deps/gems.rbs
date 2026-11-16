@@ -21,6 +21,7 @@ module Cucumber
       def initialize: () -> void
       def define_parameter_type: (untyped) -> void
       def lookup_by_type_name: (String) -> untyped
+      def parameter_types: () -> Array[untyped]
     end
 
     class CucumberExpression

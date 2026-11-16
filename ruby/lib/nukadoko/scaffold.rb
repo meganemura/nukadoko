@@ -73,7 +73,7 @@ module Nukadoko
         repeated = captures.map(&:key).tally.select { _2 > 1 }.keys
         return refusal("Refusing to scaffold: the pattern captures #{repeated.map { %("#{_1}") }.join(", ")} more than once, and one args field holds one value") if repeated.any?
 
-        types = Pattern::REGISTRY.parameter_types.map(&:name).reject(&:empty?).sort
+        types = Pattern.registry.parameter_types.map(&:name).reject(&:empty?).sort
         unknown = captures.map(&:type).uniq.find { !types.include?(_1) }
         if unknown
           return refusal(%(Refusing to scaffold: the pattern names type "#{unknown}", and this project registers none by that name; registered types: #{types.join(", ")}))
@@ -918,7 +918,7 @@ module Nukadoko
       # itself, with the readings it could not choose between.
       #: (String) -> Hash[Symbol, untyped]
       def self.infer(text)
-        generated = generate(text, Pattern::REGISTRY)
+        generated = generate(text, Pattern.registry)
         first = generated.first
         same = generated.all? do |expression|
           expression.parameter_types.size == first.parameter_types.size &&

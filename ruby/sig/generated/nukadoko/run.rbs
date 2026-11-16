@@ -200,6 +200,13 @@ module Nukadoko
       # : (singleton(Step), Hash[Symbol, untyped], String, World, then_line: bool, at_line: Integer?, results: Array[untyped], origins: Hash[String, String]) { () -> [Hash[String, untyped], Hash[String, String]] } -> Hash[Symbol, untyped]
       def execute: (singleton(Step), Hash[Symbol, untyped], String, World, then_line: bool, at_line: Integer?, results: Array[untyped], origins: Hash[String, String]) { () -> [ Hash[String, untyped], Hash[String, String] ] } -> Hash[Symbol, untyped]
 
+      # The args keys the line fills through a parameter type with a
+      # transformer, each with why a claim does not compare with it: code
+      # made the value, while the record would name the sentence. nuka check
+      # reports such a pattern; a run under --no-check agrees with it.
+      # : (untyped, Hash[String, String]) -> Hash[String, String]
+      def transformed_fills: (untyped, Hash[String, String]) -> Hash[String, String]
+
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
       # `step` is a step class whose observe or run its own file defines.

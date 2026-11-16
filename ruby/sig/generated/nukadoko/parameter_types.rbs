@@ -1,0 +1,27 @@
+# Generated from lib/nukadoko/parameter_types.rb with RBS::Inline
+
+# The config's parameterTypes, read and handed to Pattern: each entry a
+# name, a regexp, and an optional transformer. A shape the TypeScript
+# engine's schema refuses is refused here with its words, so a project
+# moves between the engines without a config that one of them takes and
+# the other does not. Boundary: reading the entries; registering them and
+# matching lines are Pattern's.
+module Nukadoko
+  module Engine
+    module ParameterTypes
+      NAME: ::Regexp
+
+      KEYS: untyped
+
+      # : (untyped) -> void
+      def self.read: (untyped) -> void
+
+      # A value's kind in the words zod uses for it.
+      # : (untyped) -> String
+      def self.kind: (untyped) -> String
+
+      # : (String) -> bot
+      def self.invalid: (String) -> bot
+    end
+  end
+end

@@ -71,7 +71,53 @@ module Nukadoko
       end
 
       NAMED = /\{([A-Za-z_][\w-]*):([\w-]+)\}/
-      REGISTRY = Registry.new
+      BUILT_IN = Registry.new.parameter_types.map(&:name).freeze #: Array[String]
+
+      # The registry every pattern of the loaded project reads: the built-in
+      # types, and the config's parameterTypes on top of them.
+      #: () -> Registry
+      def self.registry = @registry ||= Registry.new
+
+      # Why the config's parameterTypes could not be registered, in the
+      # TypeScript engine's words, or nil. While it is set no pattern
+      # matches a line, as no pattern binds there: nuka check reports it
+      # once, as parameter-type-invalid, and a run under --no-check stops.
+      #: () -> String?
+      def self.collision = @collision
+
+      # The names of the config's parameter types that have a transformer,
+      # whose capture a claim cannot compare with.
+      #: () -> Array[String]
+      def self.transformed = @transformed || []
+
+      # Registers the config's parameterTypes: each a name, a regexp, and an
+      # optional transformer, given the groups the regexp captured. A type
+      # with no transformer gives the text the regexp matched, or its first
+      # group, as the JavaScript package does.
+      #: (Array[Hash[Symbol, untyped]]) -> void
+      def self.configure(types)
+        @registry = Registry.new
+        @collision = nil
+        @transformed = types.select { _1[:transformer] }.map { _1[:name].to_s }
+        seen = [] #: Array[String]
+        types.each do |type|
+          name = type[:name].to_s
+          if BUILT_IN.include?(name)
+            @collision = %(Custom parameter type "#{name}" collides with one of cucumber-expressions' own built-in parameter types; ) +
+                         "redefining what {#{name}} means would quietly change the meaning of every pattern that already uses it"
+          elsif seen.include?(name)
+            @collision = %(Custom parameter type "#{name}" is registered more than once in parameterTypes)
+          end
+          if @collision
+            @registry = Registry.new
+            return
+          end
+
+          seen << name
+          transformer = type[:transformer] || ->(*groups) { groups.first }
+          @registry.define_parameter_type(CE::ParameterType.new(name, type[:regexp], Object, transformer, true, false))
+        end
+      end
 
       attr_reader :source, :keys
 
@@ -79,11 +125,13 @@ module Nukadoko
       def initialize(source)
         @source = source
         @keys = source.scan(NAMED).map { Array(_1).first.to_s }
-        @expression = CE::CucumberExpression.new(source.gsub(NAMED, '{\2}'), REGISTRY)
+        @expression = CE::CucumberExpression.new(source.gsub(NAMED, '{\2}'), Pattern.registry)
       end
 
       #: (String) -> Hash[String, untyped]?
       def match(text)
+        return nil if Pattern.collision
+
         found = @expression.match(text)
         found && keys.zip(found.map { _1.value(nil) }).to_h
       end
@@ -91,6 +139,8 @@ module Nukadoko
       # Each capture's text as the line wrote it, quotes included.
       #: (String) -> Hash[String, String]?
       def texts(text)
+        return nil if Pattern.collision
+
         found = @expression.match(text)
         found && keys.zip(found.map { _1.group.value }).to_h
       end

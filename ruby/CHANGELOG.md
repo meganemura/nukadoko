@@ -6,6 +6,21 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Added
+
+- `Nukadoko.config(parameterTypes: [...])` registers custom parameter types, as
+  the TypeScript engine's `parameterTypes` does: each a `name`, a `regexp`
+  (a Ruby Regexp or a string), and an optional `transformer` lambda. A step
+  can read a value inside a sentence with no spaces around it, such as
+  `優先度{priority:priority}のタスクを足す`, without quotes in the feature
+  file. A shape the TypeScript schema refuses is `config-invalid` with its
+  words. `nuka check` reports `parameter-type-invalid` for a type that takes
+  a built-in name or repeats one, `parameter-type-unused` for one no
+  pattern names, and `claim-expected-transformed` for a claim that compares
+  with a capture a transformer rewrote, which a run under `--no-check`
+  leaves unjudged. A run under `--no-check` stops with
+  `parameter-type-collision` when the types do not register.
+
 ## [0.3.0] - 2026-11-16
 
 ### Changed

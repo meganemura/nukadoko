@@ -42,7 +42,31 @@ module Nukadoko
 
       NAMED: ::Regexp
 
-      REGISTRY: untyped
+      BUILT_IN: Array[String]
+
+      # The registry every pattern of the loaded project reads: the built-in
+      # types, and the config's parameterTypes on top of them.
+      # : () -> Registry
+      def self.registry: () -> Registry
+
+      # Why the config's parameterTypes could not be registered, in the
+      # TypeScript engine's words, or nil. While it is set no pattern
+      # matches a line, as no pattern binds there: nuka check reports it
+      # once, as parameter-type-invalid, and a run under --no-check stops.
+      # : () -> String?
+      def self.collision: () -> String?
+
+      # The names of the config's parameter types that have a transformer,
+      # whose capture a claim cannot compare with.
+      # : () -> Array[String]
+      def self.transformed: () -> Array[String]
+
+      # Registers the config's parameterTypes: each a name, a regexp, and an
+      # optional transformer, given the groups the regexp captured. A type
+      # with no transformer gives the text the regexp matched, or its first
+      # group, as the JavaScript package does.
+      # : (Array[Hash[Symbol, untyped]]) -> void
+      def self.configure: (Array[Hash[Symbol, untyped]]) -> void
 
       attr_reader source: untyped
 

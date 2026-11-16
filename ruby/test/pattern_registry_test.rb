@@ -27,7 +27,7 @@ class PatternRegistryTest < Minitest::Test
 
   def test_each_line_reads_as_the_javascript_package_reads_it
     CASES.each do |source, text, values|
-      expression = Cucumber::CucumberExpressions::CucumberExpression.new(source, Nukadoko::Engine::Pattern::REGISTRY)
+      expression = Cucumber::CucumberExpressions::CucumberExpression.new(source, Nukadoko::Engine::Pattern.registry)
       read = expression.match(text)&.map { _1.value(nil) }
       read = read&.map { _1.is_a?(Float) && _1.nan? ? :nan : _1 }
       values.nil? ? assert_nil(read, "#{source} on #{text.inspect}") : assert_equal(values, read, "#{source} on #{text.inspect}")

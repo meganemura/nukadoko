@@ -96,6 +96,16 @@ module Nukadoko
       # : () -> void
       def check_unbound: () -> void
 
+      # A config parameter type no pattern names.
+      # : () -> void
+      def check_unused_parameter_types: () -> void
+
+      # A claim whose expected value is an args key a type with a
+      # transformer fills compares with what code made of the line, while
+      # the record would name the sentence as its source.
+      # : (singleton(Step)) -> void
+      def check_transformed: (singleton(Step)) -> void
+
       # A from key every line fills with a capture never takes its value
       # from the producer it names.
       # : () -> void
