@@ -6,6 +6,8 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-16
+
 ### Changed
 
 - The gem accepts `playwright-ruby-client` 1.63.0 and later, in place of
