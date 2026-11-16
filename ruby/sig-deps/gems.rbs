@@ -38,11 +38,6 @@ module Cucumber
   end
 end
 
-# rbs ships no signature of rbconfig.
-module RbConfig
-  def self.ruby: () -> String
-end
-
 # rbs's Open3 and Process lack the options nukadoko passes (env first,
 # chdir:, err:, stdin_data:, pgroup:), so these overloads take them.
 module Open3
