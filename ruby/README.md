@@ -39,6 +39,7 @@ end
 - Every `*.rb` file under `features/steps/` is loaded, a helper under `features/steps/lib/` too. A step class is looked up by the CamelCase form of its file name (`add_todo.rb` defines `AddTodo`), so a helper module named the same way (`lib/todo_api.rb` defines `TodoApi`) can be used from any step without a `require`.
 - Every capture in the pattern is named, and each name is a key of `args`.
 - The keyword arguments of `run` (or `observe`, in a Then step) name the fixtures the step needs. `nuka check` reads them with `Method#parameters`, without calling the body.
+- The `request` fixture sends `get`, `post`, `put`, `patch`, and `delete` and records each in the step's `http.jsonl`. A path joins the program's URL; an absolute `http` or `https` URL goes where it names, so a step can call a third-party API, in a project with no program too.
 - A Then step declares `claims` and an `observe` that reads the world. nukadoko judges the claims. `observe` does not receive an args key that a claim compares with.
 
 ## Commands

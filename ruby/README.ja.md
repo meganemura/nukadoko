@@ -49,6 +49,7 @@ end
 - `features/steps/` の下の `*.rb` は、`features/steps/lib/` の補助ファイルも含めてすべて読み込まれます。ステップのクラスはファイル名を CamelCase にした名前で探します(`add_todo.rb` は `AddTodo` を定義します)。補助モジュールも同じ決まりで名付ければ(`lib/todo_api.rb` は `TodoApi`)、どのステップからも `require` なしで使えます。
 - パターンの取り出し部分にはすべて名前を付けます。名前は `args` のキーです。
 - `run`(Then ステップでは `observe`)のキーワード引数が、ステップが使うフィクスチャです。`nuka check` は本体を呼ばずに `Method#parameters` で読みます。
+- `request` フィクスチャは `get`、`post`、`put`、`patch`、`delete` を送り、それぞれをステップの `http.jsonl` に記録します。パスはプログラムの URL につなげます。`http` か `https` の絶対 URL はその場所に送るので、外部の API も呼べます。プログラムのないプロジェクトでも使えます。
 - Then ステップは `claims` と、世界を読む `observe` を書きます。claim の判定は nukadoko が行います。claim が比べる args のキーは `observe` に渡されません。
 
 ## コマンド

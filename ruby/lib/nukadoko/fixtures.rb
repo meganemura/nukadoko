@@ -28,10 +28,23 @@ module Nukadoko
     class Request
       attr_reader :log #: Array[Hash[Symbol, untyped]]
 
-      #: (String) -> void
+      # `base_url` is the world's URL, which a path joins onto; a project with
+      # no program has none. An absolute URL, http or https, goes where it
+      # names, so a step can call a third-party API and still have its
+      # requests recorded.
+      #: (String?) -> void
       def initialize(base_url)
-        @base = URI(base_url)
+        @base = base_url && URI(base_url)
         @log = []
+      end
+
+      #: (String) -> URI::Generic
+      def target(path)
+        named = URI(path.to_s)
+        return named if named.absolute?
+        raise ArgumentError, %(The request fixture needs an absolute URL for "#{path}": this world has no program, so there is no base URL to join a path onto) unless @base
+
+        URI.join(@base.to_s, path.to_s)
       end
 
       BODY_TEXT = 16 * 1024
@@ -57,7 +70,8 @@ module Nukadoko
         # `data:` is sent as JSON; `body:` is sent as it is, for a request
         # whose body is meant to be wrong.
         define_method(verb) do |path, data: nil, body: nil, headers: {}|
-          uri = URI.join(@base, path)
+          # @type self: Request
+          uri = target(path)
           klass = Net::HTTP.const_get(verb.capitalize)
           req = klass.new(uri, headers)
           if data
@@ -73,7 +87,7 @@ module Nukadoko
           entry = { method: verb.upcase, url: uri.to_s, **(path.to_s == uri.to_s ? {} : { declared_url: path.to_s }) }
           stamp = traceparent ? { traceparent: traceparent, traceparent_sent_to: [Trace.origin(uri)] } : {}
           begin
-            res = HttpRecording.unrecorded { Net::HTTP.start(uri.host.to_s, uri.port) { _1.request(req) } }
+            res = HttpRecording.unrecorded { Net::HTTP.start(uri.host.to_s, uri.port, use_ssl: uri.scheme == "https") { _1.request(req) } }
           rescue StandardError => e
             @log << entry.merge(status: 0, duration_ms: Request.since(started), via: "request", **stamp, **Request.body(:request_body, req.body),
                                 error: e.message.lines.first.to_s.chomp)

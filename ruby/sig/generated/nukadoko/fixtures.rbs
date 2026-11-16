@@ -31,8 +31,15 @@ module Nukadoko
     class Request
       attr_reader log: Array[Hash[Symbol, untyped]]
 
-      # : (String) -> void
-      def initialize: (String) -> void
+      # `base_url` is the world's URL, which a path joins onto; a project with
+      # no program has none. An absolute URL, http or https, goes where it
+      # names, so a step can call a third-party API and still have its
+      # requests recorded.
+      # : (String?) -> void
+      def initialize: (String?) -> void
+
+      # : (String) -> URI::Generic
+      def target: (String) -> URI::Generic
 
       BODY_TEXT: untyped
 

@@ -8,6 +8,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- The `request` fixture sends an absolute `https` URL over TLS and works in
+  a project with no program, so a step can call a third-party API and keep
+  its requests in `http.jsonl`. A path in a world with no URL is refused
+  with that reason.
+
 - `args` and `returns` declare what zod declares: `array :todos do ... end`
   for a list of objects, `numbers` and `integers` beside `strings`,
   `array :x, of:` for any item type, `optional: true`, `default:`, and the
