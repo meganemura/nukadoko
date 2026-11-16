@@ -1,0 +1,129 @@
+# Generated from lib/nukadoko/step_fixtures.rb with RBS::Inline
+
+# The fixtures a step body uses to say where it went, to wait for a state
+# that is not there yet, and to keep evidence only it can produce. The
+# TypeScript engine gives the same three on ctx. Each one fills a list the
+# engine writes into the step record, also when the step raises, because a
+# failed step is the one whose record a reader opens.
+module Nukadoko
+  # poll gave up: the budget ended before the block returned a value.
+  class PollTimeoutError < StandardError
+    attr_reader timeout_ms: Numeric
+
+    attr_reader description: String?
+
+    # : (Numeric, String?) -> void
+    def initialize: (Numeric, String?) -> void
+  end
+
+  # A timeout or interval that cannot be a budget. Raised before the first
+  # attempt, so it is not in the record: there is no attempt to count.
+  class InvalidPollOptionsError < ArgumentError
+  end
+
+  # An evidence name that would land outside the step's directory.
+  class InvalidEvidenceNameError < ArgumentError
+  end
+
+  # An evidence name the engine itself writes into the step's directory.
+  class ReservedEvidenceNameError < ArgumentError
+  end
+
+  # A pageAs name that cannot be part of a file name.
+  class InvalidContextNameError < ArgumentError
+  end
+
+  # A pageAs call that asks an open context for options it was not made with.
+  class ContextOptionsConflictError < ArgumentError
+  end
+
+  module Engine
+    # : () -> String
+    def self.now_iso: () -> String
+
+    # `section.("label")` marks that the body reached a stage. It is a bare
+    # marker, not a block wrapper, so nesting and an early return need no
+    # meaning: the record answers where the body stopped.
+    class Sections
+      attr_reader entries: Array[Hash[Symbol, String]]
+
+      # : () -> void
+      def initialize: () -> void
+
+      # : (String | Symbol) -> nil
+      def call: (String | Symbol) -> nil
+    end
+
+    # `poll.(description:, timeout:, interval:) { value or nil }` calls the
+    # block until it gives a value other than nil. The budget holds the
+    # attempt in flight too, so a value that arrives after it is not
+    # returned. Every finished call is kept, so the record tells a wait that
+    # did nothing from one that took seconds.
+    class Polls
+      DEFAULT_TIMEOUT_MS: ::Integer
+
+      DEFAULT_INTERVAL_MS: ::Integer
+
+      # The longest timer Node accepts, kept so both engines refuse the same values.
+      MAX_MS: ::Integer
+
+      # An Exception, not a StandardError, so a block that rescues its own
+      # errors cannot swallow the end of its budget.
+      class AttemptOver < Exception
+      end
+
+      attr_reader entries: Array[Hash[Symbol, untyped]]
+
+      # : () -> void
+      def initialize: () -> void
+
+      # : [T] (?description: String?, ?timeout: Numeric?, ?interval: Numeric?) { () -> T? } -> T
+      def call: [T] (?description: String?, ?timeout: Numeric?, ?interval: Numeric?) { () -> T? } -> T
+
+      private
+
+      # The budget in seconds, from milliseconds.
+      # : (untyped, String) -> Float
+      def budget: (untyped, String) -> Float
+
+      # : () -> Float
+      def monotonic: () -> Float
+    end
+
+    # `evidence.attach(name, body)` writes a file into the step's own
+    # directory, and `evidence.path(name)` gives a path there without
+    # writing. A name used twice keeps both files. A name that differs only
+    # by case counts as the same, since a case-insensitive volume would put
+    # the two on one file.
+    class Evidence
+      # The files and directories the engine writes into the same directory.
+      HARNESS: untyped
+
+      PROCESS_FILE: ::Regexp
+
+      NAMED_FILE: ::Regexp
+
+      MAX_ATTACHMENTS: ::Integer
+
+      # : (String, ?reserved: Array[String]) -> void
+      def initialize: (String, ?reserved: Array[String]) -> void
+
+      # : (String | Symbol, String) -> nil
+      def attach: (String | Symbol, String) -> nil
+
+      # : (String | Symbol) -> String
+      def path: (String | Symbol) -> String
+
+      # What the step left: its attachments, and each path it wrote to, by
+      # time, at most MAX_ATTACHMENTS of them, with the whole count when
+      # there were more.
+      # : () -> [Array[Hash[Symbol, String]], Integer?]
+      def snapshot: () -> [ Array[Hash[Symbol, String]], Integer? ]
+
+      private
+
+      # : (String) -> String
+      def allocate: (String) -> String
+    end
+  end
+end

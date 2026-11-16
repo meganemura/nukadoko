@@ -6,7 +6,7 @@
 # engine's vocabulary without opening a file.
 module Nukadoko
   module Vocabulary
-    BROWSER = %i[page context pageAs].freeze
+    BROWSER = %i[page context pageAs page_as].freeze
 
     #: (singleton(Step), String) -> Hash[Symbol, untyped]
     def self.entry(step, project)

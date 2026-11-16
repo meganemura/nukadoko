@@ -82,6 +82,9 @@ module Nukadoko
       # : (untyped, String, Float, ?caret: String?, ?bounded: bool) -> bool
       def masked_shot: (untyped, String, Float, ?caret: String?, ?bounded: bool) -> bool
 
+      # : () -> untyped
+      def launch: () -> untyped
+
       # : (String, Array[Hash[Symbol, untyped]]) -> [untyped, ^() -> void]
       def page_for: (String, Array[Hash[Symbol, untyped]]) -> [ untyped, ^() -> void ]
 
@@ -174,6 +177,32 @@ module Nukadoko
       # the screenshot only.
       # : (?String?) -> Array[Hash[Symbol, untyped]]
       def end_scenario: (?String?) -> Array[Hash[Symbol, untyped]]
+
+      CONTEXT_NAME: ::Regexp
+
+      # The page of a browser context of its own, named `name`, so a second
+      # person in the scenario has cookies and storage of their own. The
+      # context opens on the first call for the name in the scenario, with
+      # `options` over the world's base URL, and a later call gets the same
+      # page. Each step that calls it gets a trace chunk, trace.<name>.zip,
+      # and the page's requests go to the step's log with `as`.
+      # : (String, Hash[untyped, untyped]?, String, Array[Hash[Symbol, untyped]]) -> untyped
+      def page_as: (String, Hash[untyped, untyped]?, String, Array[Hash[Symbol, untyped]]) -> untyped
+
+      # Ends the step's chunk of each named context it reached, and names
+      # the files, in the order the contexts opened.
+      # : () -> Array[Hash[Symbol, String]]
+      def finish_named: () -> Array[Hash[Symbol, String]]
+
+      private
+
+      # : () -> Hash[String, Hash[Symbol, untyped]]
+      def named: () -> Hash[String, Hash[Symbol, untyped]]
+
+      # : () -> Hash[String, [String, untyped]]
+      def step_named: () -> Hash[String, [ String, untyped ]]
+
+      public
 
       # : () -> void
       def close: () -> void

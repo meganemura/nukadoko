@@ -8,6 +8,21 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- The fixtures the TypeScript engine gives on ctx and the Ruby engine
+  lacked: `context`, `pageAs` (a browser context of its own per name, with
+  `trace.<name>.zip` per step and `final.<name>.png` per scenario),
+  `section`, `poll` (a block called until it gives a value, kept in
+  `polls`), `evidence` (`attach` and `path`, kept in
+  `evidence.attachments`), and `resultOf`. Before, `nuka check` accepted
+  some of these names and the run then failed with "the Ruby engine has no
+  fixture ... yet"; now each name check accepts is one the run gives.
+- `base_url:`, `require_env:`, `page_as:`, and `result_of:` name the same
+  fixtures as `baseURL:`, `requireEnv:`, `pageAs:`, and `resultOf:`, so a
+  step body passes RuboCop's naming cops.
+- A step record lists each key `requireEnv` was asked for in
+  `required_env`, as the TypeScript engine does. An empty value counts as
+  missing.
+
 - A project fixture can name a builtin (`page`, `request`, `env`,
   `requireEnv`, `baseURL`, `scratch`), and one with a builtin's name
   replaces it for every step while its own keyword of that name is the

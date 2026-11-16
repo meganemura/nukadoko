@@ -153,8 +153,8 @@ module Nukadoko
         false
       end
 
-      #: (String, Array[Hash[Symbol, untyped]]) -> [untyped, ^() -> void]
-      def page_for(step_dir, log)
+      #: () -> untyped
+      def launch
         require "playwright"
         # playwright-ruby-client parses each driver message from a buffer in
         # the default external encoding. Under US-ASCII (LANG unset) its reader
@@ -164,6 +164,11 @@ module Nukadoko
         Encoding.default_external = Encoding::UTF_8 unless @execution
         @execution ||= Playwright.create(playwright_cli_executable_path: ENV.fetch("PLAYWRIGHT_CLI", "npx playwright"))
         @browser ||= @execution.playwright.chromium.launch(**@launch_options)
+      end
+
+      #: (String, Array[Hash[Symbol, untyped]]) -> [untyped, ^() -> void]
+      def page_for(step_dir, log)
+        launch
         @context ||= @browser.new_context(baseURL: @base_url).tap do |context|
           context.tracing.start(screenshots: true, snapshots: true)
           watch_requests(context)
@@ -388,7 +393,7 @@ module Nukadoko
       # nil when it opened none.
       #: () -> Hash[Symbol, untyped]?
       def scenario_browser
-        @context && @browser ? { type: "chromium", version: @browser.version } : nil
+        (@context || named.any?) && @browser ? { type: "chromium", version: @browser.version } : nil
       end
 
       # Closes the scenario's context, and returns the screenshot of its
@@ -402,11 +407,87 @@ module Nukadoko
           FileUtils.mkdir_p(dir)
           shots << { file: "final.png", at: Time.now.utc.iso8601(3) } if masked_shot(@page, File.join(dir, "final.png"), monotonic + VIEW_TIMEOUT_MS / 1000.0, bounded: false)
         end
+        named.each do |name, held|
+          if dir
+            FileUtils.mkdir_p(dir)
+            file = "final.#{name}.png"
+            shots << { file: file, at: Time.now.utc.iso8601(3), as: name } if masked_shot(held[:page], File.join(dir, file), monotonic + VIEW_TIMEOUT_MS / 1000.0, bounded: false)
+          end
+          held[:context].tracing.stop rescue nil
+          held[:context].close rescue nil
+        end
+        @named = {}
         @context&.tracing&.stop
         @context&.close
         @context = @page = nil
         shots
       end
+
+      CONTEXT_NAME = /\A[a-z0-9][a-z0-9-]{0,63}\z/
+
+      # The page of a browser context of its own, named `name`, so a second
+      # person in the scenario has cookies and storage of their own. The
+      # context opens on the first call for the name in the scenario, with
+      # `options` over the world's base URL, and a later call gets the same
+      # page. Each step that calls it gets a trace chunk, trace.<name>.zip,
+      # and the page's requests go to the step's log with `as`.
+      #: (String, Hash[untyped, untyped]?, String, Array[Hash[Symbol, untyped]]) -> untyped
+      def page_as(name, options, step_dir, log)
+        unless name.is_a?(String) && name.match?(CONTEXT_NAME)
+          raise InvalidContextNameError, "pageAs name #{name.inspect} is not valid. Use 1 to 64 lowercase letters, digits, and hyphens, " \
+                                         "starting with a letter or a digit: the name becomes part of evidence file names such as trace.<name>.zip."
+        end
+        asked = options&.to_h { |key, value| [key.to_sym, value] }&.compact
+        held = named[name]
+        if held
+          if asked && asked != held[:options]
+            raise ContextOptionsConflictError, "pageAs(#{name.inspect}) already opened that context in this scenario with other options. " \
+                                               "A context keeps the options it was created with: pass the same options, or none, on a later call."
+          end
+        else
+          launch
+          context = @browser.new_context(baseURL: @base_url, **(asked || {}))
+          context.tracing.start(screenshots: true, snapshots: true)
+          held = named[name] = { context: context, page: context.new_page, options: asked || {} }
+        end
+        unless step_named.key?(name)
+          held[:context].tracing.start_chunk
+          listener = ->(req) { log << { method: req.method, url: req.url, via: "page", as: name } }
+          held[:page].on("request", listener)
+          step_named[name] = [step_dir, listener]
+        end
+        held[:page]
+      end
+
+      # Ends the step's chunk of each named context it reached, and names
+      # the files, in the order the contexts opened.
+      #: () -> Array[Hash[Symbol, String]]
+      def finish_named
+        traces = [] #: Array[Hash[Symbol, String]]
+        named.each do |name, held|
+          step_dir, listener = step_named[name]
+          next unless step_dir
+
+          held[:page].off("request", listener)
+          file = "trace.#{name}.zip"
+          held[:context].tracing.stop_chunk(path: File.join(step_dir, file))
+          traces << { as: name, file: file }
+        rescue StandardError
+          nil
+        end
+        @step_named = {}
+        traces
+      end
+
+      private
+
+      #: () -> Hash[String, Hash[Symbol, untyped]]
+      def named = (@named ||= {})
+
+      #: () -> Hash[String, [String, untyped]]
+      def step_named = (@step_named ||= {})
+
+      public
 
       #: () -> void
       def close

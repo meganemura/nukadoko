@@ -35,7 +35,7 @@ module Nukadoko
       end
     end
 
-    FIXTURES = %w[baseURL call context env evidence page pageAs poll request requireEnv result scratch].freeze
+    FIXTURES = %w[baseURL base_url call context env evidence page pageAs page_as poll request requireEnv require_env resultOf result_of scratch section].freeze
 
     class Check
       attr_reader :findings #: Array[Finding]
@@ -390,7 +390,7 @@ module Nukadoko
                                 "If #{which} is meant to run #{steps_phrase.(held.flat_map { _1[:candidates] }.uniq)}, reword that line to match that step's pattern. Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.", nil)
       end
 
-      SCENARIO_ONLY = FIXTURES - %w[env requireEnv baseURL]
+      SCENARIO_ONLY = FIXTURES - %w[env requireEnv require_env baseURL base_url]
 
       # Fixture definitions that can never resolve, and (in a whole-project
       # check) one no step reaches.
@@ -421,7 +421,7 @@ module Nukadoko
 
         # An override of page that names no browser fixture cannot hand back
         # a page the engine launched, records, and traces.
-        if (page = fixtures[:page]) && (page.dependencies & %i[page context pageAs]).empty?
+        if (page = fixtures[:page]) && (page.dependencies & %i[page context pageAs page_as]).empty?
           findings << Finding.new("error", "page-override-unowned", config, nil, nil,
                                   %(fixture "page" overrides the builtin page but destructures none of "page", "context", or "pageAs": there is no way for it to hand back a page the executor still owns and measures),
                                   Codes.fix("page-override-unowned"), nil)

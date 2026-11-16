@@ -718,12 +718,12 @@ module Nukadoko
           @browser&.step = { step_record_id: record[:step_record_id], step: record[:step], line: at_line }
           @browser&.begin_step
           Trace.within(boundary) do
-            fixtures, finish = build_fixtures(step, dir, log, world, record)
+            fixtures, finish = build_fixtures(step, dir, log, world, record, results)
             HttpRecording.collect(log) do
               Processes.collect(processes) { RedactedOutput.around(secrets) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) } }
             end
           end
-          record[:page_view] = @browser.judged(dir, record[:step_record_id], aria_in_claims: step.claims.to_a.any? { !_1[:each] && _1[:compare] == "fits-aria-snapshot" }) if step.claims && fixtures[:page] && record[:observation] != "unobserved"
+          record[:page_view] = @browser.judged(dir, record[:step_record_id], aria_in_claims: step.claims.to_a.any? { !_1[:each] && _1[:compare] == "fits-aria-snapshot" }) if step.claims && (fixtures[:page] || fixtures[:context]) && record[:observation] != "unobserved"
           record[:status] ||= "passed"
         rescue StandardError => e
           record.merge!(status: "failed", outcome: :broke, error: e.message)
@@ -755,6 +755,17 @@ module Nukadoko
             record[:scratch] = made if made.any?
           end
           record[:calls] = fixtures[:call].calls if fixtures[:call]&.calls&.any?
+          # The step's own marks, waits, and files, as plain values for the record.
+          sections = record.delete(:section_log)&.entries
+          record[:sections] = sections if sections&.any?
+          polls = record.delete(:poll_log)&.entries
+          record[:polls] = polls if polls&.any?
+          if (evidence = record.delete(:evidence_log))
+            attachments, total = evidence.snapshot
+            record[:attachments] = attachments if attachments.any?
+            record[:attachments_total] = total if total
+          end
+          record.delete(:required_env) if record[:required_env] && record[:required_env].empty?
           # A page's own traffic is in http.jsonl and the trace, not counted as the step's.
           record[:http_count] = log.count { _1[:via] != "page" }
           File.write(File.join(dir, "http.jsonl"), "#{log.map { JSON.generate(secrets.redact(_1)) }.join("\n")}\n") if log.any?
@@ -811,7 +822,7 @@ module Nukadoko
                                    received: observes ? step.inputs.fields.map { _1.name.to_s } : [], transformed: transformed_fills(step, origins))
           end
           # A reading with a page open is timed, so the record can say what the page had received by then.
-          read = (plain = read; -> { @browser.reading(&plain) }) if own[:page]
+          read = (plain = read; -> { @browser.reading(&plain) }) if own[:page] || own[:context]
           observed = begin
             step.poll ? Poll.new(step.poll, step.claims, args, sides).call(record, &read) : read.()
           rescue StandardError => e
@@ -1020,14 +1031,20 @@ module Nukadoko
         raise Refusal.new("env-file-unreadable", e.message)
       end
 
-      BUILTINS = %i[request baseURL env requireEnv scratch page].freeze
+      BUILTINS = %i[request baseURL env requireEnv scratch page context pageAs section poll evidence resultOf
+                    base_url require_env page_as result_of].freeze
 
-      #: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
-      def build_fixtures(step, dir, log, world, record)
-        finish = nil
+      # The snake_case spelling of each builtin a Ruby step may name instead,
+      # so a body passes RuboCop's naming cops. Both reach the same fixture.
+      ALIASES = { base_url: :baseURL, require_env: :requireEnv, page_as: :pageAs, result_of: :resultOf }.freeze
+
+      #: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped], Array[untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
+      def build_fixtures(step, dir, log, world, record, results)
+        finishes = [] #: Array[^() -> void]
         @fixture_usage = []
         built = {} #: Hash[Symbol, untyped]
         builtin = lambda do |name|
+          name = ALIASES.fetch(name, name)
           next built[name] if built.key?(name)
 
           built[name] =
@@ -1035,11 +1052,23 @@ module Nukadoko
             when :request then Request.new(world.base_url)
             when :baseURL then world.base_url
             when :env then step_env(world)
-            when :requireEnv then ->(key) { step_env(world).fetch(key.to_s) { raise %(requireEnv("#{key}"): the world's env has no #{key}) } }
+            when :requireEnv then require_env(world, record)
             when :scratch then @scratch
             when :page
               page, finish = @browser.page_for(dir, log)
+              finishes << finish
               page
+            when :context then builtin.(:page).context
+            when :pageAs
+              finishes << lambda do
+                traces = @browser.finish_named
+                record[:named_traces] = traces if traces.any?
+              end
+              ->(as, options = nil) { @browser.page_as(as, options, dir, log) }
+            when :section then (record[:section_log] = Sections.new)
+            when :poll then (record[:poll_log] = Polls.new)
+            when :evidence then (record[:evidence_log] = Evidence.new(dir))
+            when :resultOf then result_of(step, results, record)
             end
         end
         # A project fixture of a builtin's name replaces it for the step.
@@ -1052,7 +1081,50 @@ module Nukadoko
         fixtures[:call] = Caller.new(step, fixtures) if step.fixtures.include?(:call)
         record[:fixtures] = @fixture_usage if @fixture_usage.any?
         @fixture_usage = nil
+        finish = finishes.empty? ? nil : -> { finishes.reverse_each(&:call) }
         [fixtures, finish]
+      end
+
+      # requireEnv: the env fixture's value for a key, or a raise that names
+      # only the key. An empty value counts as missing, since a step that
+      # requires it is broken either way. Every name asked for is kept, in
+      # the order asked, whether the read found a value or not.
+      #: (World, Hash[Symbol, untyped]) -> ^(String | Symbol) -> String
+      def require_env(world, record)
+        asked = record[:required_env] = [] #: Array[String]
+        lambda do |key|
+          key = key.to_s
+          asked << key unless asked.include?(key)
+          value = step_env(world)[key]
+          raise %(requireEnv("#{key}") found no value: set "#{key}" in one of the environment's env files, or in the world's env) if value.nil? || value.empty?
+
+          value
+        end
+      end
+
+      # resultOf: the result an earlier step of the scenario last gave when
+      # it passed, or nil when it has not. A claim step takes an earlier
+      # value through `from` alone, so its record names where the value
+      # came from. A read that found a result names its step in `used`, as
+      # a from key does.
+      #: (singleton(Step), Array[untyped], Hash[Symbol, untyped]) -> ^(untyped) -> untyped
+      def result_of(step, results, record)
+        lambda do |source|
+          unless source.is_a?(Class) && source < Step && @steps.include?(source)
+            raise ArgumentError, "resultOf(#{source.inspect}): that is not a step this project registered, so no step record could hold its result"
+          end
+          if step.claims
+            raise ArgumentError, %(Step "#{step.step_name}" declares claims, so it takes an earlier step's value through "from" alone, ) +
+                                 %(which names where the value came from; resultOf(#{source.step_name}) is not available in a claim step.)
+          end
+
+          _, value, _, record_id = results.reverse_each.find { |cls, *| cls == source }
+          next nil unless value
+
+          used = (record[:used] ||= []) #: Array[Hash[Symbol, untyped]]
+          used << { step: source.step_name, record: "steps/#{record_id}", result: value } unless used.any? { _1[:record] == "steps/#{record_id}" }
+          (schema = source.returns) ? schema.load(value) : value
+        end
       end
 
       #: (String) -> String

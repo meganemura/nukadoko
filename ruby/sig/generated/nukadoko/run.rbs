@@ -260,8 +260,27 @@ module Nukadoko
 
       BUILTINS: untyped
 
-      # : (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
-      def build_fixtures: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [ Hash[Symbol, untyped], (^() -> void)? ]
+      # The snake_case spelling of each builtin a Ruby step may name instead,
+      # so a body passes RuboCop's naming cops. Both reach the same fixture.
+      ALIASES: untyped
+
+      # : (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped], Array[untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
+      def build_fixtures: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped], Array[untyped]) -> [ Hash[Symbol, untyped], (^() -> void)? ]
+
+      # requireEnv: the env fixture's value for a key, or a raise that names
+      # only the key. An empty value counts as missing, since a step that
+      # requires it is broken either way. Every name asked for is kept, in
+      # the order asked, whether the read found a value or not.
+      # : (World, Hash[Symbol, untyped]) -> ^(String | Symbol) -> String
+      def require_env: (World, Hash[Symbol, untyped]) -> ^(String | Symbol) -> String
+
+      # resultOf: the result an earlier step of the scenario last gave when
+      # it passed, or nil when it has not. A claim step takes an earlier
+      # value through `from` alone, so its record names where the value
+      # came from. A read that found a result names its step in `used`, as
+      # a from key does.
+      # : (singleton(Step), Array[untyped], Hash[Symbol, untyped]) -> ^(untyped) -> untyped
+      def result_of: (singleton(Step), Array[untyped], Hash[Symbol, untyped]) -> ^(untyped) -> untyped
 
       # : (String) -> String
       def new_id: (String) -> String
