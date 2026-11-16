@@ -1,0 +1,1 @@
+{ "serve": { "command": "node {root}/conformance/apps/shopping-list.mjs --port {port}", "ready": "/items" } }

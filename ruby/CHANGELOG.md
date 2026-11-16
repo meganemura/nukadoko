@@ -8,6 +8,13 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- A project fixture can name a builtin (`page`, `request`, `env`,
+  `requireEnv`, `baseURL`, `scratch`), and one with a builtin's name
+  replaces it for every step while its own keyword of that name is the
+  builtin, so `Nukadoko.fixture(:page) { |use, page:| ...; use.(page) }`
+  wraps the page each step gets. `nuka check` reports `page-override-unowned`
+  for a `page` override that names no browser fixture.
+
 - The `request` fixture sends an absolute `https` URL over TLS and works in
   a project with no program, so a step can call a third-party API and keep
   its requests in `http.jsonl`. A path in a world with no URL is refused

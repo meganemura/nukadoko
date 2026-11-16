@@ -732,7 +732,8 @@ module Nukadoko
         ensure
           @browser&.step = nil
           finish&.call
-          log.concat(fixtures[:request].log) if fixtures[:request]
+          log.concat(@request_log.log) if @request_log
+          @request_log = nil
           # A world at a URL has a log nukadoko does not read.
           record[:program_log] = @program_log&.slice(dir, boundary) if boundary
           record[:finished_at] = Time.now.utc.iso8601(3)
@@ -959,17 +960,20 @@ module Nukadoko
 
       # A project fixture is built the first time a step of its scope names
       # it, directly or through another fixture, and kept until the scope ends.
-      #: (Symbol, World, Array[Symbol]) -> untyped
-      def project_fixture(name, world, chain)
+      #: (Symbol, World, Array[Symbol], ?(^(Symbol) -> untyped)?) -> untyped
+      def project_fixture(name, world, chain, builtin = nil)
         fixture = Nukadoko.project_fixtures[name] or raise ArgumentError, "the Ruby engine has no fixture #{name} yet"
         raise ArgumentError, "fixtures depend on each other in a cycle: #{[*chain, name].join(" -> ")}" if chain.include?(name)
 
         cache = fixture.scope == :process ? @process_fixtures : @scenario_fixtures
+        # A fixture that names itself wraps the builtin of that name, as a
+        # page override in the TypeScript config does, so it is no cycle.
         deps = fixture.dependencies.to_h do |dep|
-          case dep
-          when :baseURL then [dep, world.base_url]
-          when :scratch then [dep, @scratch]
-          else [dep, project_fixture(dep, world, [*chain, name])]
+          if BUILTINS.include?(dep) && (dep == name || !Nukadoko.project_fixtures.key?(dep))
+            raise ArgumentError, %(fixture "#{name}" names "#{dep}", which only a step's own fixtures can give) unless builtin
+
+            [dep, builtin.(dep)]
+          else [dep, project_fixture(dep, world, [*chain, name], builtin)]
           end
         end
         return cache[name].tap { note_fixture(name, fixture.scope, nil, nil) } if cache.key?(name)
@@ -1016,23 +1020,35 @@ module Nukadoko
         raise Refusal.new("env-file-unreadable", e.message)
       end
 
+      BUILTINS = %i[request baseURL env requireEnv scratch page].freeze
+
       #: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
       def build_fixtures(step, dir, log, world, record)
         finish = nil
         @fixture_usage = []
-        fixtures = (step.bag - [:call]).to_h do |name|
-          case name
-          when :request then [name, Request.new(world.base_url)]
-          when :baseURL then [name, world.base_url]
-          when :env then [name, step_env(world)]
-          when :requireEnv then [name, ->(key) { step_env(world).fetch(key.to_s) { raise %(requireEnv("#{key}"): the world's env has no #{key}) } }]
-          when :scratch then [name, @scratch]
-          when :page
-            page, finish = @browser.page_for(dir, log)
-            [name, page]
-          else [name, project_fixture(name, world, [])]
-          end
+        built = {} #: Hash[Symbol, untyped]
+        builtin = lambda do |name|
+          next built[name] if built.key?(name)
+
+          built[name] =
+            case name
+            when :request then Request.new(world.base_url)
+            when :baseURL then world.base_url
+            when :env then step_env(world)
+            when :requireEnv then ->(key) { step_env(world).fetch(key.to_s) { raise %(requireEnv("#{key}"): the world's env has no #{key}) } }
+            when :scratch then @scratch
+            when :page
+              page, finish = @browser.page_for(dir, log)
+              page
+            end
         end
+        # A project fixture of a builtin's name replaces it for the step.
+        fixtures = {} #: Hash[Symbol, untyped]
+        (step.bag - [:call]).each do |name|
+          fixtures[name] = Nukadoko.project_fixtures.key?(name) || !BUILTINS.include?(name) ? project_fixture(name, world, [], builtin) : builtin.(name)
+        end
+        # Requests a wrapped request fixture sends are the builtin's, so the record keeps them.
+        @request_log = built[:request]
         fixtures[:call] = Caller.new(step, fixtures) if step.fixtures.include?(:call)
         record[:fixtures] = @fixture_usage if @fixture_usage.any?
         @fixture_usage = nil

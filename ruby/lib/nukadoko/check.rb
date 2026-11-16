@@ -419,6 +419,14 @@ module Nukadoko
         end
         fixtures.each_key { visit.(_1, []) if state[_1] == :white }
 
+        # An override of page that names no browser fixture cannot hand back
+        # a page the engine launched, records, and traces.
+        if (page = fixtures[:page]) && (page.dependencies & %i[page context pageAs]).empty?
+          findings << Finding.new("error", "page-override-unowned", config, nil, nil,
+                                  %(fixture "page" overrides the builtin page but destructures none of "page", "context", or "pageAs": there is no way for it to hand back a page the executor still owns and measures),
+                                  Codes.fix("page-override-unowned"), nil)
+        end
+
         fixtures.each_value do |fixture|
           next unless fixture.scope == :process
 

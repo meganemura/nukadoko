@@ -236,8 +236,8 @@ module Nukadoko
 
       # A project fixture is built the first time a step of its scope names
       # it, directly or through another fixture, and kept until the scope ends.
-      # : (Symbol, World, Array[Symbol]) -> untyped
-      def project_fixture: (Symbol, World, Array[Symbol]) -> untyped
+      # : (Symbol, World, Array[Symbol], ?(^(Symbol) -> untyped)?) -> untyped
+      def project_fixture: (Symbol, World, Array[Symbol], ?(^(Symbol) -> untyped)?) -> untyped
 
       # Each project fixture a step's bag touched, once, as the step record
       # lists it: built here with its setup time, or reused from its scope.
@@ -257,6 +257,8 @@ module Nukadoko
       # set, from the same read, so the two agree on what was loaded.
       # : (Environment) -> void
       def read_env: (Environment) -> void
+
+      BUILTINS: untyped
 
       # : (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [Hash[Symbol, untyped], (^() -> void)?]
       def build_fixtures: (singleton(Step), String, Array[Hash[Symbol, untyped]], World, Hash[Symbol, untyped]) -> [ Hash[Symbol, untyped], (^() -> void)? ]

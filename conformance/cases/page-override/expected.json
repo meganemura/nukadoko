@@ -1,0 +1,100 @@
+{
+  "check": [],
+  "vocabulary": [
+    {
+      "name": "open-list",
+      "patterns": [
+        "the shopping list is open"
+      ],
+      "mutates": false,
+      "needs": [
+        "page"
+      ],
+      "needs_browser": true,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "page-set-up",
+      "patterns": [
+        "the page was set up by the project"
+      ],
+      "mutates": false,
+      "claims": [
+        {
+          "actual": "wrapped",
+          "compare": "equal",
+          "expected": {
+            "literal": "by the project"
+          }
+        }
+      ],
+      "poll": false,
+      "needs": [
+        "page"
+      ],
+      "needs_browser": true,
+      "args": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "returns": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "default": {},
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "feature": "features/wrapped.feature",
+      "line": 3,
+      "environment": "default",
+      "status": "passed",
+      "role": "required",
+      "steps": [
+        {
+          "line": 4,
+          "step": "open-list",
+          "status": "passed"
+        },
+        {
+          "line": 5,
+          "step": "page-set-up",
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "verdict": "passed",
+  "table": [
+    {
+      "feature": "features/wrapped.feature",
+      "line": 3,
+      "verdict": "held",
+      "cells": [
+        {
+          "environment": "default",
+          "role": "required",
+          "outcome": "pass",
+          "runs": 1
+        }
+      ]
+    }
+  ]
+}
