@@ -916,6 +916,8 @@ module Nukadoko
         used = []
         step.from.each do |key, sources|
           cls, value, at_line, record_id = results.reverse_each.find { |c, _| sources.any? { _1.first == c } }
+          # An optional key stays absent when no producer ran, as zod leaves it.
+          next if !cls && step.args[key]&.absent_ok?
           unless cls
             record[:error_kind] = "binding_invalid"
             raise ArgumentError, %(no earlier step in this scenario gave "#{key}")
@@ -928,7 +930,7 @@ module Nukadoko
           used << { step: cls.step_name, record: "steps/#{record_id}", result: value } unless used.any? { _1[:record] == "steps/#{record_id}" }
         end
         record[:used] = used
-        open = step.args.fields.map { _1.name.to_s } - args.keys
+        open = step.args.required_names - args.keys
         attachment = line.table || line.doc_string
         if attachment && open.any?
           args[open.first] = attachment
@@ -944,7 +946,7 @@ module Nukadoko
       # for the one key it fills.
       #: (singleton(Step), Hash[String, untyped], PickleStep) -> Hash[String, String]
       def attachment_texts(step, captures, line)
-        open = step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys
+        open = step.args.required_names - captures.keys - step.from.keys
         return {} if open.empty?
         return { open.first => line.doc_string } if line.doc_string
         return { open.first => line.table.map { |row| "| #{row.join(" | ")} |" }.join("\n") } if line.table

@@ -34,6 +34,9 @@ end
 ```
 
 - A field takes `null: true` when nil is allowed. `enum :outcome, %w[accepted refused]` allows only those words, and Steep sees them as a union of literals.
+- `optional: true` lets the key be absent, and the body reads nil, as zod's `.optional()`: a key that `from` fills in some scenarios only. `default: 10` reads an absent key as that value, as `.default(10)`. `min:`, `max:`, `positive: true`, and `negative: true` bound a number's value, a string's length, and an array's item count, with zod's messages.
+- `array :todos do string :id end` is a list of objects. `strings`, `numbers`, and `integers` are lists of one scalar type, and `array :ids, of: :string` names any item type. `each: { positive: true }` bounds every item.
+- Every `*.rb` file under `features/steps/` is loaded, a helper under `features/steps/lib/` too. A step class is looked up by the CamelCase form of its file name (`add_todo.rb` defines `AddTodo`), so a helper module named the same way (`lib/todo_api.rb` defines `TodoApi`) can be used from any step without a `require`.
 - Every capture in the pattern is named, and each name is a key of `args`.
 - The keyword arguments of `run` (or `observe`, in a Then step) name the fixtures the step needs. `nuka check` reads them with `Method#parameters`, without calling the body.
 - A Then step declares `claims` and an `observe` that reads the world. nukadoko judges the claims. `observe` does not receive an args key that a claim compares with.

@@ -4,8 +4,19 @@
 # a value must pass at run time, the RBS a Steep user checks the step body
 # against, and the Data class the body receives. A type is a symbol for a
 # scalar, `[:array, type]` for a list, or a nested Schema for an object.
+# `[:checked, type, checks]` is an array item with bounds of its own.
+#
+# Each field method takes the options zod spells as methods: `null: true`
+# (`.nullable()`), `optional: true` (`.optional()`: the key may be absent,
+# and the body reads nil), `default:` (`.default(x)`: an absent key reads
+# as the value), and bounds: `min:` and `max:` (a number's value, a
+# string's length, an array's item count), `positive: true` (> 0) and
+# `negative: true` (< 0).
 module Nukadoko
   class Schema
+    # The value of `default` when the field declares none.
+    NONE: untyped
+
     class Field < Data
       attr_reader name(): Symbol
 
@@ -13,13 +24,30 @@ module Nukadoko
 
       attr_reader description(): String?
 
-      def self.new: (Symbol name, untyped type, String? description) -> instance
-                  | (name: Symbol, type: untyped, description: String?) -> instance
+      attr_reader optional(): bool
 
-      def self.members: () -> [ :name, :type, :description ]
+      attr_reader default(): untyped
 
-      def members: () -> [ :name, :type, :description ]
+      attr_reader checks(): Hash[Symbol, untyped]
+
+      def self.new: (Symbol name, untyped type, String? description, bool optional, untyped default, Hash[Symbol, untyped] checks) -> instance
+                  | (name: Symbol, type: untyped, description: String?, optional: bool, default: untyped, checks: Hash[Symbol, untyped]) -> instance
+
+      def self.members: () -> [ :name, :type, :description, :optional, :default, :checks ]
+
+      def members: () -> [ :name, :type, :description, :optional, :default, :checks ]
     end
+
+    class Field
+      # An absent key passes: the field is optional or has a default.
+      # : () -> bool
+      def absent_ok?: () -> bool
+
+      # : () -> bool
+      def default?: () -> bool
+    end
+
+    CHECKS: untyped
 
     # : () ?{ () [self: Schema] -> void } -> Schema
     def self.build: () ?{ () [self: Schema] -> void } -> Schema
@@ -29,33 +57,45 @@ module Nukadoko
     # : (?Array[Field]) -> void
     def initialize: (?Array[Field]) -> void
 
-    # `null: true` lets the value be nil as well, as zod's `.nullable()` does.
-    # : (Symbol, ?String?, ?null: bool) -> void
-    def string: (Symbol, ?String?, ?null: bool) -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def string: (Symbol, ?String?, **untyped) -> void
 
-    # : (Symbol, ?String?, ?null: bool) -> void
-    def boolean: (Symbol, ?String?, ?null: bool) -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def boolean: (Symbol, ?String?, **untyped) -> void
 
-    # : (Symbol, ?String?, ?null: bool) -> void
-    def integer: (Symbol, ?String?, ?null: bool) -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def integer: (Symbol, ?String?, **untyped) -> void
 
-    # : (Symbol, ?String?, ?null: bool) -> void
-    def number: (Symbol, ?String?, ?null: bool) -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def number: (Symbol, ?String?, **untyped) -> void
 
-    # : (Symbol, ?String?) -> void
-    def unknown: (Symbol, ?String?) -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def unknown: (Symbol, ?String?, **untyped) -> void
 
-    # : (Symbol, Array[String | Symbol], ?String?, ?null: bool) -> void
-    def enum: (Symbol, Array[String | Symbol], ?String?, ?null: bool) -> void
+    # : (Symbol, Array[String | Symbol], ?String?, **untyped) -> void
+    def enum: (Symbol, Array[String | Symbol], ?String?, **untyped) -> void
 
-    # : (Symbol, ?String?, ?null: bool) -> void
-    def strings: (Symbol, ?String?, ?null: bool) -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def strings: (Symbol, ?String?, **untyped) -> void
 
-    # : (Symbol, ?String?, ?null: bool) -> void
-    def table: (Symbol, ?String?, ?null: bool) -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def numbers: (Symbol, ?String?, **untyped) -> void
 
-    # : (Symbol, ?String?, ?null: bool) { () [self: Schema] -> void } -> void
-    def object: (Symbol, ?String?, ?null: bool) { () [self: Schema] -> void } -> void
+    # : (Symbol, ?String?, **untyped) -> void
+    def integers: (Symbol, ?String?, **untyped) -> void
+
+    # : (Symbol, ?String?, **untyped) -> void
+    def table: (Symbol, ?String?, **untyped) -> void
+
+    # : (Symbol, ?String?, **untyped) { () [self: Schema] -> void } -> void
+    def object: (Symbol, ?String?, **untyped) { () [self: Schema] -> void } -> void
+
+    # A list: of objects the block declares (`array :todos do string :id end`),
+    # or of `of:` (:string, :number, :integer, :boolean, or a Schema).
+    # `each:` holds bounds every item meets (`each: { positive: true }`);
+    # `min:` and `max:` bound the item count.
+    # : (Symbol, ?String?, ?of: untyped, ?each: Hash[Symbol, untyped], **untyped) ?{ () [self: Schema] -> void } -> void
+    def array: (Symbol, ?String?, ?of: untyped, ?each: Hash[Symbol, untyped], **untyped) ?{ () [self: Schema] -> void } -> void
 
     # Reuses a field another step declared, so two contracts that must agree
     # on one shape are written once: `field :created, AnItemExists.returns[:body]`.
@@ -64,6 +104,10 @@ module Nukadoko
 
     # : (Symbol | String) -> Field?
     def []: (Symbol | String) -> Field?
+
+    # The keys a value must hold: neither optional nor defaulted.
+    # : () -> Array[String]
+    def required_names: () -> Array[String]
 
     # : (Array[String]) -> Schema
     def without: (Array[String]) -> Schema
@@ -122,6 +166,15 @@ module Nukadoko
     # : (untyped, untyped, String) -> Array[String]
     def self.type_problems: (untyped, untyped, String) -> Array[String]
 
+    # A bound zod reports in its own words, once the type passed: a number's
+    # value, a string's length in UTF-16 units, an array's item count.
+    # : (Hash[Symbol, untyped], untyped, String) -> Array[String]
+    def self.check_problems: (Hash[Symbol, untyped], untyped, String) -> Array[String]
+
+    # A number as JavaScript prints it: 2.0 is 2.
+    # : (Numeric) -> String
+    def self.js: (Numeric) -> String
+
     # zod's int: a finite whole number within Number.MAX_SAFE_INTEGER.
     # : (untyped) -> String?
     def self.integer_problem: (untyped) -> String?
@@ -132,8 +185,15 @@ module Nukadoko
     # : (?root: bool, ?output: bool) -> Hash[Symbol, untyped]
     def json_schema: (?root: bool, ?output: bool) -> Hash[Symbol, untyped]
 
-    # : (untyped, ?bool) -> Hash[Symbol, untyped]
-    def self.json_type: (untyped, ?bool) -> Hash[Symbol, untyped]
+    # As z.toJSONSchema writes it, bounds included and in its key order.
+    # : (untyped, ?bool, ?Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+    def self.json_type: (untyped, ?bool, ?Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+    # : (Hash[Symbol, untyped], Integer?, Integer?) -> Hash[Symbol, untyped]
+    def self.number_bounds: (Hash[Symbol, untyped], Integer?, Integer?) -> Hash[Symbol, untyped]
+
+    # : (Hash[Symbol, untyped], Symbol, Symbol) -> Hash[Symbol, untyped]
+    def self.length_bounds: (Hash[Symbol, untyped], Symbol, Symbol) -> Hash[Symbol, untyped]
 
     # : () -> Array[String]
     def rbs_fields: () -> Array[String]
@@ -141,13 +201,17 @@ module Nukadoko
     # : () -> String
     def rbs_record: () -> String
 
+    # An optional key reads as nil when it is absent.
+    # : (Field) -> String
+    def self.rbs_field: (Field) -> String
+
     # : (untyped) -> String
     def self.rbs_type: (untyped) -> String
 
     private
 
-    # : (Symbol, untyped, String?, ?bool) -> void
-    def add: (Symbol, untyped, String?, ?bool) -> void
+    # : (Symbol, untyped, String?, ?null: bool, ?optional: bool, ?default: untyped, **untyped) -> void
+    def add: (Symbol, untyped, String?, ?null: bool, ?optional: bool, ?default: untyped, **untyped) -> void
 
     # : (String?, Symbol | String) -> String
     def join: (String?, Symbol | String) -> String

@@ -8,6 +8,21 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- `args` and `returns` declare what zod declares: `array :todos do ... end`
+  for a list of objects, `numbers` and `integers` beside `strings`,
+  `array :x, of:` for any item type, `optional: true`, `default:`, and the
+  bounds `min:`, `max:`, `positive:`, and `negative:` (and `each:` for an
+  array's items). The problems and the JSON Schema `nuka describe` prints
+  are zod's. A key `from` fills in some scenarios only can be optional, and
+  stays absent where no producer ran.
+- The README says how files under `features/steps/` load, so a helper
+  module named after its file can be used from any step.
+
+### Changed
+
+- An `integer` field's JSON Schema has the `minimum` and `maximum` zod
+  gives `z.int()`.
+
 - `Nukadoko.run_command(..., unbundled: true)` runs the command with the
   environment from before Bundler set up nuka, so `bin/rails runner` in
   another Ruby project loads its own Gemfile instead of nuka's.

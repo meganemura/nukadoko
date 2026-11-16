@@ -44,6 +44,9 @@ end
 ```
 
 - nil を許すフィールドには `null: true` を付けます。`enum :outcome, %w[accepted refused]` はその語だけを許し、Steep はリテラルの和として扱います。
+- `optional: true` はキーがなくてもよいことを表し、本体には nil が渡ります(zod の `.optional()`)。`from` が一部のシナリオでだけ埋めるキーに使います。`default: 10` は、キーがないときにその値を渡します(`.default(10)`)。`min:`、`max:`、`positive: true`、`negative: true` は、数の値、文字列の長さ、配列の要素数の範囲を決め、zod と同じメッセージを出します。
+- `array :todos do string :id end` はオブジェクトの配列です。`strings`、`numbers`、`integers` は 1 つのスカラー型の配列で、`array :ids, of: :string` は任意の要素型を指定します。`each: { positive: true }` はすべての要素の範囲を決めます。
+- `features/steps/` の下の `*.rb` は、`features/steps/lib/` の補助ファイルも含めてすべて読み込まれます。ステップのクラスはファイル名を CamelCase にした名前で探します(`add_todo.rb` は `AddTodo` を定義します)。補助モジュールも同じ決まりで名付ければ(`lib/todo_api.rb` は `TodoApi`)、どのステップからも `require` なしで使えます。
 - パターンの取り出し部分にはすべて名前を付けます。名前は `args` のキーです。
 - `run`(Then ステップでは `observe`)のキーワード引数が、ステップが使うフィクスチャです。`nuka check` は本体を呼ばずに `Method#parameters` で読みます。
 - Then ステップは `claims` と、世界を読む `observe` を書きます。claim の判定は nukadoko が行います。claim が比べる args のキーは `observe` に渡されません。

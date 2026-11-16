@@ -443,7 +443,7 @@ module Nukadoko
         return refuse(Engine::Refusal.new("step-args-invalid", "--args must be a JSON object", fix: args_fix, run: describe)) unless given.is_a?(Hash)
       end
       args, origins, used = used_args(step, @options["--use"])
-      if @options["--args"].empty? && (step.args.fields.map { _1.name.to_s } - args.keys).any?
+      if @options["--args"].empty? && (step.args.required_names - args.keys).any?
         return refuse(Engine::Refusal.new("step-args-invalid", "--args is required unless --use supplies this step's arguments", fix: args_fix, run: describe))
       end
 

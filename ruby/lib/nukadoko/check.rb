@@ -326,6 +326,9 @@ module Nukadoko
                                       "Remove or move lines so that exactly one of steps #{quoted} runs before this line.", nil)
               next
             end
+            # An optional key may stay empty: the schema says absent is fine.
+            next unless step.args.required_names.include?(key)
+
             undefined = scenario.steps.first(index).each_index.select { Engine.matches(@usable, scenario.steps[_1].text).empty? }
             issue = { index: index, step: step.step_name, key: key, candidates: names }
             next held << issue.merge(undefined: undefined) if undefined.any?
@@ -778,7 +781,7 @@ module Nukadoko
       # attachment can never be, fail binding with certainty.
       #: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
       def check_fill(scenario, line, step, captures)
-        missing = step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys
+        missing = step.args.required_names - captures.keys - step.from.keys
         if line.table || line.doc_string
           if missing.size != 1
             detail = missing.empty? ? "every args key is already consumed by named captures or declared from" : "#{missing.size} args keys are left unconsumed (#{missing.join(", ")}); exactly one is required"
@@ -833,7 +836,7 @@ module Nukadoko
       #: (Scenario, PickleStep, singleton(Step), Hash[String, untyped]) -> void
       def check_unfit_trees(scenario, line, step, captures)
         claims = step.claims or return
-        docstring_keys = line.doc_string ? step.args.fields.map { _1.name.to_s } - captures.keys - step.from.keys.map(&:to_s) : []
+        docstring_keys = line.doc_string ? step.args.required_names - captures.keys - step.from.keys.map(&:to_s) : []
         claims.each_with_index do |claim, index|
           key = claim[:expected]
           next if claim[:each] || claim[:compare] != "fits-aria-snapshot" || !key.is_a?(String)
