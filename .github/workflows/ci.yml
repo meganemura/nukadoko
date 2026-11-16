@@ -222,3 +222,8 @@ jobs:
           awk -F, 'NR > 1 && $3 == "error" { print "Steep did not type check " $2; failed = 1 } END { exit failed }'
         working-directory: ruby
         shell: bash
+      # typegap reports where the types and the code disagree. It prints what it
+      # finds and fails the job only when it cannot run.
+      - name: Report gaps between the types and the code
+        run: bundle exec typegap || [ $? -eq 1 ]
+        working-directory: ruby
