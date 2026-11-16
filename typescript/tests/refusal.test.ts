@@ -41,7 +41,7 @@ describe("refuse", () => {
     const stderr = createCaptureSink();
     const own = Object.assign(new Error("needs playwright"), {
       code: "playwright-missing",
-      do: "npm install -D -E playwright@1.61.1",
+      do: "npm install -D -E playwright@1.63.0",
     });
     const unregistered = Object.assign(new Error("no such file"), { code: "ENOENT" });
 
@@ -50,7 +50,7 @@ describe("refuse", () => {
     refuse({ json: false, stdout, stderr, command: "run" }, unregistered, "target-not-found");
 
     expect(stderr.text()).toBe(
-      "refused\tplaywright-missing\t-\tneeds playwright\n  fix: Install the package that the message names in the project, at the version that the message names.\n  do: npm install -D -E playwright@1.61.1\n" +
+      "refused\tplaywright-missing\t-\tneeds playwright\n  fix: Install the package that the message names in the project, at the version that the message names.\n  do: npm install -D -E playwright@1.63.0\n" +
         "refused\tunexpected-error\t-\t42\n  fix: Read the message; it is the error the command stopped on.\n  do: nuka run --help\n" +
         "refused\ttarget-not-found\t-\tno such file\n  fix: Name a file or a directory that exists.\n  do: nuka run --help\n",
     );

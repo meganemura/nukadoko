@@ -51,11 +51,13 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // simply read and compared against the closed list below.
 
 /** Trace format versions this build knows how to read (measured against
- * version 8). Extend this list, never
+ * version 8, and version 9 as Playwright 1.63.0 writes it: the same
+ * `context-options`, `before`, and `after` fields this file reads, and the
+ * same actions from the same calls). Extend this list, never
  * relax the check itself, when a newer Playwright's own trace format is
  * measured and found compatible — guessing that an unmeasured version is
  * "probably fine" is exactly what this file's own header rules out. */
-const KNOWN_TRACE_VERSIONS: readonly number[] = [8];
+const KNOWN_TRACE_VERSIONS: readonly number[] = [8, 9];
 
 /** Every `BrowserContext` runs an internal watch for `console`/`weberror`/
  * `requestfailed` events (Playwright's own client library sets this up,

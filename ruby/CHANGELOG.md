@@ -6,6 +6,16 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Changed
+
+- The gem accepts `playwright-ruby-client` 1.63.0 and later, in place of
+  exactly 1.61.0.
+
+### Fixed
+
+- A step record on a Playwright 1.63 driver had no `actions`: the driver
+  writes trace format version 9, which the engine now reads.
+
 ### Added
 
 - `Nukadoko.config(parameterTypes: [...])` registers custom parameter types, as

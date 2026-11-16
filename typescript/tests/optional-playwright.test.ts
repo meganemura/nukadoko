@@ -583,7 +583,7 @@ describe("PLAYWRIGHT_VERSION", () => {
       peerDependenciesMeta: Record<string, { optional?: boolean }>;
     };
     expect(pkg.dependencies.playwright).toBeUndefined();
-    expect(pkg.peerDependencies.playwright).toBe(`^${PLAYWRIGHT_VERSION}`);
+    expect(pkg.peerDependencies.playwright).toBe("^1.61.1");
     expect(pkg.peerDependenciesMeta.playwright?.optional).toBe(true);
     expect(pkg.devDependencies.playwright).toBe(PLAYWRIGHT_VERSION);
   });

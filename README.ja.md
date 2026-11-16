@@ -71,7 +71,7 @@ Playwright は optional な peer dependency で、`page` か `request` を使う
 そうした step を持つプロジェクトは、nukadoko がテストしているバージョンの Playwright と、それが起動するブラウザを追加します:
 
 ```sh
-npm install -D -E playwright@1.61.1
+npm install -D -E playwright@1.63.0
 npx playwright install chromium
 ```
 

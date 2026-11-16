@@ -14,12 +14,13 @@ import type * as Playwright from "playwright";
 
 const SPECIFIER = "playwright";
 // The version this package is built and tested against: the exact
-// `devDependencies` pin in package.json, and the floor of the
-// `peerDependencies` caret range. The install hint names this exact version
-// because it is the one CI runs; the peer range is a caret so that a project
-// already on a later Playwright 1.x installs without npm's ERESOLVE. A test
-// reads package.json and compares, so the three cannot drift.
-export const PLAYWRIGHT_VERSION = "1.61.1";
+// `devDependencies` pin in package.json. The install hint names this exact
+// version because it is the one CI runs. The `peerDependencies` range is a
+// caret from 1.61.1, an earlier version nukadoko was tested against, so a
+// project still on 1.61 or 1.62 installs without npm's ERESOLVE; its trace
+// format (version 8) is still read. A test reads package.json and compares,
+// so the pin and the hint cannot drift.
+export const PLAYWRIGHT_VERSION = "1.63.0";
 
 export type PlaywrightModule = typeof Playwright;
 

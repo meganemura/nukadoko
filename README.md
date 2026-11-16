@@ -80,7 +80,7 @@ only by a step that uses `page` or `request`. Such a project adds it, at
 the version nukadoko is tested against, and the browser it launches:
 
 ```sh
-npm install -D -E playwright@1.61.1
+npm install -D -E playwright@1.63.0
 npx playwright install chromium
 ```
 

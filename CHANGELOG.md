@@ -7,7 +7,17 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- nukadoko is tested against Playwright 1.63.0, and the `playwright-missing`
+  install line names that version. The peer range stays `^1.61.1`, so a
+  project on 1.61 or 1.62 keeps its own version.
+
 ### Fixed
+
+- A step record on Playwright 1.63 had no `actions`, and the run warned
+  `trace-version-unknown`: 1.63 writes trace format version 9. That version
+  was measured to carry the same fields as version 8, and it is now read.
 
 - `llms.txt` still described the program under test as
   `nukadoko.program.ts` and `defineProgram`, and the Ruby one as

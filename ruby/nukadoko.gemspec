@@ -15,5 +15,5 @@ Gem::Specification.new do |spec|
   spec.executables = ["nuka"]
   spec.add_dependency "cucumber-cucumber-expressions", "20.1.0"
   spec.add_dependency "cucumber-gherkin", "42.0.1"
-  spec.add_dependency "playwright-ruby-client", "1.61.0"
+  spec.add_dependency "playwright-ruby-client", ">= 1.63.0"
 end

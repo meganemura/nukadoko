@@ -63,7 +63,7 @@ The When step sends its request through Playwright's `request`, so
 install `playwright` too:
 
 ```sh
-npm install -D -E playwright@1.61.1
+npm install -D -E playwright@1.63.0
 npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
 npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
 ```

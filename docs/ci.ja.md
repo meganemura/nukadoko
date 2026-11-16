@@ -56,7 +56,7 @@ pull request では、pull request の基点に対して `nuka run --base` を�
 `nuka run` も実行の前に自分の scenario を改めて check します。
 その費用は step の discovery 1 回分で、ブラウザは要りません。
 
-ブラウザのプロジェクトは、nukadoko がテストしているバージョンの `playwright` を自分の `devDependencies` に書きます(`npm install -D -E playwright@1.61.1`)。
+ブラウザのプロジェクトは、nukadoko がテストしているバージョンの `playwright` を自分の `devDependencies` に書きます(`npm install -D -E playwright@1.63.0`)。
 nukadoko はそれを optional な peer dependency として宣言しており、インストールはしません。
 すると下の `npm ci` の行がどの job でもそのパッケージを入れ、ブラウザをダウンロードするのは `run` job だけです。
 

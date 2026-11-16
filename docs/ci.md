@@ -67,7 +67,7 @@ is installed. `nuka run` checks its own scenarios again before it executes,
 which costs one more step discovery and no browser.
 
 A browser project lists `playwright` in its own `devDependencies`, at the
-version nukadoko is tested against (`npm install -D -E playwright@1.61.1`):
+version nukadoko is tested against (`npm install -D -E playwright@1.63.0`):
 nukadoko declares it as an optional peer dependency and does not install it.
 The `npm ci` lines below then bring in the package in every job, and only
 the `run` job downloads a browser for it.

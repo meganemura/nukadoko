@@ -4,7 +4,7 @@ PATH
     nukadoko (0.3.0)
       cucumber-cucumber-expressions (= 20.1.0)
       cucumber-gherkin (= 42.0.1)
-      playwright-ruby-client (= 1.61.0)
+      playwright-ruby-client (>= 1.63.0)
 
 GEM
   remote: https://rubygems.org/
@@ -54,7 +54,7 @@ GEM
     parser (3.3.13.0)
       ast (~> 2.4.1)
       racc
-    playwright-ruby-client (1.61.0)
+    playwright-ruby-client (1.63.0)
       base64
       concurrent-ruby (>= 1.1.6)
       mime-types (>= 3.0)

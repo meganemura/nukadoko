@@ -279,6 +279,14 @@ describe("parseTraceActions", () => {
     expect(result.truncatedCount).toBeUndefined();
   });
 
+  it("reads version 9, which Playwright 1.63.0 writes, the same as version 8", () => {
+    const lines = (version: number) =>
+      [headerLine(version), JSON.stringify(EXPECT_BEFORE), JSON.stringify(EXPECT_AFTER)].join("\n");
+    const v9 = parseTraceActions(Buffer.from(lines(9), "utf8"));
+    expect(v9.kind).toBe("ok");
+    expect(v9).toEqual(parseTraceActions(Buffer.from(lines(8), "utf8")));
+  });
+
   it("reports an unknown trace format version instead of guessing", () => {
     const traceTrace = [headerLine(999), JSON.stringify(EXPECT_BEFORE), JSON.stringify(EXPECT_AFTER)].join(
       "\n",

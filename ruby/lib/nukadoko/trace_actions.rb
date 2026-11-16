@@ -16,10 +16,12 @@ require "zlib"
 module Nukadoko
   module Engine
     module TraceActions
-      # Version 8 as the TypeScript engine measured it, and version 10 as
+      # Version 8 as the TypeScript engine measured it, version 9 as
+      # Playwright 1.63.0 writes it (the same fields and the same actions as
+      # version 8), and version 10 as
       # Playwright 1.65.1 writes it for the Ruby client: the same `before`
       # and `after` fields, with a number for `callId`.
-      KNOWN_VERSIONS = [8, 10].freeze
+      KNOWN_VERSIONS = [8, 9, 10].freeze
       MAX_ACTIONS = 100
       INTERNAL_WAIT = "__waitInfo__"
       JUDGED_VIEW_GROUP = "nukadoko: view of the judged reading"

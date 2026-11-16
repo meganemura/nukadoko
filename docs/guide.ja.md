@@ -66,7 +66,7 @@ When の step とその Then を scaffold するだけで、編集なしでシ�
 When の step は Playwright の `request` で request を送るので、`playwright` もインストールしてください:
 
 ```sh
-npm install -D -E playwright@1.61.1
+npm install -D -E playwright@1.63.0
 npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
 npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
 ```
