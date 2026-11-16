@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    nukadoko (0.4.0)
+    nukadoko (0.5.0)
       cucumber-cucumber-expressions (= 20.1.0)
       cucumber-gherkin (= 42.0.1)
       playwright-ruby-client (>= 1.63.0)
