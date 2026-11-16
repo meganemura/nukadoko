@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.28.0 — 2026-11-16
+
 ### Added
 
 - A failed step record whose `error.kind` is `step_error` carries
