@@ -13,6 +13,10 @@ just until 0.1.
   `error.at`: the project's own stack frames, each `path:line` relative to
   the project root, outside `node_modules`, at most five, redacted like the
   message. Both engines write it.
+- `skills/nukadoko/references/ruby.md` says how each TypeScript shape the
+  other references show reads in a Ruby project, and llms.txt's Ruby
+  section names every fixture the gem gives and two playwright-ruby-client
+  calls that do not behave as their TypeScript names suggest.
 
 ## 0.27.1 — 2026-11-16
 

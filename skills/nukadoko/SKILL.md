@@ -44,7 +44,7 @@ never commits, pushes, or publishes. Keep the narration short.
 Run `nuka` from the directory that holds the config, and `nuka init` first
 when there is none (`references/running.md`, "Setting up"); an app to start
 needs the program in `nukadoko.config.ts` (`references/program.md`). A Ruby project
-writes steps as the "Ruby" section of `llms.txt` says. Pick one line:
+writes steps as `references/ruby.md` says. Pick one line:
 
 1. **Prose only** (a ticket, a request, a conversation):
    `references/from-prose.md`, then line 2.
