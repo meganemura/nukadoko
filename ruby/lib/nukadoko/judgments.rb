@@ -184,6 +184,36 @@ module Nukadoko
         end
       end
 
+      # Under --base, each judgment a read cites gains `in_base`: true when
+      # the base's file already held that very judgment (the same claim,
+      # value, verdict, judge, reason, and time), false when the change
+      # brought it. A change cannot be trusted to judge its own output any
+      # more than to rewrite its own Thens, and the old world covers only
+      # the Thens. `base_entries_of` answers nil for a feature whose base
+      # file could not be read, and its reads stay unmarked.
+      #: (Array[Hash[Symbol, untyped]], ^(String) -> Array[Hash[Symbol, untyped]]?) -> Array[Hash[Symbol, untyped]]
+      def with_base_judgments(rows, base_entries_of)
+        rows.map do |row|
+          judgment = row[:judgment]
+          next row unless judgment && judgment[:reads].any? { _1[:judgment] }
+
+          entries = base_entries_of.(row[:feature])
+          next row unless entries
+
+          reads = judgment[:reads].map do |read|
+            cited = read[:judgment]
+            next read unless cited
+
+            held = entries.any? do |entry|
+              entry[:criterion] == row[:name] && entry[:then] == read[:step] && entry[:claim] == read[:claim] &&
+                %i[value_digest verdict by because at].all? { entry[_1] == cited[_1] }
+            end
+            { **read, judgment: { **cited, in_base: held } }
+          end
+          { **row, judgment: { **judgment, reads: reads } }
+        end
+      end
+
       #: (Array[Hash[Symbol, untyped]]) -> bool
       def open?(rows) = rows.any? { _1[:judgment] && _1[:judgment][:state] != "judged" }
 

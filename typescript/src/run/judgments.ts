@@ -216,6 +216,42 @@ export function withJudgments(table: RunTable, scenarios: readonly RunScenario[]
   return { ...table, rows };
 }
 
+/** Whether `entries`, the base's judgments of a feature, hold the very
+ * judgment a read cites: the same claim of the same Then of the same
+ * criterion, value, verdict, judge, reason, and time. A judgment judged
+ * again in the change has another time, so it reads as the change's. */
+function heldBy(entries: readonly JudgmentEntry[], criterion: string, read: RunJudgedRead, judgment: RunCitedJudgment): boolean {
+  return entriesFor(entries, criterion, read).some(
+    (entry) =>
+      entry.value_digest === judgment.value_digest &&
+      entry.verdict === judgment.verdict &&
+      entry.by === judgment.by &&
+      entry.because === judgment.because &&
+      entry.at === judgment.at,
+  );
+}
+
+/** Under `--base`, the table with `in_base` on each judgment a read
+ * cites: `true` when the base already held it, `false` when the change
+ * brought it, so a row that stands on a judgment the change made of its
+ * own output says so. A change cannot be trusted to judge itself any more
+ * than to rewrite its own Thens, and the `old` world covers only the
+ * Thens. `baseEntriesOf` answers `undefined` for a feature whose base
+ * file could not be read, and its reads stay unmarked. Pure. */
+export function withBaseJudgments(table: RunTable, baseEntriesOf: (feature: string) => readonly JudgmentEntry[] | undefined): RunTable {
+  const rows = table.rows.map((row): RunTableRow => {
+    const judgment = row.judgment;
+    if (judgment === undefined || !judgment.reads.some((read) => read.judgment !== undefined)) return row;
+    const entries = baseEntriesOf(row.feature);
+    if (entries === undefined) return row;
+    const reads = judgment.reads.map((read): RunJudgedRead =>
+      read.judgment === undefined ? read : { ...read, judgment: { ...read.judgment, in_base: heldBy(entries, row.name, read, read.judgment) } },
+    );
+    return { ...row, judgment: { ...judgment, reads } };
+  });
+  return { ...table, rows };
+}
+
 /** Whether the judgments leave the gate red: a row whose judgment is
  * anything but `judged`. Pure. */
 export function judgmentsOpen(table: Pick<RunTable, "rows">): boolean {

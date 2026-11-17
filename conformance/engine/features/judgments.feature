@@ -107,7 +107,7 @@ Feature: nuka reads a judged-as claim against the committed judgments as the Typ
       Each item below is something the verdicts above do not cover, listed under its kind in run.json's `limits`.
 
       - **Held on a judgment** (`judgment`, 1): each criterion below asks a reader to judge a value its Then read, and a committed judgment cites that value; nukadoko checks the citation, never the judgment
-        - `features/greeting.feature:3` a first-time visitor is greeted: stands on a judgment by `ann`: nukadoko checked that the value is the one judged, not the judgment
+        - `features/greeting.feature:3` a first-time visitor is greeted: stands on a judgment by `ann` that this change added: nukadoko checked that the value is the one judged, not the judgment
 
       - commit: `<commit>` with uncommitted changes
       - environment: default

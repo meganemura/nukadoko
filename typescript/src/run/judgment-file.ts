@@ -67,3 +67,17 @@ export async function changedJudgmentFiles(rootDir: string, baseCommit: string):
   }
   return changed.sort();
 }
+
+/** What `baseCommit` holds as the judgments of a feature file: its
+ * entries, none when it holds no such file, or why the file did not
+ * parse. Throws a `GitRefError` when git does not answer. */
+export async function judgmentEntriesAtCommit(
+  rootDir: string,
+  baseCommit: string,
+  feature: string,
+): Promise<{ readonly entries: readonly JudgmentEntry[] } | { readonly problem: string }> {
+  const { top, prefix } = await repositoryPlace(rootDir);
+  const relative = judgmentFileOf(feature);
+  const text = await fileAtCommit(top, baseCommit, prefix === "" ? relative : `${prefix}/${relative}`);
+  return text === null ? { entries: [] } : parseJudgmentFile(text);
+}

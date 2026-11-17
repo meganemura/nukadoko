@@ -19,6 +19,13 @@ just until 0.1.
   block. Because the stamp names the tree, a later reader checks it
   exactly against `git rev-parse <commit>^{tree}`. `nuka verdict --json`
   carries the same line as `trailer`. Both engines.
+- Under `--base`, each judgment a read cites carries `in_base`: whether
+  the base's judgment file already held that very entry, or the change
+  brought it. A row that stands on a judgment the change added says so in
+  its `judgment` limit (`stands on a judgment by <name> that this change
+  added`), so a reviewer sees which criteria the change both made and
+  judged. Before, only the changed judgment files were named. Both
+  engines.
 
 ## 0.28.0 — 2026-11-16
 

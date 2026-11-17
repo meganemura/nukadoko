@@ -451,8 +451,11 @@ module Nukadoko
 
           by = judgment[:reads].map { _1.dig(:judgment, :by) || "" }.uniq.map { code_span(_1) }.join(", ")
           aria = judgment[:reads].any? { _1[:measured] == "aria-snapshot" } ? "; it is bound to the ARIA snapshot, so a change only to how the page looks keeps it current" : ""
+          # Under --base, a judgment the change itself brought is the change
+          # judging its own output, which the reviewer reads first.
+          added = judgment[:reads].any? { _1.dig(:judgment, :in_base) == false } ? " that this change added" : ""
           { kind: "judgment", feature: row[:feature], line: row[:line], text: row[:name],
-            detail: "stands on a judgment by #{by}: nukadoko checked that the value is the one judged, not the judgment#{aria}" }
+            detail: "stands on a judgment by #{by}#{added}: nukadoko checked that the value is the one judged, not the judgment#{aria}" }
         end
       end
 

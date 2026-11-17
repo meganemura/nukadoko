@@ -413,7 +413,7 @@ const rowJudgment = z.looseObject({
       record: z.string().nullable(),
       state: judgmentState,
       judgment: z
-        .looseObject({ value_digest: z.string(), verdict: z.enum(["meets", "misses"]), by: z.string(), because: z.string(), run_id: z.string(), at: z.string() })
+        .looseObject({ value_digest: z.string(), verdict: z.enum(["meets", "misses"]), by: z.string(), because: z.string(), run_id: z.string(), at: z.string(), in_base: z.boolean().optional() })
         .optional(),
     }),
   ),

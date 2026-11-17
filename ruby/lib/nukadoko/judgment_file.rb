@@ -73,6 +73,27 @@ module Nukadoko
           name.delete_prefix(prefix.empty? ? "" : "#{prefix}/") if now != before&.b
         end.sort
       end
+
+      # What `commit` holds as the judgments of a feature file: its
+      # entries, none when it holds no such file, or why the file did not
+      # parse. nil when git does not answer.
+      #: (String, String, String) -> Hash[Symbol, untyped]?
+      def at_commit(project, commit, feature)
+        prefix, ok = Base.git(project, "rev-parse", "--show-prefix")
+        return nil unless ok
+
+        prefix = prefix.delete_suffix("/")
+        name = prefix.empty? ? of(feature) : "#{prefix}/#{of(feature)}"
+        top, ok = Base.git(project, "rev-parse", "--show-toplevel")
+        return nil unless ok
+
+        listed, ok = Base.git(top, "ls-tree", "-z", "--name-only", commit, "--", name, strip: false)
+        return nil unless ok
+        return { entries: [] } unless listed.split("\0").include?(name)
+
+        text, ok = Base.git(top, "show", "#{commit}:#{name}", strip: false)
+        ok ? Judgments.parse_file(text.dup.force_encoding("UTF-8")) : nil
+      end
     end
   end
 end

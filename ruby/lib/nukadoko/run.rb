@@ -360,6 +360,14 @@ module Nukadoko
         if @base && changed.nil?
           warnings << { severity: "warning", code: "judgments-not-compared", message: "the judgment files were not compared with the base: git did not answer" }
         end
+        # And per row, which judgment the change brought: a row that stands
+        # on a judgment the change made of its own output.
+        if (base = @base) && changed
+          at_base = {} #: Hash[String, Array[Hash[Symbol, untyped]]?]
+          rows = Judgments.with_base_judgments(rows, lambda do |feature|
+            at_base.fetch(feature) { at_base[feature] = JudgmentFile.at_commit(@project, base.commit, feature)&.dig(:entries) }
+          end)
+        end
         judged += Judgments.findings(rows, @id) + problems
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
           environments: @environments.map { environment_entry(_1) }, worlds: @world_entries, order: @order,

@@ -7413,6 +7413,23 @@ and no `control-not-proving` one. A row held on a judgment is a
 from the base's, so a reviewer sees which judgments the change brings,
 and the summary says so in one line.
 
+A change that adds the judgment of its own output is a change judging
+itself, the same as a change that rewrites the Then that judges it. The
+old world keeps an unchanged criterion under the ref's Thens, and it
+cannot do the same for a judgment: a new criterion has no judgment at
+the base to keep. So under `--base` each judgment a read cites carries
+`in_base`: `true` when the base's judgment file of the feature already
+held that very entry (the same criterion, Then, claim, value digest,
+verdict, judge, reason, and time), `false` when the change brought it,
+a judgment made again included. A row whose judgment came with the
+change says so in its `judgment` limit, `stands on a judgment by <name>
+that this change added`, so a reviewer reads first the criteria the
+change both made and judged. It is a comparison of two files, never a
+reading of who judged. `in_base` is absent without `--base`, and on the
+reads of a feature whose judgment file at the base could not be read.
+A feature file moved in the change is looked up at the base by its new
+path, so the judgments that moved with it read as added.
+
 ### Single steps (the agent path)
 
 ```sh

@@ -93,3 +93,9 @@ never `unproven` (no base can break a claim that compares nothing), and
 its judgment decides it. The summary names the judgment files the change
 brings ("A judgment file changed since the base"), so the person reviews
 each judgment with the feature.
+
+A judgment the change itself added is the change judging its own output.
+Such a row's `judgment` limit says `stands on a judgment by <name> that
+this change added`, and each cited judgment in run.json carries `in_base:
+false`. When the agent that wrote the change also recorded the judgment,
+tell the person so, and ask a second agent or the person to judge it.

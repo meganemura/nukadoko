@@ -364,6 +364,10 @@ export interface RunCitedJudgment {
    * holds it, and where it first differs from the value read now. */
   readonly value?: unknown;
   readonly difference?: string;
+  /** Under `--base`: whether the base's judgment file already held this
+   * judgment (`false` when the change brought it). Absent without a base,
+   * and when the base's file could not be read. */
+  readonly in_base?: boolean;
 }
 
 /** One value a run read for a judgment: which Then and claim read it, in

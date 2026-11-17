@@ -89,6 +89,16 @@ module Nukadoko
       # : (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(String) -> Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
       def self?.with_judgments: (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(String) -> Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
 
+      # Under --base, each judgment a read cites gains `in_base`: true when
+      # the base's file already held that very judgment (the same claim,
+      # value, verdict, judge, reason, and time), false when the change
+      # brought it. A change cannot be trusted to judge its own output any
+      # more than to rewrite its own Thens, and the old world covers only
+      # the Thens. `base_entries_of` answers nil for a feature whose base
+      # file could not be read, and its reads stay unmarked.
+      # : (Array[Hash[Symbol, untyped]], ^(String) -> Array[Hash[Symbol, untyped]]?) -> Array[Hash[Symbol, untyped]]
+      def self?.with_base_judgments: (Array[Hash[Symbol, untyped]], ^(String) -> Array[Hash[Symbol, untyped]]?) -> Array[Hash[Symbol, untyped]]
+
       # : (Array[Hash[Symbol, untyped]]) -> bool
       def self?.open?: (Array[Hash[Symbol, untyped]]) -> bool
 

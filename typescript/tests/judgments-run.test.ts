@@ -69,9 +69,9 @@ const GREETING = `Feature: Greeting
 const WELCOME = "Welcome! Make yourself at home.\n";
 
 interface Document {
-  table: { rows: { line: number; verdict: string; cells: { world: string }[]; judgment?: { state: string; reason: string } }[]; judgments_changed?: string[] };
+  table: { rows: { line: number; verdict: string; cells: { world: string }[]; judgment?: { state: string; reason: string; reads: { judgment?: { in_base?: boolean } }[] } }[]; judgments_changed?: string[] };
   findings: { code: string; message: string; severity?: string; file?: string; line?: number; fix?: string; do?: string }[];
-  limits?: { kind: string; detail: string }[];
+  limits?: { kind: string; line?: number; detail: string }[];
 }
 
 describe("judgments through nuka run and nuka judge", () => {
@@ -222,5 +222,15 @@ describe("judgments through nuka run and nuka judge", () => {
     expect(judged.document.table.judgments_changed).toEqual(["judgments/features/greeting.feature.json"]);
     const summary = readFileSync(path.join(project.root, ".nukadoko/runs", judged.runId, "summary.md"), "utf8");
     expect(summary).toContain("A judgment file changed since the base: `judgments/features/greeting.feature.json`.");
+
+    // Per row: the judgment the base already held, and the one this change
+    // brought, which the row's limit names.
+    const inBase = Object.fromEntries(
+      judged.document.table.rows.filter((entry) => entry.judgment !== undefined).map((entry) => [entry.line, entry.judgment!.reads.map((read) => read.judgment?.in_base)]),
+    );
+    expect(inBase).toEqual({ 3: [true], 7: [false] });
+    const details = Object.fromEntries((judged.document.limits ?? []).filter((limit) => limit.kind === "judgment").map((limit) => [limit.line, limit.detail]));
+    expect(details[7]).toBe("stands on a judgment by `reviewer` that this change added: nukadoko checked that the value is the one judged, not the judgment");
+    expect(details[3]).not.toContain("that this change added");
   }, 120_000);
 });

@@ -12,6 +12,9 @@ notes come from the section below whose heading starts with `## [<version>]`.
   `Nukadoko-Verdict: <passed|failed|stale|none|unknown> run <id> tree <id>`,
   to stamp a commit, and exits 0 whatever it says. `--json` carries the
   same line as `trailer`. The same as the TypeScript engine.
+- Under `--base`, each judgment a read cites carries `in_base`, and a row
+  that stands on a judgment the change added says so in its `judgment`
+  limit. The same as the TypeScript engine.
 
 ## [0.5.0] - 2026-11-16
 

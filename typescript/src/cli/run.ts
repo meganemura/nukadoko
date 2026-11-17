@@ -70,8 +70,8 @@ import { generateRunId } from "../run/run-id.js";
 import { inRunOrder, orderFlags, orderText, readOrder, replayTargets, runCommand } from "../run/run-order.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { limitsOf, renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
-import { judgmentFindings, judgmentsOpen, withJudgments, type JudgmentEntry } from "../run/judgments.js";
-import { changedJudgmentFiles, judgmentFileOf, readJudgmentFile } from "../run/judgment-file.js";
+import { judgmentFindings, judgmentsOpen, withBaseJudgments, withJudgments, type JudgmentEntry } from "../run/judgments.js";
+import { changedJudgmentFiles, judgmentEntriesAtCommit, judgmentFileOf, readJudgmentFile } from "../run/judgment-file.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { judgedEarlyFindings, readingsToRecount, withAfterWorldStop } from "../run/events-after-stop.js";
 import { demotingFailure, unexpectedFailureFindings, unseenExpectationNotes } from "../run/underneath.js";
@@ -1603,6 +1603,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // Under --base a reviewer reads which judgments the change added or
       // replaced, as the summary lists the mapping files that changed.
       let judgmentsChanged: readonly string[] | undefined;
+      let baseJudgedTable = judgedTable;
       if (base !== undefined) {
         try {
           judgmentsChanged = await changedJudgmentFiles(rootDir, base.commit);
@@ -1610,7 +1611,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           warn({ severity: "warning", code: "judgments-not-compared", message: `the judgment files were not compared with the base: ${error instanceof Error ? error.message : String(error)}` });
         }
       }
-      const table = judgmentsChanged === undefined ? judgedTable : { ...judgedTable, judgments_changed: judgmentsChanged };
+      // And per row, which judgment the change brought: a row that stands
+      // on a judgment the change made of its own output. A base file git
+      // or the parser cannot read leaves that feature's reads unmarked.
+      if (base !== undefined && judgmentsChanged !== undefined) {
+        const baseEntries = new Map<string, readonly JudgmentEntry[] | undefined>();
+        for (const feature of new Set(judgedTable.rows.filter((row) => row.judgment !== undefined).map((row) => row.feature))) {
+          const read = await judgmentEntriesAtCommit(rootDir, base.commit, feature).catch(() => undefined);
+          baseEntries.set(feature, read === undefined || "problem" in read ? undefined : read.entries);
+        }
+        baseJudgedTable = withBaseJudgments(judgedTable, (feature) => baseEntries.get(feature));
+      }
+      const table = judgmentsChanged === undefined ? baseJudgedTable : { ...baseJudgedTable, judgments_changed: judgmentsChanged };
       // A red row with no required cell has no failed execution to carry
       // its finding, so it gets one of its own. An environment the run did
       // not start that meets the row is the one its `do:` line runs.
