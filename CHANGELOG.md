@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.29.0 — 2026-11-17
+
 ### Added
 
 - `nuka verdict --trailer` prints one git trailer line that stamps a
