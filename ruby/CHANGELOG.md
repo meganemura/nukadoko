@@ -6,6 +6,8 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-17
+
 ### Added
 
 - `nuka verdict --trailer` prints one git trailer line,
