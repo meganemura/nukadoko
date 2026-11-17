@@ -7,6 +7,19 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- `nuka verdict --trailer` prints one git trailer line that stamps a
+  commit with what the newest run said about the working tree:
+  `Nukadoko-Verdict: passed`, `failed`, `stale`, `none` (no run ended),
+  or `unknown` (no tree id), with the run id and the tree the run
+  recorded, and exits 0 whatever it says. It is the observing form of the
+  gate: a `prepare-commit-msg` hook stamps every commit, and a team counts
+  how often the plain `nuka verdict` would have blocked before it lets it
+  block. Because the stamp names the tree, a later reader checks it
+  exactly against `git rev-parse <commit>^{tree}`. `nuka verdict --json`
+  carries the same line as `trailer`. Both engines.
+
 ## 0.28.0 — 2026-11-16
 
 ### Added

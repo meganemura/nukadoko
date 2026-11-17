@@ -1037,16 +1037,22 @@ export async function runCli(
 
   // The question an agent asks before it says a change is done, answered
   // from records alone; it never starts a run (src/cli/verdict.ts).
-  const verdictCommand: CommandModule<Record<string, never>, { json?: boolean }> = {
+  const verdictCommand: CommandModule<Record<string, never>, { json?: boolean; trailer?: boolean }> = {
     command: "verdict",
     describe:
       "say whether the newest run judged the working tree as it is now and left nothing red; exits 1 when it did not, and never starts a run",
     builder: (y: Argv) =>
-      y.option("json", { type: "boolean", default: false, describe: "machine-readable output" }) as Argv<{ json?: boolean }>,
-    handler: async (args: Arguments<{ json?: boolean }>) => {
+      y
+        .option("json", { type: "boolean", default: false, describe: "machine-readable output" })
+        .option("trailer", {
+          type: "boolean",
+          default: false,
+          describe: "print one git trailer line (Nukadoko-Verdict: passed, failed, stale, none, or unknown, with the run id and the tree it judged) and exit 0 whatever it says, to stamp a commit",
+        }) as Argv<{ json?: boolean; trailer?: boolean }>,
+    handler: async (args: Arguments<{ json?: boolean; trailer?: boolean }>) => {
       if (argsFailed) return;
       const { runVerdict } = await import("./verdict.js");
-      exitCode = await runVerdict({ rootDir, json: args.json ?? false, notices, stdout, stderr });
+      exitCode = await runVerdict({ rootDir, json: args.json ?? false, trailer: args.trailer ?? false, notices, stdout, stderr });
     },
   };
 

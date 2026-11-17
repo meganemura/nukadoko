@@ -91,6 +91,28 @@ Code's hook fields as of 2.1.317 (`hook_event_name`, `session_id`, `cwd`,
 `stop_hook_active`; `decision: "block"` with `reason`); check them against
 the version you run.
 
+## Stamping each commit, before the hook blocks
+
+A gate that blocks from its first day blocks on the cases nobody
+measured. `nuka verdict --trailer` is the observing form: it prints one
+git trailer line and exits 0 whatever it says, so it never stops a
+commit. Add it in a `prepare-commit-msg` hook:
+
+```sh
+git interpret-trailers --in-place --trailer "$(npx nuka verdict --trailer)" "$1"
+```
+
+Git runs the hook at the repository's top. When the project is below it,
+`cd` inside the `$(...)`, as `"$(cd app && npx nuka verdict --trailer)"`:
+`$1` is a path from the top.
+
+Every commit then carries `Nukadoko-Verdict: passed`, `failed`, `stale`,
+`none` (no run ended), or `unknown` (no tree id), with the run id and the
+tree the run recorded. The stamp speaks for the commit only when
+`git rev-parse <commit>^{tree}` is that tree; a commit of part of the
+working tree carries another. Count the commits that were not `passed`
+for a while, then turn on the Stop hook above, which blocks.
+
 ## When the reviewer asks how risky it is
 
 A pass and a clean intent still leave the reviewer's own question: what

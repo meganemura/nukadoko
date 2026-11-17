@@ -5,7 +5,7 @@
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
-    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records --meets --misses --step].freeze
+    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records --meets --misses --step --trailer].freeze
     REPEATED = %w[--tag --env --use].freeze
     VALUED = %w[--format --out --base --repeat --concurrency --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv
                 --run --by --because --walk --timeout].freeze
@@ -44,7 +44,8 @@ module Nukadoko
                                 alone
         nuka verdict            say whether the newest run judged the working tree as
                                 it is now and left nothing red; exits 1 when it did
-                                not, and never starts a run
+                                not, and never starts a run; --trailer prints one git
+                                trailer line to stamp a commit, and exits 0
         nuka judge <target>     show the values a run read for a criterion whose Then
                                 asks for a judgment (<feature file>:<scenario line>),
                                 or record a judgment of them with --meets or --misses
@@ -761,13 +762,18 @@ module Nukadoko
     #: () -> Integer
     def verdict
       answer = Engine::Verdict.new(@project)
+      # --trailer observes: a stamp never blocks, so only the exit code
+      # moves, and the envelope still says what the verdict was.
+      trailer = @options.key?("--trailer")
       if @json
         emit({ **head("verdict", answer.open? ? "failed" : "passed", answer.findings), **answer.envelope_fields }, answer.findings, "verdict")
+      elsif trailer
+        @out.puts answer.trailer
       else
         @out.puts answer.headline
         emit({}, answer.findings, "verdict")
       end
-      answer.open? ? 1 : 0
+      answer.open? && !trailer ? 1 : 0
     end
 
     # What check says about the env files; a file it cannot read, or a key

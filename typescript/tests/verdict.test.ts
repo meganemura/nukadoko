@@ -3,7 +3,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { appendFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { isOpen, judgeWorkingTree } from "../src/cli/verdict.js";
+import { isOpen, judgeWorkingTree, trailer } from "../src/cli/verdict.js";
 import { runCli } from "../src/cli/run-cli.js";
 import type { Finding } from "../src/finding/finding.js";
 import type { RunDocument } from "../src/record/run-result.js";
@@ -51,6 +51,7 @@ describe("nuka verdict", () => {
       "run_dir",
       "run_working_tree",
       "base",
+      "trailer",
     ]);
     expect(document).toMatchObject({
       command: "verdict",
@@ -62,6 +63,7 @@ describe("nuka verdict", () => {
       run_dir: null,
       run_working_tree: null,
       base: null,
+      trailer: "Nukadoko-Verdict: none",
     });
   });
 
@@ -112,6 +114,31 @@ describe("nuka verdict", () => {
     const red = (run.findings as Finding[]).filter((finding) => finding.severity === "failed");
     expect(red.map((finding) => finding.code)).toContain("scenario-failed");
     expect(document.findings.filter((finding: Finding) => finding.severity === "failed")).toEqual(red);
+  });
+
+  it("prints one trailer line under --trailer and exits 0, whatever the verdict", async () => {
+    expect(await nuka(rootDir, ["verdict", "--trailer"])).toEqual({ exitCode: 0, stdout: "Nukadoko-Verdict: none\n", stderr: "" });
+
+    expect((await nuka(rootDir, ["run", "--no-check", "features/passing.feature"])).exitCode).toBe(0);
+    const passed = latestRunJson(rootDir);
+    const tree = passed.commit.working_tree as string;
+    expect(await nuka(rootDir, ["verdict", "--trailer"])).toEqual({
+      exitCode: 0,
+      stdout: `Nukadoko-Verdict: passed run ${passed.run_id} tree ${tree}\n`,
+      stderr: "",
+    });
+
+    await appendFile(path.join(rootDir, "features", "passing.feature"), "\n");
+    expect((await nuka(rootDir, ["verdict", "--trailer"])).stdout).toBe(`Nukadoko-Verdict: stale run ${passed.run_id} tree ${tree}\n`);
+
+    expect((await nuka(rootDir, ["run", "--no-check", "features/failing.feature"])).exitCode).toBe(1);
+    const failed = latestRunJson(rootDir);
+    const red = await nuka(rootDir, ["verdict", "--trailer", "--json"]);
+    expect(red.exitCode).toBe(0);
+    expect(JSON.parse(red.stdout)).toMatchObject({
+      verdict: "failed",
+      trailer: `Nukadoko-Verdict: failed run ${failed.run_id} tree ${failed.commit.working_tree as string}`,
+    });
   });
 
   it("fails a run that left out scenarios of its file with run-partial", async () => {
@@ -204,6 +231,21 @@ describe("judgeWorkingTree", () => {
       const relayed = answer.findings.filter((finding) => newest.findings.includes(finding));
       expect(relayed).toEqual(red);
       expect(answer.judged).toBe(recorded === undefined ? "unknown" : "judged");
+    }),
+  );
+
+  it(
+    "stamps passed exactly when the plain verdict passes on a tree it judged, and names the tree the run recorded",
+    () => hegel.test((tc) => {
+      const newest = tc.draw(gs.oneOf(runDocument.map((run): RunDocument | undefined => run), gs.just(undefined)));
+      const workingTree = tc.draw(gs.oneOf(TREE.map((tree): string | undefined => tree), gs.just(undefined)));
+      const answer = judgeWorkingTree(newest, workingTree);
+      const line = trailer(answer, newest);
+      const [key, word, ...rest] = line.split(" ");
+      expect(key).toBe("Nukadoko-Verdict:");
+      expect(word === "passed").toBe(answer.judged === "judged" && !isOpen(answer.findings));
+      const recorded = (newest?.commit as { working_tree?: string } | null)?.working_tree;
+      expect(rest).toEqual(newest === undefined ? [] : ["run", newest.run_id, ...(recorded === undefined ? [] : ["tree", recorded])]);
     }),
   );
 });

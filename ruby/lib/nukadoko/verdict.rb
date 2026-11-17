@@ -17,6 +17,8 @@ module Nukadoko
         "working-tree-unknown" => "No change is necessary. In a git repository with a commit, nuka verdict compares the tree with the one the run judged."
       }.freeze
 
+      TRAILER_KEY = "Nukadoko-Verdict" #: String
+
       attr_reader :judged #: String
       attr_reader :findings #: Array[Hash[Symbol, untyped]]
       attr_reader :newest #: Hash[Symbol, untyped]?
@@ -51,7 +53,22 @@ module Nukadoko
       #: () -> Hash[Symbol, untyped]
       def envelope_fields
         { judged: judged, working_tree: working_tree, run_id: newest&.fetch(:run_id), run_dir: newest&.fetch(:run_dir, nil),
-          run_working_tree: newest && recorded, base: newest&.dig(:table, :base) }
+          run_working_tree: newest && recorded, base: newest&.dig(:table, :base), trailer: trailer }
+      end
+
+      # One git trailer line that stamps a commit with this answer. The tree
+      # named is the one the run recorded, so a reader compares it with the
+      # commit's own tree later and knows whether the stamp speaks for it.
+      #: () -> String
+      def trailer
+        run = newest or return "#{TRAILER_KEY}: none"
+        word = case judged
+               when "stale" then "stale"
+               when "unknown" then "unknown"
+               else open? ? "failed" : "passed"
+               end
+        tree = recorded
+        "#{TRAILER_KEY}: #{word} run #{run[:run_id]}#{" tree #{tree}" if tree}"
       end
 
       #: () -> String

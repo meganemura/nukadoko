@@ -68,8 +68,9 @@ seed が同じなら、TypeScript 版と同じ順番です。
 `--concurrency` は、feature ファイルを丸ごと、その数の worker プロセスに分けて実行します。
 Feature の行に `@nukadoko:serial` があるファイルは、ほかのファイルのあとに 1 つずつ実行します。
 `--repeat` は選んだシナリオをその回数だけ実行し、`--proof-runs` は control を何回実行するかを決め、`--records` はシナリオの記録を終わるたびに stdout に書きます。
-- `nuka verdict [--json]` は、いちばん新しい run が今の作業ツリーを判定し、赤を残さなかったかを答えます。
+- `nuka verdict [--json] [--trailer]` は、いちばん新しい run が今の作業ツリーを判定し、赤を残さなかったかを答えます。
 run は始めません。
+`--trailer` は、その答えでコミットに印を付ける git の trailer を 1 行出し、終了コード 0 で終わります。
 - `nuka judge <feature>:<line> [--run <id>] [--json]` は、Then が判断を求める基準(`judged-as` の claim)について、run が読んだ値を見せます。
 `--meets` か `--misses` に `--by <who>` と `--because <一文>` を付けると、その値の判断を `judgments/<feature>.json` に記録します。
 次の run は、この記録と照らして基準を読みます。

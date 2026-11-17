@@ -10,6 +10,8 @@ module Nukadoko
     class Verdict
       FIXES: untyped
 
+      TRAILER_KEY: String
+
       attr_reader judged: String
 
       attr_reader findings: Array[Hash[Symbol, untyped]]
@@ -31,6 +33,12 @@ module Nukadoko
 
       # : () -> Hash[Symbol, untyped]
       def envelope_fields: () -> Hash[Symbol, untyped]
+
+      # One git trailer line that stamps a commit with this answer. The tree
+      # named is the one the run recorded, so a reader compares it with the
+      # commit's own tree later and knows whether the stamp speaks for it.
+      # : () -> String
+      def trailer: () -> String
 
       # : () -> String
       def headline: () -> String

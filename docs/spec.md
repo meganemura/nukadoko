@@ -8593,6 +8593,22 @@ its scenario record's id, so either record leads to the other.
   `working-tree-unknown` leaves the verdict to the run's own table. A step
   or a program that writes a file git counts moves the tree on every run,
   and the verdict stays `run-stale` until `.gitignore` leaves the file out.
+- `nuka verdict --trailer` stamps a commit with the same answer, observed
+  rather than enforced: one git trailer line,
+  `Nukadoko-Verdict: <word> run <run_id> tree <tree id>`, and exit 0 whatever
+  it says, a refusal included. The word is `passed` or `failed` for a run that judged this
+  tree, `stale` for one that judged another, `none` when no run has ended
+  (the line then ends there), and `unknown` when git gave no tree id. The
+  tree is the one the run recorded, left out when it recorded none, so the
+  stamp is checked later exactly: it speaks for a commit when the commit's
+  `git rev-parse <commit>^{tree}` is that tree, and a commit of part of the
+  working tree carries another. A `prepare-commit-msg` hook adds it with
+  `git interpret-trailers --in-place --trailer "$(npx nuka verdict --trailer)" "$1"`,
+  with a `cd` into the project inside the `$(...)` when the project is
+  below the repository's top, since git runs the hook at the top and `$1`
+  is a path from there.
+  The stamp blocks nothing, and that is its use: a team counts how often
+  the plain `nuka verdict` would have blocked before it lets it block.
 - A run's step records are stored under `.nukadoko/runs/<run_id>/steps/<id>/`,
   beside its `run.json`, and a `nuka do` step record under
   `.nukadoko/do/<id>/` (see "Artifacts"). Both are
@@ -9844,7 +9860,8 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               directory on the way to --out is created;
                               anything else in the way is refused
                               (report-out-invalid)
-nuka verdict [--json]         whether the newest run that ended judged the
+nuka verdict [--json] [--trailer]
+                              whether the newest run that ended judged the
                               working tree as it is now and left nothing
                               red, from run.json and one git tree id; it
                               never starts a run. Exit 1 with run-missing
@@ -9859,7 +9876,13 @@ nuka verdict [--json]         whether the newest run that ended judged the
                               the change has a criterion of its own (see
                               "Records"). --json adds judged (missing,
                               stale, judged, unknown), working_tree,
-                              run_id, run_dir, run_working_tree, and base
+                              run_id, run_dir, run_working_tree, base, and
+                              trailer. --trailer prints only the trailer,
+                              one git trailer line that stamps a commit
+                              (Nukadoko-Verdict: passed, failed, stale,
+                              none, or unknown, with the run id and the
+                              tree the run recorded), and exits 0
+                              whatever it says
 nuka judge <feature:line> [--run <run-id>] [--meets|--misses --by <name> --because <sentence>] [--json]
                               show what a criterion's judged-as Thens read
                               in a run that ended (the newest, or --run):
@@ -10414,7 +10437,7 @@ reading either stream.
 | Exit | Meaning | Examples |
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported, a `nuka verdict` that found no run speaking for the working tree or a red one, a `nuka run` with a judgment that is not `judged` |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported, a `nuka verdict` (without `--trailer`) that found no run speaking for the working tree or a red one, a `nuka run` with a judgment that is not `judged` |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat`, `--concurrency`, or `--order`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code or a note code with targets, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
@@ -10425,7 +10448,7 @@ reading either stream.
 | `nuka check` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and the `fail-on` lines |
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |
 | `nuka clean` | one line per path, or with `--json` the envelope | nothing, except a refusal or a `walk-run-kept` note without `--json` |
-| `nuka verdict` | one line that says what the newest run speaks for, then its findings, or with `--json` the envelope | nothing, except a refusal without `--json` |
+| `nuka verdict` | one line that says what the newest run speaks for, then its findings; with `--trailer` the trailer line alone; with `--json` the envelope | nothing, except a refusal without `--json` |
 | `nuka judge` | the values to judge, or one line per value judged, or with `--json` the envelope | the judgment file written, with the run that reads it; a refusal without `--json` |
 
 A refusal under `--json` replaces the report: the envelope holds the

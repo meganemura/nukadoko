@@ -6,6 +6,13 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Added
+
+- `nuka verdict --trailer` prints one git trailer line,
+  `Nukadoko-Verdict: <passed|failed|stale|none|unknown> run <id> tree <id>`,
+  to stamp a commit, and exits 0 whatever it says. `--json` carries the
+  same line as `trailer`. The same as the TypeScript engine.
+
 ## [0.5.0] - 2026-11-16
 
 ### Added

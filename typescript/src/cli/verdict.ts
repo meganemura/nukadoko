@@ -33,6 +33,9 @@ import { FAILED_EXIT_CODE, formatEnvelope, refuse, withHint } from "./refusal.js
 export interface RunVerdictOptions {
   rootDir: string;
   json: boolean;
+  /** Observe instead of enforce: print the trailer line (or, with `json`,
+   * the envelope as usual) and exit 0 whatever the verdict. */
+  trailer?: boolean;
   /** Findings a caller raised before the command ran (no config file), put
    * first in the envelope. */
   notices?: readonly Finding[];
@@ -163,6 +166,25 @@ export function isOpen(findings: readonly Finding[]): boolean {
   return findings.some((finding) => finding.severity === "failed" || finding.severity === "error");
 }
 
+/** The git trailer key `--trailer` prints. */
+const TRAILER_KEY = "Nukadoko-Verdict";
+
+/**
+ * One git trailer line that stamps a commit with what the newest run said
+ * about the working tree: `passed` or `failed` when it judged this tree,
+ * `stale` when it judged another, `none` when no run has ended, and
+ * `unknown` when git gave no tree id. The tree named is the one the run
+ * recorded, so a reader later compares it with `git rev-parse
+ * <commit>^{tree}` and knows exactly whether the stamp speaks for that
+ * commit: a commit of part of the working tree carries another tree.
+ */
+export function trailer(answer: VerdictAnswer, newest: RunDocument | undefined): string {
+  if (newest === undefined) return `${TRAILER_KEY}: none`;
+  const word = answer.judged === "stale" ? "stale" : answer.judged === "unknown" ? "unknown" : isOpen(answer.findings) ? "failed" : "passed";
+  const tree = runWorkingTree(newest);
+  return `${TRAILER_KEY}: ${word} run ${newest.run_id}${tree === undefined ? "" : ` tree ${tree}`}`;
+}
+
 /** The line before the findings: what the newest run speaks for, in words. */
 export function headline(answer: VerdictAnswer, newest: RunDocument | undefined): string {
   const open = isOpen(answer.findings);
@@ -188,7 +210,9 @@ export async function runVerdict(options: RunVerdictOptions): Promise<number> {
   try {
     stateDir = (await loadConfig(rootDir)).stateDir;
   } catch (error) {
-    return refuse(sinks, error, "unexpected-error", undefined, notices);
+    // A stamp never blocks a commit, a project nuka cannot read included.
+    const refused = refuse(sinks, error, "unexpected-error", undefined, notices);
+    return options.trailer === true ? 0 : refused;
   }
 
   // The tree is probed before the runs are read: a run that ends in
@@ -198,6 +222,9 @@ export async function runVerdict(options: RunVerdictOptions): Promise<number> {
   const newest = rankRunsNewestFirst(readEndedRuns(rootDir, stateDir))[0]?.run;
   const answer = judgeWorkingTree(newest, workingTree);
   const exitCode = isOpen(answer.findings) ? FAILED_EXIT_CODE : 0;
+  // A stamp never blocks: blocking is the plain command's job. The JSON
+  // envelope still says what the verdict was, so only the exit code moves.
+  const returned = options.trailer === true ? 0 : exitCode;
 
   if (json) {
     stdout.write(
@@ -208,9 +235,14 @@ export async function runVerdict(options: RunVerdictOptions): Promise<number> {
         run_dir: newest === undefined ? null : (newest.run_dir ?? null),
         run_working_tree: newest === undefined ? null : (runWorkingTree(newest) ?? null),
         base: newest === undefined ? null : tableOf(newest).base,
+        trailer: trailer(answer, newest),
       }),
     );
-    return exitCode;
+    return returned;
+  }
+  if (options.trailer === true) {
+    stdout.write(`${trailer(answer, newest)}\n`);
+    return returned;
   }
   stdout.write(`${headline(answer, newest)}\n`);
   for (const finding of answer.findings) stdout.write(formatFinding(withHint(finding)));

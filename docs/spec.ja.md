@@ -6580,6 +6580,20 @@ scenario record は独立したファイルではなく、その run の `run.js
   run がどの feature ファイルを名指したかも言いません。
   git の外や最初のコミットの前には比べる作業ツリーの id が無く、注記 `working-tree-unknown` を出して、断定はその run 自身の断定の表に任せます。
   git が数えるファイルを step やプログラムが書くと、run のたびに作業ツリーが動き、`.gitignore` がそのファイルを除くまで断定は `run-stale` のままです。
+- `nuka verdict --trailer` は、同じ答えでコミットに印を付けます。
+  止めずに観察する形です。
+  git の trailer を 1 行、`Nukadoko-Verdict: <word> run <run_id> tree <tree id>` と出し、拒否のときも含めて、何と言っても終了コード 0 で終わります。
+  word は、この作業ツリーを判定した run なら `passed` か `failed`、別の作業ツリーを判定した run なら `stale`、終わった run が無いなら `none`(行はそこで終わります)、git が作業ツリーの id を返さなかったなら `unknown` です。
+  tree は run が記録した作業ツリーで、記録が無ければ書きません。
+  そのため、印はあとで正確に確かめられます。
+  コミットの `git rev-parse <commit>^{tree}` がその tree なら、印はそのコミットについて言っています。
+  作業ツリーの一部だけをコミットすると、別の tree になります。
+  `prepare-commit-msg` フックでは `git interpret-trailers --in-place --trailer "$(npx nuka verdict --trailer)" "$1"` で付けます。
+  git はフックをリポジトリの最上位で動かし、`$1` もそこからのパスです。
+  そのため、プロジェクトがその下にあるときは、`$(...)` の中でプロジェクトへ `cd` します。
+  印は何も止めません。
+  それが使いどころです。
+  チームは、素の `nuka verdict` に止めさせる前に、それが何回止めたはずかを数えられます。
 - run の step record は、その `run.json` の隣の `.nukadoko/runs/<run_id>/steps/<id>/` の下に、`nuka do` の step record は `.nukadoko/do/<id>/` の下に置かれます(「成果物」を参照)。
   どちらもローカルな作業上の計測であり、人が手元に残すのは pull request 上の run サマリです(後述)。
 
@@ -7718,7 +7732,8 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               directory on the way to --out is created;
                               anything else in the way is refused
                               (report-out-invalid)
-nuka verdict [--json]         whether the newest run that ended judged the
+nuka verdict [--json] [--trailer]
+                              whether the newest run that ended judged the
                               working tree as it is now and left nothing
                               red, from run.json and one git tree id; it
                               never starts a run. Exit 1 with run-missing
@@ -7733,7 +7748,13 @@ nuka verdict [--json]         whether the newest run that ended judged the
                               the change has a criterion of its own (see
                               "Records"). --json adds judged (missing,
                               stale, judged, unknown), working_tree,
-                              run_id, run_dir, run_working_tree, and base
+                              run_id, run_dir, run_working_tree, base, and
+                              trailer. --trailer prints only the trailer,
+                              one git trailer line that stamps a commit
+                              (Nukadoko-Verdict: passed, failed, stale,
+                              none, or unknown, with the run id and the
+                              tree the run recorded), and exits 0
+                              whatever it says
 nuka judge <feature:line> [--run <run-id>] [--meets|--misses --by <name> --because <sentence>] [--json]
                               show what a criterion's judged-as Thens read
                               in a run that ended (the newest, or --run):
@@ -8274,7 +8295,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code、作業ツリーを判定した run が無いか red の run を見つけた `nuka verdict`、`judged` でない判断を持つ `nuka run` |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code、作業ツリーを判定した run が無いか red の run を見つけた `nuka verdict`(`--trailer` なし)、`judged` でない判断を持つ `nuka run` |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat`、`--concurrency`、`--order`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code や対象を指定したときの注記の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
@@ -8285,7 +8306,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | `nuka check` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`fail-on` の行を除く) |
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |
 | `nuka clean` | パスごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否と `walk-run-kept` の note を除く) |
-| `nuka verdict` | 最新の run が何を判定したかを言う 1 行とその所見、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
+| `nuka verdict` | 最新の run が何を判定したかを言う 1 行とその所見、`--trailer` なら trailer の 1 行だけ、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
 | `nuka judge` | 判断する値、判断した値ごとに 1 行、`--json` なら envelope | 書いた判断のファイルと、それを読む run(`--json` なしの拒否を含む) |
 
 `--json` のときの拒否は報告の代わりになります。

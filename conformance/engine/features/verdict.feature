@@ -50,3 +50,30 @@ Feature: nuka verdict says whether the newest run judged this working tree
     Then it exits with 0
     And the findings are "working-tree-unknown run-without-base"
     And the verdict judged "unknown"
+
+  Scenario: --trailer stamps a commit with none before any run, and exits 0
+    Given the project "tagged" in a git repository
+    When nuka runs "verdict --trailer"
+    Then it exits with 0
+    And it prints
+      """
+      Nukadoko-Verdict: none
+      """
+
+  Scenario: --trailer exits 0 over a red run, and the envelope still says what the verdict was
+    Given the project "chain" in a git repository
+    When nuka runs "run features/chain.feature --json"
+    And nuka runs "verdict --json --trailer"
+    Then it exits with 0
+    And the findings are "scenario-failed run-without-base"
+    And the verdict judged "judged"
+
+  Scenario: outside git the trailer names the run and no tree
+    Given the project "tagged"
+    When nuka runs "run --json"
+    And nuka runs "verdict --json --trailer"
+    Then it exits with 0
+    And the envelope at "trailer" is
+      """
+      "Nukadoko-Verdict: unknown run run-<id>"
+      """
