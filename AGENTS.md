@@ -82,6 +82,16 @@ ships those shared files: `npm run build` copies them into `typescript/`,
 where git ignores them. Edit the root's files; a change to a copy is lost
 on the next build.
 
+`site/` is the documentation site (Astro and Starlight, its own
+`package.json`; run `npm` there), published to
+https://meganemura.github.io/nukadoko/ by `.github/workflows/site.yml`
+when main moves. It holds no prose of its own: `site/pages.ts` says
+which `## ` sections of the READMEs and `docs/` make each page, and
+`npm run build` writes the pages from them. A new `## ` in one of those
+documents fails that build until `site/pages.ts` places it, and so does
+a Japanese file whose `## ` headings do not pair with the English one,
+or a link to a heading that does not exist.
+
 ## Naming rule
 
 The npm package, this repository, the config file (`nukadoko.config.ts`),

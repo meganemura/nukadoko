@@ -1,0 +1,7 @@
+node_modules
+dist
+.astro
+.hegel
+# Written by scripts/sync.ts from docs/, the READMEs, and llms.txt. Edit those.
+src/content/docs
+public/llms.txt
