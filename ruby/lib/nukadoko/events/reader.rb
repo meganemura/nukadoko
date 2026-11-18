@@ -241,9 +241,20 @@ module Nukadoko
         # Once the world stopped: the world's redacted copy at `copy`, each
         # step's lines past its slice in its LATE_FILE, and what the file
         # holds. `steps` maps a trace id to [lines its slice read, its
-        # record's directory].
-        #: (String, Hash[String, [Integer, String]]) -> Hash[Symbol, untyped]
-        def collect(copy, steps)
+        # record's directory, its tally inputs]. With inputs, a step's path
+        # and its writes that persisted to a table that holds state are
+        # folded from every line of its trace, and each of `recounts`
+        # (`{ trace_id:, inputs:, selection:, replaced: }`) is counted again
+        # over every line of its trace, leaving out what `tables` leaves out.
+        #: (String, Hash[String, Array[untyped]], ?recounts: Array[Hash[Symbol, untyped]], ?tables: Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+        def collect(copy, steps, recounts: [], tables: NO_MARKED_TABLES)
+          own = { fields: {}, redact: ->(value) { @secrets.().redact(value) } }
+          folds = steps.filter_map { |id, (_, _, inputs)| [id, PathFold.new(inputs.merge(tables: tables), own)] if inputs }.to_h
+          writes = steps.filter_map { |id, (_, _, inputs)| [id, Tally.new(inputs.merge(selections: [Selection::PERSISTED_WRITES], tables: tables))] if inputs }.to_h
+          kinds = KindsSeen.new
+          tallies = recounts.map { Tally.new(_1[:inputs].merge(selections: [_1[:selection]], tables: tables)) }
+          tallies_of = Hash.new { |h, k| h[k] = [] } #: Hash[String, Array[Tally]]
+          recounts.each_with_index { |recount, index| tallies_of[recount[:trace_id]] << tallies.fetch(index) }
           secrets = @secrets.()
           counts = { lines: 0, owned: 0, unowned: 0, unreadable: 0 }
           undefined_kinds = Hash.new(0) #: Hash[String, Integer]
@@ -266,6 +277,20 @@ module Nukadoko
             elsif owner.nil? then counts[:unowned] += 1
             end
             undefined_kinds[line.kind.to_s] += 1 if line.state == "undefined-kind"
+            kinds.note(line)
+            # Ownership as the slice reads it: a damaged line by the id its
+            # text carries, a readable one by its `trace` field.
+            if !line.readable?
+              if (id = Trace.id_in(text, @prefix))
+                folds[id]&.damaged
+                writes[id]&.damaged
+                tallies_of.fetch(id, []).each(&:damaged)
+              end
+            elsif owner
+              folds[owner]&.owned(line)
+              writes[owner]&.owned(line)
+              tallies_of.fetch(owner, []).each { _1.owned(line) }
+            end
             shown = Events.kept_line(text, line, secrets)
             begin
               out&.puts(shown)
@@ -289,7 +314,20 @@ module Nukadoko
             entry[:file] = file
             entry[:truncated] = true if kept.truncated
           end
-          { copied: copied, **counts, undefined_kinds: undefined_kinds, late: late }
+          # Nothing is kept, so nothing is cut.
+          paths = folds.transform_values { _1.path(truncated: false, replaced: @replaced) }
+          # Only a write the lines say persisted counts.
+          state_writes = writes.filter_map do |id, tally|
+            counted = tally.reading(truncated: false, replaced: @replaced)[:counts][0][:counted]
+            [id, secrets.redact(counted)] if counted.any?
+          end.to_h
+          recounted = recounts.each_with_index.map do |recount, index|
+            reading = tallies.fetch(index).reading(truncated: false, replaced: recount[:replaced])
+            count = reading[:counts][0]
+            { lines: reading[:lines], unreadable: reading[:unreadable], count: count.merge(counted: secrets.redact(count[:counted])),
+              open: Events.reading_gaps(reading[:open], recount[:selection]["kind"], kinds) }
+          end
+          { copied: copied, **counts, undefined_kinds: undefined_kinds, late: late, paths: paths, state_writes: state_writes, recounted: recounted }
         end
 
         private

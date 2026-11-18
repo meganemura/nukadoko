@@ -40,6 +40,8 @@ module Nukadoko
         @target_versions = {} #: Hash[String, String]
         # Findings that are told and never fail the run.
         @warnings = [] #: Array[Hash[Symbol, untyped]]
+        @judged_early = {} #: Hash[String, Hash[Symbol, untyped]]
+        @state_writes = {} #: Hash[String, untyped]
         @world_entries = []
         @order = order
         @records = records
@@ -168,12 +170,14 @@ module Nukadoko
               end
             end
           end
-          @scenarios.each { cells[_1] << cell(runs[_1], environment, roles[_1], _1) }
         ensure
           @browser&.close
           @process_fixtures&.teardown
           world&.stop
           @world_entries << world_entry(environment, world, world_dir, (runs&.values || []).flatten) if world && @program.file?
+          # Cells are folded once the world stopped, so a claim its stop judged
+          # otherwise turns its execution broke.
+          @scenarios.each { cells[_1] << cell(runs[_1], environment, roles[_1], _1) } if world && runs && !$!
           world&.remove_events
           @browser = @process_fixtures = @program_log = @events = nil
         end
@@ -209,15 +213,104 @@ module Nukadoko
       #: (World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
       def world_events(world, world_dir, executions)
         steps = executions.flat_map { _1[:json][:steps] || [] }.select { _1.dig(:observed, :events) }
-        traced = steps.to_h { |step| [step[:observed][:events][:trace_id], [step[:observed][:events][:lines], File.join(@dir, step[:record])]] } #: Hash[String, [Integer, String]]
+        traced = steps.to_h do |step|
+          slice = step[:observed][:events]
+          [slice[:trace_id], [slice[:lines], File.join(@dir, step[:record]), Events.inputs_of_slice(slice)]]
+        end #: Hash[String, Array[untyped]]
+        places, recounts = readings_to_recount(executions)
         copy = File.join(world_dir, Events::WORLD_FILE)
-        found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets }).collect(copy, traced)
+        found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets }).collect(copy, traced, recounts: recounts)
         steps.each do |step|
-          late = found[:late][step[:observed][:events][:trace_id]]
+          id = step[:observed][:events][:trace_id]
+          late = found[:late][id]
           step[:events_late] = late if late
+          step[:path] = found[:paths][id] if found[:paths][id]
         end
+        @state_writes.merge!(found[:state_writes])
+        places.zip(found[:recounted]).each { |(step, claim, read), recounted| after_world_stop(step, claim, read, recounted) }
+        executions.each { judged_too_early(_1) }
         { file: found[:copied] ? File.join("worlds", File.basename(world_dir), Events::WORLD_FILE) : nil, lines: found[:lines], owned: found[:owned],
           late: found[:late].values.sum { _1[:lines] }, unowned: found[:unowned], unreadable: found[:unreadable], undefined_kinds: found[:undefined_kinds] }
+      end
+
+      # The claims of `executions` measured on a reading whose producer is
+      # a step of the same pass, each with the recount its world's stop
+      # makes. A reading of a finished record (`nuka do --use`) has its
+      # producer in another world, and a reading of nothing has none.
+      #: (Array[Hash[Symbol, untyped]]) -> [Array[[Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]]], Array[Hash[Symbol, untyped]]]
+      def readings_to_recount(executions)
+        steps = executions.flat_map { _1[:json][:steps] || [] }
+        producers = steps.filter_map { (slice = _1.dig(:observed, :events)) && [slice[:trace_id], slice] }.to_h
+        places = [] #: Array[[Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]]]
+        recounts = [] #: Array[Hash[Symbol, untyped]]
+        steps.each do |step|
+          (step[:claims] || []).each do |claim|
+            channel = claim[:measured].is_a?(Hash) && claim[:measured][:step_record_id] == step[:step_record_id] ? claim[:measured][:channel].to_s : ""
+            next unless channel.start_with?("events_read.")
+
+            read = (step[:events_read] || {})[channel.delete_prefix("events_read.")]
+            slice = read && read[:trace_id] && producers[read[:trace_id]]
+            next unless slice
+
+            places << [step, claim, read]
+            recounts << { trace_id: slice[:trace_id], inputs: Events.inputs_of_slice(slice), selection: read[:count],
+                          replaced: read[:open].any? { _1[:gap] == "file-replaced" } }
+          end
+        end
+        [places, recounts]
+      end
+
+      # A claim on a count, judged again over every line of the producer's
+      # trace once its world stopped: `after_world_stop` on the claim when
+      # a line arrived after it was judged. A claim the whole count would
+      # have judged otherwise was judged on lines still on their way.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void
+      def after_world_stop(_step, claim, read, recounted)
+        return if claim[:each] || claim[:outcome] == "unobserved"
+        return unless Events::Count::COMPARES.include?(claim[:compare]) && claim[:expected].is_a?(Numeric)
+
+        judged = read[:lines] + read[:unreadable]
+        all = recounted[:lines] + recounted[:unreadable]
+        return if all <= judged
+
+        # The reading's window closed when it read: the lines no step owns
+        # in it may still be the producer's, and the stop counts none.
+        maybe = recounted[:count][:maybe].merge("unowned" => recounted[:count][:maybe]["unowned"] + read[:maybe]["unowned"].to_i)
+        whole = recounted[:open].empty?
+        range = Events::Count.range_of(recounted[:count][:yes], maybe, whole)
+        judgment = Events::Count.judge({ range: range, whole: whole, open: recounted[:open], maybe: maybe }, claim[:compare], claim[:expected])
+        added = Events::Counted.describe(Events::Counted.added(read[:counted], recounted[:count][:counted]), true)
+        lines = ->(count) { count == 1 ? "1 line" : "#{count} lines" }
+        late = %(#{lines.(all - judged)} of the trace of step "#{read.dig(:of, :step) || "unknown"}" arrived after this claim was judged on #{lines.(judged)}) +
+               (added.empty? ? "" : ", and the stop counted #{added}")
+        reason = if judgment[:outcome] == :unjudged then "#{late}; #{judgment[:reason]}"
+                 else "#{late}; over all #{lines.(all)}, the count is #{Events::Count.describe_range(range)}, so the claim #{judgment[:outcome] == :held ? "holds" : "breaks"}"
+                 end
+        claim[:after_world_stop] = { lines: recounted[:lines], range: range, outcome: judgment[:outcome].to_s, reason: reason }
+      end
+
+      # An execution with a claim the world's stop judged otherwise was
+      # judged on lines still on their way: its cell is broke, and a
+      # claim-judged-early finding names the first such claim.
+      #: (Hash[Symbol, untyped]) -> void
+      def judged_too_early(execution)
+        json = execution[:json]
+        index = (json[:steps] || []).index { |step| (step[:claims] || []).any? { _1[:after_world_stop] && _1[:after_world_stop][:outcome] != _1[:outcome] } }
+        return unless index
+
+        step = json[:steps][index]
+        line = step[:line] || json[:line]
+        execution[:execution] = [:broke, line, "a claim at line #{line} was judged before every execution event it counts had arrived"]
+        claim = step[:claims].find { _1[:after_world_stop] && _1[:after_world_stop][:outcome] != _1[:outcome] }
+        # One per scenario and environment, since --repeat would say it again.
+        key = "#{json[:feature]}:#{json[:line]}:#{json[:environment]}"
+        scenario = @scenarios.find { _1.uri == json[:feature] && _1.line == json[:line] }
+        return if @world != "head" || @judged_early.key?(key) || scenario.nil? || @environment.nil?
+
+        @judged_early[key] = { severity: "failed", code: "claim-judged-early", file: json[:feature], line: line,
+                               message: "#{json[:scenario]}: a claim at line #{line} #{claim[:outcome]} before every execution event it counts " \
+                                        "had arrived, so its cell is broke: #{claim[:after_world_stop][:reason]}",
+                               do: again(scenario, @environment) }
       end
 
       # Under --concurrency the files go to worker processes in the run's
@@ -350,7 +443,7 @@ module Nukadoko
         executions = runs.map { _1[:execution] }
         cell = Table.cell(executions)
         entry = { world: @world, environment: environment.name, role: role, conditions: Table.conditions_of(scenario.tags, environment.conditions),
-                  outcome: cell[:outcome], line: cell[:line], runs: cell[:runs] }.compact
+                  outcome: cell[:outcome], line: cell[:line], runs: cell[:runs], reason: cell[:reason] }.compact
         if cell[:outcome] == "fail"
           entry[:claim] = executions.first[2]
           entry[:actuals] = runs.map { { value: _1[:actual] } }
@@ -422,7 +515,7 @@ module Nukadoko
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                    mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
                    worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },
-          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + judged + @incomplete,
+          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + @judged_early.values + judged + @incomplete,
           # A criterion whose Then asks for a judgment holds only once one
           # cites what it read: the judgment column has a gate of its own.
           passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty?,
@@ -634,8 +727,8 @@ module Nukadoko
                  else "passed"
                  end
         json = { scenario_record_id: scenario_record_id, feature: scenario.uri, line: scenario.line, scenario: scenario.name,
-                 status: status, **(walk_stopped && !stopped ? { stopped: walk_stopped } : {}),
-                 environment: environment.name, started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
+                 environment: environment.name, status: status, **(walk_stopped && !stopped ? { stopped: walk_stopped } : {}),
+                 started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
         json[:evidence] = { dir: File.join("scenarios", scenario_record_id), screenshots: final } if final.any?
         json[:do] = again(scenario, environment) if (failed || status == "stopped") && role != "control"

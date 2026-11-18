@@ -76,6 +76,24 @@ class EventsPropertiesTest < Minitest::Test
     end
   end
 
+  # A path counts each kind of line once per line it reads, so its entries
+  # do not depend on the order the lines arrived in, and their counts add
+  # up to the lines a path keys.
+  def test_a_paths_entries_do_not_depend_on_the_order_of_its_lines
+    check do |tc|
+      lines = Array.new(tc.draw(integers(min_value: 0, max_value: 8))) { E.parse_line(JSON.generate(draw_event(tc, traceparent(tc)))) }
+      inputs = { spans: SPANS, spans_not_kept: 0, processes: "none", process_spans: [] }
+      forward = E::PathFold.new(inputs)
+      lines.each { forward.owned(_1) }
+      backward = E::PathFold.new(inputs)
+      lines.reverse_each { backward.owned(_1) }
+      path = forward.path(truncated: false, replaced: false)
+      sorted = ->(entries) { entries.map { _1.key?("gates") ? _1.merge("gates" => _1["gates"].sort) : _1 }.sort_by(&:to_s) }
+      assert_equal sorted.(path[:entries]), sorted.(backward.path(truncated: false, replaced: false)[:entries])
+      assert_equal lines.count { E.request_of(_1).nil? && E.path_key_of(_1) }, path[:entries].sum { _1["count"] }
+    end
+  end
+
   # A compare holds on a range only when it holds for every count in it,
   # and breaks only when it holds for none: checked against each count of
   # a bounded range, and of an unbounded one up to past the expected value.

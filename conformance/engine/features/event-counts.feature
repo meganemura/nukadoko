@@ -51,3 +51,51 @@ Feature: a claim on a count of an earlier step's execution events
       """
       error events-producer-missing features/order.feature:4 Step "nothing-was-written"'s events.writes counts the execution events of step "an-item-is-added", and no earlier line runs it: "an-item-is-added" runs nowhere in this scenario. Each claim on the count is unjudged (producer-not-run)
       """
+
+  Scenario: a step's record folds its events into a path
+    Given the project "event-counts"
+    When nuka runs "run --json features/counts.feature"
+    Then it exits with 1
+    And the run.json at "scenarios[0].steps[0].path" is
+      """
+      {
+        "entries": [
+          {
+            "count": 1,
+            "kind": "db",
+            "op": "insert",
+            "table": "items"
+          }
+        ],
+        "maybe": 0,
+        "open": [],
+        "requests": [
+          {
+            "method": "POST",
+            "route": "/items",
+            "status": 201
+          }
+        ]
+      }
+      """
+
+  Scenario: a claim judged before its lines arrived turns its cell broke
+    Given the project "event-counts"
+    When nuka runs "run --json features/arrivals.feature"
+    Then it exits with 1
+    And the run.json at "scenarios[0].steps[1].claims[0].after_world_stop.outcome" is
+      """
+      "held"
+      """
+    And the run.json at "table.rows[0].cells[0].reason" is
+      """
+      "a claim at line 5 was judged before every execution event it counts had arrived"
+      """
+    And the run.json at "findings[1].message" is
+      """
+      "the row arrives after the claim read: a claim at line 5 unjudged before every execution event it counts had arrived, so its cell is broke: 2 lines of the trace of step \"a-slow-item-is-added\" arrived after this claim was judged on 0 lines, and the stop counted 1 more line: db insert into items; over all 2 lines, the count is exactly 1, so the claim holds"
+      """
+    And the run.json at "limits[0].detail" is
+      """
+      "2 lines of the program's events after the step ended, in `events-late.jsonl`"
+      """

@@ -3,7 +3,8 @@
 // one db line and then its request line, each with the traceparent the
 // request carried. POST /jobs enqueues a job that performs after the
 // answer, so its perform line arrives after the step ended, and writes a
-// line that is not JSON beside it.
+// line that is not JSON beside it. POST /slow-items answers at once and
+// writes its lines 250 ms later, after a claim that waits less has read.
 import { appendFileSync } from "node:fs";
 import { createServer } from "node:http";
 
@@ -16,6 +17,14 @@ createServer((request, response) => {
   if (request.method === "POST" && request.url === "/items") {
     write({ trace, kind: "db", table: "items", op: "insert", rows: 1, committed: true });
     write({ trace, kind: "request", method: "POST", route: "/items", status: 201 });
+    response.statusCode = 201;
+    return response.end("added");
+  }
+  if (request.method === "POST" && request.url === "/slow-items") {
+    setTimeout(() => {
+      write({ trace, kind: "db", table: "items", op: "insert", rows: 1, committed: true });
+      write({ trace, kind: "request", method: "POST", route: "/slow-items", status: 201 });
+    }, 250);
     response.statusCode = 201;
     return response.end("added");
   }

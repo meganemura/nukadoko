@@ -133,9 +133,13 @@ module Nukadoko
         # Once the world stopped: the world's redacted copy at `copy`, each
         # step's lines past its slice in its LATE_FILE, and what the file
         # holds. `steps` maps a trace id to [lines its slice read, its
-        # record's directory].
-        # : (String, Hash[String, [Integer, String]]) -> Hash[Symbol, untyped]
-        def collect: (String, Hash[String, [ Integer, String ]]) -> Hash[Symbol, untyped]
+        # record's directory, its tally inputs]. With inputs, a step's path
+        # and its writes that persisted to a table that holds state are
+        # folded from every line of its trace, and each of `recounts`
+        # (`{ trace_id:, inputs:, selection:, replaced: }`) is counted again
+        # over every line of its trace, leaving out what `tables` leaves out.
+        # : (String, Hash[String, Array[untyped]], ?recounts: Array[Hash[Symbol, untyped]], ?tables: Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+        def collect: (String, Hash[String, Array[untyped]], ?recounts: Array[Hash[Symbol, untyped]], ?tables: Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
 
         private
 

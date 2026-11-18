@@ -211,7 +211,9 @@ TypeScript エンジンにあって、このエンジンにまだないもので
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
 - プログラムの `lists`。
-- step のイベントのうちの flag とリクエストの並びである `path`。
+- run.json の `paths`、`flags`、`routes`(step のしたことを環境と world の間で比べるもの)と `intent`。
+- 下にある失敗(通った scenario が名指ししていない応答、エラー、ページのエラー)でセルを broke にすること。
+`@expects:` タグで名指ししたものは除きます。
 - fixture の `use` が返すもの。
 TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
 - MCP クライアントの呼び出しを記録する `measureMcp`。

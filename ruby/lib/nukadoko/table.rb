@@ -36,8 +36,9 @@ module Nukadoko
       end
 
       # What a cell's executions came to. An execution is `[:pass]`,
-      # `[:fail, line, claim]`, `[:broke, line]`, or `[:stopped, line]`
-      # for a walk a person stopped after that line.
+      # `[:fail, line, claim]`, `[:broke, line]` (with a reason when one is
+      # known, such as a claim judged before its events had arrived), or
+      # `[:stopped, line]` for a walk a person stopped after that line.
       #: (Array[Array[untyped]]) -> Hash[Symbol, untyped]
       def self.cell(executions)
         first = executions.first
@@ -47,6 +48,7 @@ module Nukadoko
           line = executions.find { _1.first != :pass }&.at(1)
           { outcome: "flaky", line: line }
         elsif first.first == :pass then { outcome: "pass" }
+        elsif first.first == :broke && first[2].is_a?(String) then { outcome: "broke", line: first[1], reason: first[2] }
         else { outcome: first.first.to_s, line: first[1] }
         end.merge(runs: executions.size)
       end

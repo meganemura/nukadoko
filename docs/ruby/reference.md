@@ -254,7 +254,11 @@ What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
 - In the program: `lists`.
-- On a step: `path`, the flags and requests among a step's events.
+- In run.json: `paths`, `flags`, and `routes`, which compare what steps did
+  across environments and worlds, and `intent`.
+- Failures underneath: a response, an error, or a page error a passed
+  scenario did not name turns its cell broke, unless an `@expects:` tag
+  names it.
 - What a fixture's `use` returns: the TypeScript engine gives back the
   scenario's outcome, so a teardown can keep what a failure left.
 - `measureMcp`, which records the MCP calls a client makes.

@@ -48,6 +48,26 @@ module Nukadoko
       # : (World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
       def world_events: (World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
 
+      # The claims of `executions` measured on a reading whose producer is
+      # a step of the same pass, each with the recount its world's stop
+      # makes. A reading of a finished record (`nuka do --use`) has its
+      # producer in another world, and a reading of nothing has none.
+      # : (Array[Hash[Symbol, untyped]]) -> [Array[[Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]]], Array[Hash[Symbol, untyped]]]
+      def readings_to_recount: (Array[Hash[Symbol, untyped]]) -> [ Array[[ Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped] ]], Array[Hash[Symbol, untyped]] ]
+
+      # A claim on a count, judged again over every line of the producer's
+      # trace once its world stopped: `after_world_stop` on the claim when
+      # a line arrived after it was judged. A claim the whole count would
+      # have judged otherwise was judged on lines still on their way.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void
+      def after_world_stop: (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]) -> void
+
+      # An execution with a claim the world's stop judged otherwise was
+      # judged on lines still on their way: its cell is broke, and a
+      # claim-judged-early finding names the first such claim.
+      # : (Hash[Symbol, untyped]) -> void
+      def judged_too_early: (Hash[Symbol, untyped]) -> void
+
       # Under --concurrency the files go to worker processes in the run's
       # order, round-robin, and each worker plays its own files --repeat
       # times. A file whose Feature line is @nukadoko:serial runs after

@@ -324,8 +324,8 @@ module Nukadoko
       findings += result.delete(:failures)
       started = result.slice(:run_id, :run_dir, :started_at, :finished_at, :commit, :environments, :worlds)
       rest = result.except(*started.keys)
-      envelope = { **head("run", passed ? "passed" : "failed", findings, check: @no_check ? "skipped" : "ran"),
-                   **started, selection: selection.selection, tag_selection: selection.tag_selection, **rest } #: Hash[Symbol, untyped]
+      envelope = { **head("run", passed ? "passed" : "failed", findings), **started, selection: selection.selection, tag_selection: selection.tag_selection,
+                   **rest.slice(:order), check: @no_check ? "skipped" : "ran", **rest.except(:order) } #: Hash[Symbol, untyped]
       envelope.delete(:tag_selection) unless envelope[:tag_selection]
       # The limits restate the fields above, so they are read from them,
       # and a run with none has no field.

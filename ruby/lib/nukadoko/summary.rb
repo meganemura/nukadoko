@@ -28,6 +28,7 @@ module Nukadoko
                     "the expected value and where it came from, whether it held, and the recorded channel that holds the actual value " \
                     "(`measured: none` when no channel does, or when another channel holds the same number). " \
                     "An expected value an earlier step returned or `observe` read gets the same, as `expected measured`."
+      LATE_NOTE = " A claim on a count of execution events that the world's stop counted again and judged otherwise says what the whole count came to, after its outcome: it was judged on lines still on their way."
       CONTROL_NOTE = " An entry marked `control` is a control's: a claim it broke is evidence that the scenario tells the behaviour apart, not a failure."
       LIMIT_KINDS = %w[left-out check-skipped control-not-proving no-claim judgment unmeasured after-record unrecorded-log unrecorded-events].freeze
       LIMIT_HEADINGS = {
@@ -38,7 +39,11 @@ module Nukadoko
         "no-claim" => ["Scenarios with no claim", "in each scenario below, no claim on a Then line was judged (held, broken, or unjudged)"],
         "judgment" => ["Held on a judgment",
                        "each criterion below asks a reader to judge a value its Then read, and a committed judgment cites that value; nukadoko checks the citation, never the judgment"],
-        "unmeasured" => ["Unmeasured actions", "each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did"]
+        "unmeasured" => ["Unmeasured actions", "each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did"],
+        "after-record" => ["After a step's record was written",
+                           "each step below started an action, or has lines of the program's log or events, after its record was written: they are in that step's own files, and not in its record"],
+        "unrecorded-log" => ["The program's log", "what of it no step's record holds"],
+        "unrecorded-events" => ["The program's execution events", "what of them no step's record holds"]
       }.freeze
 
       module_function
@@ -436,6 +441,8 @@ module Nukadoko
             detail: "no claim on a Then line was judged in it", fix: "end the scenario with a Then whose step declares claims" }
         end.sort(&by_place))
         list.concat(judgment_limits(rows))
+        list.concat(step_limits(head).sort(&by_place))
+        (doc[:worlds] || []).each { list.concat(world_limits(_1)) }
         list.sort_by.with_index { |limit, index| [LIMIT_KINDS.index(limit[:kind]), index] }
       end
 
@@ -457,6 +464,119 @@ module Nukadoko
           { kind: "judgment", feature: row[:feature], line: row[:line], text: row[:name],
             detail: "stands on a judgment by #{by}#{added}: nukadoko checked that the value is the one judged, not the judgment#{aria}" }
         end
+      end
+
+      # How many unmeasured actions one entry names before it counts the rest.
+      UNMEASURED_SHOWN = 3
+
+      # Per step: what it did that nukadoko saw and could not measure
+      # (`observed.unmeasured`), and what reached its files after its record
+      # was written. Under `--repeat` the same step with the same gap is one
+      # entry, citing its first record.
+      #: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def step_limits(head)
+        limits = {} #: Hash[Hash[Symbol, untyped], Hash[Symbol, untyped]]
+        add = ->(limit) { limits[limit.except(:record)] ||= limit }
+        head.each do |scenario|
+          scenario[:steps].each do |step|
+            at = { feature: scenario[:feature], line: step[:line] || scenario[:line], text: step[:text], environment: scenario[:environment], record: step[:record] }.compact
+            unmeasured = step.dig(:observed, :unmeasured) || []
+            if unmeasured.any?
+              shown = unmeasured.first(UNMEASURED_SHOWN).map { "#{_1[:kind].sub("_", " ")} #{code_span(_1[:detail])}" }
+              shown << "and #{unmeasured.size - UNMEASURED_SHOWN} more" if unmeasured.size > UNMEASURED_SHOWN
+              fix = unmeasured.any? { _1[:kind] == "child_process" } ? { fix: "start a process with `run_command` to record it" } : {}
+              add.({ kind: "unmeasured", **at, detail: shown.join(", "), **fix })
+            end
+            unjudged = unjudged_failures(step)
+            add.({ kind: "unmeasured", **at, detail: unjudged.join(", ") }) if unjudged.any?
+            late = late_items(step)
+            add.({ kind: "after-record", **at, detail: late.join(", ") }) if late.any?
+          end
+        end
+        limits.values
+      end
+
+      # What of a step's failures underneath could not be seen: its cell
+      # was judged without them.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def unjudged_failures(step)
+        unseen = step.dig(:underneath, :unseen)
+        return [] unless unseen
+
+        http = if !unseen.key?(:http_lines) then []
+               elsif unseen[:http_lines].nil? then ["#{code_span("http.jsonl")} could not be read, so no response status of the step was judged"]
+               else ["#{count_of(unseen[:http_lines], "request", "requests")} with no readable line in #{code_span("http.jsonl")}, whose status was not judged"]
+               end
+        errors = unseen[:page_errors] ? ["#{count_of(unseen[:page_errors], "page error", "page errors")} past the record's cap, not judged"] : []
+        http + errors
+      end
+
+      # What reached a step's own files after its record was written: this
+      # is the one place that says those lines exist, and names their file.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def late_items(step)
+        items = [] #: Array[String]
+        started = step[:after_step_end]
+        if started
+          parts = [*("#{count_of(started[:requests], "request", "requests")} in #{code_span(started[:http] || "http.jsonl")}" if started[:requests].to_i.positive?),
+                   *(count_of(started[:processes], "process", "processes") if started[:processes].to_i.positive?),
+                   *("#{count_of(started[:mcp], "MCP call", "MCP calls")} in #{code_span("mcp.jsonl")}" if started[:mcp].to_i.positive?)]
+          items << "started after the step ended: #{parts.join(", ")}" if parts.any?
+        end
+        { program_log_late: "log", events_late: "events" }.each do |key, what|
+          late = step[key]
+          next unless late
+
+          lines = count_of(late[:lines], "line", "lines")
+          items << (late[:file].nil? ? "#{lines} of the program's #{what} after the step ended, which could not be written" : "#{lines} of the program's #{what} after the step ended, in #{code_span(late[:file])}")
+        end
+        items
+      end
+
+      # Once per world, what of the program's log and execution events no
+      # step's record holds. A head step's late lines are its own entry, so
+      # the world names its late count only when it is the pattern a program
+      # that buffers its output on a pipe makes, or when the world is the
+      # base's or the old one.
+      #: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def world_limits(world)
+        tree = world[:tree] || "head"
+        at = { environment: world[:name], world: tree }
+        limits = [] #: Array[Hash[Symbol, untyped]]
+        not_read = "not read, since the program runs at #{world[:url] || "a URL"}, which nukadoko did not start"
+        late_log = ->(count) { "#{count_of(count, "line", "lines")} carrying a step's trace id arrived after that step ended (#{code_span("program-log-late.txt")})" }
+        if world.key?(:program_log) && world[:program_log].nil?
+          limits << { kind: "unrecorded-log", **at, detail: not_read }
+        elsif (log = world[:program_log]) && log[:stamped].positive?
+          if log[:tagged].zero?
+            limits << { kind: "unrecorded-log", **at, detail: "carries no trace ids, so each step's slice of it is empty" }
+          elsif log[:late].positive? && log[:lines].zero?
+            limits << { kind: "unrecorded-log", **at,
+                        detail: "#{late_log.(log[:late])}, and none in time, which is what a program that buffers its output on a pipe looks like",
+                        fix: "if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python" }
+          elsif log[:late].positive? && tree != "head"
+            limits << { kind: "unrecorded-log", **at, detail: late_log.(log[:late]) }
+          end
+        end
+        if world.key?(:events) && world[:events].nil?
+          limits << { kind: "unrecorded-events", **at, detail: not_read }
+        elsif (events = world[:events])
+          if events[:lines].zero?
+            limits << { kind: "unrecorded-events", **at, detail: "the program wrote no line to the file #{code_span("{events}")} names, so no step's record has an event" }
+          else
+            kinds = (events[:undefined_kinds] || {}).to_a
+            facts = [
+              *("#{count_of(events[:late], "line", "lines")} carrying a step's trace id arrived after that step ended (#{code_span("events-late.jsonl")})" if events[:late].positive? && tree != "head"),
+              *("#{count_of(events[:unreadable], "line is", "lines are")} not one readable line of the format" if events[:unreadable].positive?),
+              *("#{count_of(kinds.sum { _2 }, "line names", "lines name")} a kind the format does not define (#{kinds.map { code_span(_1.first.to_s) }.join(", ")})" if kinds.any?)
+            ]
+            if facts.any?
+              copy = events[:file].nil? ? "the world's copy of the file could not be written" : "the whole file is in #{code_span(events[:file])}"
+              limits << { kind: "unrecorded-events", **at, detail: "#{facts.join("; ")}; #{copy}" }
+            end
+          end
+        end
+        limits
       end
 
       #: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
@@ -483,7 +603,7 @@ module Nukadoko
 
       #: (Hash[Symbol, untyped], bool) -> String
       def limit_place(limit, named)
-        return "" unless limit[:feature]
+        return limit[:environment] ? "world #{cell_text(limit[:world].nil? || limit[:world] == "head" ? limit[:environment] : "#{limit[:environment]} (#{limit[:world]})")}" : "" unless limit[:feature]
 
         environment = named && limit[:environment] ? " (#{cell_text(limit[:environment])})" : ""
         "#{code_span("#{limit[:feature]}:#{limit[:line]}")}#{limit[:text] ? " #{cell_text(limit[:text])}" : ""}#{environment}"
@@ -562,7 +682,18 @@ module Nukadoko
       # measured: a value no recorded channel holds is what a constant in
       # step code looks like, so the line says `measured: none`.
       #: (Hash[Symbol, untyped], String?) -> String
-      def claim_line(claim, own) = "#{ClaimLine.line(claim)}#{measured_text(claim, own)}"
+      def claim_line(claim, own) = "#{ClaimLine.line(claim)}#{after_world_stop_text(claim)}#{measured_text(claim, own)}"
+
+      # A claim on a count of execution events the world's stop judged
+      # otherwise was judged on lines still on their way: its line says what
+      # the whole count came to, since its outcome proves nothing.
+      #: (Hash[Symbol, untyped]) -> String
+      def after_world_stop_text(claim)
+        after = (claim[:each] ? nil : claim[:after_world_stop]) #: Hash[Symbol, untyped]?
+        return "" if after.nil? || after[:outcome] == claim[:outcome]
+
+        "; after the world stopped, #{after[:reason]}, and the cell is broke"
+      end
 
       #: (Hash[Symbol, untyped], String?) -> String
       def measured_text(claim, own)
@@ -587,6 +718,7 @@ module Nukadoko
       def claims(doc)
         named = doc[:environments].size > 1
         any_control = false
+        any_late = false
         entries = {}
         head_scenarios(doc).each do |scenario|
           scenario[:steps].each do |step|
@@ -599,6 +731,7 @@ module Nukadoko
             attempts = step[:attempts].to_i > 1 ? ", #{step[:attempts]} readings" : ""
             observation = step[:observation] == "unobserved" ? ", observed nothing" : ""
             head = "- #{cell_code(where)} #{cell_text(step[:text])}#{marks.empty? ? "" : " (#{marks.join(", ")})"}#{attempts}#{observation}"
+            any_late ||= step[:claims].any? { !after_world_stop_text(_1).empty? }
             claim_lines = step[:claims].map { "  - #{cell_text(claim_line(_1, step[:step_record_id]))}" }
             key = [head, *claim_lines].join("\n")
             next if entries.key?(key)
@@ -609,7 +742,7 @@ module Nukadoko
         end
         return [] if entries.empty?
 
-        lead = "#{CLAIMS_LEAD}#{CONTROL_NOTE if any_control}"
+        lead = "#{CLAIMS_LEAD}#{CONTROL_NOTE if any_control}#{LATE_NOTE if any_late}"
         seen_note = " `seen` links what the Then's pages showed right after the reading its claims were judged on, or, for a Then that read no page, " \
                     "the requests its step sent; a capture taken 100 ms or more after the reading says so. The claims judged the values above, " \
                     "not these files, and the scenario's `final.png` is the page as the scenario ended, not as it was judged."

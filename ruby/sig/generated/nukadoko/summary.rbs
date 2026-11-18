@@ -30,6 +30,8 @@ module Nukadoko
 
       CLAIMS_LEAD: ::String
 
+      LATE_NOTE: ::String
+
       CONTROL_NOTE: ::String
 
       LIMIT_KINDS: untyped
@@ -148,6 +150,34 @@ module Nukadoko
       # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
       def self?.judgment_limits: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
 
+      # How many unmeasured actions one entry names before it counts the rest.
+      UNMEASURED_SHOWN: ::Integer
+
+      # Per step: what it did that nukadoko saw and could not measure
+      # (`observed.unmeasured`), and what reached its files after its record
+      # was written. Under `--repeat` the same step with the same gap is one
+      # entry, citing its first record.
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.step_limits: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # What of a step's failures underneath could not be seen: its cell
+      # was judged without them.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.unjudged_failures: (Hash[Symbol, untyped]) -> Array[String]
+
+      # What reached a step's own files after its record was written: this
+      # is the one place that says those lines exist, and names their file.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.late_items: (Hash[Symbol, untyped]) -> Array[String]
+
+      # Once per world, what of the program's log and execution events no
+      # step's record holds. A head step's late lines are its own entry, so
+      # the world names its late count only when it is the pattern a program
+      # that buffers its output on a pipe makes, or when the world is the
+      # base's or the old one.
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.world_limits: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
       # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
       def self?.control_limit: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]?
 
@@ -171,6 +201,12 @@ module Nukadoko
       # step code looks like, so the line says `measured: none`.
       # : (Hash[Symbol, untyped], String?) -> String
       def self?.claim_line: (Hash[Symbol, untyped], String?) -> String
+
+      # A claim on a count of execution events the world's stop judged
+      # otherwise was judged on lines still on their way: its line says what
+      # the whole count came to, since its outcome proves nothing.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.after_world_stop_text: (Hash[Symbol, untyped]) -> String
 
       # : (Hash[Symbol, untyped], String?) -> String
       def self?.measured_text: (Hash[Symbol, untyped], String?) -> String

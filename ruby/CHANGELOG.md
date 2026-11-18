@@ -147,6 +147,15 @@ Each release's notes come from the section below whose heading starts with `## [
   each engine's commands and flags, and a conformance case holds that list
   to this help.
 - The gem declares itself a [Rails Hyperdrive](https://github.com/rails-hyperdrive/rails-hyperdrive) companion in its metadata (`hyperdrive_targets: "*"`, `hyperdrive_artifacts: skill`). In a Rails app that bundles it, `bin/rails hyperdrive:init` installs the two skills the gem ships to `.claude/skills/nukadoko/` and `.claude/skills/nukadoko-verification/`.
+- Each step's record holds its `path`: the requests and the counted kinds of
+  its execution events, with the gates of each flag line, as in the
+  TypeScript engine.
+- When the world stops, a claim on a count of execution events is counted
+  again over every line that arrived. A claim judged otherwise then is
+  `after_world_stop` on the claim, turns the cell broke, and is a
+  `claim-judged-early` finding. run.json's `limits` and the summary now
+  list `after-record`, `unrecorded-log`, and `unrecorded-events`, as the
+  TypeScript engine does.
 
 ## [0.6.0] - 2026-11-17
 

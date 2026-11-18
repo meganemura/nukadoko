@@ -1,0 +1,149 @@
+# Generated from lib/nukadoko/events/path.rb with RBS::Inline
+
+# A step's coarse execution path: what one trace's lines say the program
+# did, counted by what each line did and no finer (a write by table and
+# op, a job by name and phase, a served request by route and status), and
+# the range a count of one entry lies in on a path, by the gaps the trace
+# leaves open. Pure. Which lines are the trace's, and reading them, are
+# the caller's (Reader#collect folds every line of a world's file when
+# the world stops).
+#
+# PATH_KINDS is the one table of what a path keeps. Its order is the
+# order a reader ranks a difference by: what persists outside the process
+# first, then the route through it.
+#
+# A path leaves out what is too fine or too noisy to compare across two
+# runs of one criterion: a database read (a query count moves with every
+# cache), a `tx` line, a row's ids, and an actor. A write to a table the
+# program's tables list marks as bookkeeping or infrastructure stays in
+# it, its entry carrying what the table holds, since another reader of
+# that table may depend on it.
+#
+# A count on a path is a range, as a count claim's is. Lines that may be
+# any line raise only its upper bound, and a trace that is not whole has
+# none, except that the step's own requests are written inside first, so
+# under `jobs-pending` alone a request count stays bounded, and a step
+# that sent nothing and has no line has an exact empty path.
+#
+# A writer's own kind (`x_decision`) is in a path after the format's
+# kinds, counted by its kind and by the fields the project names, each
+# read at a dotted path, and by nothing else: a writer may put an id or a
+# time in its own field, which would make every run differ from the last.
+#
+# An outgoing call's origin on loopback is kept without its port: a test
+# run starts the services it calls on free ports, so a key with the port
+# would make two runs differ by nothing the program decided.
+module Nukadoko
+  module Engine
+    module Events
+      PATH_KINDS: Hash[String, Hash[Symbol, untyped]]
+
+      PATH_KIND_ORDER: untyped
+
+      NO_OWN_READING: Hash[Symbol, untyped]
+
+      LOOPBACK_HOSTS: untyped
+
+      ORIGIN: ::Regexp
+
+      # Whether a kind is a writer's own.
+      # : (untyped) -> bool
+      def self.own_kind?: (untyped) -> bool
+
+      # The value at a dotted path of a JSON object, nil where it has none.
+      # : (Hash[String, untyped], String) -> untyped
+      def self.value_at: (Hash[String, untyped], String) -> untyped
+
+      # The fields of a key: the format's kinds' in PATH_KINDS order, a
+      # writer's own in its key's order.
+      # : (Hash[String, untyped]) -> Array[String]
+      def self.key_fields: (Hash[String, untyped]) -> Array[String]
+
+      # A key as one text, the same for equal keys: what two paths are
+      # joined by.
+      # : (Hash[String, untyped]) -> String
+      def self.path_key_text: (Hash[String, untyped]) -> String
+
+      # Where a kind ranks: PATH_KINDS order, then every writer's own kind.
+      # : (String) -> Integer
+      def self.kind_rank: (String) -> Integer
+
+      # : (Hash[String, untyped], Hash[String, untyped]) -> Integer
+      def self.by_path_key: (Hash[String, untyped], Hash[String, untyped]) -> Integer
+
+      # The order of a flag's gates: the format's first, in its order,
+      # then a word it does not define, then nil.
+      # : (String?) -> [Integer, String]
+      def self.gate_order: (String?) -> [ Integer, String ]
+
+      # : (String?, String?) -> Integer
+      def self.by_gate: (String?, String?) -> Integer
+
+      # An `http` line's origin as a path keeps it: on a loopback host,
+      # without its port; any other origin as written.
+      # : (String) -> String
+      def self.path_origin: (String) -> String
+
+      # The entry a line counts toward, or nil for a line that is not in a
+      # coarse path.
+      # : (Line) -> Hash[String, untyped]?
+      def self.path_key_of: (Line) -> Hash[String, untyped]?
+
+      # The key a writer's own line counts toward, by the fields `reading`
+      # names for its kind.
+      # : (String, Hash[String, untyped], Hash[Symbol, untyped]) -> Hash[String, untyped]
+      def self.own_key_of: (String, Hash[String, untyped], Hash[Symbol, untyped]) -> Hash[String, untyped]
+
+      # The key alone of an entry, without its count and gates.
+      # : (Hash[String, untyped]) -> Hash[String, untyped]
+      def self.key_only: (Hash[String, untyped]) -> Hash[String, untyped]
+
+      # : (Hash[String, untyped]) -> Hash[String, untyped]
+      def self.request_key: (Hash[String, untyped]) -> Hash[String, untyped]
+
+      # One trace's lines, folded into its path in any order.
+      class PathFold
+        # : (Hash[Symbol, untyped], ?Hash[Symbol, untyped]) -> void
+        def initialize: (Hash[Symbol, untyped], ?Hash[Symbol, untyped]) -> void
+
+        # A readable line whose trace is the fold's.
+        # : (Line) -> void
+        def owned: (Line) -> void
+
+        # An unreadable line whose text carries the fold's trace id.
+        # : () -> void
+        def damaged: () -> void
+
+        # The path of the lines folded so far.
+        # : (truncated: bool, replaced: bool) -> Hash[Symbol, untyped]
+        def path: (truncated: bool, replaced: bool) -> Hash[Symbol, untyped]
+      end
+
+      # How many lines of `path` reported `key`.
+      # : (Hash[Symbol, untyped], Hash[String, untyped]) -> Integer
+      def self.count_of: (Hash[Symbol, untyped], Hash[String, untyped]) -> Integer
+
+      # Every key the paths hold, their requests' included, once each, in
+      # entry order.
+      # : (*Hash[Symbol, untyped]) -> Array[Hash[String, untyped]]
+      def self.keys_of: (*Hash[Symbol, untyped]) -> Array[Hash[String, untyped]]
+
+      # What the table of `key` holds on `path`, when its entry is marked.
+      # : (Hash[Symbol, untyped], Hash[String, untyped]) -> String?
+      def self.holds_on: (Hash[Symbol, untyped], Hash[String, untyped]) -> String?
+
+      # What PATH_KINDS says of a kind, apart from its fields.
+      # : (String) -> Hash[Symbol, untyped]
+      def self.kind_rule: (String) -> Hash[Symbol, untyped]
+
+      # The gaps that leave a count on `path` unbounded: the trace's,
+      # except that a step that sent nothing and has no line has none.
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self.bounding_gaps: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
+      # The range the count of `key` on `path` lies in.
+      # : (Hash[Symbol, untyped], Hash[String, untyped]) -> Hash[Symbol, Integer?]
+      def self.range_on: (Hash[Symbol, untyped], Hash[String, untyped]) -> Hash[Symbol, Integer?]
+    end
+  end
+end
