@@ -47,6 +47,18 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Fixed
 
+- A page's line in http.jsonl carries `duration_ms`, and the
+  `traceparent` it went out with and `traceparent_sent_to`, as in the
+  TypeScript engine.
+- A page of a `page_as` context gets the step's trace context on its
+  requests to the world too. Only the step's `page` got it, so a request a
+  named context sent was never part of the step's trace.
+- `nuka check` reports its findings in the TypeScript engine's order:
+  fixture findings first, then the feature files, and a scenario's
+  findings about the order of its lines right after its own lines.
+- A `{x:bigdecimal}` capture is text, as the engine hands it to the step,
+  so an args field declared as a string no longer gets a
+  `capture-type-mismatch` finding.
 - A program whose `serve` names no `ready` path is ready once `/` answers
   2xx, as in the TypeScript engine. It crashed while it waited for the program.
 - A claim's json view reads a text that holds one key twice as

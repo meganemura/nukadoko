@@ -36,3 +36,7 @@ Feature: what failed underneath the steps
 
   Scenario: the page's own request fails
     When the shop page is opened at "/page/down"
+
+  @expects:status=503
+  Scenario: a page of a named context sends the step's trace context too
+    When aki opens the shop page at "/page/down"

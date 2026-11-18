@@ -56,6 +56,10 @@ module Nukadoko
       # : (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding], ?worlds: (Array[Hash[Symbol, untyped]] | false | nil)) -> void
       def initialize: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding], ?worlds: Array[Hash[Symbol, untyped]] | false | nil) -> void
 
+      PROBLEM_ORDER: untyped
+
+      NOTE_ORDER: untyped
+
       # : () -> bool
       def passed?: () -> bool
 
@@ -188,10 +192,13 @@ module Nukadoko
 
       SCENARIO_ONLY: untyped
 
-      # Fixture definitions that can never resolve, and (in a whole-project
-      # check) one no step reaches.
-      # : (bool) -> void
-      def check_fixtures: (bool) -> void
+      # Fixture definitions that can never resolve.
+      # : () -> void
+      def check_fixtures: () -> void
+
+      # In a whole-project check, a fixture no step reaches.
+      # : () -> void
+      def check_unused_fixtures: () -> void
 
       # A scenario whose condition tags no environment of the selection meets
       # has no required cell, so nothing in the run shows that it holds.

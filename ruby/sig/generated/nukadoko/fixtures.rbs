@@ -185,8 +185,8 @@ module Nukadoko
       # turns the browser's cache off. Images, scripts, and stylesheets are
       # left out, since each paused request costs a round trip. A session
       # that cannot be opened leaves the page's requests unstamped.
-      # : (untyped) -> void
-      def stamp: (untyped) -> void
+      # : (untyped, untyped) -> void
+      def stamp: (untyped, untyped) -> void
 
       # How long a pause waits for each capture of the page's view. A page
       # whose main thread is stuck answers none of them, and without a
@@ -242,6 +242,16 @@ module Nukadoko
 
       # : () -> Hash[String, [String, untyped]]
       def step_named: () -> Hash[String, [ String, untyped ]]
+
+      # When each page request started, by the request itself, for its
+      # http.jsonl line's duration.
+      # : () -> Hash[untyped, Float]
+      def page_started: () -> Hash[untyped, Float]
+
+      # The traceparents page requests went out with, by method and URL,
+      # oldest first.
+      # : () -> Hash[[String, String], Array[String]]
+      def page_stamps: () -> Hash[[ String, String ], Array[String]]
 
       public
 

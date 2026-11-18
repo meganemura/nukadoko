@@ -54,3 +54,21 @@ Feature: failures underneath the steps
     When nuka runs "run --json features/underneath.feature:26"
     Then it exits with 0
     And the findings are "expects-unseen"
+
+  Scenario: a page of a named context sends the step's trace context to the world
+    Given the project "underneath"
+    When nuka runs "run --json features/underneath.feature:41"
+    Then it exits with 0
+    And line 2 of the "http.jsonl" of step "scenarios[0].steps[0]" at "as" is
+      """
+      "aki"
+      """
+    And the run.json at "scenarios[0].steps[0].observed.events.open" is
+      """
+      [
+        {
+          "gap": "request-unreported",
+          "requests": 1
+        }
+      ]
+      """

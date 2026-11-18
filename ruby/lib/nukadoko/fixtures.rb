@@ -174,7 +174,7 @@ module Nukadoko
           watch_requests(context)
           watch_page(context, nil)
         end
-        @page ||= @context.new_page.tap { stamp(_1) }
+        @page ||= @context.new_page.tap { stamp(_1, @context) }
         @context.tracing.start_chunk
         @boundary = Trace.current
         listener = page_logger(log, nil)
@@ -258,6 +258,7 @@ module Nukadoko
       #: (untyped, String?) -> void
       def watch_page(context, as)
         named_as = as ? { as: as } : {}
+        context.on("request", ->(request) { page_started[request] = monotonic })
         context.on("console", lambda do |message|
           next unless message.type == "error"
 
@@ -271,6 +272,7 @@ module Nukadoko
           note_page_event(:page_errors, { **(name.empty? ? {} : { name: name }), message: error.respond_to?(:message) ? error.message.to_s : error.to_s, **named_as })
         end)
         context.on("requestfailed", lambda do |request|
+          page_started.delete(request)
           failure = request.failure
           note_page_event(:failed_requests, { method: request.method, url: request.url, **(failure ? { failure: failure } : {}), **named_as })
         end)
@@ -313,7 +315,11 @@ module Nukadoko
             @http_omitted[type] += 1 if @http_omitted
             next
           end
-          log << { method: request.method, url: response.url, status: response.status, via: "page", **(as ? { as: as } : {}) }
+          started = page_started.delete(request)
+          traceparent = page_stamps[[request.method, request.url]]&.shift
+          log << { method: request.method, url: request.url, status: response.status, duration_ms: started ? Request.since(started) : 0, via: "page",
+                   **(as ? { as: as } : {}),
+                   **(traceparent ? { traceparent: traceparent, traceparent_sent_to: [Trace.origin(URI(request.url))] } : {}) }
         end
       end
 
@@ -402,16 +408,18 @@ module Nukadoko
       # turns the browser's cache off. Images, scripts, and stylesheets are
       # left out, since each paused request costs a round trip. A session
       # that cannot be opened leaves the page's requests unstamped.
-      #: (untyped) -> void
-      def stamp(page)
-        session = @context.new_cdp_session(page)
+      #: (untyped, untyped) -> void
+      def stamp(page, context)
+        session = context.new_cdp_session(page)
         session.on("Fetch.requestPaused", lambda do |event|
           request = event["request"]
           headers = nil
-          unless request["headers"].keys.any? { _1.downcase == "traceparent" }
-            traceparent = @boundary&.stamp(request["url"])
-            headers = [*request["headers"].map { |name, value| { name: name, value: value } }, { name: "traceparent", value: traceparent }] if traceparent
-          end
+          own = request["headers"].find { |name, _| name.downcase == "traceparent" }&.last
+          traceparent = own || @boundary&.stamp(request["url"])
+          headers = [*request["headers"].map { |name, value| { name: name, value: value } }, { name: "traceparent", value: traceparent }] if traceparent && !own
+          # The page's http.jsonl line for this request names the value it
+          # went out with, matched by method and URL in the order sent.
+          (page_stamps[[request["method"], request["url"]]] ||= []) << traceparent if traceparent
           # Answered off the thread that delivers the event, which also
           # reads the answer.
           Thread.new do
@@ -502,6 +510,8 @@ module Nukadoko
           held[:context].close rescue nil
         end
         @named = {}
+        @page_stamps = {}
+        @page_started = nil
         @context&.tracing&.stop
         @context&.close
         @context = @page = nil
@@ -534,8 +544,9 @@ module Nukadoko
           context = @browser.new_context(baseURL: @base_url, **(asked || {}))
           context.tracing.start(screenshots: true, snapshots: true)
           watch_page(context, name)
-          held = named[name] = { context: context, page: context.new_page, options: asked || {} }
+          held = named[name] = { context: context, page: context.new_page.tap { stamp(_1, context) }, options: asked || {} }
         end
+        @boundary = Trace.current
         unless step_named.key?(name)
           held[:context].tracing.start_chunk
           listener = page_logger(log, name)
@@ -562,6 +573,7 @@ module Nukadoko
           nil
         end
         @step_named = {}
+        @boundary = nil
         traces
       end
 
@@ -572,6 +584,16 @@ module Nukadoko
 
       #: () -> Hash[String, [String, untyped]]
       def step_named = (@step_named ||= {})
+
+      # When each page request started, by the request itself, for its
+      # http.jsonl line's duration.
+      #: () -> Hash[untyped, Float]
+      def page_started = (@page_started ||= {}.compare_by_identity)
+
+      # The traceparents page requests went out with, by method and URL,
+      # oldest first.
+      #: () -> Hash[[String, String], Array[String]]
+      def page_stamps = (@page_stamps ||= {})
 
       public
 

@@ -74,26 +74,39 @@ module Nukadoko
         check_parts
         check_state_shapes
         check_shapes
+        # In the TypeScript engine's order: the fixture graph, what the
+        # feature files themselves say (a file that does not parse, then a
+        # misplaced serial tag, then an outline that does not run), the
+        # tags, the conditions no environment meets, and then each line.
+        check_fixtures
+        problems.sort_by.with_index { |problem, i| [PROBLEM_ORDER.index(problem.code) || PROBLEM_ORDER.size, i] }.each do |problem|
+          findings << Finding.new("error", problem.code, problem.uri, problem.line, nil, problem.message, Codes.fix(problem.code), nil)
+        end
         check_tags(conditions)
+        check_conditions_met(environments) if environments
         check_lines
         # One finding per cause: each undefined line already names the
         # scaffold command for its file, so the missing step files would be
         # said a second time.
         @findings.reject! { _1.code == "no-step-files-found" } if steps.empty? && @findings.any? { _1.code == "undefined-step" }
-        check_fixtures(full)
-        check_conditions_met(environments) if environments
-        problems.each { |problem| findings << Finding.new("error", problem.code, problem.uri, problem.line, nil, problem.message, Codes.fix(problem.code), nil) }
         if full
-          check_unbound
           check_from_unused
+          check_unbound
           check_unused_parameter_types
+          check_unused_fixtures
           check_unmeasured_mcp
         end
-        # Errors, then warnings, then notes, each kind in the order found, as
-        # the TypeScript engine reports them.
+        # Errors, then warnings, then notes. Errors and warnings keep the
+        # order found; notes go by kind, as the TypeScript engine lists them.
         rank = { "error" => 0, "warning" => 1, "note" => 2 }
-        @findings = @findings.uniq { [_1.code, _1.file, _1.line, _1.message] }.each_with_index.sort_by { |f, i| [rank.fetch(f.severity, 3), i] }.map(&:first)
+        @findings = @findings.uniq { [_1.code, _1.file, _1.line, _1.message] }.each_with_index.sort_by do |f, i|
+          [rank.fetch(f.severity, 3), f.severity == "note" ? NOTE_ORDER.index(f.code) || NOTE_ORDER.size : 0, i]
+        end.map(&:first)
       end
+
+      PROBLEM_ORDER = %w[feature-parse-error serial-tag-on-scenario outline-does-not-run].freeze
+      NOTE_ORDER = %w[from-unused pattern-unbound step-description-todo schema-field-undescribed parameter-type-unused fixture-unused
+                      mcp-transport-unmeasured].freeze
 
       #: () -> bool
       def passed? = findings.none? { _1.severity == "error" }
@@ -150,8 +163,8 @@ module Nukadoko
         ["pattern-syntax-error", "#{head}: #{e.message}"]
       end
 
-      NUMBER_TYPES = %w[int float bigdecimal biginteger byte short long double].freeze
-      STRING_TYPES = %w[string word].freeze
+      NUMBER_TYPES = %w[int float biginteger byte short long double].freeze
+      STRING_TYPES = %w[string word bigdecimal].freeze
 
       # A capture hands the step a number or a string, and an args field of
       # the other kind can never hold it.
@@ -559,10 +572,9 @@ module Nukadoko
 
       SCENARIO_ONLY = FIXTURES - %w[env requireEnv require_env baseURL base_url]
 
-      # Fixture definitions that can never resolve, and (in a whole-project
-      # check) one no step reaches.
-      #: (bool) -> void
-      def check_fixtures(full)
+      # Fixture definitions that can never resolve.
+      #: () -> void
+      def check_fixtures
         fixtures = Nukadoko.project_fixtures
         return if fixtures.empty?
 
@@ -606,8 +618,13 @@ module Nukadoko
                                     Codes.fix("fixture-scope-violation"), nil)
           end
         end
-        return unless full
+      end
 
+      # In a whole-project check, a fixture no step reaches.
+      #: () -> void
+      def check_unused_fixtures
+        fixtures = Nukadoko.project_fixtures
+        config = CONFIG
         reachable = []
         pending = @steps.flat_map(&:bag)
         until pending.empty?
@@ -824,12 +841,14 @@ module Nukadoko
                                       %("#{line.text}" matches more than one step: #{matches.map { _1.first.step_name }.join(", ")}), Codes.fix("ambiguous-step"), nil)
             end
           end
+          # A scenario's findings about the order of its lines follow its
+          # own lines, so a file reads top to bottom.
+          check_from_order(scenario)
+          check_files_order(scenario)
+          check_claim_sources(scenario)
         end
         check_events_worlds(bound.uniq) unless @worlds == false
         bound.uniq.each { check_transformed(_1) }
-        @scenarios.each { check_from_order(_1) }
-        @scenarios.each { check_files_order(_1) }
-        @scenarios.each { check_claim_sources(_1) }
         check_state_order
         suppress_undefined(undefined)
         @scenarios.each { judging_nothing(_1) }
