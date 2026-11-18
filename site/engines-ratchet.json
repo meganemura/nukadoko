@@ -37,15 +37,15 @@
   },
   "skills/nukadoko-verification/SKILL.md": {
     "unpaired": 0,
-    "words": 1
+    "words": 2
   },
   "skills/nukadoko/SKILL.md": {
     "unpaired": 0,
-    "words": 1
+    "words": 4
   },
   "skills/nukadoko/references/checking-steps.md": {
-    "unpaired": 4,
-    "words": 2
+    "unpaired": 0,
+    "words": 0
   },
   "skills/nukadoko/references/diagnosing.md": {
     "unpaired": 0,
@@ -56,15 +56,15 @@
     "words": 1
   },
   "skills/nukadoko/references/evidence.md": {
-    "unpaired": 2,
+    "unpaired": 0,
     "words": 0
   },
   "skills/nukadoko/references/exploring.md": {
-    "unpaired": 1,
+    "unpaired": 0,
     "words": 0
   },
   "skills/nukadoko/references/fixtures.md": {
-    "unpaired": 2,
+    "unpaired": 0,
     "words": 0
   },
   "skills/nukadoko/references/from-prose.md": {
@@ -72,7 +72,7 @@
     "words": 0
   },
   "skills/nukadoko/references/judgments.md": {
-    "unpaired": 1,
+    "unpaired": 0,
     "words": 1
   },
   "skills/nukadoko/references/maintenance.md": {
@@ -84,24 +84,20 @@
     "words": 0
   },
   "skills/nukadoko/references/parts.md": {
-    "unpaired": 1,
-    "words": 2
+    "unpaired": 0,
+    "words": 0
   },
   "skills/nukadoko/references/perturbed-worlds.md": {
-    "unpaired": 1,
+    "unpaired": 0,
     "words": 0
   },
   "skills/nukadoko/references/program.md": {
-    "unpaired": 2,
+    "unpaired": 0,
     "words": 0
   },
   "skills/nukadoko/references/reviewing.md": {
     "unpaired": 0,
     "words": 3
-  },
-  "skills/nukadoko/references/ruby.md": {
-    "unpaired": 1,
-    "words": 5
   },
   "skills/nukadoko/references/running.md": {
     "unpaired": 0,
@@ -112,12 +108,12 @@
     "words": 1
   },
   "skills/nukadoko/references/states.md": {
-    "unpaired": 1,
+    "unpaired": 0,
     "words": 0
   },
   "skills/nukadoko/references/step-files.md": {
-    "unpaired": 1,
-    "words": 2
+    "unpaired": 0,
+    "words": 0
   },
   "skills/nukadoko/references/verdicts.md": {
     "unpaired": 0,

@@ -4,7 +4,7 @@ The criteria are fixed before the implementation exists, so a scenario is
 evidence only if nothing in it came from the implementation. Each rule
 below says what to write, shows the weak form and the strong form, and
 names the finding that enforces it, or says `review` when no check can
-decide it without guessing. `examples/` beside this file holds three
+decide it without guessing. `typescript/examples/` beside this file holds three
 finished projects (`cli.md`, `http-api.md`, `workflow.md`) that follow
 every rule, with the output of real runs.
 
@@ -80,7 +80,7 @@ Checked by: `outline-rows-share-name`.
 
 Bad: scenario 2 reads the item scenario 1 created. The server
 the config's `program` starts serves every scenario of the run, as a
-fixture with `scope: "process"` does. Measured in `examples/http-api.md`:
+fixture with `scope: "process"` does. Measured in `typescript/examples/http-api.md`:
 the read got `{"id":2,"name":"lamp"}` where the feature expected id 1.
 Good: `Given an item named "lamp" exists` in the scenario that reads it,
 and claims on what the scenario created (the body the Given returned),
@@ -111,7 +111,7 @@ A scenario that breaks a rule on purpose, such as signing in before
 confirming, uses a step that does not require what the rule demands
 (`states.md`).
 Checked by: `from-order-violation` when the action written as a Given has
-no Given before it to read from (`examples/cli.md`),
+no Given before it to read from (`typescript/examples/cli.md`),
 `claims-outside-then` for a claim step in Given or When position, and
 `then-without-claims` for a step that runs in Then position; the rest is
 review.
@@ -121,7 +121,7 @@ review.
 `nuka run` prints the first line of the error beside the failed step; the
 rest is in the step record. A Then gets this from its claims: a broken
 claim's line names both values and where each came from. Measured in
-`examples/cli.md`: `claim broken: "food: 5.5\nrent: 100"
+`typescript/examples/cli.md`: `claim broken: "food: 5.5\nrent: 100"
 (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101"
 (sentence:expected); first difference at line 2: actual "rent: 100",
 expected "rent: 101"`.
@@ -171,7 +171,7 @@ A lesson from a real run is promoted in three stages, and each stage
 replaces the one before it:
 
 1. **An example row.** Add the decision to the "Decisions" table of the
-   example for that kind of project (`examples/<shape>.md`): the date, the
+   example for that kind of project (`typescript/examples/<shape>.md`): the date, the
    decision, what was chosen, and why. Add a new example file when no
    existing shape fits.
 2. **A rule here.** A decision becomes a rule when it comes up in a second

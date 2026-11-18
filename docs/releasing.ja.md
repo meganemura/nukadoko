@@ -98,12 +98,12 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
 2. `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check && npm run skill-examples` を実行します。
    `pack-check` は本物の tarball を、このリポジトリの外の捨てプロジェクトへインストールし、そこで CLI を動かします。
    これが捕まえるのは、このリポジトリが devDependency にしか挙げていないパッケージへ `bin` が依存していることと、`dist/` が `src/` と一致していないことです。
-   `skill-examples` は同じ tarball を `examples/acceptance/` の各プロジェクトのコピーへインストールし、そこで `nuka check` と `nuka run` を実行して、出力を `skills/nukadoko/references/examples/` にある実行記録と比べます。
+   `skill-examples` は同じ tarball を `examples/acceptance/` の各プロジェクトのコピーへインストールし、そこで `nuka check` と `nuka run` を実行して、出力を `skills/nukadoko/references/typescript/examples/` にある実行記録と比べます。
 
 3. 前回の tag から `skills/` が変わっているとき(`git diff --stat v<previous>..HEAD -- skills/` が行を出すとき)は、skill の評価を手で 1 回行います。
-   `skills/nukadoko/references/examples/` の作業例を 1 つ選びます。
+   `skills/nukadoko/references/typescript/examples/` の作業例を 1 つ選びます。
    捨てプロジェクトに、その例のプログラム(`examples/acceptance/` にあるそのプロジェクトの `src/`)を置き、この checkout の tarball をインストールします。
-   インストールされた skill から、その例の Markdown ファイルを `node_modules/nukadoko/skills/nukadoko/references/examples/` で削除し、エージェントにはほかの写しも渡しません。
+   インストールされた skill から、その例の Markdown ファイルを `node_modules/nukadoko/skills/nukadoko/references/typescript/examples/` で削除し、エージェントにはほかの写しも渡しません。
    エージェントにその例の「The ticket」の節を渡し、scenario を書いて実行するよう頼みます。
    エージェントが書いた feature を、`skills/nukadoko/references/scenario-rules.md` の各ルール S1 から S12 について、満たす、満たさない、該当しない、で採点します。
    その表と、例の名前と、モデルを `typescript/CHANGELOG.md` のこのバージョンの見出しの下に書き、release notes に載るようにします。

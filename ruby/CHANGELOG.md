@@ -6,6 +6,17 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ## [Unreleased]
 
+### Changed
+
+- The bundled skill shows step code on each engine's own pages:
+  `skills/nukadoko/references/ruby/` and `references/typescript/` hold the
+  same pages under the same headings (step files, claim steps, fixtures,
+  the program), an example that names a conformance case copied from it, and
+  SKILL.md tells an agent which folder to read from the config file it
+  finds. `references/ruby.md`, which translated TypeScript shapes into
+  Ruby, is gone, and the worked examples moved to
+  `references/typescript/examples/`.
+
 ### Fixed
 
 - A program whose `serve` names no `ready` path is ready once `/` answers,

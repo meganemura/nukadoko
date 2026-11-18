@@ -3,38 +3,15 @@
 When a scenario needs a project resource a step merely borrows (a tenant, a
 seeded database row, an uploaded file), don't write its teardown inside the
 step: that puts something in the feature file that is not itself an
-acceptance condition. Declare it as a fixture instead, under
-`nukadoko.config.ts`'s own `fixtures`, using `defineFixtures` (from the
-`nukadoko` package).
+acceptance condition. Declare it as a fixture instead, in the config.
 
 ## Declaring a fixture
 
-```ts
-export default defineConfig({
-  fixtures: {
-    tenant: async ({ request }, use) => {
-      const t = await createTenant(request);
-      await use(t);
-      await destroyTenant(request, t);
-    },
-  },
-});
+How the config declares one is `typescript/fixtures.md` or
+`ruby/fixtures.md`.
 
-declare module "nukadoko" {
-  interface StepFixtures {
-    tenant: Tenant;
-  }
-}
-```
-
-`tsc` needs the `declare module` block: without it, a step that
-destructures `tenant` fails with `Property 'tenant' does not exist on type
-'FixtureBag'`. `nuka check` does not need it, because it reads fixture
-names from the source text. Write the block in `nukadoko.config.ts`, next
-to the fixture, with the type the fixture passes to `use()`.
-
-A step reaches it the same way it reaches `page` or `request`, by
-destructuring the name: `async ({ tenant }, args) => {...}`. Setup runs the
+A step reaches it the same way it reaches `page` or `request`, by naming
+it among its fixtures. Setup runs the
 first time a step names it; teardown runs after that step's scenario
 finishes, in reverse build order, whether the scenario passed or failed.
 What a fixture leaves (a signed-in context) belongs to the `gives` of the
@@ -166,8 +143,10 @@ or a binding is `env-file-skipped-line` from `nuka check`.
 A project already on e2e (`tester-army/e2e`) keeps its engines: its
 `e2e/runner` exports `openHost`, which opens e2e sessions inside another
 runner. Open the host in a process fixture and one session per scenario;
-nukadoko gains no dependency, since the project already has `e2e`.
+nukadoko gains no dependency, since the project already has `e2e`. It is a
+JavaScript library, so this is the TypeScript engine's:
 
+<!-- engine: typescript -->
 ```ts
 e2eHost: [async ({ baseURL }, use) => {
   const host = await openHost({ config: { targets: [

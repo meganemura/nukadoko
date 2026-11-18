@@ -108,7 +108,7 @@ rather than an instruction to the tool. The same step can be the When of
 one scenario and a Given of another: a registration is the action under
 test in "a short password" and the setup in "sign in before confirming".
 A step that can be refused returns the outcome instead of throwing, so a
-Then can claim the refusal (`examples/workflow.md`).
+Then can claim the refusal (`typescript/examples/workflow.md`).
 
 The keyword meets a step's contract in one place: a Then binds a claim
 step, and only a Then does. A Then bound to a step that runs is the

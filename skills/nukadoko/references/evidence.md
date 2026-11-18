@@ -7,6 +7,13 @@ response body past the 16 KiB `http.jsonl` keeps. Reach for the `evidence` fixtu
 of `console.log`-ing it away or writing it to disk with no place on the
 step record to point back at:
 
+```ruby
+def run(evidence:, request:)
+  res = request.get("/orders")
+  evidence.attach("orders.json", res.body)
+end
+```
+
 ```ts
 async run({ evidence, request }, args) {
   const res = await request.get("/orders");
@@ -38,8 +45,10 @@ answers itself never reaches nukadoko, so it has no line; a mocked
 
 A step that calls a program's MCP server uses the SDK's own `Client`,
 connected in a fixture, with its transport passed through `measureMcp`
-(from `nukadoko`); nukadoko adds no client:
+(from `nukadoko`); nukadoko adds no client. This is the TypeScript
+engine's:
 
+<!-- engine: typescript -->
 ```ts
 await client.connect(measureMcp(new StreamableHTTPClientTransport(new URL("/mcp", baseURL))));
 ```

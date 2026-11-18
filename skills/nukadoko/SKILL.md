@@ -1,7 +1,7 @@
 ---
 name: nukadoko
 description: Use when turning a requirement into a Gherkin scenario and the run that is its evidence, for a person to review, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first, or a scenario a person wants to walk one step at a time, the run paused after each step while the agent explains its record and waits for the person's answer.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka step, nuka verdict, nuka judge).
+compatibility: Requires nukadoko installed in the project, the npm package (run as `npx nuka`) or the gem (run as `bundle exec nuka`); the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka step, nuka verdict, nuka judge).
 license: MIT
 ---
 
@@ -12,24 +12,26 @@ summary: the run is the evidence, and where the approval is recorded is
 the team's process. The feature is written before the implementation it judges,
 from the criteria and never from the program's output, which is what
 makes a green run evidence rather than agreement. This file is the order
-of work: open the reference a step names when you reach it.
-`node_modules/nukadoko/llms.txt` names every command, flag, and code.
+of work: open the reference a step names when you reach it. `llms.txt`
+in the package names every command, flag, and code.
+
+**Which engine.** `nukadoko.config.rb` is Ruby (`bundle exec nuka`,
+`references/ruby/`), `nukadoko.config.ts` or `.mts` TypeScript (`npx nuka`,
+`references/typescript/`); `nuka` below is that launcher.
 
 ## Before the first command
 
 Say in two or three sentences what the loop is for and what it will
 touch, then one line for each of these that applies:
 
-- A `mutates: true` step that reaches past the project (a real service, a
+- A mutating step that reaches past the project (a real service, a
   shared database, a file outside `scratch`) gets a go-ahead before its first
   `nuka do`, once, not on every retry. A step that writes only under `scratch`,
-  or only to a server a fixture or the program in `nukadoko.config.ts` started, needs none
+  or only to a server a fixture or the program in the config started, needs none
   (`references/writing-steps.md`, "Asking before a step changes something").
-- A step that needs `page`, `context`, `pageAs`, or `request` needs the project's
-  own `playwright`; `nuka check` reports `playwright-missing` with the
-  install line. Adding it is a dependency change: ask first. A `page` step
-  makes `nuka run` open a browser and take minutes. A project on e2e
-  drives it through e2e instead (`references/fixtures.md`, last section).
+- A `page` step needs Playwright (in TypeScript a `request` step too), and
+  `nuka check` reports `playwright-missing` with the install line: ask before
+  adding it. It makes `nuka run` open a browser and take minutes.
 - A Playwright MCP server, when the loop explores a browser app whose
   state cannot be repeated, drives the real application with whatever
   login it holds. A click that submits something there needs the same
@@ -43,8 +45,7 @@ never commits, pushes, or publishes. Keep the narration short.
 
 Run `nuka` from the directory that holds the config, and `nuka init` first
 when there is none (`references/running.md`, "Setting up"); an app to start
-needs the program in `nukadoko.config.ts` (`references/program.md`). A Ruby project
-writes steps as `references/ruby.md` says. Pick one line:
+needs the program in the config (`references/program.md`). Pick one line:
 
 1. **Prose only** (a ticket, a request, a conversation):
    `references/from-prose.md`, then line 2.
@@ -80,10 +81,9 @@ If none is true, ask what this is supposed to do before writing anything.
    <entry point>` (`--cwd`, `--argv`) or `--request "<METHOD> <path>"`, and
    `--from <step>.<key>` per value an earlier step returns (its producer has
    to return that key already). A step that needs only what an earlier line
-   did `requires` the state that line's step `gives` (`references/states.md`).
-   A Then declares `claims`, never `run` (`references/checking-steps.md`). Run
-   each alone with `nuka do <step> --args '<json>'`
-   (`references/writing-steps.md`). Finished projects: `references/examples/`.
+   did `requires` its state (`references/states.md`). A Then declares
+   `claims`, never `run` (`references/checking-steps.md`). Run each alone
+   with `nuka do <step> --args '<json>'` (`references/writing-steps.md`).
 3. **`nuka check <feature>`.** Fix every error and read every warning: a
    warning is a question about intent, not noise. Each finding names its
    file, a `fix:` (an edit) or `do:` (a command) line; apply or run it.

@@ -5,7 +5,7 @@ nukadoko 0.16.1 and rescaffolded with the releases after it (which added
 `nuka scaffold --cwd` and then `--argv`, and moved its Thens to claims) on Node 24.22.0. Every output block below is copied
 from a real run of that project, which is `examples/acceptance/cli/` in
 the nukadoko repository; CI runs it. The rules it follows are in
-`../scenario-rules.md`.
+`../../scenario-rules.md`.
 
 ## The ticket
 

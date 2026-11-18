@@ -20,9 +20,9 @@ person reading the scenario, not to the code moving data between steps?
 After a failure, what should be knowable about it?
 
 - Its inputs and its result, under a contract worth stating: make it a
-  **part**. Define it with `defineStep` and no `pattern`, list it in the
-  calling step's `parts`, and run it with `await call(thePart, {...})`.
-  Destructure `call` in that step's `run`, not in a fixture: `nuka check`
+  **part**. Define it as a step with no `pattern`, list it in the calling
+  step's `parts`, and run it through the `call` fixture. Name `call` in that
+  step's `run`, not in a fixture: `nuka check`
   reports a fixture that names it.
   Its args and its result are validated exactly as a step's are, and the
   call is recorded under `calls` on the calling step's own step record.
@@ -67,11 +67,11 @@ line that requires it after this one (`states.md`).
 The original step keeps its pattern, its `args`, and its `returns`. Only
 its body moves.
 
-1. Move each half into its own file under `features/steps/`, defined with
-   `defineStep`, with no `pattern`. Give each one the `args` and `returns`
+1. Move each half into its own step file under `features/steps/`, with no
+   `pattern`. Give each one the `args` and `returns`
    it actually demands, not the ones its current caller happens to have.
 2. List them in the original step's `parts`, and replace the moved code
-   with `await call(thatPart, {...})`.
+   with a call through `call`.
 3. Run `nuka check`. A part the caller did not list is refused at the
    call, and a step declaring `mutates: false` while listing a part that
    declares `mutates: true` is an error: the composite's own flag has to
@@ -79,34 +79,57 @@ its body moves.
 4. Run the original scenario. Its feature file did not change, so a
    reviewer who approved that sentence has nothing new to read.
 
-`parts` takes the imported step objects themselves, never their names,
-the same way `from` names its producer:
+`parts` takes the steps themselves (imported in TypeScript, the classes in
+Ruby), never their names, the same way `from` names its producer:
+
+```ruby
+# conformance/cases/parts/steps-rb/a_done_todo.rb
+class ADoneTodo < Nukadoko::Step
+  pattern "a done todo titled {title:string} exists"
+  description "Create a todo and complete it, through two parts"
+  args { string :title, "The title of the todo" }
+  returns do
+    string :id, "The id of the todo"
+    boolean :done, "true once completed"
+  end
+  mutates true
+  parts [CreateTodo, CompleteById]
+
+  def run(call:, args:)
+    created = call.(CreateTodo, title: args.title)
+    completed = call.(CompleteById, id: created.id)
+    { id: completed.id, done: completed.done }
+  end
+end
+```
 
 ```ts
-import openAccount from "./open-account.ts";
-import sendWelcomeMail from "./send-welcome-mail.ts";
+// conformance/cases/parts/steps-ts/a-done-todo.ts
+import { defineStep, z } from "nukadoko";
+import createTodo from "./parts/create-todo.ts";
+import completeById from "./parts/complete-by-id.ts";
 
 export default defineStep({
-  // pattern, description, args and returns are exactly what they were
-  pattern: "a customer {email:string} is onboarded on the {plan:string} plan",
-  args: z.object({ email: z.string(), plan: z.string() }),
-  returns: z.object({ accountId: z.string(), mailId: z.string() }),
-  parts: [openAccount, sendWelcomeMail],
+  pattern: "a done todo titled {title:string} exists",
+  description: "Create a todo and complete it, through two parts",
+  args: z.object({ title: z.string().describe("The title of the todo") }),
+  returns: z.object({
+    id: z.string().describe("The id of the todo"),
+    done: z.boolean().describe("true once completed"),
+  }),
+  mutates: true,
+  parts: [createTodo, completeById],
   async run({ call }, args) {
-    const { accountId } = await call(openAccount, {
-      email: args.email,
-      plan: args.plan,
-    });
-    const { mailId } = await call(sendWelcomeMail, { email: args.email });
-    return { accountId, mailId };
+    const created = await call(createTodo, { title: args.title });
+    const completed = await call(completeById, { id: created.id });
+    return { id: completed.id, done: completed.done };
   },
 });
 ```
 
 Get each part right on its own before wiring the composite back together.
 A part with no `pattern` is still vocabulary, so it runs alone like any
-other step: `nuka do open-account --args '{"email":"ada@example.com",
-"plan":"team"}'`.
+other step: `nuka do create-todo --args '{"title":"x"}'`.
 
 When the second scenario wants to name one half as a line of its own,
 give that part a `pattern`. It stays callable from the composite at the

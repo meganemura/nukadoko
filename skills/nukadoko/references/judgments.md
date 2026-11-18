@@ -17,6 +17,18 @@ change to that value asks for a new one.
 The claim is `judged-as`. Its actual is the value to judge, its expected
 the quality the sentence names, from a capture or the pattern's own words:
 
+```ruby
+class GreetingReadsAs < Nukadoko::Step
+  pattern "the greeting reads as {quality:string}"
+  args do
+    string :quality
+    field :stdout, RunGreet.returns[:stdout]
+  end
+  from stdout: [RunGreet, :stdout]
+  claims [{ actual: "stdout", view: "text", compare: "judged-as", expected: "quality" }]
+end
+```
+
 ```ts
 export default defineStep({
   pattern: "the greeting reads as {quality:string}",

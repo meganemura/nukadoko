@@ -5,20 +5,10 @@
 The config holds the criteria, and its `program` holds how a run gets the
 program the scenarios talk to: how to build it, prepare its state, start it,
 and the env its processes get. `nuka init` does not write it: write it from
-what the README or CI script already runs.
-
-```ts
-import { defineConfig } from "nukadoko";
-
-export default defineConfig({
-  program: () => ({
-    build: ["npm run build"],              // once per run, in the tree's root
-    prepare: ["node dist/migrate.js"],     // once per world, with env below
-    serve: { command: "node dist/server.js", ready: "/health" },
-    env: { PORT: "{port}", DATABASE_PATH: "{dir}/app.sqlite3" },
-  }),
-});
-```
+what the README or CI script already runs. How the config writes it is
+`typescript/program.md` or `ruby/program.md`; the gem reads `serve`, `env`,
+`environments`, and `defaultEnvironments`, and the rest of this page is the
+TypeScript engine's.
 
 `nuka run` starts one world per environment: it runs `build` and
 `prepare`, starts `serve` on a free port, waits until `ready` answers
@@ -52,7 +42,7 @@ refuse it before any command runs.
 
 One world serves every scenario of an environment, so what one scenario
 writes is there for the next: a scenario creates what it reads and claims
-only on that (`scenario-rules.md`, S8, and `examples/http-api.md`).
+only on that (`scenario-rules.md`, S8, and `typescript/examples/http-api.md`).
 
 A step reads the same `env`: in `process.env` during the run and in the
 `env` fixture, after the config's env files. `setup(world)` runs once per
@@ -173,15 +163,7 @@ with no `table` left out on tables `lists.tables` marks (`left_out`,
 
 An entry of `environments` overrides any field above (`env` merges by
 key). A feature behind a switch gets one environment per side, each
-naming its side in `conditions`:
-
-```ts
-env: { CHECKOUT_V2: "{condition.checkout_v2}" },
-environments: {
-  "checkout-v1": { conditions: { checkout_v2: false } },
-  "checkout-v2": { conditions: { checkout_v2: true } },
-},
-```
+naming its side in `conditions` ("Environments" on your engine's page).
 
 `conditions` sets nothing, and nukadoko does not check it against the program;
 `{condition.checkout_v2}` hands the program the declared side, so the two

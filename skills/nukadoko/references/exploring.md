@@ -12,8 +12,25 @@ not name is not recorded. That is right for a step a scenario relies on,
 and wrong for the first look at a system nobody has described yet.
 
 Write one probe step for the looking. Give it no `pattern`, so it can
-never become a line in a feature, and a `returns` of `z.unknown()`, so
-nothing is filtered out:
+never become a line in a feature, and a `returns` that keeps the body
+whole, so nothing is filtered out:
+
+```ruby
+class Probe < Nukadoko::Step
+  description "Send one request and return the whole response, for looking at"
+  args { string :path, "Path under the program's URL" }
+  returns do
+    number :status
+    unknown :body
+  end
+  mutates false
+
+  def run(request:, args:)
+    res = request.get(args.path)
+    { status: res.status, body: res.body }
+  end
+end
+```
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -34,9 +51,7 @@ export default defineStep({
 
 `nuka do probe --args '{"path":"/accounts/1"}'` then prints the whole
 thing, because `do` writes the step record to stdout. One probe lasts a
-project; write it once and stop guessing at shapes.
-
-A permissive `returns` is deliberate here and stays confined to the probe.
+project; write it once and stop guessing at shapes. A permissive `returns` is deliberate here and stays confined to the probe.
 The moment you know the shape, the step that a scenario will name declares
 it properly. A probe that drifts into being relied on is a contract that
 stopped saying anything.

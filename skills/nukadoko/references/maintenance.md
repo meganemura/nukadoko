@@ -67,7 +67,7 @@ the one that covers the most step executions, not the slowest. It names a
 process-scope fixture only when every shared step declares
 `mutates: false`. Otherwise it names the first step that may write: an
 opening that creates the record each scenario then reads by id stays in
-each scenario (`scenario-rules.md`, S8, and `examples/http-api.md`). A
+each scenario (`scenario-rules.md`, S8, and `typescript/examples/http-api.md`). A
 step that keeps the default `mutates: true` but writes nothing a later
 scenario reads is the one case to judge yourself.
 

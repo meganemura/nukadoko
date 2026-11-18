@@ -82,7 +82,7 @@ each stub's own single scaffold with `--replace`; add `--command` or
    point>")`, the `runCommand` call in an empty `scratch.dir()`, and
    `returns` of `exitCode`, `stdout`, and `stderr`. A file a Given wrote
    is in the directory that Given returned: `--from <given>.dir --cwd dir`
-   runs the program there (`examples/cli.md`). Only captures are argv;
+   runs the program there (`typescript/examples/cli.md`). Only captures are argv;
    `--argv <key>` splits one on whitespace only (`"input.csv --json"`),
    and any other `--from` value throws by name until you pass it (`env`).
    The entry point runs under plain `node`, so when `.ts` files import
@@ -127,7 +127,7 @@ the project (a real service, a shared database, a file outside
 go-ahead, once per step, not on every retry while fixing it, or
 trial-and-error stops being possible. A step that writes only under
 `scratch`, or to a server a fixture or the program in `nukadoko.config.ts` started, needs no
-go-ahead (`examples/http-api.md`), nor does a claim or `mutates: false` step.
+go-ahead (`typescript/examples/http-api.md`), nor does a claim or `mutates: false` step.
 
 With nobody to ask mid-task, because the caller handed the task over
 rather than sitting in the conversation, the go-ahead has to exist before
@@ -191,7 +191,7 @@ step read both.
 
 When the same producer runs more than once in a scenario, `from` reads
 its most recent result: two registrations followed by "the confirmation
-link is opened" confirm the second one (`examples/workflow.md`).
+link is opened" confirm the second one (`typescript/examples/workflow.md`).
 
 Declaring `from` is not just documentation: `nuka check` reads it and
 verifies the producing step actually appears earlier in the same scenario,

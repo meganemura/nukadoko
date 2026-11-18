@@ -23,6 +23,24 @@ Each environment declares its zone and its clock as `conditions`, and
 `env` hands the same values to the program through `{condition.<name>}`,
 so the column heading and the program cannot disagree:
 
+```ruby
+# Two zones by two pinned clocks. A combination left out is not run, and
+# nothing reports it, so the cross product is written once, here.
+zones = { utc: "UTC", tokyo: "Asia/Tokyo" }
+clocks = { midmonth: "2026-03-10T12:00:00Z", monthend: "2026-01-31T12:00:00Z" }
+environments = zones.flat_map { |zone, tz| clocks.map { |clock, now| ["#{zone}-#{clock}", { conditions: { tz: tz, now: now } }] } }.to_h
+
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "ruby src/server.rb", ready: "/health" },
+      env: { PORT: "{port}", TZ: "{condition.tz}", NOW: "{condition.now}" },
+      environments: environments,
+    }
+  },
+)
+```
+
 ```ts
 import { defineConfig } from "nukadoko";
 

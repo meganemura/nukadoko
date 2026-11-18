@@ -1,7 +1,7 @@
 # The nukadoko skill's worked examples
 
 Each directory here is the project one worked example under
-[`skills/nukadoko/references/examples/`](../../skills/nukadoko/references/examples/)
+[`skills/nukadoko/references/typescript/examples/`](../../skills/nukadoko/references/typescript/examples/)
 was copied from: [`cli/`](cli/) for `cli.md`, [`http-api/`](http-api/) for
 `http-api.md`, and [`workflow/`](workflow/) for `workflow.md`. The npm
 package ships the Markdown and not these projects.

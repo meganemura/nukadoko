@@ -6,7 +6,7 @@ in the release after 0.21.0, which also put the count behind a switch,
 and that program moved into `nukadoko.config.ts` in the release after 0.26.0. Every output block below is copied from a real run of
 that project, which is `examples/acceptance/http-api/` in the nukadoko
 repository; CI runs it. The rules it follows are in
-`../scenario-rules.md`.
+`../../scenario-rules.md`.
 
 ## The ticket
 

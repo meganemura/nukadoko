@@ -7,6 +7,10 @@ cannot carry that, because nothing is returned. Declare it as a state, and
 
 ## Declaring one
 
+States are the TypeScript engine's; the gem has none yet, and a Ruby step
+carries what a later line needs through `from`.
+
+<!-- engine: typescript -->
 ```ts
 requires: [["signed-in", "person"]],   // on the step that cannot work without it
 gives: [["signed-in", "person"]],      // on the step that leaves it holding

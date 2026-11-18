@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { listCheckCodes } from "../src/check/codes.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { listRunCodes } from "../src/finding/run-codes.js";
-import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
+import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot, sharedRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -161,6 +161,7 @@ describe("nuka skill (process)", () => {
 // that is there. The worked examples are exempt because their output
 // blocks are copied from real runs, not written to a length.
 const SKILL_MD_BUDGET = 120;
+const ENGINES = ["ruby", "typescript"];
 const REFERENCE_BUDGET = 200;
 
 function lineCount(text: string): number {
@@ -173,11 +174,16 @@ function budgetProblems(skillDir: string): string[] {
   const problems: string[] = [];
   const skillLines = lineCount(readFileSync(path.join(skillDir, "SKILL.md"), "utf8"));
   if (skillLines > SKILL_MD_BUDGET) problems.push(`SKILL.md has ${skillLines} lines, over ${SKILL_MD_BUDGET}`);
-  const referencesDir = path.join(skillDir, "references");
-  for (const entry of readdirSync(referencesDir, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-    const lines = lineCount(readFileSync(path.join(referencesDir, entry.name), "utf8"));
-    if (lines > REFERENCE_BUDGET) problems.push(`references/${entry.name} has ${lines} lines, over ${REFERENCE_BUDGET}`);
+  // Each engine's folder is read by an agent of that engine on top of the
+  // shared references, so its pages count against the same budget.
+  for (const folder of ["references", ...ENGINES.map((engine) => `references/${engine}`)]) {
+    const dir = path.join(skillDir, folder);
+    if (!existsSync(dir)) continue;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const lines = lineCount(readFileSync(path.join(dir, entry.name), "utf8"));
+      if (lines > REFERENCE_BUDGET) problems.push(`${folder}/${entry.name} has ${lines} lines, over ${REFERENCE_BUDGET}`);
+    }
   }
   return problems;
 }
@@ -202,10 +208,13 @@ describe("nukadoko skill size budget", () => {
       await writeFile(path.join(skillDir, "SKILL.md"), "line\n".repeat(121));
       await writeFile(path.join(skillDir, "references", "at-budget.md"), "line\n".repeat(200));
       await writeFile(path.join(skillDir, "references", "over.md"), "line\n".repeat(201));
+      await mkdir(path.join(skillDir, "references", "ruby"), { recursive: true });
+      await writeFile(path.join(skillDir, "references", "ruby", "over.md"), "line\n".repeat(201));
       await writeFile(path.join(skillDir, "references", "examples", "long.md"), "line\n".repeat(900));
       expect(budgetProblems(skillDir)).toEqual([
         "SKILL.md has 121 lines, over 120",
         "references/over.md has 201 lines, over 200",
+        "references/ruby/over.md has 201 lines, over 200",
       ]);
     } finally {
       await removeTempDir(skillDir);
@@ -274,5 +283,37 @@ describe("scenario-rules.md rule shape", () => {
       "S3 is not numbered S2",
       "S3's Checked by: names no code and does not say review",
     ]);
+  });
+});
+
+// The skill shows step code only on each engine's own pages, so an agent
+// reads its engine's folder and never the other's. The two folders hold the
+// same pages under the same headings, as docs/ruby/reference.md and
+// docs/typescript/reference.md do, and a block that names a conformance
+// file on its first line is that file, which CI runs in its engine.
+describe("nukadoko skill engine pages", () => {
+  const references = path.join(skillsDir, "nukadoko", "references");
+  const pages = (engine: string) => readdirSync(path.join(references, engine)).filter((name) => name.endsWith(".md")).sort();
+  const headings = (file: string) => readFileSync(file, "utf8").split("\n").filter((line) => line.startsWith("## "));
+
+  it("gives each engine the same pages with the same headings", () => {
+    expect(pages("ruby")).toEqual(pages("typescript"));
+    for (const page of pages("ruby")) {
+      expect(headings(path.join(references, "ruby", page)), page).toEqual(headings(path.join(references, "typescript", page)));
+    }
+  });
+
+  it("copies each example that names a conformance file from that file", () => {
+    const named: string[] = [];
+    for (const engine of ENGINES) {
+      for (const page of pages(engine)) {
+        const text = readFileSync(path.join(references, engine, page), "utf8");
+        for (const match of text.matchAll(/^```(?:ruby|ts)\n(?:#|\/\/) (conformance\/\S+)\n([\s\S]*?)^```$/gm)) {
+          named.push(match[1]!);
+          expect(match[2], `${engine}/${page}: ${match[1]}`).toBe(readFileSync(path.join(sharedRoot, match[1]!), "utf8"));
+        }
+      }
+    }
+    expect(named.length).toBeGreaterThan(0);
   });
 });

@@ -5,35 +5,19 @@
 A Then judges, never in code: its step declares `claims` in place of `run`,
 naming the value it reads, how it compares it, and where its expected value
 comes from. nukadoko compares, and the step record keeps each claim with both
-values and their sources. A typed Then never calls `expect` or `node:assert`.
-`defineStep` refuses a claim step that also declares `run`, `returns`,
-`mutates`, or `parts`. `nuka check` refuses a Then bound to a step that runs
+values and their sources; a Then never asserts in code. `nuka check` refuses
+a Then bound to a step that runs
 (`then-without-claims`) and a claim step in a Given or a When
 (`claims-outside-then`): a step that reads a value for a later Then is a When.
-
-```ts
-import { defineStep, z } from "nukadoko";
-import runTally from "./run-tally.ts";
-
-export default defineStep({
-  pattern: "it exits with {code:int}",
-  args: z.object({
-    code: z.number().describe("The expected exit code"),
-    exitCode: runTally.returns.shape.exitCode,
-  }),
-  from: { exitCode: [runTally, "exitCode"] },
-  claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
-});
-```
+How a step file writes one, with an example for each section here, is
+`typescript/checking-steps.md` or `ruby/checking-steps.md`.
 
 A claim is `{ actual, view?, at?, count?, compare, expected, expected_view? }`.
 `nuka scaffold --then --from <step>.<key>` writes this shape when the
 line states one value (for a word such as `empty`, the literal of the
-chained key's type); `examples/` has a finished Then for a CLI, an API,
-and a workflow (`examples/workflow.md` claims a literal and a sentence
-value in one step). Write claims as plain data (no getter, Proxy, class
-instance, hole, or unknown key) and export what `defineStep` returned: it
-validates one frozen copy, and a copy of the step (`{ ...step }`) fails.
+chained key's type); `typescript/examples/` has a finished Then for a CLI, an API,
+and a workflow (`typescript/examples/workflow.md` claims a literal and a sentence
+value in one step).
 
 ## Where the expected value comes from
 
@@ -41,11 +25,10 @@ Pick the source from the sentence; the record names it in `expected_from`.
 
 - **The sentence states it** (a capture, the docstring, or the table):
   `expected: "code"`, recorded as `sentence:code`. The key is required in
-  `args`, with no default, and its schema must not rewrite the value
-  (`z.coerce`, a transform, a pipe, `trim`, `catch`, a default inside, or a
-  refine on an object, an array, or the args object is refused; a schema that
-  still changes it leaves the claim `unjudged`). Read it as JSON, lines, or a
-  comma list with `expected_view` on a `z.string()` key. With no `observe`, a
+  `args`, with no default, and its schema must not rewrite the value (a
+  coercion, a transform, or a default is refused; a schema that still changes
+  it leaves the claim `unjudged`). Read it as JSON, lines, or a comma list with
+  `expected_view` on a string key. With no `observe`, a
   claim reads each value the line states: an unread capture is refused, an
   unread docstring or table `claim-sentence-unread`.
 - **An earlier step returned it** ("the item count is unchanged"): `expected:
@@ -61,41 +44,6 @@ Pick the source from the sentence; the record names it in `expected_from`.
   other literal is refused: `Then the command succeeds` cannot claim `0`.
 - **A second reading** ("A is listed before B"): `expected: { observe:
   "<path>" }`, a value `observe` returned beside the actual one.
-
-```ts
-import { defineStep, z } from "nukadoko";
-import countItems from "./count-items.ts";
-
-export default defineStep({
-  pattern: "the item count is unchanged",
-  args: z.object({ before: countItems.returns.shape.count }),
-  from: { before: [countItems, "count"] },
-  async observe({ request }) {
-    return { items: await (await request.get("/items")).json() };
-  },
-  claims: [{ actual: "items", count: true, compare: "equal", expected: { from: "before" } }],
-});
-```
-
-```ts
-import { defineStep, z } from "nukadoko";
-
-export default defineStep({
-  pattern: "{first:string} is listed before {second:string}",
-  args: z.object({
-    first: z.string().describe("The title expected first"),
-    second: z.string().describe("The title expected after it"),
-  }),
-  async observe({ page }, { first, second }) {
-    const titles = await page.locator(".result h2").allTextContents();
-    // A title that is not there is undefined, and an undefined value breaks the claim.
-    const at = (title: string) => (titles.includes(title) ? titles.indexOf(title) : undefined);
-    return { firstAt: at(first), secondAt: at(second) };
-  },
-  poll: { timeout_ms: 5000 },
-  claims: [{ actual: "firstAt", compare: "less-than", expected: { observe: "secondAt" } }],
-});
-```
 
 ## The actual value
 
@@ -156,9 +104,9 @@ a text, a number, a list (a claim with `count: true` counts it, so return the
 list, not its length). A boolean literal is refused when the actual value comes
 from `observe`, since `{ visible: true }` is the judgment made in code. For a
 yes or no in the sentence, return the word it uses
-(`outcome: "accepted" | "refused"`, `examples/workflow.md`), or the measurement
+(`outcome: "accepted" | "refused"`, `typescript/examples/workflow.md`), or the measurement
 behind it. Give every `args` and `returns` field of a step you write or rewrite
-a `.describe()`, so `nuka describe` connects a criterion's wording to the field
+a description, so `nuka describe` connects a criterion's wording to the field
 that answers it; a note on a step you are not changing is a report.
 
 `poll: { timeout_ms }` runs `observe` every 100 ms until every claim holds on
@@ -175,25 +123,10 @@ so it is one step; "is in trial" and "is not in trial" are two steps.
 
 ## A page by role and name
 
-A When may still wait with Playwright's `expect` before it acts (outside
-`playwright test`, on Playwright 1.61.1, a failing `expect.soft` throws at once,
-and `toMatchAriaSnapshot`, `toHaveScreenshot`, and `toMatchSnapshot` throw
-`"<name>() must be called during the test"`). For what a page shows, a Then
+A When may still wait on the page before it acts. For what a page shows, a Then
 returns the page or a locator from `observe` and claims `fits-aria-snapshot`
 against the docstring (the one required `args` key no capture or `from` fills);
-nukadoko takes the ARIA snapshot, and the record keeps it whole:
-
-```ts
-import { defineStep, z } from "nukadoko";
-
-export default defineStep({
-  pattern: "the scores form shows",
-  args: z.object({ tree: z.string().describe("Part of the form's ARIA snapshot") }),
-  observe: ({ page }) => ({ form: page.getByRole("form", { name: "Scores" }) }),
-  poll: { timeout_ms: 5000 },
-  claims: [{ actual: "form", compare: "fits-aria-snapshot", expected: "tree" }],
-});
-```
+nukadoko takes the ARIA snapshot, and the record keeps it whole.
 
 The docstring states part of the tree (`writing-the-feature.md`). A name between
 slashes, `[active]`, and a tree that names nothing are refused
