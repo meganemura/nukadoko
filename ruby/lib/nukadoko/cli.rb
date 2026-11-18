@@ -122,7 +122,7 @@ module Nukadoko
       # starts; a selection --env names is a choice of where to run.
       selected = (Engine::Program.new(Nukadoko.program_options).environments if Array(@options["--env"]).empty?) rescue nil
       check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")), full: @command == "check",
-                                conditions: declared, environments: selected, problems: problems, config: env_findings)
+                                conditions: declared, environments: selected, problems: problems, config: env_findings, worlds: events_worlds)
       findings = check.findings.map { relative(_1).to_h }
       case @command
       when "check" then checked(check, findings)
@@ -272,7 +272,7 @@ module Nukadoko
       default = @options["--env"].empty?
       declared = program.declared.values.flat_map { (_1[:conditions] || {}).keys.map(&:to_s) }
       check = Engine::Check.new(steps, default ? selection.scenarios : kept, conditions: declared,
-                                environments: (environments if default), problems: selection.problems, config: env_findings)
+                                environments: (environments if default), problems: selection.problems, config: env_findings, worlds: events_worlds)
       # The TypeScript engine refuses a declaration as its step file loads, so
       # such a step file stops its run even under --no-check, naming the
       # first one.
@@ -453,7 +453,7 @@ module Nukadoko
         end
         return refuse(Engine::Refusal.new("step-args-invalid", "--args must be a JSON object", fix: args_fix, run: describe)) unless given.is_a?(Hash)
       end
-      args, origins, used, files = used_args(step, @options["--use"])
+      args, origins, used, files, events = used_args(step, @options["--use"])
       if @options["--args"].empty? && (step.args.required_names - args.keys).any?
         return refuse(Engine::Refusal.new("step-args-invalid", "--args is required unless --use supplies this step's arguments", fix: args_fix, run: describe))
       end
@@ -469,7 +469,7 @@ module Nukadoko
       dir = File.join(@project, ".nukadoko", "do", id)
       run = Engine::Run.new(@project, check.usable, [], Nukadoko.program_options, environments: [environment], dir: dir, out: $stderr)
       texts = given.to_h { |key, value| [key, JSON.generate(value)] }
-      record = run.do_step(step, args, origins, texts, environment, files)
+      record = run.do_step(step, args, origins, texts, environment, files, events)
       if (late = record[:events_late])
         where = late[:file] ? "see #{File.join(".nukadoko", "do", id, late[:file])}" : "they could not be written beside the record"
         message = "world #{environment.name}: #{late[:lines]} line(s) of the program's execution events carry the step's trace id and arrived after the step ended; #{where}"
@@ -488,7 +488,7 @@ module Nukadoko
     # Each from key of the step, from the newest record --use names whose
     # step gives it, and where it came from; and for each files key, the
     # record of the one --use value whose step its `of` names.
-    #: (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped]]
+    #: (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped], ^(String, untyped) -> Hash[Symbol, untyped]]
     def used_args(step, ids)
       records = ids.map do |id|
         path = [File.join(@project, ".nukadoko", "do", id, "record.json"), *Dir.glob(File.join(@project, ".nukadoko", "runs", "*", "steps", id, "record.json"))].find { File.exist?(_1) }
@@ -496,6 +496,7 @@ module Nukadoko
           raise Engine::Refusal.new("step-inputs-invalid", "--use #{id}: no such step record. A step record is removed with its run once the run is older than the newest 20 runs, " \
                                                            "and a nuka do record once it is older than 7 days (retention in nukadoko.config.rb)")
         end
+        (@use_dirs ||= {})[id] = File.dirname(path)
         [id, JSON.parse(File.read(path))]
       end
       args = {}
@@ -512,7 +513,7 @@ module Nukadoko
           break
         end
       end
-      [args, origins, used, used_files(step, records)]
+      [args, origins, used, used_files(step, records), used_events(step, records)]
     end
 
     # A list is the files of one execution, so two --use records for one
@@ -546,6 +547,76 @@ module Nukadoko
       end
     end
 
+    # Each events key reads the record --use named for it, one record per
+    # key, since a count is of one execution. A key no --use supplies is
+    # unjudged with the reason: under nuka do no earlier line ran, and
+    # --use is how a producer is named.
+    #: (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
+    def used_events(step, records)
+      chosen = {} #: Hash[String, [String, Hash[String, untyped]]]
+      step.events.each do |key, entry|
+        names = Engine::ChangedFiles.producers(entry).map(&:step_name)
+        records.each do |id, record|
+          next unless names.include?(record["step"])
+
+          if (earlier = chosen[key]) && earlier.first != id
+            raise Engine::Refusal.new("step-inputs-invalid", %(--use: events key "#{key}" is supplied by both step record #{earlier.first} (step "#{earlier.last["step"]}") and ) +
+                                                             %(step record #{id} (step "#{record["step"]}"), and nuka do counts the execution events of one step record per key))
+          end
+          chosen[key] = [id, record]
+        end
+      end
+      lambda do |key, entry|
+        if (found = chosen[key])
+          id, record = found
+          next { of: "#{record["step"]}@#{id}", producer: recorded_events_producer(id, record) }
+        end
+
+        names = Engine::ChangedFiles.producers(entry).map(&:step_name)
+        { of: names.join(" or "),
+          unchosen: "events.#{key}.of names #{names.map { %("#{_1}") }.join(" or ")}, and no --use value names a step record of #{names.size == 1 ? "it" : "any of them"}, " \
+                    "so nuka do has no execution events to count" }
+      end
+    end
+
+    # Where a finished step record's execution events are: its directory
+    # with its slice and late lines, whether the late lines are all there,
+    # and the world's copy, whose kinds count as reported. A late file
+    # whose count no record names may be cut short, so it counts as
+    # truncated: an absence then stays unjudged.
+    #: (String, Hash[String, untyped]) -> Hash[Symbol, untyped]
+    def recorded_events_producer(id, record)
+      dir = (@use_dirs || {}).fetch(id)
+      symbolized = JSON.parse(JSON.generate(record), symbolize_names: true)
+      run_id = symbolized[:run_id]
+      run = run_id && begin
+        JSON.parse(File.read(File.join(@project, ".nukadoko", "runs", run_id, "run.json")), symbolize_names: true)
+      rescue SystemCallError, JSON::ParserError
+        nil
+      end
+      scenario = run && run[:scenarios].find { |entry| entry[:steps].any? { _1[:step_record_id] == id } }
+      step = scenario && scenario[:steps].find { _1[:step_record_id] == id }
+      of = { step_record_id: id, step: symbolized[:step], line: step && step[:line] }
+      observed = symbolized[:observed] || {}
+      slice = observed[:events]
+      return { source: "unread", of: of, gap: "world-unread" } if observed.key?(:events) && slice.nil?
+      return { source: "unread", of: of, gap: observed[:program_log].nil? ? "world-unread" : "inlet-unnamed" } unless slice
+
+      may_miss = lambda do |late|
+        next File.exist?(File.join(dir, Engine::Events::LATE_FILE)) if late.nil?
+
+        late[:truncated] == true || (late[:lines].to_i.positive? && late[:file].nil?)
+      end
+      if run_id.nil?
+        world = File.join(dir, "world", Engine::Events::WORLD_FILE)
+        return { source: "recorded", of: of, dir: dir, slice: slice, late_truncated: may_miss.(symbolized[:events_late]), **(File.exist?(world) ? { world: world } : {}) }
+      end
+
+      copy = scenario && run[:worlds]&.find { _1[:name] == scenario[:environment] && _1[:tree] == (scenario[:world] || "head") }&.dig(:events, :file)
+      world = copy && File.join(@project, ".nukadoko", "runs", run_id, copy)
+      { source: "recorded", of: of, dir: dir, slice: slice, late_truncated: may_miss.(step&.[](:events_late)), **(world ? { world: world } : {}) }
+    end
+
     # The record `nuka do` prints, in the TypeScript engine's shape.
     #: (Hash[Symbol, untyped], String, singleton(Step), Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], Engine::Environment) -> Hash[Symbol, untyped]
     def do_record(record, id, step, given, origins, used, environment)
@@ -559,18 +630,18 @@ module Nukadoko
         end
       end
       passed = record[:status] == "passed"
-      outcome = passed ? { result: record[:result] || {}, returns_dropped: record[:returns_dropped] || [] } : { error: { message: record[:error], kind: record[:error_kind] } }
+      outcome = passed ? { result: record[:result] || {}, **(step.claims ? {} : { returns_dropped: record[:returns_dropped] || [] }) } : { error: { message: record[:error], kind: record[:error_kind] } }
       processes = record[:processes]
       { schema_version: Engine::RunRecord::SCHEMA_VERSION, nukadoko: VERSION, step_record_id: id, step: step.step_name, kind: "do",
         args: record[:args] || given, args_origin: args_origin, **outcome, status: record[:status], environment: environment.name,
-        world_name: nil, **(record[:target_version] ? { target_version: record[:target_version] } : {}),
+        world_name: Engine::Program.new(Nukadoko.program_options).file? ? environment.name : nil, **(record[:target_version] ? { target_version: record[:target_version] } : {}),
         scenario_record_id: nil, run_id: nil, started_at: record[:started_at], finished_at: record[:finished_at],
         evidence: { dir: File.join(".nukadoko", "do", id), screenshots: [] },
         observed: { processes: processes&.any? ? processes : nil,
                     http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [],
                     **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}), **(record.key?(:events) ? { events: record[:events] } : {}) },
         mutates: record[:mutates], **(used.any? ? { used: used } : {}), **(record[:events_late] ? { events_late: record[:events_late] } : {}),
-        **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }
+        **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1, **Engine::RunRecord.read_fields(record) } : {}) }
     end
 
     #: (Engine::Scenario, Array[Engine::Environment]) -> bool
@@ -903,6 +974,22 @@ module Nukadoko
 
     # A placeholder a world this invocation starts has no value for fails
     # that world before its program starts, and the program alone says so.
+    # The worlds a run with this invocation's --env starts, each with how
+    # it is reached and whether its program names {events}; nil with no
+    # program, and none when --env names no environment.
+    #: () -> Array[Hash[Symbol, untyped]]?
+    def events_worlds
+      program = Engine::Program.new(Nukadoko.program_options)
+      return nil unless program.file?
+
+      program.environments(Array(@options["--env"])).map do |environment|
+        recipe = program.recipe(environment)
+        { name: environment.name, kind: recipe.reach[:kind], events: Engine::Program.names_placeholder?(recipe, "events") }
+      end
+    rescue Engine::Refusal
+      []
+    end
+
     # A world no command of this invocation starts is not checked.
     #: () -> Array[Engine::Finding]
     def placeholder_findings

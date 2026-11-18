@@ -53,8 +53,8 @@ module Nukadoko
       # what the feature loader found that runs nothing.
       # `config` holds what was found in the config and its program before
       # any step loaded, such as an env file that is missing.
-      # : (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
-      def initialize: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
+      # : (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding], ?worlds: (Array[Hash[Symbol, untyped]] | false | nil)) -> void
+      def initialize: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding], ?worlds: Array[Hash[Symbol, untyped]] | false | nil) -> void
 
       # : () -> bool
       def passed?: () -> bool
@@ -131,6 +131,19 @@ module Nukadoko
       # helper may call run_command), so the check stays silent there.
       # : (Scenario) -> void
       def check_files_order: (Scenario) -> void
+
+      # `events-inlet-missing` (errors) and `events-unread` (warnings) for
+      # the worlds a run starts, when a bound step declares events: a world
+      # nukadoko serves whose program names no `{events}`, and a world it
+      # does not serve, or a project with no program to start one. The fix
+      # is the program's, so one finding per world says it once.
+      # : (Array[singleton(Step)]) -> void
+      def check_events_worlds: (Array[singleton(Step)]) -> void
+
+      # A reading of an earlier step that a claim step declares by key,
+      # each with an `of`: what the findings call it, and what is left
+      # unjudged.
+      READINGS: Array[Hash[Symbol, untyped]]
 
       # `"a"`, `"a" and "b"`, `"a", "b", and "c"`, as the run names candidates.
       # : (Array[String]) -> String

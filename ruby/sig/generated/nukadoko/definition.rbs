@@ -26,6 +26,15 @@ module Nukadoko
       # : () -> String?
       def run_step_problem: () -> String?
 
+      EVENTS_ENTRY_KEYS: untyped
+
+      # Why `events` is not a hash of counts the run can read: each key one
+      # word a claim's actual can name, each entry `{ of:, count: }` with
+      # `of` a step or a list of distinct ones, and `count` a selection the
+      # format can judge.
+      # : () -> String?
+      def events_problem: () -> String?
+
       FILES_ENTRY_KEYS: untyped
 
       FILE_CHANGES: untyped
@@ -48,6 +57,10 @@ module Nukadoko
 
       # : () -> ClaimRules::Shape
       def shape: () -> ClaimRules::Shape
+
+      # Each value the step's selections take from the sentence.
+      # : () -> Array[Hash[Symbol, String]]
+      def events_sentence: () -> Array[Hash[Symbol, String]]
 
       # A deadline the step could never keep is refused when it loads, as
       # the TypeScript engine refuses one Node's timer would clamp.

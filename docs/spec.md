@@ -4998,7 +4998,15 @@ A Then can claim what the program did inside an earlier step:
 The claim step names the count in `events`, and a claim reads its key
 as its actual:
 
-<!-- engine: typescript -->
+```ruby
+# features/steps/nothing_was_written.rb
+class NothingWasWritten < Nukadoko::Step
+  pattern "nothing was written"
+  events writes: { of: [OpenRoom, PlaceScore], count: { kind: "db", op: %w[insert update delete other], committed: true } }
+  claims [{ actual: "writes", compare: "equal", expected: { literal: 0 } }]
+end
+```
+
 ```ts
 // features/steps/nothing-was-written.ts
 import { defineStep, z } from "nukadoko";

@@ -48,7 +48,7 @@ module Nukadoko
           **(record[:required_env] ? { required_env: record[:required_env] } : {}),
           **(record[:actions] ? { actions: record[:actions] } : {}), **(record[:actions_truncated] || record[:attachments_total] ? { truncated: { actions: record[:actions_truncated], evidence: record[:attachments_total] }.compact } : {}),
           **(record[:fixtures] ? { fixtures: record[:fixtures] } : {}),
-          **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", **poll_fields(record), **page_fields(record) } : {}) }
+          **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", **poll_fields(record), **read_fields(record) } : {}) }
       end
 
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
@@ -64,12 +64,20 @@ module Nukadoko
         actual_from = "ARIA snapshot of #{base}" if declared[:compare] == "fits-aria-snapshot"
         actual_from = "ARIA snapshot of observe:#{Claims.judged_path(declared)}" if judged[:aria]
         expected_from, expected_text = expected_origin(declared, origins, texts, patterns)
-        { **judged.slice(:actual), actual_from: actual_from, **{ view: declared[:view], at: declared[:at]&.to_s, count: declared[:count] }.compact,
+        { **judged.slice(:actual, :actual_range, :counted, :left_out), actual_from: actual_from, **{ view: declared[:view], at: declared[:at]&.to_s, count: declared[:count] }.compact,
           compare: declared[:compare], **judged.slice(:expected), expected_from: expected_from,
           **{ expected_view: declared[:expected_view] }.compact }.merge(expected_text: expected_text, **outcome(judged), measured: nil)
       end
 
       READING_MAX_BYTES = 1024
+
+      # What the page received and showed, with each events key's reading
+      # before the judged view, in the TypeScript engine's order.
+      #: (Hash[Symbol, untyped], ?String?) -> Hash[Symbol, untyped]
+      def read_fields(record, under = nil)
+        page = page_fields(record, under)
+        { **page.except(:judged_view), **(record[:events_read] ? { events_read: record[:events_read] } : {}), **page.slice(:judged_view) }
+      end
 
       # What a claim step's page had received by its judged reading, and
       # what the page showed right after it. A file is named from the step

@@ -1,0 +1,63 @@
+# Generated from lib/nukadoko/events/count.rb with RBS::Inline
+
+module Nukadoko
+  module Engine
+    module Events
+      # Responsibility: what a count of execution events says of a claim:
+      # the range the count lies in, and whether a compare holds, breaks, or
+      # cannot be known on that range, with the words of the reason. Pure.
+      # Boundary: what the lines add up to is the tally's; where the
+      # expected value comes from is the claim's.
+      #
+      # A count is a range, never one number standing for "probably that
+      # many". Lines that match raise the lower bound. Lines that may match
+      # raise only the upper bound, and a reading that is not whole has
+      # none, since more lines may still come. A compare holds, or breaks,
+      # only when it gives that answer for every count in the range, so an
+      # absence never holds on a reading that was not whole.
+      module Count
+        COMPARES: untyped
+
+        # The gaps that say nothing was read, rather than that what was
+        # read may lack lines.
+        UNREAD_GAPS: untyped
+
+        CAUSE_WORDS: untyped
+
+        # The range a selection's count lies in: `[yes, yes + maybe]` on a
+        # whole reading, `[yes, unbounded]` on one that is not.
+        # : (Integer, Hash[String, Integer], bool) -> Hash[Symbol, Integer?]
+        def self.range_of: (Integer, Hash[String, Integer], bool) -> Hash[Symbol, Integer?]
+
+        # : (Hash[String, Integer]) -> Integer
+        def self.maybe_total: (Hash[String, Integer]) -> Integer
+
+        # What `compare` gives for every whole count in `range`.
+        # : (Hash[Symbol, Integer?], String, Numeric) -> Symbol
+        def self.judge_range: (Hash[Symbol, Integer?], String, Numeric) -> Symbol
+
+        # : (Integer) -> String
+        def self.lines: (Integer) -> String
+
+        # The words of one gap, as a reason uses them.
+        # : (Hash[Symbol, untyped]) -> String
+        def self.describe_gap: (Hash[Symbol, untyped]) -> String
+
+        # The lines that may match, by cause.
+        # : (Hash[String, Integer]) -> String
+        def self.describe_maybe: (Hash[String, Integer]) -> String
+
+        # The range in words: `exactly 2`, `between 1 and 3`, `at least 1,
+        # with no upper bound`.
+        # : (Hash[Symbol, Integer?]) -> String
+        def self.describe_range: (Hash[Symbol, Integer?]) -> String
+
+        # `held` or `broken` only when every count in the range gives that
+        # answer; `unjudged` with the reason and the gap word otherwise.
+        # `of` names the step whose events were read, in the reason.
+        # : (Hash[Symbol, untyped], String, Numeric, ?String?) -> Hash[Symbol, untyped]
+        def self.judge: (Hash[Symbol, untyped], String, Numeric, ?String?) -> Hash[Symbol, untyped]
+      end
+    end
+  end
+end

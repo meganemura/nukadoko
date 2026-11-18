@@ -26,6 +26,11 @@ module Nukadoko
 
       READING_MAX_BYTES: ::Integer
 
+      # What the page received and showed, with each events key's reading
+      # before the judged view, in the TypeScript engine's order.
+      # : (Hash[Symbol, untyped], ?String?) -> Hash[Symbol, untyped]
+      def self?.read_fields: (Hash[Symbol, untyped], ?String?) -> Hash[Symbol, untyped]
+
       # What a claim step's page had received by its judged reading, and
       # what the page showed right after it. A file is named from the step
       # record's directory, or from the run's when `under` names the step's.

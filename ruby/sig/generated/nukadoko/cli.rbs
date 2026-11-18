@@ -79,14 +79,29 @@ module Nukadoko
     # Each from key of the step, from the newest record --use names whose
     # step gives it, and where it came from; and for each files key, the
     # record of the one --use value whose step its `of` names.
-    # : (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped]]
-    def used_args: (singleton(Step), Array[String]) -> [ Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped] ]
+    # : (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped], ^(String, untyped) -> Hash[Symbol, untyped]]
+    def used_args: (singleton(Step), Array[String]) -> [ Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped], ^(String, untyped) -> Hash[Symbol, untyped] ]
 
     # A list is the files of one execution, so two --use records for one
     # files key are refused, and a key no --use supplies is unjudged: under
     # nuka do no earlier line ran, and --use is how a producer is named.
     # : (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
     def used_files: (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
+
+    # Each events key reads the record --use named for it, one record per
+    # key, since a count is of one execution. A key no --use supplies is
+    # unjudged with the reason: under nuka do no earlier line ran, and
+    # --use is how a producer is named.
+    # : (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
+    def used_events: (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
+
+    # Where a finished step record's execution events are: its directory
+    # with its slice and late lines, whether the late lines are all there,
+    # and the world's copy, whose kinds count as reported. A late file
+    # whose count no record names may be cut short, so it counts as
+    # truncated: an absence then stays unjudged.
+    # : (String, Hash[String, untyped]) -> Hash[Symbol, untyped]
+    def recorded_events_producer: (String, Hash[String, untyped]) -> Hash[Symbol, untyped]
 
     # The record `nuka do` prints, in the TypeScript engine's shape.
     # : (Hash[Symbol, untyped], String, singleton(Step), Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], Engine::Environment) -> Hash[Symbol, untyped]
@@ -179,6 +194,12 @@ module Nukadoko
 
     # A placeholder a world this invocation starts has no value for fails
     # that world before its program starts, and the program alone says so.
+    # The worlds a run with this invocation's --env starts, each with how
+    # it is reached and whether its program names {events}; nil with no
+    # program, and none when --env names no environment.
+    # : () -> Array[Hash[Symbol, untyped]]?
+    def events_worlds: () -> Array[Hash[Symbol, untyped]]?
+
     # A world no command of this invocation starts is not checked.
     # : () -> Array[Engine::Finding]
     def placeholder_findings: () -> Array[Engine::Finding]

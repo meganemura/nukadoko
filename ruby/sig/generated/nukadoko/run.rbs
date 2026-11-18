@@ -199,6 +199,27 @@ module Nukadoko
       # : (untyped) -> Hash[String, Hash[Symbol, untyped]]
       def files_sides: (untyped) -> Hash[String, Hash[Symbol, untyped]]
 
+      # The step an events key counts the execution events of, chosen as a
+      # files key's producer is (events-producer-missing,
+      # events-producer-ambiguous); under --no-check the claim is unjudged.
+      # : (Hash[untyped, Hash[Symbol, untyped]], String, Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+      def scenario_events_source: (Hash[untyped, Hash[Symbol, untyped]], String, Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+
+      # One producer per trace, so the keys that read it share one reading.
+      # : (Hash[Symbol, untyped], String) -> Hash[Symbol, untyped]
+      def events_producer: (Hash[Symbol, untyped], String) -> Hash[Symbol, untyped]
+
+      # How long a claim step waits for the events it reads to be whole
+      # when it names no timeout.
+      EVENTS_WAIT_MS: ::Integer
+
+      # Each events key of a claim step: the reading of its producer's
+      # events, or why there is none. The step waits for the readings
+      # before it observes, so the steps between the producer and the
+      # claim run where they ran. `record[:events_read]` gets each reading.
+      # : (untyped, Hash[untyped, untyped], Hash[Symbol, untyped], String) -> Hash[String, Hash[Symbol, untyped]]
+      def events_sides: (untyped, Hash[untyped, untyped], Hash[Symbol, untyped], String) -> Hash[String, Hash[Symbol, untyped]]
+
       # A step that declares it mutates does not run in a read-only
       # environment: the declaration is trusted, not checked against what
       # the step does.
@@ -211,8 +232,8 @@ module Nukadoko
       # line or by earlier records (`origins` says which), in a world
       # started for this one execution, its evidence in this run's
       # directory, which is the record's own.
-      # : (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
-      def do_step: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
+      # : (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
+      def do_step: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
 
       # What `nuka do` writes its stdout and its record through.
       # : (untyped) -> untyped
@@ -256,8 +277,8 @@ module Nukadoko
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
       # `step` is a step class whose observe or run its own file defines.
-      # : (untyped, Hash[Symbol, untyped], untyped, [bool, Integer?], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?]) -> void
-      def body: (untyped, Hash[Symbol, untyped], untyped, [ bool, Integer? ], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?]) -> void
+      # : (untyped, Hash[Symbol, untyped], untyped, [bool, Integer?], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?], String) -> void
+      def body: (untyped, Hash[Symbol, untyped], untyped, [ bool, Integer? ], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?], String) -> void
 
       # Captures first, then each `from` key from the nearest earlier step that
       # gave it, then a table or docstring for the one required key still open.

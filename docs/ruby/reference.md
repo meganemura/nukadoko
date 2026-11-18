@@ -134,6 +134,14 @@ changed" in [the spec](../spec.md#files-an-earlier-step-changed)). The
 list comes from that step's record, from each `Nukadoko.run_command` it
 ran, never from what its `run` returned.
 
+`events writes: { of: PlaceScore, count: { kind: "db", op: %w[insert
+update delete other], committed: true } }` counts the execution events of
+an earlier step, and a claim reads the key as its actual ("A claim on a
+count of events" in [the spec](../spec.md#a-claim-on-a-count-of-events)).
+A value of the count can come from the sentence, `table: { sentence:
+"table" }`. The step reads the lines of that step's trace before it
+judges its claims, and keeps each reading in its record's `events_read`.
+
 ## Chaining (`from`)
 
 `from id: [StartJob, :id]` fills `id` with what the step `StartJob`
@@ -246,8 +254,7 @@ What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
 - In the program: `lists`.
-- On a step: `events`, a claim on a count of execution events, and
-  `path`, the flags and requests among a step's events.
+- On a step: `path`, the flags and requests among a step's events.
 - What a fixture's `use` returns: the TypeScript engine gives back the
   scenario's outcome, so a teardown can keep what a failure left.
 - `measureMcp`, which records the MCP calls a client makes.

@@ -76,6 +76,37 @@ class EventsPropertiesTest < Minitest::Test
     end
   end
 
+  # A compare holds on a range only when it holds for every count in it,
+  # and breaks only when it holds for none: checked against each count of
+  # a bounded range, and of an unbounded one up to past the expected value.
+  def test_a_count_range_is_judged_by_every_count_in_it
+    check do |tc|
+      low = tc.draw(integers(min_value: 0, max_value: 6))
+      high = tc.draw(booleans) ? nil : low + tc.draw(integers(min_value: 0, max_value: 4))
+      compare = tc.draw(sampled_from(E::Count::COMPARES))
+      expected = tc.draw(integers(min_value: 0, max_value: 12))
+      counts = (low..(high || 30)).to_a
+      answers = counts.map { E::Count.judge_range({ at_least: _1, at_most: _1 }, compare, expected) }
+      want = if answers.all?(:held) then :held
+             elsif answers.all?(:broken) then :broken
+             else :unknown
+             end
+      assert_equal want, E::Count.judge_range({ at_least: low, at_most: high }, compare, expected)
+    end
+  end
+
+  # A count that is one number is compared as the number is.
+  def test_a_count_of_one_number_compares_as_the_number
+    check do |tc|
+      count = tc.draw(integers(min_value: 0, max_value: 9))
+      expected = tc.draw(integers(min_value: 0, max_value: 9))
+      compare = tc.draw(sampled_from(E::Count::COMPARES))
+      holds = { "equal" => count == expected, "not-equal" => count != expected, "greater-than" => count > expected,
+                "at-least" => count >= expected, "less-than" => count < expected, "at-most" => count <= expected }.fetch(compare)
+      assert_equal holds ? :held : :broken, E::Count.judge_range({ at_least: count, at_most: count }, compare, expected)
+    end
+  end
+
   def test_the_lines_read_do_not_depend_on_where_the_writes_split
     check do |tc|
       texts = Array.new(tc.draw(integers(min_value: 1, max_value: 5))) { tc.draw(sampled_from(["a", "é ü", "{\"x\":1}", "", "日本語"])) }

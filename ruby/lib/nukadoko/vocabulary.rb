@@ -14,7 +14,7 @@ module Nukadoko
         name: step.step_name, kind: "typed", file: step.file.delete_prefix("#{project}/"),
         patterns: step.patterns, description: step.description, mutates: step.mutating?, timeout: step.timeout,
         parts: step.parts.empty? ? nil : step.parts.map(&:step_name),
-        from: from(step), claims: step.claims, poll: step.poll, files: files(step), **states(step, steps),
+        from: from(step), claims: step.claims, poll: step.poll, events: events(step), files: files(step), **states(step, steps),
         needs: step.bag.map(&:to_s).sort, needs_browser: step.bag.intersect?(BROWSER)
       }.compact
     end
@@ -26,6 +26,17 @@ module Nukadoko
       entry(step, project, steps).merge(args: step.args.json_schema, returns: returns)
     end
 
+
+    # `events` for a claim step that declares any: each key's `of` by step
+    # name, and its count as declared.
+    #: (singleton(Step)) -> Hash[String, Hash[Symbol, untyped]]?
+    def self.events(step)
+      return nil unless step.claims && step.events.any?
+
+      step.events.transform_values do |entry|
+        { of: Engine::ChangedFiles.producers(entry).map(&:step_name), count: Engine::Events::Selection.normalize(entry[:count] || entry["count"]) }
+      end
+    end
 
     # `files` for a claim step that declares any: each key's `of` by step
     # name, and its change and directory when it names them.
@@ -72,6 +83,9 @@ module Nukadoko
       browser = step.bag.intersect?(BROWSER) ? "  browser" : ""
       header = "#{step.step_name}  typed  #{step.claims ? "claims" : step.mutating? ? "mutates" : "read-only"}#{browser}#{"  timeout #{step.timeout}ms" if step.timeout}"
       items = [*(step.patterns.empty? ? ["(no pattern)"] : step.patterns), step.description]
+      (events(step) || {}).each do |key, entry|
+        items << "events: #{key} counts #{Engine::Events::Selection.describe(entry[:count])} of #{entry[:of].join(" or ")}"
+      end
       (files(step) || {}).each do |key, entry|
         items << "files: #{key} lists the files the commands of #{entry[:of].join(" or ")} #{Engine::ChangedFiles.describe(entry)}"
       end

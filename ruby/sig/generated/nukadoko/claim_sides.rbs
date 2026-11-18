@@ -72,19 +72,21 @@ module Nukadoko
 
         attr_reader files(): Hash[String, Hash[Symbol, untyped]]
 
-        def self.new: (untyped observed, untyped args, bool observes, Array[String] from_keys, ^(String) -> String labels, Array[String] received, Hash[String, String] transformed, Hash[String, Hash[Symbol, untyped]] files) -> instance
-                    | (observed: untyped, args: untyped, observes: bool, from_keys: Array[String], labels: ^(String) -> String, received: Array[String], transformed: Hash[String, String], files: Hash[String, Hash[Symbol, untyped]]) -> instance
+        attr_reader events(): Hash[String, Hash[Symbol, untyped]]
 
-        def self.members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received, :transformed, :files ]
+        def self.new: (untyped observed, untyped args, bool observes, Array[String] from_keys, ^(String) -> String labels, Array[String] received, Hash[String, String] transformed, Hash[String, Hash[Symbol, untyped]] files, Hash[String, Hash[Symbol, untyped]] events) -> instance
+                    | (observed: untyped, args: untyped, observes: bool, from_keys: Array[String], labels: ^(String) -> String, received: Array[String], transformed: Hash[String, String], files: Hash[String, Hash[Symbol, untyped]], events: Hash[String, Hash[Symbol, untyped]]) -> instance
 
-        def members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received, :transformed, :files ]
+        def self.members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received, :transformed, :files, :events ]
+
+        def members: () -> [ :observed, :args, :observes, :from_keys, :labels, :received, :transformed, :files, :events ]
       end
 
       # A Data block's methods are its own, but rbs-inline reads only a class
       # body, so they are written in one.
       class Inputs
-        # : (?transformed: Hash[String, String], ?files: Hash[String, Hash[Symbol, untyped]], **untyped) -> void
-        def initialize: (?transformed: Hash[String, String], ?files: Hash[String, Hash[Symbol, untyped]], **untyped) -> void
+        # : (?transformed: Hash[String, String], ?files: Hash[String, Hash[Symbol, untyped]], ?events: Hash[String, Hash[Symbol, untyped]], **untyped) -> void
+        def initialize: (?transformed: Hash[String, String], ?files: Hash[String, Hash[Symbol, untyped]], ?events: Hash[String, Hash[Symbol, untyped]], **untyped) -> void
       end
 
       # : (Place, String?) -> Place
@@ -186,6 +188,14 @@ module Nukadoko
       # under the same name breaks the claim, so each name has one source.
       # : (Hash[Symbol, untyped], Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
       def self.judge_files: (Hash[Symbol, untyped], Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
+
+      # A claim on an events key: the range the step read against the
+      # expected number. `actual` is the count when the range is one number,
+      # and `actual_range` the range otherwise, with the lines it counted,
+      # and those it left out, beside it. A key observe returns under the
+      # same name breaks the claim, so each name has one source.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
+      def self.judge_events: (Hash[Symbol, untyped], Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
 
       # : (Hash[Symbol, untyped], StandardError) -> Hash[Symbol, untyped]
       def self.unjudgeable: (Hash[Symbol, untyped], StandardError) -> Hash[Symbol, untyped]

@@ -1,0 +1,92 @@
+# Generated from lib/nukadoko/events/read.rb with RBS::Inline
+
+# A claim step's reading of an earlier step's execution events, at the
+# moment its claims are judged: the lines of that step's trace counted
+# against each selection, as a range, written to READ_FILE beside the
+# reading step's record. Boundary: what a line says and what a count says
+# of a claim are Events'; which step produced the events, and the
+# deadline, are the caller's; this module reads and waits.
+#
+# A reading starts at the byte the producer's slice began reading at, so
+# it holds every line of the producer's trace, and the lines no step owns
+# from then on: such a line may be the producer's, so it widens every
+# count it could match. Lines another step owns do not.
+#
+# The reading waits while the producer's events may still become whole (a
+# request with no line yet, a job not yet performed, no line at all). It
+# stops once they are whole, once a gap no more lines can close is open,
+# or when the deadline is near. It never waits until a claim would hold:
+# waiting for "one row was written" would make "nothing was written" hold
+# before the write arrived.
+#
+# A recorded producer (`nuka do --use`) is read from its record's
+# directory: the slice and its late lines, read again with the same
+# tally. Its lines no step owns were counted in its slice and not kept, so
+# each one widens every count by one.
+module Nukadoko
+  module Engine
+    module Events
+      READ_FILE: ::String
+
+      # Gaps more lines can close: the reading waits only while every open
+      # gap is one of these.
+      CLOSABLE: untyped
+
+      NO_MAYBE: untyped
+
+      # One producer's lines, folded for every key that reads it.
+      class Group
+        attr_reader producer: Hash[Symbol, untyped]
+
+        attr_reader requests: Array[Hash[Symbol, untyped]]
+
+        attr_reader tally: Tally
+
+        attr_accessor unowned_not_kept: Integer
+
+        attr_accessor truncated: bool
+
+        attr_accessor replaced: bool
+
+        # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Tally) -> void
+        def initialize: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Tally) -> void
+
+        # : () -> String
+        def trace_id: () -> String
+
+        # Whether more lines can no longer change whether the group is whole.
+        # : () -> bool
+        def settled?: () -> bool
+      end
+
+      # : () -> Float
+      def self.clock: () -> Float
+
+      # Reads each request's producer (`{ key:, producer:, selection: }`),
+      # waiting until every live producer's events are whole, can no
+      # longer become whole, or `until_at` (monotonic seconds) is near, and
+      # writes the lines it counted to READ_FILE in `dir`. Returns each
+      # key's reading, as a step record's `events_read` holds it.
+      # : (Array[Hash[Symbol, untyped]], Float, String, Secrets) -> Hash[String, Hash[Symbol, untyped]]
+      def self.read: (Array[Hash[Symbol, untyped]], Float, String, Secrets) -> Hash[String, Hash[Symbol, untyped]]
+
+      # Reads the live groups' world file forward, feeding each group's
+      # tally, until every group is settled or `until_at` is near. The block
+      # keeps a line some group counted, by its byte.
+      # : (Array[Group], Reader, Float) { (Integer, String, Line) -> void } -> void
+      def self.read_live: (Array[Group], Reader, Float) { (Integer, String, Line) -> void } -> void
+
+      # Waits until the step that `start` began is whole, can no longer
+      # become whole, or `until_at` is near, and keeps nothing: `nuka do`
+      # waits so before it stops its world. A world whose program has
+      # written no line yet is not waited for: a program that writes none
+      # would cost every call the whole wait.
+      # : (Reader, Hash[Symbol, untyped]?, Float) -> void
+      def self.settle: (Reader, Hash[Symbol, untyped]?, Float) -> void
+
+      # Folds a recorded producer's lines into its group's tally.
+      # : (Group, KindsSeen) { (String, Line) -> void } -> void
+      def self.read_recorded: (Group, KindsSeen) { (String, Line) -> void } -> void
+    end
+  end
+end

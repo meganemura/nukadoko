@@ -30,7 +30,10 @@ module Nukadoko
 
       #: (Hash[Symbol, untyped]) -> String
       def comparison_text(record)
-        actual = record.key?(:actual) ? snapshot_excerpt_text(record) || "#{value_text(record[:actual])} (#{record[:actual_from]})" : record[:actual_from]
+        actual = if record.key?(:actual) then snapshot_excerpt_text(record) || "#{value_text(record[:actual])} (#{record[:actual_from]})"
+                 elsif record[:actual_range] then "#{Events::Count.describe_range(record[:actual_range])} (#{record[:actual_from]})"
+                 else record[:actual_from]
+                 end
         "#{actual} #{record[:compare]} #{expected_text(record)}"
       end
 
@@ -332,6 +335,19 @@ module Nukadoko
         difference ? "; #{difference}" : ""
       end
 
+      # What a count of execution events counted, after its outcome and its
+      # reason, under every outcome: a count that held on the wrong table
+      # reads as plainly as one that broke on it. Then what it left out,
+      # since the program marks their table.
+      #: (Hash[Symbol, untyped]) -> String
+      def counted_text(record)
+        return "" if each?(record)
+
+        counted = record[:counted] ? Events::Counted.describe(record[:counted]) : ""
+        left_out = record[:left_out] ? Events::Counted.describe_left_out(record[:left_out]) : ""
+        "#{"; counted #{counted}" unless counted.empty?}#{"; left out #{left_out}" unless left_out.empty?}"
+      end
+
       #: (Hash[Symbol, untyped]) -> String
       def reason_text(record) = record[:reason] ? ": #{record[:reason]}" : difference_text(record)
 
@@ -354,7 +370,7 @@ module Nukadoko
       # first broken item and that item's first broken comparison.
       #: (Hash[Symbol, untyped]) -> String
       def line(record)
-        text = "#{claim_text(record)} #{record[:outcome]}#{reason_text(record)}"
+        text = "#{claim_text(record)} #{record[:outcome]}#{reason_text(record)}#{counted_text(record)}"
         return text unless each?(record)
 
         item = named_item(record)
@@ -373,7 +389,7 @@ module Nukadoko
       #: (Array[Hash[Symbol, untyped]]) -> String
       def broken_claims_message(records)
         records.select { %w[broken unjudged].include?(_1[:outcome]) }.flat_map do |record|
-          ["claim #{record[:outcome]}: #{claim_text(record)}#{reason_text(record)}", *(each?(record) ? named_item_lines(record) : [])]
+          ["claim #{record[:outcome]}: #{claim_text(record)}#{reason_text(record)}#{counted_text(record)}", *(each?(record) ? named_item_lines(record) : [])]
         end.join("\n")
       end
     end

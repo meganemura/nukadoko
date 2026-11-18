@@ -30,19 +30,23 @@ module Nukadoko
 
         attr_reader files(): Array[String]
 
-        def self.new: (Array[String] patterns, Array[String] args_keys, Array[String] string_args, Array[String] from_keys, Array[String] capture_keys, bool observe, Array[String] files) -> instance
-                    | (patterns: Array[String], args_keys: Array[String], string_args: Array[String], from_keys: Array[String], capture_keys: Array[String], observe: bool, files: Array[String]) -> instance
+        attr_reader events(): Array[String]
 
-        def self.members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe, :files ]
+        attr_reader events_sentence(): Array[Hash[Symbol, String]]
 
-        def members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe, :files ]
+        def self.new: (Array[String] patterns, Array[String] args_keys, Array[String] string_args, Array[String] from_keys, Array[String] capture_keys, bool observe, Array[String] files, Array[String] events, Array[Hash[Symbol, String]] events_sentence) -> instance
+                    | (patterns: Array[String], args_keys: Array[String], string_args: Array[String], from_keys: Array[String], capture_keys: Array[String], observe: bool, files: Array[String], events: Array[String], events_sentence: Array[Hash[Symbol, String]]) -> instance
+
+        def self.members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe, :files, :events, :events_sentence ]
+
+        def members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe, :files, :events, :events_sentence ]
       end
 
       # A Data block's methods are its own, but rbs-inline reads only a class
       # body, so they are written in one.
       class Shape
-        # : (?files: Array[String], **untyped) -> void
-        def initialize: (?files: Array[String], **untyped) -> void
+        # : (?files: Array[String], ?events: Array[String], ?events_sentence: Array[Hash[Symbol, String]], **untyped) -> void
+        def initialize: (?files: Array[String], ?events: Array[String], ?events_sentence: Array[Hash[Symbol, String]], **untyped) -> void
       end
 
       VIEWS: untyped
@@ -161,6 +165,20 @@ module Nukadoko
       # list from { from } or { observe } would be one step code chose.
       # : (String, Hash[Symbol, untyped], String, Shape) -> void
       def self?.check_files_claim: (String, Hash[Symbol, untyped], String, Shape) -> void
+
+      EVENTS_CLAIM_KEYS: untyped
+
+      # A claim on an events key reads the count nukadoko measured, one
+      # number, so it takes no path, view, at, or count, and compares the
+      # count with a number the line states.
+      # : (String, Hash[Symbol, untyped], String, Shape) -> void
+      def self?.check_events_claim: (String, Hash[Symbol, untyped], String, Shape) -> void
+
+      # An events key that collides with another source of a claim's
+      # actual, takes a sentence value an expected sentence key could not
+      # be, or names a count no claim reads.
+      # : (Array[Hash[Symbol, untyped]], Shape) -> void
+      def self?.check_events: (Array[Hash[Symbol, untyped]], Shape) -> void
 
       # A files key that collides with another source of a claim's actual,
       # or that no claim reads.

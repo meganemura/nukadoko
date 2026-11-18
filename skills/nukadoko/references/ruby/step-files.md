@@ -43,6 +43,13 @@ name states a line needs, leaves, and ends: `requires ["signed-in",
 :person]` for a state one person holds, `gives "book-open"` for one a
 scenario holds once.
 
+A claim step can read what an earlier step did instead of observing it.
+`files written: { of: RunBuild, change: "added" }` lists the paths that
+step's commands changed, and `events writes: { of: PlaceScore, count: {
+kind: "db", op: %w[insert update delete other], committed: true } }`
+counts that step's execution events. A claim names the key as its
+actual.
+
 ## Loading
 
 Every `*.rb` file under `features/steps/` is loaded, a helper under

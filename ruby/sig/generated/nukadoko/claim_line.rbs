@@ -126,6 +126,13 @@ module Nukadoko
       # : (Hash[Symbol, untyped]) -> String
       def self?.difference_text: (Hash[Symbol, untyped]) -> String
 
+      # What a count of execution events counted, after its outcome and its
+      # reason, under every outcome: a count that held on the wrong table
+      # reads as plainly as one that broke on it. Then what it left out,
+      # since the program marks their table.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.counted_text: (Hash[Symbol, untyped]) -> String
+
       # : (Hash[Symbol, untyped]) -> String
       def self?.reason_text: (Hash[Symbol, untyped]) -> String
 

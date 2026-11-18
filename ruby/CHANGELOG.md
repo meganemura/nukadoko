@@ -70,6 +70,25 @@ Each release's notes come from the section below whose heading starts with `## [
   `url`, is `program-placeholder-unfilled`, and every
   `program-placeholder-unfilled` finding now names the edit for its own
   field, as the TypeScript engine's does.
+- A claim on a count of an earlier step's execution events:
+  `events writes: { of: PlaceScore, count: { kind: "db", op: %w[insert
+  update delete other], committed: true } }` names the lines to count,
+  a value of which can come from the sentence (`{ sentence: "table" }`),
+  and a claim reads the key as its actual. Before it judges its claims,
+  the step reads that step's trace from where its slice began, waiting up
+  to its `timeout` (10 seconds, or `stepTimeout` when shorter) while the
+  events may still become whole, and writes the lines it counted to
+  `events-read.jsonl`. The count is a range: a claim holds or breaks only
+  when every count in it does, and is `unjudged` otherwise, naming the
+  first gap. The record keeps each reading in `events_read`, and the claim
+  record carries `actual` or `actual_range`, `counted`, `left_out`, and
+  `measured` on `events_read.<key>`. `nuka do --use` reads a recorded step's
+  events, and `nuka do` waits for its own step's events before it stops
+  its world. `nuka check` reports a selection the format cannot judge, a
+  claim that reads inside a count, `events-producer-missing`,
+  `events-producer-ambiguous`, `events-inlet-missing`, and
+  `events-unread`, and `nuka steps` and `nuka describe` list each key.
+  The same as the TypeScript engine.
 - A claim step reads the files an earlier step's commands changed:
   `files written: { of: RunBuild, change: "added", under: "src" }` names
   the paths each `Nukadoko.run_command` of that step added, changed, or

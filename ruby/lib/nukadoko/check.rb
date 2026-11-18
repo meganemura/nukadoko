@@ -46,8 +46,9 @@ module Nukadoko
       # what the feature loader found that runs nothing.
       # `config` holds what was found in the config and its program before
       # any step loaded, such as an env file that is missing.
-      #: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding]) -> void
-      def initialize(steps, scenarios, features: true, full: false, conditions: nil, environments: nil, problems: [], config: [])
+      #: (Array[singleton(Step)], Array[Scenario], ?features: bool, ?full: bool, ?conditions: Array[String]?, ?environments: Array[Environment]?, ?problems: Array[FeatureProblem], ?config: Array[Finding], ?worlds: (Array[Hash[Symbol, untyped]] | false | nil)) -> void
+      def initialize(steps, scenarios, features: true, full: false, conditions: nil, environments: nil, problems: [], config: [], worlds: false)
+        @worlds = worlds
         @steps = steps
         @scenarios = scenarios
         @conditions = conditions
@@ -365,37 +366,87 @@ module Nukadoko
       def check_files_order(scenario)
         resolved = scenario.steps.map { |line| (m = Engine.matches(@usable, line.text).map(&:first).uniq).size == 1 ? m.first : nil }
         resolved.each_with_index do |step, index|
-          next unless step&.claims && step.files.any?
+          next unless step&.claims
 
           before = resolved.first(index).compact.map(&:step_name)
           undefined_before = scenario.steps.first(index).any? { Engine.matches(@usable, _1.text).empty? }
-          step.files.each do |key, entry|
-            names = ChangedFiles.producers(entry).filter_map { _1.step_name if @usable.include?(_1) }
-            next if names.empty?
+          READINGS.each do |reading|
+            entries = step.public_send(reading[:option])
+            next unless entries.is_a?(Hash)
 
-            ran = names.select { before.include?(_1) }
-            next if ran.size == 1
+            entries.each do |key, entry|
+              of = (entry[:of] || entry["of"] if entry.is_a?(Hash)) #: untyped
+              names = (of.is_a?(Array) ? of : [of]).filter_map { |cls| cls.step_name if cls && @usable.include?(cls) } #: Array[String]
+              next if names.empty?
 
-            where = %(Step "#{step.step_name}"'s files.#{key})
-            line = scenario.steps[index].line
-            if ran.size >= 2
-              findings << Finding.new("error", "files-producer-ambiguous", scenario.uri, line, step.step_name,
-                                      "#{where} reads the files the commands of one of steps #{producer_names(names)} changed, and #{producer_names(ran)} each ran earlier in this scenario, " \
-                                      "so the run cannot choose whose files to read, and each claim on the list is unjudged",
-                                      "Remove or move lines so that exactly one of steps #{producer_names(ran)} runs before this line.", nil)
-              next
+              ran = names.select { before.include?(_1) }
+              next if ran.size == 1
+
+              where = %(Step "#{step.step_name}"'s #{reading[:option]}.#{key})
+              line = scenario.steps[index].line
+              if ran.size >= 2
+                findings << Finding.new("error", "#{reading[:option]}-producer-ambiguous", scenario.uri, line, step.step_name,
+                                        "#{where} #{reading[:reads].("one of steps #{producer_names(names)}")}, and #{producer_names(ran)} each ran earlier in this scenario, " \
+                                        "so the run cannot choose #{reading[:choose]}, and #{reading[:unjudged]}",
+                                        "Remove or move lines so that exactly one of steps #{producer_names(ran)} runs before this line.", nil)
+                next
+              end
+              next if undefined_before
+
+              status = names.map { |name| resolved.any? { _1&.step_name == name } ? %("#{name}" runs only at or after this line) : %("#{name}" runs nowhere in this scenario) }.join("; ")
+              whose = names.size == 1 ? %(step "#{names.first}") : "exactly one of steps #{producer_names(names)}"
+              unjudged = reading[:unjudged].sub(/\A./, &:upcase)
+              findings << Finding.new("error", "#{reading[:option]}-producer-missing", scenario.uri, line, step.step_name,
+                                      "#{where} #{reading[:reads].(whose)}, and no earlier line runs it: #{status}. #{unjudged}#{reading[:missing_tail]}",
+                                      "Put a line that runs #{whose} earlier in the scenario, or, if an earlier line runs the step #{reading[:means]}, " \
+                                      "list that step in #{reading[:option]}.#{key}.of of step \"#{step.step_name}\".", nil)
             end
-            next if undefined_before
-
-            status = names.map { |name| resolved.any? { _1&.step_name == name } ? %("#{name}" runs only at or after this line) : %("#{name}" runs nowhere in this scenario) }.join("; ")
-            whose = names.size == 1 ? %(step "#{names.first}") : "exactly one of steps #{producer_names(names)}"
-            findings << Finding.new("error", "files-producer-missing", scenario.uri, line, step.step_name,
-                                    "#{where} reads the files the commands of #{whose} changed, and no earlier line runs it: #{status}. Each claim on the list is unjudged",
-                                    "Put a line that runs #{whose} earlier in the scenario, or, if an earlier line runs the step whose files the claim means, " \
-                                    "list that step in files.#{key}.of of step \"#{step.step_name}\".", nil)
           end
         end
       end
+
+      # `events-inlet-missing` (errors) and `events-unread` (warnings) for
+      # the worlds a run starts, when a bound step declares events: a world
+      # nukadoko serves whose program names no `{events}`, and a world it
+      # does not serve, or a project with no program to start one. The fix
+      # is the program's, so one finding per world says it once.
+      #: (Array[singleton(Step)]) -> void
+      def check_events_worlds(bound)
+        names = bound.select { _1.claims && _1.events.is_a?(Hash) && _1.events.any? }.map(&:step_name)
+        return if names.empty?
+
+        counting = "#{names.size == 1 ? "step" : "steps"} #{producer_names(names)} #{names.size == 1 ? "counts" : "count"} execution events"
+        if @worlds.nil?
+          findings << Finding.new("warning", "events-unread", CONFIG, nil, nil,
+                                  "#{counting}, and #{CONFIG} has no program, so no world starts and nukadoko reads no execution events: each claim on a count is unjudged (world-unread)",
+                                  %(Add program: to #{CONFIG} with serve, the command that starts the program, and {events} in env, such as program: -> { { serve: { command: "bin/rails server -p {port}" }, env: { "EXECUTION_EVENTS" => "{events}" } } }.), nil)
+          return
+        end
+        @worlds.each do |world|
+          if world[:kind] == "serve"
+            next if world[:events]
+
+            findings << Finding.new("error", "events-inlet-missing", CONFIG, nil, nil,
+                                    "world #{world[:name]}: #{counting}, and the program names no {events}, so the program has no file to write them to: each claim on a count is unjudged (inlet-unnamed)",
+                                    %(Name {events} in env of #{CONFIG} for world #{world[:name]}, such as env: { "EXECUTION_EVENTS" => "{events}" }, and have the program append its execution events to that file (docs/execution-events.md).), nil)
+            next
+          end
+          why = world[:kind] == "url" ? "the program runs at a url, which nukadoko does not start" : "it has neither serve nor url, so no program runs"
+          findings << Finding.new("warning", "events-unread", CONFIG, nil, nil,
+                                  "world #{world[:name]}: #{counting}, and #{why}, so nukadoko reads no execution events there: each claim on a count is unjudged (world-unread)",
+                                  "Run these scenarios in a world nukadoko serves: give world #{world[:name]} serve in #{CONFIG}, with {events} in env, or select one that has it with --env.", nil)
+        end
+      end
+
+      # A reading of an earlier step that a claim step declares by key,
+      # each with an `of`: what the findings call it, and what is left
+      # unjudged.
+      READINGS = [
+        { option: "events", reads: ->(whose) { "counts the execution events of #{whose}" }, choose: "whose events to count",
+          unjudged: "each claim on the count is unjudged", missing_tail: " (producer-not-run)", means: "whose execution events the claim means" },
+        { option: "files", reads: ->(whose) { "reads the files the commands of #{whose} changed" }, choose: "whose files to read",
+          unjudged: "each claim on the list is unjudged", missing_tail: "", means: "whose files the claim means" }
+      ].freeze #: Array[Hash[Symbol, untyped]]
 
       # `"a"`, `"a" and "b"`, `"a", "b", and "c"`, as the run names candidates.
       #: (Array[String]) -> String
@@ -721,6 +772,7 @@ module Nukadoko
             end
           end
         end
+        check_events_worlds(bound.uniq) unless @worlds == false
         bound.uniq.each { check_transformed(_1) }
         @scenarios.each { check_from_order(_1) }
         @scenarios.each { check_files_order(_1) }

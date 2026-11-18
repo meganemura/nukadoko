@@ -47,13 +47,17 @@ module Nukadoko
         # Each files key: the list read from an earlier step's record
         # (`label`, `paths`, `measured`), or why there is none (`unjudged`).
         :files, #: Hash[String, Hash[Symbol, untyped]]
+        # Each events key: the reading of an earlier step's execution events
+        # (`label`, `of`, `reading`, `counted`, `left_out`), or why there is
+        # none (`broken`, `unjudged`).
+        :events, #: Hash[String, Hash[Symbol, untyped]]
       )
 
       # A Data block's methods are its own, but rbs-inline reads only a class
       # body, so they are written in one.
       class Inputs
-        #: (?transformed: Hash[String, String], ?files: Hash[String, Hash[Symbol, untyped]], **untyped) -> void
-        def initialize(transformed: {}, files: {}, **rest) = super
+        #: (?transformed: Hash[String, String], ?files: Hash[String, Hash[Symbol, untyped]], ?events: Hash[String, Hash[Symbol, untyped]], **untyped) -> void
+        def initialize(transformed: {}, files: {}, events: {}, **rest) = super
       end
 
       #: (Place, String?) -> Place
@@ -357,6 +361,9 @@ module Nukadoko
       # A top-level comparison claim, judged as Claims.judge_one reports one.
       #: (Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
       def self.judge(claim, inputs)
+        events = inputs.events[claim[:actual].to_s]
+        return judge_events(claim, events, inputs) if events
+
         files = inputs.files[claim[:actual].to_s]
         return judge_files(claim, files, inputs) if files
 
@@ -402,6 +409,54 @@ module Nukadoko
         found = files[:paths] ? { value: files[:paths] } : { unjudged: files[:unjudged] }
         judged = judge_comparison(claim, Side.new(place: place, found: found), inputs)
         files[:paths] ? judged.merge(files_read: true) : judged
+      end
+
+      # A claim on an events key: the range the step read against the
+      # expected number. `actual` is the count when the range is one number,
+      # and `actual_range` the range otherwise, with the lines it counted,
+      # and those it left out, beside it. A key observe returns under the
+      # same name breaks the claim, so each name has one source.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
+      def self.judge_events(claim, side, inputs)
+        key = claim[:actual].to_s
+        observed = inputs.observed
+        if inputs.observes && observed.is_a?(Hash) && (observed.key?(key) || observed.key?(key.to_sym))
+          return { compare: claim[:compare], holds: false,
+                   reason: %(observe returned "#{key}", and events has a key of the same name, so actual "#{key}" reads the count of execution events and never what observe returned. ) +
+                           "Rename the key observe returns, or the events key, so each name has one source" }
+        end
+
+        expected, from_observe = expected_side(claim, inputs)
+        range = side.dig(:reading, :range)
+        base = { **(range.nil? ? {} : range[:at_most] == range[:at_least] ? { actual: range[:at_least] } : { actual_range: range.dup }),
+                 **side.slice(:counted, :left_out), compare: claim[:compare], **(expected.found.key?(:value) ? { expected: expected.found[:value] } : {}) }
+        return base.merge(holds: false, reason: side[:broken]) if side[:broken]
+        return base.merge(holds: false, reason: side[:unjudged], unjudged: true) if side[:unjudged]
+
+        stop = if expected.found[:broken] then { broken: expected.found[:broken] }
+               elsif expected.found[:unjudged] then { unjudged: expected.found[:unjudged] }
+               else observe_received(expected.place, inputs, "the expected value reads")
+               end
+        if stop.nil? && from_observe && [true, false].include?(expected.found[:value])
+          stop = { broken: "the expected value #{expected.place.label} is a boolean observe computed, which is a judgment made in code: " \
+                           "return the thing measured and let the claim compare it" }
+        end
+        return base.merge(holds: false, reason: stop[:broken] || stop[:unjudged], **(stop[:unjudged] ? { unjudged: true } : {})) if stop
+
+        value = expected.found[:value]
+        unless Events::Count::COMPARES.include?(claim[:compare])
+          return base.merge(holds: false, reason: "a count of execution events is a number, and #{claim[:compare]} does not compare two numbers")
+        end
+        unless value.is_a?(Numeric) && value.finite?
+          return base.merge(holds: false, reason: "the expected value #{expected.place.label} is #{article(Claims.json_type(value))}, and a count of execution events is compared with a number")
+        end
+
+        judgment = Events::Count.judge(side[:reading], claim[:compare], value, side[:of])
+        case judgment[:outcome]
+        when :held then base.merge(holds: true, events_read: true)
+        when :broken then base.merge(holds: false, events_read: true)
+        else base.merge(holds: false, reason: judgment[:reason], unjudged: true, events_read: true)
+        end
       end
 
       #: (Hash[Symbol, untyped], StandardError) -> Hash[Symbol, untyped]

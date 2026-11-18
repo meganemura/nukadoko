@@ -68,6 +68,19 @@ module Nukadoko
         @files = map.is_a?(Hash) ? map.transform_keys(&:to_s) : map
       end
 
+      # The counts of an earlier step's execution events, by the key a
+      # claim reads them as: `events writes: { of: PlaceScore, count: {
+      # kind: "db", op: %w[insert update delete other], committed: true } }`.
+      # nukadoko reads the lines of that step's trace from the world's
+      # events file, never from what its code returned.
+      #: (Hash[Symbol | String, untyped]) -> Hash[String, untyped]
+      #: () -> Hash[String, untyped]
+      def events(map = nil)
+        return @events || {} unless map
+
+        @events = map.is_a?(Hash) ? map.transform_keys(&:to_s) : map
+      end
+
       # The states a line of this step needs held (`requires`), leaves
       # held (`gives`), and leaves not held (`ends`), each a name
       # ("book-open") or a name and the args key that tells one holder from

@@ -24,13 +24,18 @@ module Nukadoko
         :observe, #: bool
         # The keys of the step's files, each a list a claim reads by its key alone.
         :files, #: Array[String]
+        # The keys of the step's events, each a count a claim reads by its key alone.
+        :events, #: Array[String]
+        # Each value a selection takes from the sentence: the events key,
+        # the field, and the args key that holds the value.
+        :events_sentence, #: Array[Hash[Symbol, String]]
       )
 
       # A Data block's methods are its own, but rbs-inline reads only a class
       # body, so they are written in one.
       class Shape
-        #: (?files: Array[String], **untyped) -> void
-        def initialize(files: [], **rest) = super
+        #: (?files: Array[String], ?events: Array[String], ?events_sentence: Array[Hash[Symbol, String]], **untyped) -> void
+        def initialize(files: [], events: [], events_sentence: [], **rest) = super
       end
 
       VIEWS = %w[text lines json comma-list].freeze
@@ -380,6 +385,13 @@ module Nukadoko
           end
           head = claim[:actual].split(".").first.to_s
           refuse(%(#{label}.actual reads inside files.#{head}, a list of paths with nothing to walk into. Name the key alone: actual "#{head}")) if shape.files.include?(head)
+          if shape.events.include?(claim[:actual])
+            check_events_claim(label, claim, claim[:actual], shape)
+            next
+          end
+          if shape.events.include?(head)
+            refuse(%(#{label}.actual reads inside events.#{head}, a count of execution events, which is one number with nothing inside it. Name the key alone: actual "#{head}"))
+          end
           from_observe = !shape.from_keys.include?(head)
           refuse(%(#{label}.actual starts with "#{head}", which is not a key of this step's from, and the step has no observe to read it)) if from_observe && !shape.observe
           if !from_observe && shape.capture_keys.include?(head)
@@ -398,6 +410,7 @@ module Nukadoko
           check_common(label, claim)
           check_each(label, claim[:each], shape, from_observe)
         end
+        check_events(claims, shape)
         check_files(claims, shape)
         check_observe_read(claims, shape)
         check_captures_read(claims, shape)
@@ -452,6 +465,54 @@ module Nukadoko
         refuse("#{reads}, and its expected value is args.#{expected}, #{how}, which is never #{wanted}, so #{claim[:compare]} judges it the same way on every line. #{fix}")
       end
 
+      EVENTS_CLAIM_KEYS = %w[actual compare expected].freeze
+
+      # A claim on an events key reads the count nukadoko measured, one
+      # number, so it takes no path, view, at, or count, and compares the
+      # count with a number the line states.
+      #: (String, Hash[Symbol, untyped], String, Shape) -> void
+      def check_events_claim(label, claim, key, shape)
+        reads = "#{label} reads events.#{key}, a count of execution events"
+        refuse("#{reads}, which is one number, and each reads the items of an array. Compare the count with #{COUNT_COMPARES.join(", ")}") unless claim[:each].nil?
+        check_keys(label, claim, EVENTS_CLAIM_KEYS, "a claim on a count of execution events")
+        unless COUNT_COMPARES.include?(claim[:compare])
+          refuse("#{reads}, which is a number, and #{describe(claim[:compare])} does not compare two numbers, so the claim would break on every line or hold on every line. " \
+                 "Compare the count with #{COUNT_COMPARES.join(", ")}")
+        end
+        check_expected(label, claim[:expected], claim[:compare], shape, false)
+        literal = literal_of(claim[:expected])
+        if literal && !literal[:literal].is_a?(Numeric)
+          refuse("#{reads}, which is a number, and its expected value is the literal #{describe(literal[:literal])}, which is never a number, so the claim always breaks. " \
+                 "State the number in the pattern, as digits, a number word, once, twice, or a word such as nothing or never, and write it as a number literal")
+        end
+        return unless claim[:expected].is_a?(String) && shape.string_args.include?(claim[:expected])
+
+        refuse("#{reads}, which is a number, and its expected value is args.#{claim[:expected]}, a plain z.string(), which is never a number, so the claim always breaks. Capture the number with {int}")
+      end
+
+      # An events key that collides with another source of a claim's
+      # actual, takes a sentence value an expected sentence key could not
+      # be, or names a count no claim reads.
+      #: (Array[Hash[Symbol, untyped]], Shape) -> void
+      def check_events(claims, shape)
+        shape.events.each do |key|
+          other = if shape.from_keys.include?(key) then "a key of from"
+                  elsif shape.args_keys.include?(key) || shape.capture_keys.include?(key) then "an args key"
+                  end
+          refuse(%(events.#{key} has the name of #{other}, so a claim's actual "#{key}" would have two sources. Rename one of them)) if other
+          next if claims.any? { _1[:actual] == key }
+
+          refuse(%(events.#{key} is read by no claim, so the count it names changes no verdict. Compare a claim with actual "#{key}", or take the key out of events))
+        end
+        shape.events_sentence.each do |value|
+          label = "events.#{value[:key]}.count.#{value[:field]}"
+          if shape.from_keys.include?(value[:name])
+            refuse(%(#{label} takes { sentence: "#{value[:name]}" }, which from fills from an earlier step, and a selection takes a value the line states))
+          end
+          refuse(%(#{label} takes { sentence: "#{value[:name]}" }, which is not a key of args)) unless shape.args_keys.include?(value[:name])
+        end
+      end
+
       # A files key that collides with another source of a claim's actual,
       # or that no claim reads.
       #: (Array[Hash[Symbol, untyped]], Shape) -> void
@@ -459,6 +520,7 @@ module Nukadoko
         shape.files.each do |key|
           other = if shape.from_keys.include?(key) then "a key of from"
                   elsif shape.args_keys.include?(key) || shape.capture_keys.include?(key) then "an args key"
+                  elsif shape.events.include?(key) then "a key of events"
                   end
           refuse(%(files.#{key} has the name of #{other}, so a claim's actual "#{key}" would have two sources. Rename one of them)) if other
           next if claims.any? { _1[:actual] == key }
@@ -550,7 +612,7 @@ module Nukadoko
         return unless shape.observe
 
         read = claims.any? do |claim|
-          next false if shape.files.include?(claim[:actual])
+          next false if shape.files.include?(claim[:actual]) || shape.events.include?(claim[:actual])
           next true unless shape.from_keys.include?(claim[:actual].to_s.split(".").first.to_s)
 
           entries = claim[:each] ? [*(claim[:each][:where] || []), *claim[:each][:claims]] : [claim]
@@ -569,7 +631,7 @@ module Nukadoko
       def check_captures_read(claims, shape)
         return if shape.observe
 
-        read = keys_read(claims)
+        read = keys_read(claims) + shape.events_sentence.map { _1[:name] }
         unread = shape.capture_keys.find { !read.include?(_1) }
         return unless unread
 

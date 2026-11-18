@@ -118,6 +118,10 @@ claim が比べる args のキーは、`observe` には渡りません。
 claim はそのキーを実際の値として読みます([spec](../spec.ja.md) の「前の step が変えたファイル」)。
 一覧はその step の record から、その step が走らせた各 `Nukadoko.run_command` から作られ、`run` が返したものからは作られません。
 
+`events writes: { of: PlaceScore, count: { kind: "db", op: %w[insert update delete other], committed: true } }` は、前の step の実行イベントを数え、claim はそのキーを実際の値として読みます([spec](../spec.ja.md) の「実行イベントの数についての claim」)。
+数え方の値は、`table: { sentence: "table" }` のように文から取れます。
+step は claim を判定する前にその step の trace の行を読み、読んだものを record の `events_read` に残します。
+
 ## 連鎖(`from`)
 
 `from id: [StartJob, :id]` は、`StartJob` という step がこの scenario で先に返した値で `id` を埋めます。
@@ -207,7 +211,7 @@ TypeScript エンジンにあって、このエンジンにまだないもので
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
 - プログラムの `lists`。
-- step の `events`(実行イベントの数についての claim)と、step のイベントのうちの flag とリクエストの並びである `path`。
+- step のイベントのうちの flag とリクエストの並びである `path`。
 - fixture の `use` が返すもの。
 TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
 - MCP クライアントの呼び出しを記録する `measureMcp`。

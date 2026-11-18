@@ -579,6 +579,8 @@ module Nukadoko
         # Each step that passed in this scenario, its latest line, for a files key.
         ran = {} #: Hash[untyped, Hash[Symbol, untyped]]
         @files_source = ->(key, entry) { scenario_files_source(ran, key, entry) }
+        @events_source = ->(key, entry) { scenario_events_source(ran, key, entry) }
+        @events_producers = {}
         @ran = ran
         @scenario_fixtures = FixtureCache.new
         scenario_record_id = new_id("scn")
@@ -703,7 +705,7 @@ module Nukadoko
             claim[:outcome] == "for-judgment" && claim.key?(:actual) && !claim[:each] ? { **claim, value_digest: Judgments.value_digest(claim[:actual]) } : claim
           end
           entry[:observation] = record[:observation] || "observed"
-          entry.merge!(RunRecord.poll_fields(record).except(:readings), **RunRecord.page_fields(record, File.join("steps", record[:step_record_id].to_s)))
+          entry.merge!(RunRecord.poll_fields(record).except(:readings), **RunRecord.read_fields(record, File.join("steps", record[:step_record_id].to_s)))
         end
         entry
       end
@@ -776,6 +778,83 @@ module Nukadoko
         end
       end
 
+      # The step an events key counts the execution events of, chosen as a
+      # files key's producer is (events-producer-missing,
+      # events-producer-ambiguous); under --no-check the claim is unjudged.
+      #: (Hash[untyped, Hash[Symbol, untyped]], String, Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+      def scenario_events_source(ran, key, entry)
+        names = ChangedFiles.producers(entry).map(&:step_name)
+        present = ChangedFiles.producers(entry).filter_map { ran[_1] }
+        of = names.join(" or ")
+        return { of: of, producer: { source: "unread", of: nil, gap: "producer-not-run" } } if present.empty?
+        if present.size > 1
+          return { of: of, unchosen: "events.#{key}.of names #{present.map { %("#{_1[:step]}") }.join(" and ")}, and each ran earlier in this scenario, so the step cannot choose whose events to count" }
+        end
+
+        found = present.first
+        record = found[:record]
+        # A step with no events trace is read by its record id, which names
+        # no trace: the producer then says why there is nothing to read.
+        producer = events_producer({ step_record_id: record[:step_record_id], step: found[:step], line: found[:line] }, record.dig(:events, :trace_id) || record[:step_record_id])
+        { of: "#{found[:step]}@#{found[:line] || record[:step_record_id]}", producer: producer }
+      end
+
+      # One producer per trace, so the keys that read it share one reading.
+      #: (Hash[Symbol, untyped], String) -> Hash[Symbol, untyped]
+      def events_producer(of, trace_id)
+        @events_producers ||= {}
+        @events_producers[trace_id] ||=
+          if @events.nil?
+            # A world nukadoko serves has a log; one whose program names no
+            # {events} has no events file to read.
+            { source: "unread", of: of, gap: @program_log ? "inlet-unnamed" : "world-unread" }
+          elsif (start = @events.producer(trace_id))
+            { source: "live", of: of, start: start, reader: @events }
+          else { source: "unread", of: of, gap: "producer-not-run" }
+          end
+      end
+
+      # How long a claim step waits for the events it reads to be whole
+      # when it names no timeout.
+      EVENTS_WAIT_MS = 10_000
+
+      # Each events key of a claim step: the reading of its producer's
+      # events, or why there is none. The step waits for the readings
+      # before it observes, so the steps between the producer and the
+      # claim run where they ran. `record[:events_read]` gets each reading.
+      #: (untyped, Hash[untyped, untyped], Hash[Symbol, untyped], String) -> Hash[String, Hash[Symbol, untyped]]
+      def events_sides(step, args, record, dir)
+        return {} if step.events.empty?
+
+        values = args.is_a?(Hash) ? args.transform_keys(&:to_s) : {}
+        plans = step.events.map do |key, entry|
+          source = @events_source ? @events_source.(key, entry) : { of: "events.#{key}.of", producer: { source: "unread", of: nil, gap: "producer-not-run" } }
+          count = Events::Selection.normalize(entry[:count] || entry["count"])
+          resolved = Events::Selection.resolve(count, ->(name) { values[name] }, "events.#{key}.count")
+          { key: key, source: source, resolved: resolved, label: "events:#{source[:of]} count #{Events::Selection.describe(resolved[:selection] || count)}" }
+        end
+        wait = step.timeout || [EVENTS_WAIT_MS, Nukadoko.config_options.fetch(:stepTimeout, EVENTS_WAIT_MS)].min
+        requests = plans.filter_map { |plan| { key: plan[:key], producer: plan[:source][:producer], selection: plan[:resolved][:selection] } if plan[:resolved][:selection] && plan[:source][:producer] }
+        read = {} #: Hash[String, Hash[Symbol, untyped]]
+        failure = "nukadoko read no execution events for this key"
+        begin
+          read = Events.read(requests, Events.clock + (Float(wait) / 1000), dir, secrets) if requests.any?
+        rescue StandardError => e
+          failure = "nukadoko could not read the execution events: #{e.message}"
+        end
+        record[:events_read] = read if read.any?
+        plans.to_h do |plan|
+          label = plan[:label]
+          next [plan[:key], { label: label, broken: plan[:resolved][:problems].join("; ") }] if plan[:resolved][:problems]
+          next [plan[:key], { label: label, unjudged: plan[:source][:unchosen] }] if plan[:source][:unchosen]
+
+          found = read[plan[:key]]
+          next [plan[:key], { label: label, unjudged: failure }] unless found
+
+          [plan[:key], { label: label, of: plan[:source][:of], reading: found.slice(:range, :whole, :open, :maybe), counted: found[:counted], **found.slice(:left_out) }]
+        end
+      end
+
       # A step that declares it mutates does not run in a read-only
       # environment: the declaration is trusted, not checked against what
       # the step does.
@@ -793,9 +872,11 @@ module Nukadoko
       # line or by earlier records (`origins` says which), in a world
       # started for this one execution, its evidence in this run's
       # directory, which is the record's own.
-      #: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
-      def do_step(step, args, origins, texts, environment, files_source = nil)
+      #: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
+      def do_step(step, args, origins, texts, environment, files_source = nil, events_source = nil)
         @files_source = files_source
+        @events_source = events_source
+        @events_producers = {}
         @ran = nil
         FileUtils.mkdir_p(@dir)
         read_env(environment)
@@ -818,6 +899,11 @@ module Nukadoko
         record[:target_version] = version if version
         record
       ensure
+        # The step's own lines still on their way land beside its record
+        # when the world stops, where a later --use reads them, so the stop
+        # waits for them first: no later step's timing can change here.
+        own = record&.dig(:events)
+        Events.settle(@events, @events.producer(own[:trace_id]), Events.clock + (EVENTS_WAIT_MS / 1000.0)) if @events && own && !own[:whole]
         @browser&.close
         @scenario_fixtures&.teardown
         @process_fixtures&.teardown
@@ -901,7 +987,7 @@ module Nukadoko
           Trace.within(boundary) do
             fixtures, finish = build_fixtures(step, dir, log, world, record, results)
             HttpRecording.collect(log) do
-              Processes.collect(processes) { RedactedOutput.around(secrets) { within_deadline(step, record) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) } } }
+              Processes.collect(processes) { RedactedOutput.around(secrets) { within_deadline(step, record) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts, dir) } } }
             end
           end
           record[:page_view] = @browser.judged(dir, record[:step_record_id], aria_in_claims: step.claims.to_a.any? { !_1[:each] && _1[:compare] == "fits-aria-snapshot" }) if step.claims && (fixtures[:page] || fixtures[:context]) && record[:observation] != "unobserved"
@@ -986,8 +1072,8 @@ module Nukadoko
       # A Then step's claims are judged on what it observed, or on its args
       # when it reads nothing itself; any other step runs and returns.
       # `step` is a step class whose observe or run its own file defines.
-      #: (untyped, Hash[Symbol, untyped], untyped, [bool, Integer?], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?]) -> void
-      def body(step, fixtures, args, position, record, results, origins, texts)
+      #: (untyped, Hash[Symbol, untyped], untyped, [bool, Integer?], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?], String) -> void
+      def body(step, fixtures, args, position, record, results, origins, texts, dir)
         then_line, at_line = position
         if step.claims
           own = fixtures.slice(*step.fixtures)
@@ -998,6 +1084,8 @@ module Nukadoko
           from_values = args.transform_keys(&:to_s).slice(*step.from.keys.map(&:to_s))
           files = files_sides(step)
           files.each { |key, side| origins[key] = side[:label] }
+          events = events_sides(step, args, record, dir)
+          events.each { |key, side| origins[key] = side[:label] }
           read = lambda do
             next args unless observes
 
@@ -1008,7 +1096,7 @@ module Nukadoko
           sides = lambda do |observed|
             ClaimSides::Inputs.new(observed: observed, args: args, observes: observes, from_keys: step.from.keys.map(&:to_s),
                                    labels: ->(key) { origins.fetch(key, "sentence:#{key}") },
-                                   received: observes ? step.inputs.fields.map { _1.name.to_s } : [], transformed: transformed_fills(step, origins), files: files)
+                                   received: observes ? step.inputs.fields.map { _1.name.to_s } : [], transformed: transformed_fills(step, origins), files: files, events: events)
           end
           # A reading with a page open is timed, so the record can say what the page had received by then.
           read = (plain = read; -> { @browser.reading(&plain) }) if own[:page] || own[:context]
@@ -1027,9 +1115,11 @@ module Nukadoko
           record[:claims] = judged
           # A files claim's list was measured in its producer's record.
           record[:files_measured] = step.claims.zip(judged).map { |declared, result| files[declared[:actual].to_s]&.[](:measured) if !declared[:each] && result[:files_read] }
+          # An events claim's count was measured in this step's events_read.
+          record[:events_measured] = step.claims.zip(judged).map { |declared, result| declared[:actual].to_s if !declared[:each] && result[:events_read] }
           # The value each claim read before its view, for `measured`.
           record[:raw_actuals] = step.claims.map do |declared|
-            next nil if declared[:each] || files.key?(declared[:actual].to_s)
+            next nil if declared[:each] || files.key?(declared[:actual].to_s) || events.key?(declared[:actual].to_s)
 
             # Under a view the raw value is the text the view read; else the value at `at`.
             read = Claims.read(observed, declared[:actual])
@@ -1044,7 +1134,7 @@ module Nukadoko
             if declared[:each]
               RunRecord.each_claim(declared, sides.(observed), origins, texts, patterns: patterns)
             else
-              RunRecord.claim(declared, result, origins, texts, observed: observes && !from_values.key?(declared[:actual].to_s.split(".").first) && !files.key?(declared[:actual].to_s), patterns: patterns)
+              RunRecord.claim(declared, result, origins, texts, observed: observes && !from_values.key?(declared[:actual].to_s.split(".").first) && !files.key?(declared[:actual].to_s) && !events.key?(declared[:actual].to_s), patterns: patterns)
             end
           end
           broken = record[:claim_records].index { !%w[held for-judgment].include?(_1[:outcome]) }
@@ -1095,6 +1185,7 @@ module Nukadoko
         end
         from_of = ->(key) { (origin = (record[:args_origin] || {})[key.to_s.split(".").first]).is_a?(Hash) ? origin.dig(:from, :step_record_id) : nil }
         files_measured = record.delete(:files_measured) || []
+        events_measured = record.delete(:events_measured) || []
         (step.claims || []).zip(record[:claim_records], record[:raw_actuals] || []).each_with_index do |(declared, claim, raw), index|
           next if claim.nil? || claim[:outcome] == "unobserved" || declared[:each]
           # A tree nukadoko took is a measurement of the page, not a value a channel carried.
@@ -1104,7 +1195,11 @@ module Nukadoko
           # record's channel is where it was measured, and no expected
           # value is told apart from it.
           files = step.files.key?(declared[:actual].to_s)
-          measured = files ? files_measured[index] : Measured.channel_for(from_of.(declared[:actual]) || own, raw, channels_of)
+          events = step.events.key?(declared[:actual].to_s)
+          measured = if files then files_measured[index]
+                     elsif events then (key = events_measured[index]) && { step_record_id: own, channel: "events_read.#{key}" }
+                     else Measured.channel_for(from_of.(declared[:actual]) || own, raw, channels_of)
+                     end
           claim[:measured] = measured
           key = declared[:expected].is_a?(String) ? declared[:expected] : declared[:expected].is_a?(Hash) && declared[:expected][:from]
           source = declared[:expected].is_a?(Hash) && declared[:expected].key?(:observe) ? own : key && from_of.(key)
@@ -1112,7 +1207,7 @@ module Nukadoko
 
           # The expected side's channel comes before the actual's, as the TypeScript engine writes it.
           claim.delete(:measured)
-          claim.merge!(expected_measured: Measured.channel_for(source, claim[:expected], channels_of, files ? nil : measured), measured: measured)
+          claim.merge!(expected_measured: Measured.channel_for(source, claim[:expected], channels_of, files || events ? nil : measured), measured: measured)
         end
         record.delete(:raw_actuals)
       end
