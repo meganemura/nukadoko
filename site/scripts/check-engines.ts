@@ -14,7 +14,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { engineBlocks, type EngineBlock } from "./document.ts";
+import { engineBlocks, parseDocument, type EngineBlock } from "./document.ts";
 
 const siteDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoDir = resolve(siteDir, "..");
@@ -102,6 +102,25 @@ for (const path of neutralDocuments()) {
   }
 }
 
+
+// docs/ruby/ and docs/typescript/ hold one engine's side of the same pages: each file twinned
+// names is in both directories, with the same `## ` headings in the same order,
+// so a reader of one engine's page finds the other's answer under the same heading.
+const engineDirs = ["docs/ruby", "docs/typescript"];
+const twinned = ["reference.md", "reference.ja.md"];
+for (const file of twinned) {
+  const [ruby, ts] = engineDirs.map((dir) => `${dir}/${file}`);
+  const missing = [ruby, ts].filter((p) => !existsSync(join(repoDir, p)));
+  if (missing.length > 0) {
+    problems.push(`${missing.join(", ")}: missing\n  because: each engine's page has a twin in the other engine's directory\n  do: write ${missing.join(" and ")} with the same \`## \` headings`);
+    continue;
+  }
+  const headings = (p: string) => parseDocument(readFileSync(join(repoDir, p), "utf8")).sections.map((s) => s.heading);
+  const [a, b] = [headings(ruby), headings(ts)];
+  if (JSON.stringify(a) !== JSON.stringify(b)) {
+    problems.push(`${ruby} and ${ts}: \`## \` headings differ\n  ${ruby}: ${a.join(" / ")}\n  ${ts}: ${b.join(" / ")}\n  because: the two engines' pages are read side by side\n  do: give both files the same \`## \` headings in the same order`);
+  }
+}
 if (write) {
   writeFileSync(ratchetPath, `${JSON.stringify(now, null, 2)}\n`);
   console.log(`check-engines: recorded the counts of ${Object.keys(now).length} neutral documents`);

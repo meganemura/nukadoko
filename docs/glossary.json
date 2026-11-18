@@ -1267,6 +1267,12 @@
     "docs/typescript/upgrading.ja.md": {
       "rule": "日本語化する。ただし版番号(0.0.5 など)や `Unreleased` のような版のラベルはそのまま残す"
     },
+    "docs/ruby/reference.ja.md": {
+      "rule": "日本語化する。ただし keep_english の語(Claims、Parts、Fixtures、Context)が主題の見出しは英語のまま。docs/typescript/reference.ja.md と同じ見出しを同じ順に並べる(site/scripts/check-engines.ts が確かめる)"
+    },
+    "docs/typescript/reference.ja.md": {
+      "rule": "日本語化する。ただし keep_english の語(Claims、Parts、Fixtures、Context)が主題の見出しは英語のまま。docs/ruby/reference.ja.md と同じ見出しを同じ順に並べる(site/scripts/check-engines.ts が確かめる)"
+    },
     "docs/ci.ja.md": {
       "rule": "日本語化する。ただしコードスパンで書かれたコマンド名と、fenced code block 内の YAML(コメント含む)はそのまま残す。README.ja.md の CI 節にある既存の workflow 抜粋がすでにこの扱い(コメント込みで英語のまま)なので、それに揃える"
     },

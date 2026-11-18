@@ -22,6 +22,8 @@ export const sources = {
   spec: { en: "docs/spec.md", ja: "docs/spec.ja.md" },
   upgrading: { en: "docs/typescript/upgrading.md", ja: "docs/typescript/upgrading.ja.md" },
   ruby: { en: "ruby/README.md", ja: "ruby/README.ja.md" },
+  rubyReference: { en: "docs/ruby/reference.md", ja: "docs/ruby/reference.ja.md" },
+  typescriptReference: { en: "docs/typescript/reference.md", ja: "docs/typescript/reference.ja.md" },
 } satisfies Record<string, Source>;
 
 export type SourceName = keyof typeof sources;
@@ -90,6 +92,8 @@ export const groups: Group[] = [
   {
     label: { en: "Reference", ja: "リファレンス" },
     pages: [
+      { slug: "reference/ruby", source: "rubyReference" },
+      { slug: "reference/typescript", source: "typescriptReference" },
       { slug: "reference/cli", source: "spec", sections: [15] },
       { slug: "reference/steps", source: "spec", sections: [3] },
       { slug: "reference/program", source: "spec", sections: [6] },
