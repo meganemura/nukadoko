@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 # Copies the files the gem ships but does not own from the repository root
-# into this directory: the agent skills and llms.txt, which both engines
+# into this directory: the agent skills, the docs, and llms.txt, which both engines
 # follow and the root keeps once. `gem build` packs only what is inside the
 # gem's own directory, so the release runs this first; the copies are
 # gitignored, and the root's files are the ones to edit.
@@ -10,7 +10,7 @@ require "fileutils"
 
 here = File.expand_path("..", __dir__)
 root = File.expand_path("..", here)
-%w[skills llms.txt].each do |name|
+%w[skills docs llms.txt].each do |name|
   target = File.join(here, name)
   FileUtils.rm_rf(target)
   FileUtils.cp_r(File.join(root, name), target)

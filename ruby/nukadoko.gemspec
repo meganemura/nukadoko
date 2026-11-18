@@ -15,7 +15,7 @@ Gem::Specification.new do |spec|
     "hyperdrive_targets" => "*",
     "hyperdrive_artifacts" => "skill"
   }
-  spec.files = Dir["lib/**/*.rb", "lib/**/*.json", "sig/**/*.rbs", "exe/*", "skills/**/*", "llms.txt", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE"]
+  spec.files = Dir["lib/**/*.rb", "lib/**/*.json", "sig/**/*.rbs", "exe/*", "skills/**/*", "docs/**/*", "llms.txt", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE"]
   spec.bindir = "exe"
   spec.executables = ["nuka"]
   spec.add_dependency "cucumber-cucumber-expressions", "20.1.0"

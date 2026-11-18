@@ -8,6 +8,9 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Changed
 
+- The gem ships `docs/` beside `skills/` and `llms.txt`, as the npm
+  package does, so a finding that cites `docs/spec.md` and a skill that
+  links to a document open in the installed gem.
 - The bundled skill shows step code on each engine's own pages:
   `skills/nukadoko/references/ruby/` and `references/typescript/` hold the
   same pages under the same headings (step files, claim steps, fixtures,
