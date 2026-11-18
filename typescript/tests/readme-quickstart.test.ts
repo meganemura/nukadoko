@@ -3,7 +3,7 @@ import { chmod, cp, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { fixture, removeTempDir, repoRoot, testsDir } from "./helpers/fixtures.js";
+import { fixture, removeTempDir, repoRoot, sharedRoot, testsDir } from "./helpers/fixtures.js";
 
 // Responsibility: README.md's "Beside your unit tests" walkthrough works as
 // written. Its commands run in order in a scratch copy of the CLI project it
@@ -69,8 +69,8 @@ afterEach(async () => {
 
 describe("README.md: Beside your unit tests", () => {
   it("README.ja.md shows the same commands, files, and output", async () => {
-    const en = quickstartBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"));
-    const ja = quickstartBlocks(await readFile(path.join(repoRoot, "README.ja.md"), "utf8"));
+    const en = quickstartBlocks(await readFile(path.join(sharedRoot, "README.md"), "utf8"));
+    const ja = quickstartBlocks(await readFile(path.join(sharedRoot, "README.ja.md"), "utf8"));
     expect(en.map((block) => block.lang)).toEqual([
       "sh", "sh", "ruby", "ts", "sh", "ruby", "ts", "gherkin", "sh", "text", "text", "text",
     ]);
@@ -78,7 +78,7 @@ describe("README.md: Beside your unit tests", () => {
   });
 
   it("runs green in a scratch project, command by command", async () => {
-    const blocks = quickstartBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"));
+    const blocks = quickstartBlocks(await readFile(path.join(sharedRoot, "README.md"), "utf8"));
     await mkdir(tempRoot, { recursive: true });
     projectDir = await mkdtemp(path.join(tempRoot, "quickstart-"));
     await cp(fixture("quickstart-project"), projectDir, { recursive: true });

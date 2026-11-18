@@ -17,6 +17,11 @@ just until 0.1.
   finds. `references/ruby.md`, which translated TypeScript shapes into
   Ruby, is gone, and the worked examples moved to
   `references/typescript/examples/`.
+- The package's README, the npm page, is the TypeScript engine's own:
+  install, one step in TypeScript, and what this engine's commands add,
+  with links to the project README and the documentation site for what
+  both engines share. The project README is no longer copied into the
+  package.
 
 ## 0.29.0 — 2026-11-17
 

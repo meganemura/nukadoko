@@ -98,7 +98,9 @@ function markdownUnder(dir: string): string[] {
   });
 }
 
-const docFiles: DocFile[] = ["README.md", "README.ja.md", "llms.txt", ...markdownUnder("docs"), ...markdownUnder("skills")]
+// "../README.md" is the project README at the repository root; "README.md" is
+// the npm page, which says what the TypeScript engine adds.
+const docFiles: DocFile[] = ["README.md", "README.ja.md", "../README.md", "../README.ja.md", "llms.txt", ...markdownUnder("docs"), ...markdownUnder("skills")]
   .sort()
   .map((relativePath) => ({ relativePath, text: readFileSync(path.join(repoRoot, relativePath), "utf8") }));
 

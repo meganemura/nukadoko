@@ -77,8 +77,9 @@ One engine per language, side by side: `typescript/` is the npm package
 `package.json`; run `npm` there), and `ruby/` is the gem. What both
 engines follow stays at the root: `docs/` (the spec among them),
 `skills/`, `conformance/` (the cases both engines must judge the same
-way), the READMEs, and `llms.txt`. Each engine keeps its own changelog
-(`typescript/CHANGELOG.md`, `ruby/CHANGELOG.md`), and what holds for one
+way), the project README, and `llms.txt`. Each engine keeps its own changelog
+and its own README (`typescript/README.md` is the npm page,
+`ruby/README.md` the gem's), and what holds for one
 engine only goes under `docs/typescript/` or `docs/ruby/`. The npm package
 still ships the shared files: `npm run build` copies them into `typescript/`,
 where git ignores them. Edit the root's files; a change to a copy is lost
@@ -163,7 +164,8 @@ change against before writing it.
   visibility, deploys). Prepare the state and let the user execute.
 - Commits are semantic units, in English, matching the existing message
   style; the user reviews direction, the session reviews code.
-- Paired files are kept in sync: README.md/README.ja.md,
+- Paired files are kept in sync: README.md/README.ja.md (and each
+  engine's own README with its `.ja.md`),
   docs/spec.md/docs/spec.ja.md, and every other document under `docs/`
   with its `.ja.md` (Japanese: one sentence per line; the English file is
   the source of truth). **Query `docs/glossary.json` before translating

@@ -6,10 +6,11 @@ The repository holds one engine per language, side by side:
 `typescript/` is the npm package, and `ruby/` is the gem. What both
 engines follow stays at the root: `docs/` (the spec among them),
 `skills/`, `conformance/` (the cases both engines must judge the same
-way), the READMEs, and `llms.txt`. Each engine keeps its own changelog
-(`typescript/CHANGELOG.md`, `ruby/CHANGELOG.md`), and what holds for one
+way), the project README, and `llms.txt`. Each engine keeps its own changelog
+and its own README (`typescript/README.md` is the npm page,
+`ruby/README.md` the gem's), and what holds for one
 engine only goes under `docs/typescript/` or `docs/ruby/`. The npm package
-still ships `docs/`, `skills/`, the READMEs, and `llms.txt`:
+still ships `docs/`, `skills/`, and `llms.txt`:
 `npm run build` copies them from the root into `typescript/`, where they
 are gitignored. Edit the root's files, never the copies.
 

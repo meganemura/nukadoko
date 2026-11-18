@@ -20,7 +20,7 @@ import { repoRoot } from "./helpers/fixtures.js";
 const SENTENCE_END = "。";
 
 async function listJapaneseFiles(): Promise<string[]> {
-  const files = [path.join(repoRoot, "README.ja.md")];
+  const files = [path.join(repoRoot, "README.ja.md"), path.join(repoRoot, "..", "README.ja.md")];
   const entries = await readdir(path.join(repoRoot, "docs"), { withFileTypes: true, recursive: true });
   for (const entry of entries) {
     if (entry.isFile() && entry.name.endsWith(".ja.md")) files.push(path.join(entry.parentPath, entry.name));

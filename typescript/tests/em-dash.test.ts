@@ -26,7 +26,7 @@ import { sharedRoot } from "./helpers/fixtures.js";
 const EM_DASH = "—";
 
 const targetDirs = ["docs", "skills"];
-const targetFiles = ["README.md", "README.ja.md", "CONTRIBUTING.md", "ruby/README.md", "ruby/README.ja.md", "conformance/README.md"];
+const targetFiles = ["README.md", "README.ja.md", "CONTRIBUTING.md", "ruby/README.md", "ruby/README.ja.md", "typescript/README.md", "typescript/README.ja.md", "conformance/README.md"];
 
 async function listMarkdownFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true, recursive: true });

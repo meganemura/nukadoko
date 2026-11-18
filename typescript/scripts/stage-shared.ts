@@ -4,8 +4,9 @@
 // the listed paths here with fresh copies of the root's, and nothing else.
 //
 // The repository holds one engine per language (`typescript/`, `ruby/`) and
-// keeps what both engines follow at its root: the spec, the skills, the
-// README. Each engine keeps its own changelog in its own directory. npm
+// keeps what both engines follow at its root: the spec and the skills.
+// Each engine keeps its own changelog and its own README (the npm page is
+// typescript/README.md, which says only what this engine adds). npm
 // packs only what is inside the package's own directory, and it skips a
 // symbolic link, so a link would leave the tarball without its docs. A copy
 // made on every build is the shape that keeps one source at the root and
@@ -18,7 +19,7 @@ import { cpSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const SHARED = ["docs", "skills", "README.md", "README.ja.md", "llms.txt", "LICENSE"];
+export const SHARED = ["docs", "skills", "llms.txt", "LICENSE"];
 
 const here = path.resolve(import.meta.dirname, "..");
 const root = path.resolve(here, "..");

@@ -64,7 +64,5 @@ tmp/
 # writes on every build, so the npm package ships them. Edit the root's.
 typescript/docs/
 typescript/skills/
-typescript/README.md
-typescript/README.ja.md
 typescript/llms.txt
 typescript/LICENSE

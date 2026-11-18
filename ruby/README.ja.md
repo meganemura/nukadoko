@@ -11,7 +11,8 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`--step`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-`nuka init --allure` など、TypeScript 版の機能の一部はまだありません。
+今 TypeScript 版にだけあるのは `nuka check --codes` と `--fail-on` です。
+片方のエンジンにだけあるフラグは、[プロジェクトの README の表](../README.ja.md#install)にあります。
 
 ## インストール
 
