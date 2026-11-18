@@ -128,6 +128,13 @@ module Nukadoko
       # : (Environment) -> Hash[Symbol, untyped]
       def environment_entry: (Environment) -> Hash[Symbol, untyped]
 
+      # The environment's version function, under ten seconds: its answer
+      # goes into run.json and every record of the environment as
+      # target_version, and a probe that fails is a warning, never a reason
+      # the run fails.
+      # : (Environment) -> void
+      def probe_version: (Environment) -> void
+
       # The line before a scenario's execution, numbered across the run, in
       # the TypeScript engine's words so a log reads the same from either.
       # : (String, Integer, String, String) -> String
@@ -173,6 +180,12 @@ module Nukadoko
 
       # : (PickleStep, Array[untyped], World) -> Hash[Symbol, untyped]
       def play_step: (PickleStep, Array[untyped], World) -> Hash[Symbol, untyped]
+
+      # A step that declares it mutates does not run in a read-only
+      # environment: the declaration is trusted, not checked against what
+      # the step does.
+      # : (untyped) -> String?
+      def read_only_refusal: (untyped) -> String?
 
       public
 

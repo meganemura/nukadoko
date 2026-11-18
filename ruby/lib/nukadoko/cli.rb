@@ -460,7 +460,11 @@ module Nukadoko
 
       args = given.merge(args.reject { |key, _| given.key?(key) })
       given.each_key { origins[_1] = "command_line:#{_1}" }
-      environment = Engine::Program.new(Nukadoko.program_options).environments(@options["--env"].last(1)).first
+      program = Engine::Program.new(Nukadoko.program_options)
+      environment = program.environments(@options["--env"].last(1)).first
+      if step.mutating? && program.policy(environment.name) == "read-only"
+        return refuse(Engine::Refusal.new("read-only-environment", %(Step "#{step.step_name}" mutates state but environment "#{environment.name}" has policy "read-only")))
+      end
       id = "step-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}-#{SecureRandom.alphanumeric(4).downcase}"
       dir = File.join(@project, ".nukadoko", "do", id)
       run = Engine::Run.new(@project, check.usable, [], Nukadoko.program_options, environments: [environment], dir: dir, out: $stderr)
@@ -522,7 +526,8 @@ module Nukadoko
       processes = record[:processes]
       { schema_version: Engine::RunRecord::SCHEMA_VERSION, nukadoko: VERSION, step_record_id: id, step: step.step_name, kind: "do",
         args: record[:args] || given, args_origin: args_origin, **outcome, status: record[:status], environment: environment.name,
-        world_name: nil, scenario_record_id: nil, run_id: nil, started_at: record[:started_at], finished_at: record[:finished_at],
+        world_name: nil, **(record[:target_version] ? { target_version: record[:target_version] } : {}),
+        scenario_record_id: nil, run_id: nil, started_at: record[:started_at], finished_at: record[:finished_at],
         evidence: { dir: File.join(".nukadoko", "do", id), screenshots: [] },
         observed: { processes: processes&.any? ? processes : nil,
                     http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [] },
@@ -853,9 +858,28 @@ module Nukadoko
     #: () -> Array[Engine::Finding]
     def env_findings
       Engine::EnvCheck.validate!
-      Engine::EnvCheck.findings(@project)
+      Engine::EnvCheck.findings(@project) + placeholder_findings
     rescue Engine::EnvFile::Unreadable => e
       raise Engine::Refusal.new("env-file-unreadable", e.message)
+    end
+
+    # A placeholder a world this invocation starts has no value for fails
+    # that world before its program starts, and the program alone says so.
+    # A world no command of this invocation starts is not checked.
+    #: () -> Array[Engine::Finding]
+    def placeholder_findings
+      program = Engine::Program.new(Nukadoko.program_options)
+      environments = begin
+        program.environments(Array(@options["--env"]))
+      rescue Engine::Refusal
+        []
+      end
+      environments.flat_map do |environment|
+        Engine::Program.placeholder_gaps(program.recipe(environment)).map do |gap|
+          Engine::Finding.new("error", "program-placeholder-unfilled", Engine::CONFIG, nil, nil, "world #{environment.name}: #{gap}",
+                              Engine::Codes.fix("program-placeholder-unfilled"), nil)
+        end
+      end
     end
 
     #: (Engine::Refusal) -> Integer

@@ -173,6 +173,15 @@ Nukadoko.config(
 TypeScript エンジンが読んでこのエンジンがまだ読まないキー(下)も止めます。
 プログラムが起動しなかった world ではシナリオを 1 つも走らせず、実行は `program-start-failed` と world の `program.log` の終わりを示して失敗します。
 
+world は TypeScript エンジンと同じ順に段階を進みます。
+`build`(実行ごとに tree ごと 1 回、どの world よりも前に走るコマンド)、`prepare`(world ごと 1 回、その env とプレースホルダで走るコマンド)、次に `serve` か `url`(nukadoko が起動しないプログラムの URL か、それを返す lambda)、最後に `setup`(world を受け取る lambda で、`name`、`root`、`dir`、`tree`、`url`、`port`、`env` を持つ)です。
+コマンドは `{ command:, timeout_ms: }` とも書けます。
+`setup` と `url` の lambda も、`timeout_ms` 付きの `{ run: }` と `{ resolve: }` で書けます。
+失敗した段階や制限時間を過ぎた段階は world を止め、その段階の名前を示します。
+environment は `policy: "read-only"` を取り、mutates を宣言する step をすべて失敗にします。
+`version:` は String を返す lambda で、その値は run.json とすべての記録に `target_version` として入ります。
+world に値がないプレースホルダ(`serve` も `url` もない world の `{port}`、`build` の `{root}` 以外)は、`nuka check` で `program-placeholder-unfilled` になります。
+
 ## 型とツール
 
 `nuka sig` は、各 step の args と returns の RBS を `sig/nukadoko/steps.rbs` に書きます。
@@ -183,7 +192,7 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- プログラムの `build`、`prepare`、`setup`、`url`(nukadoko が起動しないプログラム)、`lists`、`policy`、それに `{events}` のプレースホルダと、それが読む実行イベント。
+- プログラムの `lists` と、`{events}` のプレースホルダと、それが読む実行イベント。
 - step の `requires`、`gives`、`ends`(state)、`files`(コマンドが書いたもの)、`events`(プログラムがしたこと)。
 - fixture の `use` が返すもの。
 TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。

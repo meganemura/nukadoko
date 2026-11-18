@@ -37,6 +37,9 @@ module Nukadoko
         @repeat = repeat
         @concurrency = concurrency
         @incomplete = []
+        @target_versions = {} #: Hash[String, String]
+        # Findings that are told and never fail the run.
+        @warnings = [] #: Array[Hash[Symbol, untyped]]
         @world_entries = []
         @order = order
         @records = records
@@ -109,20 +112,31 @@ module Nukadoko
           world_dir = File.join(@dir, "worlds", @world == "head" ? environment.name : "#{environment.name}@#{@world}")
           FileUtils.mkdir_p(world_dir)
           read_env(environment)
+          @environment = environment
+          probe_version(environment)
           roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
           begin
-            world = @program.start(environment, world_dir, @project)
+            world = @program.start(environment, world_dir, @project, tree: @world)
+          rescue Program::Unavailable => e
+            # A base with no URL of its own runs no cell, and nothing failed.
+            @scenarios.each { cells[_1] << cell([], environment, roles[_1], _1).merge(reason: "the #{@world} world has no URL to reach: #{e.message}") }
+            world = nil
+            next
           rescue Program::StartFailed => e
             # No scenario runs in a world whose program did not start: each
-            # cell is not run, saying why, and the run fails outside them.
-            @incomplete << { severity: "failed", code: "program-start-failed", message: e.message, fix: Codes.fix("program-start-failed") }
-            @world_entries << { name: environment.name, tree: @world, url: e.world.base_url, commands: e.world.commands, timings: {},
-                                log: File.join("worlds", File.basename(world_dir), "program.log"), error: e.cause_text }
-            @scenarios.each { cells[_1] << cell([], environment, roles[_1], _1).merge(reason: "the program did not start for its world") }
+            # cell is not run, saying why. Head's run fails outside them; a
+            # base that did not start is a warning, as nothing of head failed.
+            head = @world == "head"
+            (head ? @incomplete : @warnings) << { severity: head ? "failed" : "warning", code: "program-start-failed", message: redact(e.message), fix: Codes.fix("program-start-failed") }
+            @world_entries << { name: environment.name, tree: @world, url: e.world.base_url, commands: redact(e.world.commands), timings: {},
+                                log: e.world.log_path && File.join("worlds", File.basename(world_dir), "program.log"), error: redact(e.cause_text) }
+            reason = head ? "the program did not start for its world" : "the program did not start for the #{@world} world"
+            @scenarios.each { cells[_1] << cell([], environment, roles[_1], _1).merge(reason: reason) }
             world = nil
             next
           end
-          @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
+          @secrets = secrets.with(Secrets.new({ "WORLD_TOKEN" => world.token }))
+          @program_log = world.pid && world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
           @base_urls[environment.name] = world.base_url
           runs = Hash.new { |h, k| h[k] = [] }
           ran = lambda do |scenario, execution|
@@ -169,10 +183,11 @@ module Nukadoko
       # and its run.json entry names them.
       #: (Environment, World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
       def world_entry(environment, world, world_dir, executions)
-        entry = { name: environment.name, tree: @world, url: world.base_url, commands: world.commands, timings: world.timings,
+        entry = { name: environment.name, tree: @world, url: world.base_url, commands: redact(world.commands), timings: world.timings,
                   log: world.log_path && File.join("worlds", File.basename(world_dir), "program.log"), error: nil }
         return entry unless world.base_url
-        return entry.merge(program_log: nil) unless world.log_path
+        # A world at a URL has a log nukadoko does not read.
+        return entry.merge(program_log: nil) unless world.pid && world.log_path
 
         steps = executions.flat_map { _1[:json][:steps] || [] }.select { _1.dig(:observed, :program_log) }
         traced = steps.to_h { |step| [step[:observed][:program_log][:trace_id], [step[:observed][:program_log][:lines], File.join(@dir, step[:record])]] }
@@ -387,7 +402,7 @@ module Nukadoko
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                    mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
                    worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },
-          failures: warnings + executions.filter_map { _1[:failure] } + judged + @incomplete,
+          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + judged + @incomplete,
           # A criterion whose Then asks for a judgment holds only once one
           # cites what it read: the judgment column has a gate of its own.
           passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty?,
@@ -463,8 +478,26 @@ module Nukadoko
 
       #: (Environment) -> Hash[Symbol, untyped]
       def environment_entry(environment)
-        { name: environment.name, conditions: environment.conditions.empty? ? nil : environment.conditions,
-          target_version: nil, base_url: @base_urls[environment.name] }.compact.merge(target_version: nil, base_url: @base_urls[environment.name])
+        version = @target_versions[environment.name]
+        { name: environment.name, conditions: environment.conditions.empty? ? nil : environment.conditions }.compact
+          .merge(target_version: version && redact(version), base_url: @base_urls[environment.name])
+      end
+
+      # The environment's version function, under ten seconds: its answer
+      # goes into run.json and every record of the environment as
+      # target_version, and a probe that fails is a warning, never a reason
+      # the run fails.
+      #: (Environment) -> void
+      def probe_version(environment)
+        probe = @program.version(environment.name)
+        return unless probe
+
+        answer = Timeout.timeout(10, Timeout::Error, "version probe timed out after 10000ms") { probe.call }
+        raise TypeError, "version probe must resolve to a string, got #{answer.nil? ? "undefined" : answer.class.name.downcase}" unless answer.is_a?(String)
+
+        @target_versions[environment.name] = answer
+      rescue StandardError => e
+        @warnings << { severity: "warning", code: "version-probe-failed", message: redact(%(version probe for environment "#{environment.name}" failed: #{e.message})) }
       end
 
       # The line before a scenario's execution, numbered across the run, in
@@ -526,7 +559,7 @@ module Nukadoko
         @scenario_fixtures = FixtureCache.new
         scenario_record_id = new_id("scn")
         @step_file = lambda do |record|
-          RunRecord.step_file(record, environment: environment.name, world_name: @program.file? ? environment.name : nil, run_id: @id,
+          RunRecord.step_file(record, environment: environment.name, world_name: @program.file? ? environment.name : nil, run_id: @id, target_version: @target_versions[environment.name],
                                       scenario_record_id: scenario_record_id, evidence_dir: File.join(".nukadoko", "runs", @id, "steps", record[:step_record_id]))
         end
         # Where a person stopped the walk, as run.json's `stopped` says it.
@@ -622,7 +655,7 @@ module Nukadoko
         entry[:observed] = { processes: processes&.any? ? processes : nil, http: record[:http_count]&.positive? ? record[:http_count] : nil,
                              files: record[:files]&.map { _1.except(:content) }, unmeasured: [],
                              **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}) }
-        entry[:error] = { kind: record[:error_kind], message: record[:error] } if record[:error]
+        entry[:error] = { kind: record[:error_kind], message: record[:error] }.compact if record[:error]
         # Only a failed step names what it read: a reader then sees the value it broke on.
         entry[:used] = record[:used] if record[:used]&.any? && record[:status] == "failed"
         if record[:claim_records]
@@ -657,6 +690,10 @@ module Nukadoko
                    error: %("#{line.text}" matches more than one step: #{names.join(", ")}), never_began: "ambiguous" }
         end
 
+        if (refused = read_only_refusal(step))
+          return { status: "failed", outcome: :broke, step_record_id: nil, step: step.step_name, error: refused }
+        end
+
         id = new_id("step")
         dir = File.join(@dir, "steps", id)
         record = { step_record_id: id, step: step.step_name, text: line.text, started_at: Time.now.utc.iso8601(3) }
@@ -665,6 +702,17 @@ module Nukadoko
           args = bind_args(step, captures, line, results, origins, record)
           [args, (step.patterns.lazy.filter_map { Pattern.new(_1).texts(line.text) }.first || {}).merge(attachment_texts(step, captures, line))]
         end
+      end
+
+      # A step that declares it mutates does not run in a read-only
+      # environment: the declaration is trusted, not checked against what
+      # the step does.
+      #: (untyped) -> String?
+      def read_only_refusal(step)
+        name = @environment&.name
+        return nil unless name && step.mutating? && @program.policy(name) == "read-only"
+
+        %(Step "#{step.step_name}" mutates state but environment "#{name}" has policy "read-only")
       end
 
       public
@@ -677,14 +725,19 @@ module Nukadoko
       def do_step(step, args, origins, texts, environment)
         FileUtils.mkdir_p(@dir)
         read_env(environment)
+        @environment = environment
+        probe_version(environment)
         world = @program.start(environment, @dir, @project)
-        @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
+        @secrets = secrets.with(Secrets.new({ "WORLD_TOKEN" => world.token }))
+        @program_log = world.pid && world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
         @scratch = Scratch.new(@project)
         @scenario_fixtures = FixtureCache.new
         @process_fixtures = FixtureCache.new
         @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}), secrets: -> { secrets })
         record = { step_record_id: @id, step: step.step_name, started_at: now }
+        version = @target_versions[environment.name]
         execute(step, record, @dir, world, then_line: true, at_line: nil, results: [], origins: origins) { [args, texts] }
+        version ? record.merge(target_version: version) : record
       ensure
         @browser&.close
         @scenario_fixtures&.teardown
@@ -1118,7 +1171,7 @@ module Nukadoko
         end
         # Requests a wrapped request fixture sends are the builtin's, so the record keeps them.
         @request_log = built[:request]
-        fixtures[:call] = Caller.new(step, fixtures) if step.fixtures.include?(:call)
+        fixtures[:call] = Caller.new(step, fixtures, refuse: ->(part) { read_only_refusal(part) }) if step.fixtures.include?(:call)
         record[:fixtures] = @fixture_usage if @fixture_usage.any?
         @fixture_usage = nil
         finish = finishes.empty? ? nil : -> { finishes.reverse_each(&:call) }

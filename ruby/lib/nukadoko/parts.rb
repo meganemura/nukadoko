@@ -16,9 +16,12 @@ module Nukadoko
 
       attr_reader :calls
 
-      #: (singleton(Nukadoko::Step), Hash[Symbol, untyped]) -> void
-      def initialize(step, fixtures)
+      #: (singleton(Nukadoko::Step), Hash[Symbol, untyped], ?refuse: ^(untyped) -> String?) -> void
+      def initialize(step, fixtures, refuse: ->(_) {})
         @fixtures = fixtures
+        # Why a part may not run here: a part that mutates in a read-only
+        # environment is refused as its caller would be.
+        @refuse = refuse
         @stack = [step]
         @calls = []
         @into = [@calls]
@@ -39,6 +42,9 @@ module Nukadoko
                          %("parts" (docs/spec.md "Parts"). Add it there. The fixture bag this step runs with is ) +
                          %(built from that list before "run" is called, so a part the list does not name has nothing to run with.)
         end
+
+        refused = @refuse.(part)
+        raise Refused, refused if refused
 
         args = args.merge(keywords).transform_keys(&:to_s)
         entry = { step: part.step_name, args: args }

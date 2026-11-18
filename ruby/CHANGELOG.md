@@ -18,8 +18,7 @@ Each release's notes come from the section below whose heading starts with `## [
   it does not know is refused (`config-invalid`), with the known key it
   matches when only its case differs: a misspelt `ready` used to leave the
   world ready on any answer from `/`. A key the TypeScript engine reads
-  and this one does not yet (`build`, `prepare`, `url`, `lists`,
-  `setup`, `policy`, `version`) is refused too, naming it, rather than
+  and this one does not yet (`lists`) is refused too, naming it, rather than
   skipped. To move: correct or remove the key the message names.
 - **Breaking.** A world is ready once `ready` answers 2xx, as in the
   TypeScript engine; any answer counted before, a 404 or a 503 from a
@@ -49,6 +48,17 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Added
 
+- The program reads `build`, `prepare`, `url`, and `setup`, and an
+  environment's `policy` and `version`, as the TypeScript engine does. A
+  world runs `build` once per tree, then `prepare`, then `serve` or `url`,
+  then `setup`, each under its `timeout_ms`, and run.json names each
+  command and phase time. A `url` world is not started and its log is not
+  read. `policy: "read-only"` fails a step that declares it mutates, and
+  `nuka do` refuses one with `read-only-environment`. `version` goes into
+  run.json and every record as `target_version`, and a version that fails
+  is the warning `version-probe-failed`. The placeholders `{root}`,
+  `{world}`, `{url}`, and `{token}` are filled, and one a world has no
+  value for is `program-placeholder-unfilled` in `nuka check`.
 - A step can name more than one wording: `patterns "another wording"`
   adds wordings after `pattern`, and `nuka check` reports
   `alias-key-mismatch` when they capture different keys. `nuka steps`

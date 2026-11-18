@@ -15,8 +15,8 @@ module Nukadoko
       # the environment, the world, the run, the scenario, and the step's own
       # directory. A record that passed names each step it used; a failed one
       # names what each gave too, since that is what it failed on.
-      # : (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String) -> Hash[Symbol, untyped]
-      def self?.step_file: (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String) -> Hash[Symbol, untyped]
+      # : (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String, ?target_version: String?) -> Hash[Symbol, untyped]
+      def self?.step_file: (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String, ?target_version: String?) -> Hash[Symbol, untyped]
 
       # One comparison, as run.json's steps[].claims[] holds it. `origins`
       # maps an args key to the label of where its value came from, and

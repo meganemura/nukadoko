@@ -1,0 +1,11 @@
+{
+  "build": [["sh", "-c", "echo built > built.txt"]],
+  "prepare": [["sh", "-c", "echo prepared {world} > prepared.txt"]],
+  "environments": {
+    "default": {},
+    "remote": { "url": "http://localhost:9" },
+    "locked": { "policy": "read-only" },
+    "broken": { "build": [["sh", "-c", "echo no compiler; exit 3"]] },
+    "slow": { "prepare": [{ "command": ["sleep", "5"], "timeout_ms": 200 }] }
+  }
+}

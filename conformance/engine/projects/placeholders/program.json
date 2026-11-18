@@ -1,0 +1,4 @@
+{
+  "build": [["sh", "-c", "echo {port} > port.txt"]],
+  "env": { "SITE": "{url}" }
+}

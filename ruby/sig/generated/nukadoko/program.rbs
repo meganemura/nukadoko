@@ -2,7 +2,10 @@
 
 # How the program under test starts, once per environment: an environment
 # is a world of its own, with its own port, directory, and process, so one
-# environment's state never reaches another's scenarios.
+# environment's state never reaches another's scenarios. A world goes
+# through the TypeScript engine's phases in its order: build (once per
+# tree per run), prepare, serve or url, then setup. Each phase has a limit,
+# and a phase past it, or one that fails, stops the world and names itself.
 module Nukadoko
   module Engine
     class Environment < Data
@@ -22,7 +25,44 @@ module Nukadoko
       def members: () -> [ :name, :conditions, :env, :env_files ]
     end
 
+    # One environment's program, its layer over the top level applied and
+    # each limit filled. `reach` is how the world reaches its program:
+    # `{ kind: "serve", serve: }`, `{ kind: "url", url:, timeout_ms: }`, or
+    # `{ kind: "none" }`.
+    class Recipe < Data
+      attr_reader build(): Array[Hash[Symbol, untyped]]
+
+      attr_reader prepare(): Array[Hash[Symbol, untyped]]
+
+      attr_reader reach(): Hash[Symbol, untyped]
+
+      attr_reader env(): Hash[String, String]
+
+      attr_reader setup(): Hash[Symbol, untyped]?
+
+      attr_reader conditions(): Hash[String, untyped]
+
+      def self.new: (Array[Hash[Symbol, untyped]] build, Array[Hash[Symbol, untyped]] prepare, Hash[Symbol, untyped] reach, Hash[String, String] env, Hash[Symbol, untyped]? setup, Hash[String, untyped] conditions) -> instance
+                  | (build: Array[Hash[Symbol, untyped]], prepare: Array[Hash[Symbol, untyped]], reach: Hash[Symbol, untyped], env: Hash[String, String], setup: Hash[Symbol, untyped]?, conditions: Hash[String, untyped]) -> instance
+
+      def self.members: () -> [ :build, :prepare, :reach, :env, :setup, :conditions ]
+
+      def members: () -> [ :build, :prepare, :reach, :env, :setup, :conditions ]
+    end
+
     class Program
+      # How long a build or prepare command may run, and a setup or a url
+      # function take, unless the program says otherwise: a phase with no
+      # limit left a run waiting on a command that never ended.
+      DEFAULT_COMMAND_TIMEOUT_MS: ::Integer
+
+      DEFAULT_SETUP_TIMEOUT_MS: ::Integer
+
+      DEFAULT_URL_TIMEOUT_MS: ::Integer
+
+      # What a placeholder names, as the TypeScript engine names them.
+      PLACEHOLDER: ::Regexp
+
       # : (Hash[Symbol, untyped]) -> void
       def initialize: (Hash[Symbol, untyped]) -> void
 
@@ -43,6 +83,30 @@ module Nukadoko
       # : (String) -> Environment
       def environment: (String) -> Environment
 
+      # A read-only environment refuses every step that declares it mutates.
+      # : (String) -> String?
+      def policy: (String) -> String?
+
+      # The environment's version function, whose answer each record names
+      # as target_version.
+      # : (String) -> untyped
+      def version: (String) -> untyped
+
+      # The environment's fields over the top level's. A field the
+      # environment writes replaces the top level's, except env, whose keys
+      # merge with the environment's winning; serve and url are one choice.
+      # : (Environment) -> Recipe
+      def recipe: (Environment) -> Recipe
+
+      # : (untyped, Integer) -> Hash[Symbol, untyped]
+      def self.timed: (untyped, Integer) -> Hash[Symbol, untyped]
+
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def self.reach_of: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+
+      # : (untyped) -> Hash[Symbol, untyped]?
+      def self.setup_of: (untyped) -> Hash[Symbol, untyped]?
+
       # The config's envFiles, then the environment's own: later files win.
       # : (Hash[Symbol, untyped]) -> Array[String]
       def self.env_files: (Hash[Symbol, untyped]) -> Array[String]
@@ -54,13 +118,54 @@ module Nukadoko
       # : () -> String
       def chosen_by: () -> String
 
+      # Each placeholder a world's program names that has no value there,
+      # as `<where> names {<name>}, which has no value here: <why>`: build
+      # runs before any world exists, a world with neither serve nor url has
+      # no port or URL, and a condition must be one the environment declares.
+      # `{events}` is the TypeScript engine's alone, so it never has one here.
+      # : (Recipe) -> Array[String]
+      def self.placeholder_gaps: (Recipe) -> Array[String]
+
+      # : (String, String, Hash[String, untyped]) -> String?
+      def self.absence: (String, String, Hash[String, untyped]) -> String?
+
       # Started, or StartFailed with the world as far as it got, and the
-      # message the run reports as program-start-failed.
-      # : (Environment, String, String) -> World
-      def start: (Environment, String, String) -> World
+      # message the run reports as program-start-failed. A base world that
+      # has no URL of its own raises Unavailable.
+      # : (Environment, String, String, ?tree: String) -> World
+      def start: (Environment, String, String, ?tree: String) -> World
+
+      # What setup receives once its program answers, as the TypeScript
+      # engine's ProgramWorld names it.
+      class SetupWorld < Data
+        attr_reader name(): String
+
+        attr_reader root(): String
+
+        attr_reader dir(): String
+
+        attr_reader tree(): String
+
+        attr_reader url(): String?
+
+        attr_reader port(): Integer?
+
+        attr_reader env(): Hash[String, String]
+
+        def self.new: (String name, String root, String dir, String tree, String? url, Integer? port, Hash[String, String] env) -> instance
+                    | (name: String, root: String, dir: String, tree: String, url: String?, port: Integer?, env: Hash[String, String]) -> instance
+
+        def self.members: () -> [ :name, :root, :dir, :tree, :url, :port, :env ]
+
+        def members: () -> [ :name, :root, :dir, :tree, :url, :port, :env ]
+      end
 
       # Why a world did not start, in the TypeScript engine's words.
       class StartError < StandardError
+      end
+
+      # A base world with no URL to reach: it runs no cell, and nothing failed.
+      class Unavailable < StandardError
       end
 
       # A world that did not start: the message program-start-failed
@@ -83,6 +188,26 @@ module Nukadoko
       # : (String | Array[String]) -> Array[String]
       def self.words: (String | Array[String]) -> Array[String]
 
+      # Each placeholder with its value; one with none is left as written,
+      # which placeholder_gaps has already refused.
+      # : (String, Hash[String, String], Hash[String, untyped]) -> String
+      def self.filled: (String, Hash[String, String], Hash[String, untyped]) -> String
+
+      # Runs one build or prepare command to its end in the tree's root,
+      # its output in the world's log, its process group stopped at its limit.
+      # : (String, Array[String], Integer, Hash[String, String], String, File) -> void
+      def self.run_to_end: (String, Array[String], Integer, Hash[String, String], String, File) -> void
+
+      # The port a request to `url` goes to: the one it writes, or its scheme's.
+      # : (String) -> Integer
+      def self.url_port: (String) -> Integer
+
+      # Why `url` cannot be a world's URL: only http: and https: reach the
+      # world, and a user or a password in it would print in every record.
+      # The reason never quotes the URL, for that password.
+      # : (String) -> String?
+      def self.url_problem: (String) -> String?
+
       # : () -> Integer
       def self.free_port: () -> Integer
 
@@ -94,12 +219,25 @@ module Nukadoko
 
       private
 
-      # : (String, Integer?, String, Environment) -> String
-      def placeholders: (String, Integer?, String, Environment) -> String
+      # The tree's build, once per run: a world whose build already ran for
+      # another world waits on nothing and notes it in its log.
+      # : (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void) -> Integer?
+      def build: (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void) -> Integer?
+
+      # A url function's answer, under its limit, checked by the rule a
+      # written url is checked by when the file is read.
+      # : (Hash[Symbol, untyped], SetupWorld, String) -> String
+      def reach_url: (Hash[Symbol, untyped], SetupWorld, String) -> String
+
+      # Runs a setup or a url function under its limit. Ruby's Timeout stops
+      # it where it is, which the TypeScript engine cannot do.
+      # : [T] (String, Integer) { (Numeric) -> T } -> T
+      def within: [T] (String, Integer) { (Numeric) -> T } -> T
     end
 
     # A started program: where it answers, its env, the prefix of every
-    # trace id its steps carry, and its log. `timings` gains stop_ms at its stop.
+    # trace id its steps carry, and its log. `timings` gains stop_ms at its
+    # stop. `token` is the world's {token}, which every record redacts.
     class World < Data
       attr_reader base_url(): String?
 
@@ -117,12 +255,14 @@ module Nukadoko
 
       attr_reader timings(): Hash[Symbol, Integer]
 
-      def self.new: (String? base_url, Integer? pid, File? log, Hash[String, String] env, String trace_prefix, String? log_path, Array[Hash[Symbol, untyped]] commands, Hash[Symbol, Integer] timings) -> instance
-                  | (base_url: String?, pid: Integer?, log: File?, env: Hash[String, String], trace_prefix: String, log_path: String?, commands: Array[Hash[Symbol, untyped]], timings: Hash[Symbol, Integer]) -> instance
+      attr_reader token(): String
 
-      def self.members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings ]
+      def self.new: (String? base_url, Integer? pid, File? log, Hash[String, String] env, String trace_prefix, String? log_path, Array[Hash[Symbol, untyped]] commands, Hash[Symbol, Integer] timings, String token) -> instance
+                  | (base_url: String?, pid: Integer?, log: File?, env: Hash[String, String], trace_prefix: String, log_path: String?, commands: Array[Hash[Symbol, untyped]], timings: Hash[Symbol, Integer], token: String) -> instance
 
-      def members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings ]
+      def self.members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings, :token ]
+
+      def members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings, :token ]
     end
 
     class World

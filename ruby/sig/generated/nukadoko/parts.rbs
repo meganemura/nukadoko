@@ -14,8 +14,8 @@ module Nukadoko
 
       attr_reader calls: untyped
 
-      # : (singleton(Nukadoko::Step), Hash[Symbol, untyped]) -> void
-      def initialize: (singleton(Nukadoko::Step), Hash[Symbol, untyped]) -> void
+      # : (singleton(Nukadoko::Step), Hash[Symbol, untyped], ?refuse: ^(untyped) -> String?) -> void
+      def initialize: (singleton(Nukadoko::Step), Hash[Symbol, untyped], ?refuse: ^(untyped) -> String?) -> void
 
       # : () -> Proc
       def to_proc: () -> Proc

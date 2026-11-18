@@ -27,9 +27,13 @@ module Nukadoko
       # What the TypeScript engine reads that this one does not yet.
       NOT_YET: untyped
 
+      PROGRAM_KEYS: untyped
+
       TOP_KEYS: untyped
 
       ENVIRONMENT_KEYS: untyped
+
+      COMMAND_KEYS: untyped
 
       # The program with `serve`'s defaults filled, or a Refusal naming
       # each problem, as `Invalid program at <file>: program.<path>: <why>`.
@@ -48,6 +52,23 @@ module Nukadoko
 
       # : (untyped, String, Array[String]) -> untyped
       def self.serve: (untyped, String, Array[String]) -> untyped
+
+      # A build or prepare list: each entry a command, or a command with a
+      # timeout_ms of its own.
+      # : (untyped, String, Array[String]) -> void
+      def self.commands: (untyped, String, Array[String]) -> void
+
+      # : (untyped) -> bool
+      def self.command?: (untyped) -> bool
+
+      # A program nukadoko does not start: a URL, a lambda that returns one,
+      # or `{ resolve:, timeout_ms: }`.
+      # : (untyped, String, Array[String]) -> void
+      def self.url: (untyped, String, Array[String]) -> void
+
+      # A lambda run once the program answers, or `{ run:, timeout_ms: }`.
+      # : (untyped, String, Array[String]) -> void
+      def self.setup: (untyped, String, Array[String]) -> void
 
       # Why `ready` cannot be the path polled on the world's own server: a
       # second "/" or a "\" after the first names another host, which could

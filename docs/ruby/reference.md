@@ -198,6 +198,21 @@ not yet (below). A world whose program does not start runs none of its
 scenarios, and the run fails with `program-start-failed` and the end
 of the world's `program.log`.
 
+A world goes through the phases in the TypeScript engine's order:
+`build` (commands run once per tree per run, before any world), `prepare`
+(commands run once per world, with its env and placeholders), then
+`serve` or `url` (a URL, or a lambda that returns one, for a program
+nukadoko does not start), then `setup` (a lambda that receives the world:
+`name`, `root`, `dir`, `tree`, `url`, `port`, and `env`). A command may
+be `{ command:, timeout_ms: }`, and `setup` and a `url` lambda may be
+`{ run: }` or `{ resolve: }` with a `timeout_ms`. A phase that fails, or
+runs past its limit, stops the world and names itself. An environment
+takes `policy: "read-only"`, which fails every step that declares it
+mutates, and `version:`, a lambda whose String goes into run.json and
+every record as `target_version`. A placeholder a world has no value for
+(`{port}` in a world with neither `serve` nor `url`, anything but
+`{root}` in `build`) is `program-placeholder-unfilled` in `nuka check`.
+
 ## Types and tooling
 
 `nuka sig` writes `sig/nukadoko/steps.rbs`, the RBS of each step's args
@@ -209,9 +224,8 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- In the program: `build`, `prepare`, `setup`, `url` (a program nukadoko
-  does not start), `lists`, `policy`, and the `{events}` placeholder with
-  the execution events it reads.
+- In the program: `lists`, and the `{events}` placeholder with the
+  execution events it reads.
 - On a step: `requires`, `gives`, and `ends` (states), `files` (what a
   command wrote), and `events` (what the program did).
 - What a fixture's `use` returns: the TypeScript engine gives back the

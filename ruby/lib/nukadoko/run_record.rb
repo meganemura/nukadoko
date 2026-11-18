@@ -21,8 +21,8 @@ module Nukadoko
       # the environment, the world, the run, the scenario, and the step's own
       # directory. A record that passed names each step it used; a failed one
       # names what each gave too, since that is what it failed on.
-      #: (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String) -> Hash[Symbol, untyped]
-      def step_file(record, environment:, world_name:, run_id:, scenario_record_id:, evidence_dir:)
+      #: (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String, ?target_version: String?) -> Hash[Symbol, untyped]
+      def step_file(record, environment:, world_name:, run_id:, scenario_record_id:, evidence_dir:, target_version: nil)
         passed = record[:status] == "passed"
         outcome = if passed then { result: record[:result] || {}, returns_dropped: record[:returns_dropped] }.compact
                   else { error: { message: record[:error], kind: record[:error_kind], **(record[:error_at]&.any? ? { at: record[:error_at] } : {}) } }
@@ -34,6 +34,7 @@ module Nukadoko
         { schema_version: SCHEMA_VERSION, nukadoko: VERSION, step_record_id: record[:step_record_id], step: record[:step], kind: "run",
           args: record[:args] || {}, **(record[:args_origin]&.any? ? { args_origin: record[:args_origin] } : {}),
           **outcome, status: record[:status], environment: environment, world_name: world_name,
+          **(target_version ? { target_version: target_version } : {}),
           scenario_record_id: scenario_record_id, run_id: run_id, started_at: record[:started_at], finished_at: record[:finished_at],
           evidence: { dir: evidence_dir, screenshots: [], **(record[:attachments] ? { attachments: record[:attachments] } : {}),
                       **(record[:scratch] ? { scratch: record[:scratch] } : {}),

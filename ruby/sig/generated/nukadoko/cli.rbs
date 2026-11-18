@@ -170,6 +170,12 @@ module Nukadoko
     # : () -> Array[Engine::Finding]
     def env_findings: () -> Array[Engine::Finding]
 
+    # A placeholder a world this invocation starts has no value for fails
+    # that world before its program starts, and the program alone says so.
+    # A world no command of this invocation starts is not checked.
+    # : () -> Array[Engine::Finding]
+    def placeholder_findings: () -> Array[Engine::Finding]
+
     # : (Engine::Refusal) -> Integer
     def refuse: (Engine::Refusal) -> Integer
 

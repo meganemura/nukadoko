@@ -6,20 +6,22 @@ What the program is, how a world starts it, and every field are in
 ## The program
 
 `program:` is a lambda that returns how the program starts. The gem reads
-`serve` (`command`; `port`, `ready`, and `timeout_ms` as in `../program.md`),
-`env`, `environments`, and `defaultEnvironments`, and refuses any other
-key. It has no `build`, `prepare`, `setup`, `url`, `lists`, `policy`, or
-`{events}` yet: run a build before `bundle exec nuka run`, and prepare
-state from the `serve` command itself, which never goes through a shell
-unless it names one:
-`["sh", "-c", "bin/rails db:prepare && bin/rails server -p {port}"]`.
+every field `../program.md` names except `lists` and `{events}`, which it
+refuses by name, and refuses any key it does not know. A command never
+goes through a shell unless it names one (`["sh", "-c", "..."]`).
+`setup`, a `url` that is not a fixed URL, and an environment's `version`
+are lambdas; `setup` and a `url` lambda receive the world (`name`,
+`root`, `dir`, `tree`, and, for `setup`, `url`, `port`, and `env`).
 
 ```ruby
 Nukadoko.config(
   program: -> {
     {
+      build: [["bin/rails", "assets:precompile"]],
+      prepare: [["bin/rails", "db:prepare"]],
       serve: { command: "ruby src/server.rb", ready: "/health" },
-      env: { PORT: "{port}" },
+      env: { PORT: "{port}", DATABASE_URL: "sqlite3:{dir}/db.sqlite3" },
+      setup: ->(world) { Seed.call(world.url) },
     }
   },
 )

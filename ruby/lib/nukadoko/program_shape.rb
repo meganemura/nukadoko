@@ -21,9 +21,11 @@ module Nukadoko
 
       SERVE_KEYS = %i[command port ready timeout_ms].freeze
       # What the TypeScript engine reads that this one does not yet.
-      NOT_YET = %i[build prepare url lists setup policy version].freeze
-      TOP_KEYS = %i[serve env environments defaultEnvironments].freeze
-      ENVIRONMENT_KEYS = %i[serve env conditions envFiles].freeze
+      NOT_YET = %i[lists].freeze
+      PROGRAM_KEYS = %i[build prepare serve url env setup].freeze
+      TOP_KEYS = [*PROGRAM_KEYS, :environments, :defaultEnvironments].freeze
+      ENVIRONMENT_KEYS = [*PROGRAM_KEYS, :conditions, :policy, :envFiles, :version].freeze
+      COMMAND_KEYS = %i[command timeout_ms].freeze
 
       # The program with `serve`'s defaults filled, or a Refusal naming
       # each problem, as `Invalid program at <file>: program.<path>: <why>`.
@@ -61,6 +63,14 @@ module Nukadoko
         end
         read = level.dup
         read[:serve] = serve(level[:serve], at.(:serve), issues) if level.key?(:serve)
+        %i[build prepare].each { commands(level[_1], at.(_1), issues) if level.key?(_1) }
+        url(level[:url], at.(:url), issues) if level.key?(:url)
+        setup(level[:setup], at.(:setup), issues) if level.key?(:setup)
+        if level.key?(:serve) && level.key?(:url)
+          issues << "#{at.(:url)}: serve and url are two ways to reach the program: serve starts it, url names one nukadoko does not start. Keep one."
+        end
+        issues << %(#{at.(:policy)}: must be "read-only") if level.key?(:policy) && level[:policy].to_s != "read-only"
+        issues << "#{at.(:version)}: must be a lambda returning a String" if level.key?(:version) && !level[:version].respond_to?(:call)
         env(level[:env], at.(:env), issues) if level.key?(:env)
         conditions(level[:conditions], at.(:conditions), issues) if level.key?(:conditions)
         if level.key?(:envFiles) && !(level[:envFiles].is_a?(Array) && level[:envFiles].all?(String))
@@ -85,11 +95,7 @@ module Nukadoko
         end
         unknown = serve.keys.map(&:to_sym) - SERVE_KEYS
         issues << "unknown key(s): #{unknown.map { described(_1, SERVE_KEYS) }.join(", ")}" if unknown.any?
-        command = serve[:command]
-        words = command.is_a?(Array) ? command : command.to_s.split
-        unless (command.is_a?(String) || (command.is_a?(Array) && command.all?(String))) && !words.first.to_s.empty?
-          issues << "#{at}.command: must name a program to run, as a String or an Array of words"
-        end
+        issues << "#{at}.command: must name a program to run, as a String or an Array of words" unless command?(serve[:command])
         port = serve.fetch(:port, "auto")
         unless port == "auto" || (port.is_a?(Integer) && port.between?(1, 65_535))
           issues << %(#{at}.port: must be "auto" or a port number from 1 to 65535)
@@ -101,6 +107,63 @@ module Nukadoko
         problem = timeout_problem(timeout)
         issues << "#{at}.timeout_ms: #{problem}" if problem
         { **serve, port: port, ready: ready, timeout_ms: timeout }
+      end
+
+      # A build or prepare list: each entry a command, or a command with a
+      # timeout_ms of its own.
+      #: (untyped, String, Array[String]) -> void
+      def self.commands(list, at, issues)
+        return issues << "#{at}: must be an Array of commands" unless list.is_a?(Array)
+
+        list.each_with_index do |entry, index|
+          where = "#{at}.#{index}"
+          if entry.is_a?(Hash)
+            unknown = entry.keys.map(&:to_sym) - COMMAND_KEYS
+            issues << "unknown key(s): #{unknown.map { described(_1, COMMAND_KEYS) }.join(", ")}" if unknown.any?
+            problem = entry.key?(:timeout_ms) ? timeout_problem(entry[:timeout_ms]) : nil
+            issues << "#{where}.timeout_ms: #{problem}" if problem
+            entry = entry[:command]
+            where = "#{where}.command"
+          end
+          issues << "#{where}: must name a program to run, as a String or an Array of words" unless command?(entry)
+        end
+      end
+
+      #: (untyped) -> bool
+      def self.command?(command)
+        words = command.is_a?(Array) ? command : command.to_s.split
+        (command.is_a?(String) || (command.is_a?(Array) && command.all?(String))) && !words.first.to_s.empty?
+      end
+
+      # A program nukadoko does not start: a URL, a lambda that returns one,
+      # or `{ resolve:, timeout_ms: }`.
+      #: (untyped, String, Array[String]) -> void
+      def self.url(url, at, issues)
+        if url.is_a?(String)
+          problem = Program.url_problem(url)
+          issues << "#{at}: #{problem}" if problem
+        elsif url.is_a?(Hash)
+          unknown = url.keys.map(&:to_sym) - %i[resolve timeout_ms]
+          issues << "unknown key(s): #{unknown.map { described(_1, %i[resolve timeout_ms]) }.join(", ")}" if unknown.any?
+          issues << "#{at}.resolve: must be a lambda returning a URL" unless url[:resolve].respond_to?(:call)
+          problem = url.key?(:timeout_ms) ? timeout_problem(url[:timeout_ms]) : nil
+          issues << "#{at}.timeout_ms: #{problem}" if problem
+        elsif !url.respond_to?(:call)
+          issues << "#{at}: must be a URL or a lambda returning one"
+        end
+      end
+
+      # A lambda run once the program answers, or `{ run:, timeout_ms: }`.
+      #: (untyped, String, Array[String]) -> void
+      def self.setup(setup, at, issues)
+        return if setup.respond_to?(:call)
+        return issues << "#{at}: must be a lambda" unless setup.is_a?(Hash)
+
+        unknown = setup.keys.map(&:to_sym) - %i[run timeout_ms]
+        issues << "unknown key(s): #{unknown.map { described(_1, %i[run timeout_ms]) }.join(", ")}" if unknown.any?
+        issues << "#{at}.run: must be a lambda" unless setup[:run].respond_to?(:call)
+        problem = setup.key?(:timeout_ms) ? timeout_problem(setup[:timeout_ms]) : nil
+        issues << "#{at}.timeout_ms: #{problem}" if problem
       end
 
       # Why `ready` cannot be the path polled on the world's own server: a

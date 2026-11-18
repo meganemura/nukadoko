@@ -4,10 +4,15 @@
 require "socket"
 require "shellwords"
 require "net/http"
+require "securerandom"
+require "timeout"
 
 # How the program under test starts, once per environment: an environment
 # is a world of its own, with its own port, directory, and process, so one
-# environment's state never reaches another's scenarios.
+# environment's state never reaches another's scenarios. A world goes
+# through the TypeScript engine's phases in its order: build (once per
+# tree per run), prepare, serve or url, then setup. Each phase has a limit,
+# and a phase past it, or one that fails, stops the world and names itself.
 module Nukadoko
   module Engine
     Environment = Data.define(
@@ -17,10 +22,34 @@ module Nukadoko
       :env_files, #: Array[String]
     )
 
+    # One environment's program, its layer over the top level applied and
+    # each limit filled. `reach` is how the world reaches its program:
+    # `{ kind: "serve", serve: }`, `{ kind: "url", url:, timeout_ms: }`, or
+    # `{ kind: "none" }`.
+    Recipe = Data.define(
+      :build, #: Array[Hash[Symbol, untyped]]
+      :prepare, #: Array[Hash[Symbol, untyped]]
+      :reach, #: Hash[Symbol, untyped]
+      :env, #: Hash[String, String]
+      :setup, #: Hash[Symbol, untyped]?
+      :conditions, #: Hash[String, untyped]
+    )
+
     class Program
+      # How long a build or prepare command may run, and a setup or a url
+      # function take, unless the program says otherwise: a phase with no
+      # limit left a run waiting on a command that never ended.
+      DEFAULT_COMMAND_TIMEOUT_MS = 600_000
+      DEFAULT_SETUP_TIMEOUT_MS = 60_000
+      DEFAULT_URL_TIMEOUT_MS = 60_000
+      # What a placeholder names, as the TypeScript engine names them.
+      PLACEHOLDER = /\{(port|url|dir|root|world|token|events|condition\.[A-Za-z0-9_.-]+)\}/
+
       #: (Hash[Symbol, untyped]) -> void
       def initialize(options)
         @options = options
+        # Each tree's build runs once however many worlds it serves.
+        @builds = {} #: Hash[String, [String, String?]]
       end
 
       # The worlds a run starts: each --env in the order given; without one,
@@ -56,6 +85,58 @@ module Nukadoko
         Environment.new(name, (e[:conditions] || {}).transform_keys(&:to_s), e[:env] || {}, Program.env_files(e))
       end
 
+      # A read-only environment refuses every step that declares it mutates.
+      #: (String) -> String?
+      def policy(name) = declared.dig(name, :policy)&.to_s
+
+      # The environment's version function, whose answer each record names
+      # as target_version.
+      #: (String) -> untyped
+      def version(name) = declared.dig(name, :version)
+
+      # The environment's fields over the top level's. A field the
+      # environment writes replaces the top level's, except env, whose keys
+      # merge with the environment's winning; serve and url are one choice.
+      #: (Environment) -> Recipe
+      def recipe(environment)
+        e = declared[environment.name] || {}
+        pick = ->(key) { e.key?(key) ? e[key] : @options[key] }
+        Recipe.new(
+          build: Array(pick.(:build)).map { Program.timed(_1, DEFAULT_COMMAND_TIMEOUT_MS) },
+          prepare: Array(pick.(:prepare)).map { Program.timed(_1, DEFAULT_COMMAND_TIMEOUT_MS) },
+          reach: Program.reach_of(e) || Program.reach_of(@options) || { kind: "none" },
+          env: (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, v.to_s] },
+          setup: Program.setup_of(pick.(:setup)),
+          conditions: environment.conditions
+        )
+      end
+
+      #: (untyped, Integer) -> Hash[Symbol, untyped]
+      def self.timed(entry, timeout_ms)
+        return { command: words(entry), timeout_ms: timeout_ms } unless entry.is_a?(Hash)
+
+        { command: words(entry[:command]), timeout_ms: entry[:timeout_ms] || timeout_ms }
+      end
+
+      #: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def self.reach_of(fields)
+        return { kind: "serve", serve: fields[:serve] } if fields[:serve]
+
+        url = fields[:url]
+        return nil if url.nil?
+        return { kind: "url", url: url[:resolve], timeout_ms: url[:timeout_ms] || DEFAULT_URL_TIMEOUT_MS } if url.is_a?(Hash)
+
+        { kind: "url", url: url, timeout_ms: DEFAULT_URL_TIMEOUT_MS }
+      end
+
+      #: (untyped) -> Hash[Symbol, untyped]?
+      def self.setup_of(setup)
+        return nil if setup.nil?
+        return { run: setup[:run], timeout_ms: setup[:timeout_ms] || DEFAULT_SETUP_TIMEOUT_MS } if setup.is_a?(Hash)
+
+        { run: setup, timeout_ms: DEFAULT_SETUP_TIMEOUT_MS }
+      end
+
       # The config's envFiles, then the environment's own: later files win.
       #: (Hash[Symbol, untyped]) -> Array[String]
       def self.env_files(environment) = [*Nukadoko.config_options[:envFiles], *environment[:envFiles]].map(&:to_s)
@@ -77,53 +158,158 @@ module Nukadoko
         end
       end
 
-      # Started, or StartFailed with the world as far as it got, and the
-      # message the run reports as program-start-failed.
-      #: (Environment, String, String) -> World
-      def start(environment, dir, project)
-        serve = @options[:serve]
-        port = (serve[:port] == "auto" ? Program.free_port : serve[:port]) if serve
-        fill = ->(text) { placeholders(text.to_s, port, dir, environment) }
-        # The world's env is what its program and the steps' env fixture get.
-        env = (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, fill.(v)] }.freeze
-        prefix = Trace.new_prefix
-        unless serve
-          return World.new(base_url: nil, pid: nil, log: nil, env: env, trace_prefix: prefix, log_path: nil, commands: [], timings: {})
-        end
-
-        log_path = File.join(dir, "program.log")
-        log = File.open(log_path, "w")
-        log.sync = true
-        # A command is an argv array, or a string split on whitespace, as in
-        # the TypeScript engine; neither goes through a shell, so what runs
-        # does not depend on the host's shell. A program that needs one
-        # writes ["sh", "-c", "..."].
-        argv = Program.words(serve[:command]).map { fill.(_1) }
-        world = World.new(base_url: "http://localhost:#{port}", pid: nil, log: log, env: env, trace_prefix: prefix, log_path: log_path,
-                          commands: [{ phase: "serve", argv: argv }], timings: {})
-        begin
-          Program.unanswered(port.to_i) unless serve[:port] == "auto"
-          log.puts "$ #{Program.display(argv)}"
-          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          begin
-            pid = Process.spawn(env, [argv.first, argv.first], *argv.drop(1), out: log, err: log, pgroup: true, chdir: project)
-          rescue SystemCallError => e
-            raise StartError, "serve command #{Program.display(argv)} could not start: #{e.message}"
+      # Each placeholder a world's program names that has no value there,
+      # as `<where> names {<name>}, which has no value here: <why>`: build
+      # runs before any world exists, a world with neither serve nor url has
+      # no port or URL, and a condition must be one the environment declares.
+      # `{events}` is the TypeScript engine's alone, so it never has one here.
+      #: (Recipe) -> Array[String]
+      def self.placeholder_gaps(recipe)
+        kind = recipe.reach[:kind]
+        fields = [
+          *recipe.build.each_with_index.map { |entry, i| ["build[#{i}]", entry[:command], "build"] },
+          *recipe.prepare.each_with_index.map { |entry, i| ["prepare[#{i}]", entry[:command], kind] },
+          *(kind == "serve" ? [["serve.command", words(recipe.reach[:serve][:command]), kind]] : []),
+          *recipe.env.map { |key, value| ["env.#{key}", [value], kind] }
+        ] #: Array[[String, Array[String], String]]
+        fields.flat_map do |where, texts, reach|
+          texts.flat_map { _1.scan(PLACEHOLDER).flatten }.uniq.filter_map do |name|
+            why = absence(name, reach, recipe.conditions)
+            "#{where} names {#{name}}, which has no value here: #{why}" if why
           end
-          world = world.with(pid: pid)
-          world.wait_ready(serve[:ready], serve[:timeout_ms], argv)
-          world.timings[:serve_ms] = Request.since(started)
+        end
+      end
+
+      #: (String, String, Hash[String, untyped]) -> String?
+      def self.absence(name, reach, conditions)
+        return name == "root" ? nil : "build runs once per tree, before any world exists" if reach == "build"
+        if name.start_with?("condition.")
+          condition = name.delete_prefix("condition.")
+          return conditions.key?(condition) ? nil : %(its environment declares no condition "#{condition}" under conditions)
+        end
+        return "the Ruby engine reads no execution events yet" if name == "events"
+        return "this world has neither serve nor url" if %w[port url].include?(name) && reach == "none"
+
+        nil
+      end
+
+      # Started, or StartFailed with the world as far as it got, and the
+      # message the run reports as program-start-failed. A base world that
+      # has no URL of its own raises Unavailable.
+      #: (Environment, String, String, ?tree: String) -> World
+      def start(environment, dir, project, tree: "head")
+        recipe = self.recipe(environment)
+        reach = recipe.reach
+        token = SecureRandom.hex(16)
+        prefix = Trace.new_prefix
+        log_path = File.join(dir, "program.log")
+        world = World.new(base_url: nil, pid: nil, log: nil, env: {}, trace_prefix: prefix, log_path: nil, commands: [], timings: {}, token: token)
+        begin
+          gap = Program.placeholder_gaps(recipe).first
+          raise StartError, gap if gap
+          if tree == "base" && reach[:kind] == "url" && !reach[:url].respond_to?(:call)
+            raise Unavailable, "its url is a fixed URL, where head's code runs, and only a url function can say where the base's code runs"
+          end
+
+          log = nil #: File?
+          open_log = lambda do
+            file = log || File.open(log_path, "w").tap { _1.sync = true }
+            log = file
+            world = world.with(log: file, log_path: log_path)
+            file
+          end
+          run_command = lambda do |phase, argv, timeout_ms, env|
+            world.commands << { phase: phase, argv: argv }
+            Program.run_to_end(phase, argv, timeout_ms, env, project, open_log.())
+          end
+
+          built = build(recipe, project, environment.name, open_log, run_command)
+          world.timings[:build_ms] = built if built
+          place = SetupWorld.new(name: environment.name, root: project, dir: dir, tree: tree, url: nil, port: nil, env: {})
+          port = nil #: Integer?
+          url = nil #: String?
+          case reach[:kind]
+          when "serve"
+            serve = reach[:serve]
+            port = serve[:port] == "auto" ? Program.free_port : Program.unanswered(serve[:port].to_i)
+            url = "http://localhost:#{port}"
+          when "url"
+            url = reach_url(reach, place, tree)
+            port = Program.url_port(url)
+          end
+          values = { "root" => project, "dir" => dir, "world" => environment.name, "token" => token, "port" => port&.to_s, "url" => url }.compact
+          fill = ->(text) { Program.filled(text.to_s, values, recipe.conditions) }
+          env = recipe.env.transform_values { fill.(_1) }.freeze
+          world = world.with(base_url: url, env: env)
+
+          unless recipe.prepare.empty?
+            started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            recipe.prepare.each { run_command.("prepare", _1[:command].map { |word| fill.(word) }, _1[:timeout_ms], env) }
+            world.timings[:prepare_ms] = Request.since(started)
+          end
+
+          if reach[:kind] == "serve"
+            serve = reach[:serve]
+            # A command is an argv array, or a string split on whitespace, as
+            # in the TypeScript engine; neither goes through a shell, so what
+            # runs does not depend on the host's shell. A program that needs
+            # one writes ["sh", "-c", "..."].
+            argv = Program.words(serve[:command]).map { fill.(_1) }
+            world.commands << { phase: "serve", argv: argv }
+            out = open_log.()
+            out.puts "$ #{Program.display(argv)}"
+            started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            begin
+              pid = Process.spawn(env, [argv.first, argv.first], *argv.drop(1), out: out, err: out, pgroup: true, chdir: project)
+            rescue SystemCallError => e
+              raise StartError, "serve command #{Program.display(argv)} could not start: #{e.message}"
+            end
+            world = world.with(pid: pid)
+            world.wait_ready(serve[:ready], serve[:timeout_ms], argv)
+            world.timings[:serve_ms] = Request.since(started)
+          end
+
+          if (setup = recipe.setup)
+            started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            open_log.().puts "# setup"
+            within("setup", setup[:timeout_ms]) do
+              setup[:run].call(SetupWorld.new(name: environment.name, root: project, dir: dir, tree: tree, url: url, port: port, env: env.dup))
+            rescue StartError, Timeout::Error
+              raise
+            rescue StandardError => e
+              raise StartError, "setup threw: #{e.message}"
+            end
+            world.timings[:setup_ms] = Request.since(started)
+          end
           world
+        rescue Unavailable
+          world.stop
+          raise
         rescue StartError => e
           world.stop
-          tail = File.readlines(log_path).last(20).join.chomp
+          tail = world.log_path ? File.readlines(log_path).last(20).join.chomp : ""
           message = "the program did not start for world #{environment.name}: #{e.message}#{". The end of #{log_path.delete_prefix("#{project}/")}:\n#{tail}" unless tail.empty?}"
           raise StartFailed.new(message, world, e.message)
         end
       end
 
+      # What setup receives once its program answers, as the TypeScript
+      # engine's ProgramWorld names it.
+      SetupWorld = Data.define(
+        :name, #: String
+        :root, #: String
+        :dir, #: String
+        :tree, #: String
+        :url, #: String?
+        :port, #: Integer?
+        :env, #: Hash[String, String]
+      )
+
       # Why a world did not start, in the TypeScript engine's words.
       class StartError < StandardError; end
+
+      # A base world with no URL to reach: it runs no cell, and nothing failed.
+      class Unavailable < StandardError; end
 
       # A world that did not start: the message program-start-failed
       # carries, and the world as far as it got, which run.json names with
@@ -148,6 +334,68 @@ module Nukadoko
       #: (String | Array[String]) -> Array[String]
       def self.words(command) = command.is_a?(Array) ? command.map(&:to_s) : command.to_s.split
 
+      # Each placeholder with its value; one with none is left as written,
+      # which placeholder_gaps has already refused.
+      #: (String, Hash[String, String], Hash[String, untyped]) -> String
+      def self.filled(text, values, conditions)
+        text.gsub(PLACEHOLDER) do
+          name = Regexp.last_match(1).to_s
+          name.start_with?("condition.") ? conditions.fetch(name.delete_prefix("condition."), "").to_s : values.fetch(name, "{#{name}}")
+        end
+      end
+
+      # Runs one build or prepare command to its end in the tree's root,
+      # its output in the world's log, its process group stopped at its limit.
+      #: (String, Array[String], Integer, Hash[String, String], String, File) -> void
+      def self.run_to_end(phase, argv, timeout_ms, env, root, log)
+        shown = display(argv)
+        log.puts "$ #{shown}"
+        begin
+          pid = Process.spawn(env, [argv.first, argv.first], *argv.drop(1), out: log, err: log, pgroup: true, chdir: root)
+        rescue SystemCallError => e
+          raise StartError, "#{phase} command #{shown} could not start: #{e.message}"
+        end
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + (timeout_ms / 1000.0)
+        loop do
+          _, status = Process.waitpid2(pid, Process::WNOHANG)
+          if status
+            return if status.success?
+
+            exit = status.signaled? ? "on SIG#{Signal.signame(status.termsig.to_i)}" : "with code #{status.exitstatus}"
+            raise StartError, "#{phase} command #{shown} exited #{exit}"
+          end
+          if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+            begin
+              Process.kill("TERM", -pid)
+              Process.wait(pid)
+            rescue Errno::ESRCH, Errno::ECHILD, Errno::EPERM
+              nil
+            end
+            raise StartError, "#{phase} command #{shown} did not finish within #{timeout_ms} ms (timeout_ms)"
+          end
+          sleep 0.05
+        end
+      end
+
+      # The port a request to `url` goes to: the one it writes, or its scheme's.
+      #: (String) -> Integer
+      def self.url_port(url) = URI(url).port || (url.start_with?("https:") ? 443 : 80)
+
+      # Why `url` cannot be a world's URL: only http: and https: reach the
+      # world, and a user or a password in it would print in every record.
+      # The reason never quotes the URL, for that password.
+      #: (String) -> String?
+      def self.url_problem(url)
+        http = 'must be an http: or https: URL, such as "http://localhost:3000"'
+        parsed = URI.parse(url)
+        return http unless %w[http https].include?(parsed.scheme) && parsed.host && !parsed.host.empty?
+        return nil unless parsed.userinfo
+
+        "must not hold a user or a password: every record names the world's URL; a step sends credentials itself, from an env file"
+      rescue URI::InvalidURIError
+        http
+      end
+
       #: () -> Integer
       def self.free_port
         server = TCPServer.new("127.0.0.1", 0)
@@ -169,16 +417,63 @@ module Nukadoko
 
       private
 
-      #: (String, Integer?, String, Environment) -> String
-      def placeholders(text, port, dir, environment)
-        text.gsub("{port}", port.to_s).gsub("{dir}", dir).gsub(/\{condition\.([\w.-]+)\}/) do
-          environment.conditions.fetch(Regexp.last_match(1), "").to_s
+      # The tree's build, once per run: a world whose build already ran for
+      # another world waits on nothing and notes it in its log.
+      #: (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void) -> Integer?
+      def build(recipe, project, name, open_log, run_command)
+        return if recipe.build.empty?
+
+        commands = recipe.build.map { |entry| [entry[:command].map { Program.filled(_1, { "root" => project }, {}) }, entry[:timeout_ms]] }
+        key = JSON.generate([project, commands.map(&:first)])
+        if (earlier = @builds[key])
+          open_log.().puts "# build: the same commands already ran for world #{earlier[0]}"
+          raise StartError, "the build failed in world #{earlier[0]}" if earlier[1]
+
+          return
         end
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        begin
+          commands.each { |argv, timeout_ms| run_command.("build", argv, timeout_ms, ENV.to_h) }
+        rescue StartError
+          @builds[key] = [name, "failed"]
+          raise
+        end
+        @builds[key] = [name, nil]
+        Request.since(started)
+      end
+
+      # A url function's answer, under its limit, checked by the rule a
+      # written url is checked by when the file is read.
+      #: (Hash[Symbol, untyped], SetupWorld, String) -> String
+      def reach_url(reach, place, tree)
+        url = reach[:url]
+        return url.to_s unless url.respond_to?(:call)
+
+        answer = within("the url function", reach[:timeout_ms]) { url.call(place) }
+        if answer.nil? || answer.to_s.empty?
+          raise Unavailable, "its url function gave no URL for the base" if tree == "base"
+
+          raise StartError, "the url function gave no URL"
+        end
+        problem = Program.url_problem(answer.to_s)
+        raise StartError, "the url function's answer #{problem}" if problem
+
+        answer.to_s
+      end
+
+      # Runs a setup or a url function under its limit. Ruby's Timeout stops
+      # it where it is, which the TypeScript engine cannot do.
+      #: [T] (String, Integer) { (Numeric) -> T } -> T
+      def within(what, timeout_ms, &)
+        Timeout.timeout(timeout_ms / 1000.0, &)
+      rescue Timeout::Error
+        raise StartError, "#{what} did not finish within #{timeout_ms} ms (timeout_ms)"
       end
     end
 
     # A started program: where it answers, its env, the prefix of every
-    # trace id its steps carry, and its log. `timings` gains stop_ms at its stop.
+    # trace id its steps carry, and its log. `timings` gains stop_ms at its
+    # stop. `token` is the world's {token}, which every record redacts.
     World = Data.define(
       :base_url, #: String?
       :pid, #: Integer?
@@ -188,6 +483,7 @@ module Nukadoko
       :log_path, #: String?
       :commands, #: Array[Hash[Symbol, untyped]]
       :timings, #: Hash[Symbol, Integer]
+      :token, #: String
     )
 
     class World
