@@ -24,6 +24,18 @@
 プログラムの起動のしかたを返す関数です。
 nukadoko は run ごとに専用の空いているポートでそれを起動し、応答するまで待ち、すべての step の request をそこへ送り、シナリオの後に止めます:
 
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "ruby src/server.rb" },
+      env: { PORT: "{port}" },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -46,11 +58,10 @@ stderr の 1 行が URL と `program.log` を示します。
 それでも、同時に動く 2 つの run が同じポートを取り合うことはありえます。
 そのとき待ち受けられずに終わったサーバは、その world を失敗させます。
 もう一方の run のサーバがすでに準備の確認に答えていたなら、world が止まるときに `program-exited` として報告されます。
-同じファイルには、`build` と `prepare` のコマンド、run ごとのデータベースのための専用ディレクトリ(`{dir}`)、nukadoko が起動しないサーバのための `url` も書けます。
+TypeScript エンジンのプログラムには、`build` と `prepare` のコマンド、run ごとのデータベースのための専用ディレクトリ(`{dir}`)、nukadoko が起動しないサーバのための `url` も書けます。
 すべてのフィールドは [docs/spec.ja.md](spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」にあります。
-このファイルは config と並べて commit します。
 
-ここでの `src/server.ts` は `/greet/<name>` に `Hello, <name>!` というテキストで答えます。
+ここでのサーバは `/greet/<name>` に `Hello, <name>!` というテキストで答えます。
 次の feature があるとします:
 
 ```gherkin
@@ -63,30 +74,48 @@ Feature: greet API
 ```
 
 When の step とその Then を scaffold するだけで、編集なしでシナリオが動きます。
-When の step は Playwright の `request` で request を送るので、`playwright` もインストールしてください:
+When の step は `request` fixture で request を送ります。
+TypeScript ではそれは Playwright の `request` なので、`playwright` もインストールしてください([Install](../README.ja.md#install))。
 
 ```sh
-npm install -D -E playwright@1.63.0
-npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
-npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
+nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
+nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
 ```
 
-`get-greeting` は ``request.fetch(`/greet/${name}`, { method: "GET" })`` の呼び出し 1 つで、`status` と `body`(レスポンスのテキスト)を返します。
+`get-greeting` は `request` の `GET` の呼び出し 1 つで、`status` と `body`(レスポンスのテキスト)を返します。
 各 request は step record の `http.jsonl` に記録されます。
 
 `--request "<METHOD> <path>"` は path をプログラムの URL を基準に解決します。
 path の中の `{key}` はその args キーの値で、そのまま埋め込まれます。
 `--body <key>` は args キー(たとえばその行の `docstring`)を request の data として送ります。
 request が読まない値は、置き場所が決まるまで名前を挙げて throw します。
-step は `mutates: true` を書きます。
-メソッドは書き込みの意味の代わりにすぎないので、`false` にするのは作者です。
+step は、変更する step だと宣言します。
+メソッドは書き込みの意味の代わりにすぎないので、変更しないと言うのは作者です。
 
 ## Calling the program with fetch
 
 **fetch でプログラムを呼ぶ**
 
-step は代わりに `fetch` でプログラムを呼ぶこともでき、その場合は何もインストールする必要がありません。
-`baseURL` は、上のプログラムから nukadoko が起動したプログラムの URL です:
+step は代わりに言語そのものの HTTP クライアント(Ruby では `Net::HTTP`、TypeScript では `fetch`)でプログラムを呼ぶこともでき、その場合は何もインストールする必要がありません。
+`base_url`(TypeScript では `baseURL`)は、上のプログラムから nukadoko が起動したプログラムの URL です:
+
+```ruby
+# features/steps/get_greeting.rb
+class GetGreeting < Nukadoko::Step
+  description "GET /greet/<name> from the program under test"
+  pattern "I request the greeting for {name:string}"
+  args { string :name }
+  returns do
+    number :status
+    string :message
+  end
+
+  def run(base_url:, args:)
+    response = Net::HTTP.get_response(URI("#{base_url}/greet/#{URI.encode_www_form_component(args.name)}"))
+    { status: response.code.to_i, message: JSON.parse(response.body)["message"] }
+  end
+end
+```
 
 ```ts
 // features/steps/get-greeting.ts
@@ -232,6 +261,7 @@ feature 行のテキスト自体は変わりません。
 Before(cucumber-js、位置キャプチャ、型なし、World への stash):
 World は、cucumber-js があらゆる step に与える、scenario ごとの `this` オブジェクトです。
 
+<!-- engine: typescript -->
 ```ts
 // features/steps/project.ts (cucumber-js)
 import { Given } from "@cucumber/cucumber";
@@ -243,7 +273,25 @@ Given("a project {string} exists", async function (name: string) {
 });
 ```
 
-After(`defineStep`、named capture、zod、step record 付き):
+After(nukadoko の step、named capture、スキーマ、step record 付き):
+
+```ruby
+# features/steps/create_project.rb
+class CreateProject < Nukadoko::Step
+  pattern "a project {name:string} exists"
+  description "Create a project and return its id"
+  args { string :name }
+  returns do
+    string :id
+    string :name
+  end
+  mutates true
+
+  def run(request:, args:)
+    request.post("/projects", data: { name: args.name }).json
+  end
+end
+```
 
 ```ts
 // features/steps/create-project.ts
@@ -265,14 +313,15 @@ export default defineStep({
 - named capture(`{name:string}`)は、値を名前で `args.name` に結び付けます。
   位置キャプチャでは、同じ型の値 2 つを pattern 内で入れ替えると、どちらの値がどこに入るかが黙って入れ替わります。
   `nuka check` は、それが起きる前に、裸の `{string}` もエラーとして検出します。
-- `args` と `returns` は、実行境界でバリデーションされる zod のスキーマです。
+- `args` と `returns` は、実行境界でバリデーションされるスキーマです。
   step record の `result` は、step が返しただけのものではなく、ツールがバリデーション済みのものです。
-  上の `z` は nukadoko 自身から来るので、zod を別途インストールする必要はありません。
+  TypeScript ではスキーマは zod で、`z` は nukadoko 自身から来るので、zod を別途インストールする必要はありません。
   自分のプロジェクトですでに zod を使っていて、そちらのスキーマを渡す場合は、そのスキーマが zod 4 である必要があります。
-- 上の `request`(そして browser の step 向けの `page`)は、`run` の第一引数である fixture bag から直接分割代入されたものです。
-  step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません(そうした step を持たないプロジェクトは、[Install](../README.ja.md#install) のとおり Playwright そのものをインストールしません)。
-  どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。
+- 上の `request`(そして browser の step 向けの `page`)は、step が `run` の引数で名指す fixture です。
+  step が実際に名指した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません(そうした step を持たないプロジェクトは、[Install](../README.ja.md#install) のとおり Playwright そのものをインストールしません)。
+  `page` は Playwright 自身の `Page` であり、nukadoko 独自のラッパーではありません。
   そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
+  TypeScript では `request` も Playwright の `APIRequestContext` です。
 - 上の `request.post("/projects", ...)` は、その相対パスを、config の `program` が起動するか名指すプログラムの URL に対して解決します([An HTTP API](#an-http-api))。
   プログラムがなければ、絶対 URL しか通りません。
 - `nuka do create-project --args '{"name":"acme"}'` は、この step だけを実行して step record を出力します。
@@ -616,6 +665,14 @@ seed は stderr、`run.json`、サマリに出て、`--order shuffled:<seed>` �
 `run.json` は断定の表を持ちます。
 受け入れ基準ごとに 1 行、environment ごとに 1 つのセルで、サマリはこの表で始まります。
 environment はプログラムのスイッチを `conditions` として宣言でき、`--env` の無い run はそれを宣言するすべての environment、またはプログラムの `defaultEnvironments` が名指す environment を走らせます:
+
+```ruby
+env: { BANNER: "{condition.banner}" },
+environments: {
+  "banner-off": { conditions: { banner: false } },
+  "banner-on": { conditions: { banner: true } },
+},
+```
 
 ```ts
 env: { BANNER: "{condition.banner}" },

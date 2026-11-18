@@ -17,6 +17,11 @@ npm install -D nukadoko
 npx nuka init
 ```
 
+`init` は `package.json` に `test:scenarios` script も追加します。
+人も CI も、この 1 つのコマンドを実行します。
+`tsconfig.json` の `include` には steps と config を追加し、`.ts` ファイルを名指しする import を `tsc` が受け付けるためのコンパイラオプションも追加します。
+CommonJS の場合と `--allure` フラグは [Setup details](../guide.ja.md#setup-details) にあります。
+
 Playwright は省略できる peer dependency で、`page` か `request` を使う step だけが必要とします。
 
 ```sh
@@ -61,6 +66,10 @@ export default defineStep({
 `mutates: false` は、何も変えない step であることを宣言します。
 step ファイルは、別の step を `.ts` まで含めたファイル名で import します。
 Node が型を取り除いて実行するので、`enum`、`namespace`、コンストラクタの parameter property は読み込めません([spec](../spec.ja.md#型付き-step) の「型付き step」)。
+
+`nuka scaffold --command` が書く step は、エントリポイントを `node` そのもので実行します。
+そのため、`.ts` ファイルどうしが `.js` の specifier で import し合うプロジェクトでは、エントリポイントはビルドした後のプログラム(たとえば `--command dist/cli.js`)で、`"pretest:scenarios": "npm run build"` があれば、clone した直後のチェックアウトでも green になります。
+`.ts` のエントリポイントが import する `.js` ファイルがなく、その横に `.ts` ファイルがあるときは、scaffold が拒否します。
 
 ## フィールドとスキーマ
 

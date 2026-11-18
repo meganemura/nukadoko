@@ -17,6 +17,12 @@ npm install -D nukadoko
 npx nuka init
 ```
 
+`init` also adds a `test:scenarios` script to `package.json` (the one
+command a person or CI runs), and the steps and the config to the
+`include` of `tsconfig.json`, with the compiler option that lets `tsc`
+accept an import that names a `.ts` file. The CommonJS case and the
+`--allure` flag are in [Setup details](../guide.md#setup-details).
+
 Playwright is an optional peer dependency, needed only by a step that
 uses `page` or `request`:
 
@@ -63,6 +69,13 @@ export default defineStep({
 imports another by its own file name, `.ts` included. Node strips the
 types, so an `enum`, a `namespace`, and a constructor parameter property
 do not load ("Typed steps" in [the spec](../spec.md#typed-steps)).
+
+A step that `nuka scaffold --command` writes runs the entry point with
+`node` itself. In a project whose `.ts` files import each other with `.js`
+specifiers, the entry point is the built program (for example `--command
+dist/cli.js`), and `"pretest:scenarios": "npm run build"` keeps a fresh
+checkout green; the scaffold refuses a `.ts` entry point that imports a
+`.js` file which is absent while its `.ts` sibling is present.
 
 ## Fields and schemas
 

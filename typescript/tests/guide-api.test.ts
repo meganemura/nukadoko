@@ -8,9 +8,11 @@ import { httpLogLines, latestRunJson, repoRoot, sharedRoot, stepRecordDir, witho
 
 // Responsibility: the two HTTP sections of docs/guide.md work as written.
 //
-// "An HTTP API": its program, its install line, and its two scaffold
-// lines, run as written in a project with Playwright after a plain
-// `nuka init`, take its feature to green against the program nukadoko
+// Each example there is a `ruby` block followed by its `ts` twin; this
+// test runs the `ts` ones, and the Ruby engine's tests run the others.
+//
+// "An HTTP API": its program and its two scaffold lines, run as written in
+// a project with Playwright after a plain `nuka init`, take its feature to green against the program nukadoko
 // starts, with the request counted.
 //
 // "Calling the program with fetch": that section's When step, beside the
@@ -141,8 +143,8 @@ beforeAll(async () => {
   await writeFile(path.join(projectDir, "src", "server.ts"), SERVER);
   await writeFile(path.join(projectDir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({});\n');
   const readme = await readFile(path.join(sharedRoot, "docs", "guide.md"), "utf8");
-  const [program] = sectionBlocks(readme, HTTP_API);
-  blocks = [program!, ...sectionBlocks(readme, FETCH)];
+  const [program] = sectionBlocks(readme, HTTP_API).filter((block) => block.lang === "ts");
+  blocks = [program!, ...sectionBlocks(readme, FETCH)].filter((block) => block.lang !== "ruby");
   for (const block of blocks) {
     const target = path.join(projectDir, filePath(block));
     await mkdir(path.dirname(target), { recursive: true });
@@ -168,8 +170,8 @@ describe(`docs/guide.md: ${FETCH}`, () => {
   it("docs/guide.ja.md shows the same blocks", async () => {
     const en = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.md"), "utf8"), FETCH);
     const ja = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.ja.md"), "utf8"), FETCH);
-    expect(en.map((block) => block.lang)).toEqual(["ts", "gherkin"]);
-    expect(en.map(filePath)).toEqual(["features/steps/get-greeting.ts", "features/greet.feature"]);
+    expect(en.map((block) => block.lang)).toEqual(["ruby", "ts", "gherkin"]);
+    expect(en.map(filePath)).toEqual(["features/steps/get_greeting.rb", "features/steps/get-greeting.ts", "features/greet.feature"]);
     expect(ja).toEqual(en);
   });
 
@@ -275,19 +277,14 @@ describe(`docs/guide.md: ${HTTP_API}`, () => {
 
   it("docs/guide.ja.md shows the same blocks", async () => {
     const ja = sectionBlocks(await readFile(path.join(sharedRoot, "docs", "guide.ja.md"), "utf8"), HTTP_API);
-    expect(apiBlocks.map((block) => block.lang)).toEqual(["ts", "gherkin", "sh"]);
-    expect(apiBlocks.slice(0, 2).map(filePath)).toEqual(["nukadoko.config.ts", "features/greet.feature"]);
+    expect(apiBlocks.map((block) => block.lang)).toEqual(["ruby", "ts", "gherkin", "sh"]);
+    expect(apiBlocks.slice(0, 3).map(filePath)).toEqual(["nukadoko.config.rb", "nukadoko.config.ts", "features/greet.feature"]);
     expect(ja).toEqual(apiBlocks);
   });
 
   it("its program and commands, after nuka init, run the feature green against the program nukadoko starts", async () => {
-    const [program, feature, commands] = apiBlocks;
-    const [install, ...scaffolds] = commands!.body.trim().split("\n");
-    // The pin the section installs is the one this repository tests against.
-    const own = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8")) as {
-      devDependencies: Record<string, string>;
-    };
-    expect(install).toBe(`npm install -D -E playwright@${own.devDependencies.playwright}`);
+    const [, program, feature, commands] = apiBlocks;
+    const scaffolds = commands!.body.trim().split("\n");
 
     const init = await nukaIn(["init"]);
     expect(init.code, init.stderr).toBe(0);
@@ -295,8 +292,8 @@ describe(`docs/guide.md: ${HTTP_API}`, () => {
     await writeFile(path.join(apiDir, filePath(feature!)), feature!.body);
     for (const line of scaffolds) {
       const words = shellWords(line);
-      expect(words.slice(0, 3)).toEqual(["npx", "nuka", "scaffold"]);
-      const scaffold = await nukaIn(words.slice(2));
+      expect(words.slice(0, 2)).toEqual(["nuka", "scaffold"]);
+      const scaffold = await nukaIn(words.slice(1));
       expect(scaffold.code, scaffold.stderr).toBe(0);
     }
 

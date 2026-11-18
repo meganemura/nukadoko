@@ -1,7 +1,7 @@
 {
   "README.md": {
-    "unpaired": 2,
-    "words": 2
+    "unpaired": 0,
+    "words": 1
   },
   "docs/adopting.md": {
     "unpaired": 0,
@@ -16,32 +16,20 @@
     "words": 0
   },
   "docs/guide.md": {
-    "unpaired": 5,
-    "words": 3
+    "unpaired": 0,
+    "words": 2
   },
   "docs/intent.md": {
     "unpaired": 0,
     "words": 0
-  },
-  "docs/migration-playwright-test.md": {
-    "unpaired": 4,
-    "words": 0
-  },
-  "docs/migration.md": {
-    "unpaired": 4,
-    "words": 8
   },
   "docs/releasing.md": {
     "unpaired": 0,
     "words": 0
   },
   "docs/spec.md": {
-    "unpaired": 29,
-    "words": 38
-  },
-  "docs/upgrading.md": {
-    "unpaired": 15,
-    "words": 17
+    "unpaired": 0,
+    "words": 36
   },
   "llms.txt": {
     "unpaired": 0,

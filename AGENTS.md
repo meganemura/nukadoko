@@ -190,7 +190,7 @@ change against before writing it.
   `conformance/cases/*/steps-rb` file), never from memory.
   `site/scripts/check-engines.ts` counts what still breaks this in each
   neutral document and fails when a count grows; after pairing examples,
-  `npm run check:engines -- --write` in `site/` records the lower counts.
+  `node scripts/check-engines.ts --write` in `site/` records the lower counts.
 - **No em-dash in prose, English or Japanese.** Split the sentence, or use
   a comma, a colon, or parentheses, picking whichever one the em-dash was
   standing in for (a break, an aside, an apposition). Code blocks are

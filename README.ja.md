@@ -110,54 +110,59 @@ Ruby 3.4 以降が必要です。
 
 **ユニットテストの横で**
 
-ユニットテスト(vitest、`node:test`)は、関数を内側から検査します。
+ユニットテストは、関数を内側から検査します。
 scenario は、プログラムを外側から検査します。
 その文は、変更を求めた人が pull request の上で読めるものです。
-日常のループは 4 つだけです: `.feature` ファイル、行の種類ごとに 1 つの `defineStep`、`nuka check`、`nuka run`。
+日常のループは 4 つだけです: `.feature` ファイル、行の種類ごとに 1 つの step、`nuka check`、`nuka run`。
 
-以下の手順では、`Hello, <name>!` を出力する CLI `src/cli.ts` を持つプロジェクトに、scenario を 1 つ追加します。
+以下の手順では、`Hello, <name>!` を出力する CLI を持つプロジェクトに、scenario を 1 つ追加します。
+CLI は、Ruby のプロジェクトでは `src/cli.rb`、TypeScript のプロジェクトでは `src/cli.ts` です。
 出力のブロックはすべて、実際の実行からコピーしたものです。
 自分のプロジェクトに、インストールから CI までを 1 手順ずつ導入するには、[docs/adopting.ja.md](docs/adopting.ja.md) に従ってください。
 
 ```sh
-npx nuka init
+nuka init
 ```
 
-```text
-nukadoko.config.ts
-features/steps
-.gitignore
-package.json
-tsconfig.json
-```
-
-`init` は `.gitignore` に `.nukadoko/` を追加し、`package.json` に `test:scenarios` script を追加します。
-人も CI も、この 1 つのコマンドを実行します。
-`tsconfig.json` の `include` には steps と config を追加し、`.ts` ファイルを名指しする import を `tsc` が受け付けるためのコンパイラオプションも追加します。
-`.gitignore` には `.env`、`.env.*`、`!.env.example` も追加します。
-CommonJS の場合と `--allure` フラグは [Setup details](docs/guide.ja.md#setup-details) にあります。
+`init` は config(`nukadoko.config.rb` か `nukadoko.config.ts`)と `features/steps/` を書き、`.gitignore` に `.nukadoko/`、`.env`、`.env.*`、`!.env.example` を追加します。
+エンジンごとにほかに何を用意するかは、そのエンジンのページにあります: [Ruby](docs/ruby/reference.ja.md#インストールとコマンド)、[TypeScript](docs/typescript/reference.ja.md#インストールとコマンド)。
 
 When の step を scaffold します。
-`--command` は、プログラムを `scratch.dir()` で実行し、その `exitCode`、`stdout`、`stderr` を返す step を書きます。
-`scratch.dir()` は空のディレクトリで、scenario の後に削除されます。
-`runCommand` は、実行したプロセスを step record に入れます:
+`--command` は、プログラムを scratch ディレクトリで実行し、その `exitCode`、`stdout`、`stderr` を返す step を書きます。
+scratch ディレクトリは空のディレクトリで、scenario の後に削除されます。
+step はプログラムを nukadoko を通して実行するので、そのプロセスは step record に入ります:
 
 ```sh
-npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command src/cli.ts
+nuka scaffold run-greet --pattern "I run greet with {name:string}" --command src/cli.rb
 ```
 
-```text
-features/steps/run-greet.ts
-```
-
-`--command src/cli.ts` がエントリポイントを指定するので、このファイルは編集しません。
-`resolve` は、`nuka` を実行したディレクトリから読みます。
-そこにファイルがないパスは、scaffold が拒否します。
-step はエントリポイントを `node` そのもので実行します。
-そのため、`.ts` ファイルどうしが `.js` の specifier で import し合うプロジェクトでは、エントリポイントはビルドした後のプログラム(たとえば `--command dist/cli.js`)で、`"pretest:scenarios": "npm run build"` があれば、clone した直後のチェックアウトでも green になります。
-`.ts` のエントリポイントが import する `.js` ファイルがなく、その横に `.ts` ファイルがあるときは、scaffold が拒否します。
+`--command` がエントリポイント(TypeScript では `src/cli.ts`)を指定するので、このファイルは編集しません。
+`nuka` を実行したディレクトリにファイルがないパスは、scaffold が拒否します。
 値を省くと、その行には TODO が残り、埋めるまで step はファイル名と行番号を示して失敗します。
 scaffold が書く内容は次のとおりです:
+
+```ruby
+# features/steps/run_greet.rb
+class RunGreet < Nukadoko::Step
+  CLI = File.expand_path("src/cli.rb")
+
+  description "Run the command under test in an empty scratch directory"
+  pattern "I run greet with {name:string}"
+  # Give each field a description: `nuka describe` shows it to whoever picks this step.
+  args { string :name }
+  returns do
+    number :exitCode, null: true
+    string :stdout
+    string :stderr
+  end
+  # Set this to false when the program changes nothing outside a scratch directory.
+  mutates true
+
+  def run(args:, scratch:)
+    Nukadoko.run_command(RbConfig.ruby, [CLI, args.name], cwd: scratch.dir)
+  end
+end
+```
 
 ```ts
 // features/steps/run-greet.ts
@@ -187,16 +192,12 @@ export default defineStep({
 ```
 
 それをもとに Then の step を scaffold します。
-`--from run-greet.stdout` は、import、When の step の `returns` から型を取った `args` のフィールド、そしてその値を Then の step に渡す `from` のエントリを書きます。
+`--from run-greet.stdout` は、When の step の `returns` から型を取った `args` のフィールドと、その値を Then の step に渡す `from` のエントリを書きます。
 `--description` は、その step が確かめる内容を書きます。
 省くと description は TODO になり、`nuka check` がそれを注記として報告します:
 
 ```sh
-npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
-```
-
-```text
-features/steps/output-says.ts
+nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
 ```
 
 Then の step には書くべき本体がありません。
@@ -204,6 +205,23 @@ step は claim を宣言し、比べるのは nukadoko です。
 actual の値は When の step が返した `stdout`、expected の値は feature の行が述べる `text` で、record は両方の値をそれぞれの出どころとともに残します。
 greet は行を改行で終えますが、feature の行にその改行はありません。
 そのため claim は末尾を削る `view: "text"` を通して `stdout` を読み、このファイルに編集は要りません:
+
+
+```ruby
+# features/steps/output_says.rb
+class OutputSays < Nukadoko::Step
+  description "The CLI printed exactly this line"
+  pattern "the output says {text:string}"
+  # Give each field a description: `nuka describe` shows it to whoever picks this step.
+  args do
+    string :text
+    field :stdout, RunGreet.returns[:stdout]
+  end
+  from stdout: [RunGreet, :stdout]
+  # The program ends its output with a newline that the feature line does not show.
+  claims [{ actual: "stdout", view: "text", compare: "equal", expected: "text" }]
+end
+```
 
 ```ts
 // features/steps/output-says.ts
@@ -240,13 +258,10 @@ Feature: greet
 実行します:
 
 ```sh
-npm run test:scenarios
+nuka run
 ```
 
 ```text
-> test:scenarios
-> nuka run
-
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  passed  0.0s  the output says "Hello, Ada!"
@@ -310,18 +325,14 @@ Each line is one claim of a Then: the actual value and where it came from, how i
   - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken; measured: observed.processes[0].stdout of step-20261024-123634-plgs
 ```
 
-CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.ja.md](docs/ci.ja.md) に workflow 全体があります):
+CI では、ユニットテストの横に同じ `nuka run` の 1 行を加えるだけです([docs/ci.ja.md](docs/ci.ja.md) に workflow 全体があります)。
 
-```yaml
-- run: npm run test:scenarios
-```
-
-`features/`(feature とその step)、`nukadoko.config.ts`、`package.json` の変更をコミットしてください。
+`features/`(feature とその step)と config をコミットしてください。
 `.nukadoko/` はコミットしないでください。
 そこには step record と run サマリが入ります。
 `nuka init` が既に無視の対象にしています。
 
-HTTP サーバであるプログラムは `nukadoko.config.ts` の `program` に書き、nukadoko が run ごとにそれを起動します。
+HTTP サーバであるプログラムは config の `program` に書き、nukadoko が run ごとにそれを起動します。
 同じループをそうしたプログラムに対してたどる手順は [An HTTP API](docs/guide.ja.md#an-http-api) にあります。
 
 ## How a run is judged

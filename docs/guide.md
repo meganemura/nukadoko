@@ -21,6 +21,18 @@ function that returns how the program starts. nukadoko starts it for each run
 on a free port of its own, waits until it answers, sends every step's
 requests there, and stops it after the scenarios:
 
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "ruby src/server.rb" },
+      env: { PORT: "{port}" },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -41,13 +53,13 @@ program printed, beside the run's records. `port: "auto"`, the default,
 picks a free port when the world starts. Two runs at once can still race
 for the same one: a server that then cannot listen and exits fails its
 world, or, when the other run's server already answered its ready check,
-is reported as `program-exited` when the world stops. The same file holds `build` and `prepare` commands, a directory of
-its own for each run's database (`{dir}`), and `url` for a server
+is reported as `program-exited` when the world stops. In the TypeScript
+engine the program also takes `build` and `prepare` commands, a directory
+of its own for each run's database (`{dir}`), and `url` for a server
 nukadoko does not start: "Program" in [docs/spec.md](spec.md#program)
-has every field. Commit the file beside the config.
+has every field.
 
-Here `src/server.ts` answers `/greet/<name>` with the text
-`Hello, <name>!`. With this feature:
+Here the server answers `/greet/<name>` with the text `Hello, <name>!`. With this feature:
 
 ```gherkin
 # features/greet.feature
@@ -59,31 +71,50 @@ Feature: greet API
 ```
 
 scaffold the When step and its Then, and the scenario runs with no edit.
-The When step sends its request through Playwright's `request`, so
-install `playwright` too:
+The When step sends its request through the `request` fixture. In
+TypeScript that is Playwright's `request`, so install `playwright` too
+([Install](../README.md#install)).
 
 ```sh
-npm install -D -E playwright@1.63.0
-npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
-npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
+nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
+nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
 ```
 
-`get-greeting` is one ``request.fetch(`/greet/${name}`, { method: "GET" })``
-call that returns `status` and `body` (the response text). Each request
+`get-greeting` is one `GET` call on `request` that returns `status` and
+`body` (the response text). Each request
 lands in the step record's `http.jsonl`.
 
 `--request "<METHOD> <path>"` resolves the path against the program's
 URL. Each `{key}` in the path is that args key's value, put in as it is,
 and `--body <key>` sends an args key (the line's `docstring`, say) as the
 request's data. A value the request does not read throws by name until
-it is placed. The step writes `mutates: true`: the method is a proxy for
-write semantics, so the author sets `false`.
+it is placed. The step declares that it mutates: the method is a proxy for write
+semantics, so the author says when it does not.
 
 ## Calling the program with fetch
 
-A step can call the program with `fetch` instead, which needs nothing
-installed. `baseURL` is the URL of the program nukadoko started, from the
-program above:
+A step can call the program with the language's own HTTP client instead
+(`Net::HTTP` in Ruby, `fetch` in TypeScript), which needs nothing
+installed. `base_url` (`baseURL` in TypeScript) is the URL of the program
+nukadoko started, from the program above:
+
+```ruby
+# features/steps/get_greeting.rb
+class GetGreeting < Nukadoko::Step
+  description "GET /greet/<name> from the program under test"
+  pattern "I request the greeting for {name:string}"
+  args { string :name }
+  returns do
+    number :status
+    string :message
+  end
+
+  def run(base_url:, args:)
+    response = Net::HTTP.get_response(URI("#{base_url}/greet/#{URI.encode_www_form_component(args.name)}"))
+    { status: response.code.to_i, message: JSON.parse(response.body)["message"] }
+  end
+end
+```
 
 ```ts
 // features/steps/get-greeting.ts
@@ -240,6 +271,7 @@ doesn't change: only the step definition behind it does.
 Before (cucumber-js, position capture, untyped, stashed on the World: the
 per-scenario `this` object cucumber-js gives every step):
 
+<!-- engine: typescript -->
 ```ts
 // features/steps/project.ts (cucumber-js)
 import { Given } from "@cucumber/cucumber";
@@ -251,7 +283,25 @@ Given("a project {string} exists", async function (name: string) {
 });
 ```
 
-After (`defineStep`, named capture, zod, step-record-backed):
+After (a nukadoko step, named capture, a schema, step-record-backed):
+
+```ruby
+# features/steps/create_project.rb
+class CreateProject < Nukadoko::Step
+  pattern "a project {name:string} exists"
+  description "Create a project and return its id"
+  args { string :name }
+  returns do
+    string :id
+    string :name
+  end
+  mutates true
+
+  def run(request:, args:)
+    request.post("/projects", data: { name: args.name }).json
+  end
+end
+```
 
 ```ts
 // features/steps/create-project.ts
@@ -274,19 +324,20 @@ export default defineStep({
   With position capture, reordering two same-typed values in the pattern
   silently swaps which one lands where; `nuka check` also flags a bare
   `{string}` as an error before that can happen.
-- `args` and `returns` are zod schemas validated at the run boundary.
+- `args` and `returns` are schemas validated at the run boundary.
   `result` in the step record is something the tool validated, not just
-  whatever the step handed back. `z` above comes from nukadoko itself, so
-  there is no zod to install separately; if your own project already uses
-  zod and passes one of its own schemas in, that schema needs to be zod 4.
-- `request` above (and `page` for browser steps) is destructured straight
-  out of `run`'s first argument, the fixture bag; only the names a step
-  actually destructures ever get built, so a step that never names `page`
-  never launches a browser (and a project with no such step does not
-  install Playwright at all; see [Install](../README.md#install)). Both hand back
-  Playwright's own
-  `APIRequestContext` and `Page` objects, not a nukadoko wrapper, so
-  existing Playwright knowledge and helpers carry over directly.
+  whatever the step handed back. In TypeScript they are zod, and `z` comes
+  from nukadoko itself, so there is no zod to install separately; if your
+  own project already uses zod and passes one of its own schemas in, that
+  schema needs to be zod 4.
+- `request` above (and `page` for browser steps) is a fixture the step
+  names in `run`'s parameters; only the names a step actually takes ever
+  get built, so a step that never names `page` never launches a browser
+  (and a project with no such step does not install Playwright at all; see
+  [Install](../README.md#install)). `page` is Playwright's own `Page`, not
+  a nukadoko wrapper, so existing Playwright knowledge and helpers carry
+  over directly. In TypeScript `request` is Playwright's
+  `APIRequestContext` too.
 - `request.post("/projects", ...)` above resolves that relative path
   against the URL of the program the config's `program` starts or names
   ([An HTTP API](#an-http-api)). Without a program, only an absolute
@@ -690,6 +741,14 @@ summary opens with it. An environment can declare the switches of its
 program as `conditions`, and a run without `--env` runs every
 environment that declares them, or the ones the program's
 `defaultEnvironments` names:
+
+```ruby
+env: { BANNER: "{condition.banner}" },
+environments: {
+  "banner-off": { conditions: { banner: false } },
+  "banner-on": { conditions: { banner: true } },
+},
+```
 
 ```ts
 env: { BANNER: "{condition.banner}" },

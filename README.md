@@ -120,61 +120,65 @@ scenarios check against each engine's `--help`:
 
 ## Beside your unit tests
 
-Unit tests (vitest, `node:test`) check functions from the inside. A
-scenario checks the program from the outside, in sentences the person who
-asked for the change can read on the pull request. The everyday loop is
-four things: a `.feature` file, one `defineStep` per kind of line,
-`nuka check`, and `nuka run`.
+Unit tests check functions from the inside. A scenario checks the program
+from the outside, in sentences the person who asked for the change can
+read on the pull request. The everyday loop is four things: a `.feature`
+file, one step per kind of line, `nuka check`, and `nuka run`.
 
-The walkthrough below adds one scenario to a project whose CLI,
-`src/cli.ts`, prints `Hello, <name>!`. Every output block is copied from a
-real run.
+The walkthrough below adds one scenario to a project whose CLI prints
+`Hello, <name>!`: `src/cli.rb` in a Ruby project, `src/cli.ts` in a
+TypeScript one. Every output block is copied from a real run.
 To add nukadoko to your own project one step at a time, from install to
 CI, follow [docs/adopting.md](docs/adopting.md).
 
 ```sh
-npx nuka init
+nuka init
 ```
 
-```text
-nukadoko.config.ts
-features/steps
-.gitignore
-package.json
-tsconfig.json
-```
+`init` writes the config (`nukadoko.config.rb` or `nukadoko.config.ts`)
+and `features/steps/`, and adds `.nukadoko/`, `.env`, `.env.*`, and
+`!.env.example` to `.gitignore`. What else it sets up for one engine is
+on that engine's page: [Ruby](docs/ruby/reference.md#install-and-command),
+[TypeScript](docs/typescript/reference.md#install-and-command).
 
-`init` adds `.nukadoko/` to `.gitignore`, a `test:scenarios` script to
-`package.json` (the one command a person or CI runs), and the steps and the
-config to the `include` of `tsconfig.json`, with the compiler option that
-lets `tsc` accept an import that names a `.ts` file. It also adds `.env`,
-`.env.*`, and `!.env.example` to `.gitignore`. The CommonJS case and the
-`--allure` flag are in [Setup details](docs/guide.md#setup-details).
-
-Scaffold the When step. `--command` writes a step that runs a program
-in `scratch.dir()`, an empty directory that is removed after the scenario,
-and returns its `exitCode`, `stdout`, and `stderr`. `runCommand` puts the
-process it ran into the step record:
+Scaffold the When step. `--command` writes a step that runs a program in
+a scratch directory, an empty directory that is removed after the
+scenario, and returns its `exitCode`, `stdout`, and `stderr`. The step
+runs the program through nukadoko, so the process goes into the step
+record:
 
 ```sh
-npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command src/cli.ts
+nuka scaffold run-greet --pattern "I run greet with {name:string}" --command src/cli.rb
 ```
 
-```text
-features/steps/run-greet.ts
-```
+`--command` names the entry point (`src/cli.ts` in TypeScript), so the
+file needs no edit. The scaffold refuses a path that is not a file in the
+directory `nuka` runs in. Without a value, the line holds a TODO, and the
+step fails with the file and line until it is filled in. The scaffold
+writes:
 
-`--command src/cli.ts` names the entry point, so the file needs no edit.
-`resolve` reads it from the directory `nuka` runs in, and the scaffold
-refuses a path that is not a file there. The step runs the entry point
-with `node` itself, so in a project whose `.ts` files import each other
-with `.js` specifiers the entry point is the built program (for example
-`--command dist/cli.js`), and `"pretest:scenarios": "npm run build"` keeps
-a fresh checkout green; the scaffold refuses a `.ts` entry point that
-imports a `.js` file which is absent while its `.ts` sibling is present.
-Without a value,
-the line holds a TODO, and the step fails with the file and line until it
-is filled in. The scaffold writes:
+```ruby
+# features/steps/run_greet.rb
+class RunGreet < Nukadoko::Step
+  CLI = File.expand_path("src/cli.rb")
+
+  description "Run the command under test in an empty scratch directory"
+  pattern "I run greet with {name:string}"
+  # Give each field a description: `nuka describe` shows it to whoever picks this step.
+  args { string :name }
+  returns do
+    number :exitCode, null: true
+    string :stdout
+    string :stderr
+  end
+  # Set this to false when the program changes nothing outside a scratch directory.
+  mutates true
+
+  def run(args:, scratch:)
+    Nukadoko.run_command(RbConfig.ruby, [CLI, args.name], cwd: scratch.dir)
+  end
+end
+```
 
 ```ts
 // features/steps/run-greet.ts
@@ -203,18 +207,14 @@ export default defineStep({
 });
 ```
 
-Scaffold the Then step from it. `--from run-greet.stdout` writes the
-import, an `args` field typed from the When step's `returns`, and the
-`from` entry that hands the Then step that value. `--description` writes
-what the step checks; without it the description is a TODO that `nuka
-check` reports as a note:
+Scaffold the Then step from it. `--from run-greet.stdout` writes an
+`args` field typed from the When step's `returns`, and the `from` entry
+that hands the Then step that value. `--description` writes what the step
+checks; without it the description is a TODO that `nuka check` reports as
+a note:
 
 ```sh
-npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
-```
-
-```text
-features/steps/output-says.ts
+nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
 ```
 
 A Then step has no body to write. It declares a claim, and nukadoko does
@@ -223,6 +223,22 @@ the expected value is the `text` the feature line states, and the record
 keeps both, with where each came from. greet ends its line with a newline
 that the feature line does not show, so the claim reads `stdout` through
 `view: "text"`, which trims the end, and the file needs no edit:
+
+```ruby
+# features/steps/output_says.rb
+class OutputSays < Nukadoko::Step
+  description "The CLI printed exactly this line"
+  pattern "the output says {text:string}"
+  # Give each field a description: `nuka describe` shows it to whoever picks this step.
+  args do
+    string :text
+    field :stdout, RunGreet.returns[:stdout]
+  end
+  from stdout: [RunGreet, :stdout]
+  # The program ends its output with a newline that the feature line does not show.
+  claims [{ actual: "stdout", view: "text", compare: "equal", expected: "text" }]
+end
+```
 
 ```ts
 // features/steps/output-says.ts
@@ -259,13 +275,10 @@ Feature: greet
 Run it:
 
 ```sh
-npm run test:scenarios
+nuka run
 ```
 
 ```text
-> test:scenarios
-> nuka run
-
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  passed  0.0s  the output says "Hello, Ada!"
@@ -328,19 +341,15 @@ Each line is one claim of a Then: the actual value and where it came from, how i
   - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken; measured: observed.processes[0].stdout of step-20261024-123634-plgs
 ```
 
-In CI it is one more line beside the unit tests
-([docs/ci.md](docs/ci.md) has the whole workflow):
+In CI it is one more line beside the unit tests, the same `nuka run`
+([docs/ci.md](docs/ci.md) has the whole workflow).
 
-```yaml
-- run: npm run test:scenarios
-```
+Commit `features/` (the feature and its steps) and the config. Do not
+commit `.nukadoko/`: it holds the step records and the run summaries, and
+`nuka init` already ignores it.
 
-Commit `features/` (the feature and its steps), `nukadoko.config.ts`, and
-the `package.json` change. Do not commit `.nukadoko/`: it holds the step
-records and the run summaries, and `nuka init` already ignores it.
-
-A program that is an HTTP server is described by `program` in
-`nukadoko.config.ts`, and nukadoko starts it for each run: [An HTTP API](docs/guide.md#an-http-api)
+A program that is an HTTP server is described by `program` in the config,
+and nukadoko starts it for each run: [An HTTP API](docs/guide.md#an-http-api)
 walks the same loop against one.
 
 ## How a run is judged

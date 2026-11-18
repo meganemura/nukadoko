@@ -20,6 +20,9 @@ bundle install
 bundle exec nuka init
 ```
 
+プロジェクトに `Rakefile` があれば、`init` はそこに `bundle exec nuka run` を実行する `scenarios` タスクを足します。
+人も CI も、この 1 つのコマンドを実行します。
+
 `page` を使う step には、`playwright-ruby-client` が起動できるブラウザが要ります。
 
 ## 設定

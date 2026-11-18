@@ -8,13 +8,16 @@ import { fixture, removeTempDir, repoRoot, testsDir } from "./helpers/fixtures.j
 // Responsibility: README.md's "Beside your unit tests" walkthrough works as
 // written. Its commands run in order in a scratch copy of the CLI project it
 // describes, its file blocks are written where their first-line comment
-// says, and the last command it shows, `npm run test:scenarios`, exits 0.
-// The When step's block is exactly what its scaffold command wrote.
+// says, and the last command it shows, `nuka run`, exits 0. The walkthrough
+// is neutral: each step file is a `ruby` block followed by its `ts` twin, and
+// the scaffold command names the Ruby entry point with the TypeScript one
+// beside it in prose, so this test runs the `ts` blocks with `src/cli.ts`.
+// The Ruby engine's own test runs the `ruby` blocks. Each step block is
+// exactly what its scaffold command wrote.
 // README.ja.md carries the same blocks, so the two cannot drift apart.
 //
-// `npm install -D nukadoko` is the one line not run: the scratch project
-// links this checkout's own build instead, so the test needs no registry
-// and checks the code it ships with. The output blocks are copied from a
+// The scratch project links this checkout's own build, so the test needs
+// no registry and checks the code it ships with. The output blocks are copied from a
 // real run of the packed tarball and are not compared here: they carry run
 // ids and timings.
 
@@ -69,7 +72,7 @@ describe("README.md: Beside your unit tests", () => {
     const en = quickstartBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"));
     const ja = quickstartBlocks(await readFile(path.join(repoRoot, "README.ja.md"), "utf8"));
     expect(en.map((block) => block.lang)).toEqual([
-      "sh", "text", "sh", "text", "ts", "sh", "text", "ts", "gherkin", "sh", "text", "text", "text", "yaml",
+      "sh", "sh", "ruby", "ts", "sh", "ruby", "ts", "gherkin", "sh", "text", "text", "text",
     ]);
     expect(ja).toEqual(en);
   });
@@ -95,6 +98,7 @@ describe("README.md: Beside your unit tests", () => {
     // the walkthrough promises neither step needs an edit.
     const unedited: string[] = [];
     for (const block of blocks) {
+      if (block.lang === "ruby") continue;
       const target = filePath(block);
       if (target !== undefined) {
         const written = await readFile(path.join(projectDir, target), "utf8").catch(() => undefined);
@@ -104,8 +108,8 @@ describe("README.md: Beside your unit tests", () => {
         continue;
       }
       if (block.lang !== "sh") continue;
-      for (const line of block.body.split("\n").filter((text) => text.trim() !== "")) {
-        if (line === "npm install -D nukadoko") continue;
+      for (const shown of block.body.split("\n").filter((text) => text.trim() !== "")) {
+        const line = shown.replace("--command src/cli.rb", "--command src/cli.ts");
         ran.push(line);
         try {
           await execFileAsync("sh", ["-c", line], { cwd: projectDir, env });
@@ -115,7 +119,7 @@ describe("README.md: Beside your unit tests", () => {
         }
       }
     }
-    expect(ran.at(-1)).toBe("npm run test:scenarios");
+    expect(ran.at(-1)).toBe("nuka run");
     expect(unedited).toEqual(["features/steps/run-greet.ts", "features/steps/output-says.ts"]);
   }, 120_000);
 });
