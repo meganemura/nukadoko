@@ -356,6 +356,54 @@ module Nukadoko
         hold_from_order(scenario, held) if held.any?
       end
 
+      # A claim step's files chooses its producer by the same order rule:
+      # a key whose `of` names no step an earlier line runs, or two that
+      # earlier lines run, leaves each claim on the list unjudged. Whether
+      # that producer will run a command is not known before it runs (a
+      # helper may call run_command), so the check stays silent there.
+      #: (Scenario) -> void
+      def check_files_order(scenario)
+        resolved = scenario.steps.map { |line| (m = Engine.matches(@usable, line.text).map(&:first).uniq).size == 1 ? m.first : nil }
+        resolved.each_with_index do |step, index|
+          next unless step&.claims && step.files.any?
+
+          before = resolved.first(index).compact.map(&:step_name)
+          undefined_before = scenario.steps.first(index).any? { Engine.matches(@usable, _1.text).empty? }
+          step.files.each do |key, entry|
+            names = ChangedFiles.producers(entry).filter_map { _1.step_name if @usable.include?(_1) }
+            next if names.empty?
+
+            ran = names.select { before.include?(_1) }
+            next if ran.size == 1
+
+            where = %(Step "#{step.step_name}"'s files.#{key})
+            line = scenario.steps[index].line
+            if ran.size >= 2
+              findings << Finding.new("error", "files-producer-ambiguous", scenario.uri, line, step.step_name,
+                                      "#{where} reads the files the commands of one of steps #{producer_names(names)} changed, and #{producer_names(ran)} each ran earlier in this scenario, " \
+                                      "so the run cannot choose whose files to read, and each claim on the list is unjudged",
+                                      "Remove or move lines so that exactly one of steps #{producer_names(ran)} runs before this line.", nil)
+              next
+            end
+            next if undefined_before
+
+            status = names.map { |name| resolved.any? { _1&.step_name == name } ? %("#{name}" runs only at or after this line) : %("#{name}" runs nowhere in this scenario) }.join("; ")
+            whose = names.size == 1 ? %(step "#{names.first}") : "exactly one of steps #{producer_names(names)}"
+            findings << Finding.new("error", "files-producer-missing", scenario.uri, line, step.step_name,
+                                    "#{where} reads the files the commands of #{whose} changed, and no earlier line runs it: #{status}. Each claim on the list is unjudged",
+                                    "Put a line that runs #{whose} earlier in the scenario, or, if an earlier line runs the step whose files the claim means, " \
+                                    "list that step in files.#{key}.of of step \"#{step.step_name}\".", nil)
+          end
+        end
+      end
+
+      # `"a"`, `"a" and "b"`, `"a", "b", and "c"`, as the run names candidates.
+      #: (Array[String]) -> String
+      def producer_names(names)
+        each = names.map { %("#{_1}") }
+        each.size <= 2 ? each.join(" and ") : "#{each[0...-1].to_a.join(", ")}, and #{each.last}"
+      end
+
       # What a claim step's claims read, from the producers of its from
       # values on the earlier lines of the scenario (ClaimCheck).
       #: (Scenario) -> void
@@ -675,6 +723,7 @@ module Nukadoko
         end
         bound.uniq.each { check_transformed(_1) }
         @scenarios.each { check_from_order(_1) }
+        @scenarios.each { check_files_order(_1) }
         @scenarios.each { check_claim_sources(_1) }
         check_state_order
         suppress_undefined(undefined)

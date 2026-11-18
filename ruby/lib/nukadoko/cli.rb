@@ -453,7 +453,7 @@ module Nukadoko
         end
         return refuse(Engine::Refusal.new("step-args-invalid", "--args must be a JSON object", fix: args_fix, run: describe)) unless given.is_a?(Hash)
       end
-      args, origins, used = used_args(step, @options["--use"])
+      args, origins, used, files = used_args(step, @options["--use"])
       if @options["--args"].empty? && (step.args.required_names - args.keys).any?
         return refuse(Engine::Refusal.new("step-args-invalid", "--args is required unless --use supplies this step's arguments", fix: args_fix, run: describe))
       end
@@ -469,7 +469,7 @@ module Nukadoko
       dir = File.join(@project, ".nukadoko", "do", id)
       run = Engine::Run.new(@project, check.usable, [], Nukadoko.program_options, environments: [environment], dir: dir, out: $stderr)
       texts = given.to_h { |key, value| [key, JSON.generate(value)] }
-      record = run.do_step(step, args, origins, texts, environment)
+      record = run.do_step(step, args, origins, texts, environment, files)
       written = run.redact(do_record(record, id, step, given, origins, used, environment))
       File.write(File.join(dir, "record.json"), JSON.pretty_generate(written))
       $stdout.puts JSON.pretty_generate(written)
@@ -481,8 +481,9 @@ module Nukadoko
     end
 
     # Each from key of the step, from the newest record --use names whose
-    # step gives it, and where it came from.
-    #: (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]]]
+    # step gives it, and where it came from; and for each files key, the
+    # record of the one --use value whose step its `of` names.
+    #: (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped]]
     def used_args(step, ids)
       records = ids.map do |id|
         path = [File.join(@project, ".nukadoko", "do", id, "record.json"), *Dir.glob(File.join(@project, ".nukadoko", "runs", "*", "steps", id, "record.json"))].find { File.exist?(_1) }
@@ -506,7 +507,38 @@ module Nukadoko
           break
         end
       end
-      [args, origins, used]
+      [args, origins, used, used_files(step, records)]
+    end
+
+    # A list is the files of one execution, so two --use records for one
+    # files key are refused, and a key no --use supplies is unjudged: under
+    # nuka do no earlier line ran, and --use is how a producer is named.
+    #: (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
+    def used_files(step, records)
+      chosen = {} #: Hash[String, [String, Hash[String, untyped]]]
+      step.files.each do |key, entry|
+        names = Engine::ChangedFiles.producers(entry).map(&:step_name)
+        records.each do |id, record|
+          next unless names.include?(record["step"])
+
+          if (earlier = chosen[key]) && earlier.first != id
+            raise Engine::Refusal.new("step-inputs-invalid", %(--use: files key "#{key}" is supplied by both step record #{earlier.first} (step "#{earlier.last["step"]}") and ) +
+                                                             %(step record #{id} (step "#{record["step"]}"), and nuka do reads the files of one step record per key))
+          end
+          chosen[key] = [id, record]
+        end
+      end
+      lambda do |key, entry|
+        if (found = chosen[key])
+          id, record = found
+          processes = record.dig("observed", "processes")
+          next { of: "#{record["step"]}@#{id}", record: { step_record_id: id, processes: processes && JSON.parse(JSON.generate(processes), symbolize_names: true) } }
+        end
+
+        names = Engine::ChangedFiles.producers(entry).map(&:step_name)
+        { of: names.join(" or "),
+          unchosen: "files.#{key}.of names #{names.map { %("#{_1}") }.join(" or ")}, and no --use value names a step record of #{names.size == 1 ? "it" : "any of them"}, so nuka do has no files to read" }
+      end
     end
 
     # The record `nuka do` prints, in the TypeScript engine's shape.

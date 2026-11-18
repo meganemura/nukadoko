@@ -107,3 +107,23 @@ export default defineStep({
   claims: [{ actual: "form", compare: "fits-aria-snapshot", expected: "tree" }],
 });
 ```
+
+## The files an earlier step changed
+
+`files` names the paths the commands of an earlier step changed, read
+from that step's record, and a claim reads the key as its actual. Its
+expected value is the sentence's: a capture, the docstring, or a word.
+
+```ts
+// conformance/engine/projects/changed-files/steps-ts/notes-include.ts
+import { defineStep, z } from "nukadoko";
+import writeNotes from "./write-notes.ts";
+
+export default defineStep({
+  pattern: "the notes include {path:string}",
+  description: "The notes the program added include one path",
+  args: z.object({ path: z.string().describe("A path under notes/") }),
+  files: { written: { of: writeNotes, change: "added", under: "notes" } },
+  claims: [{ actual: "written", compare: "has-item", expected: "path" }],
+});
+```

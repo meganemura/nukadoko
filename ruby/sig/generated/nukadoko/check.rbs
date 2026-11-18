@@ -124,6 +124,18 @@ module Nukadoko
       # : (Scenario) -> void
       def check_from_order: (Scenario) -> void
 
+      # A claim step's files chooses its producer by the same order rule:
+      # a key whose `of` names no step an earlier line runs, or two that
+      # earlier lines run, leaves each claim on the list unjudged. Whether
+      # that producer will run a command is not known before it runs (a
+      # helper may call run_command), so the check stays silent there.
+      # : (Scenario) -> void
+      def check_files_order: (Scenario) -> void
+
+      # `"a"`, `"a" and "b"`, `"a", "b", and "c"`, as the run names candidates.
+      # : (Array[String]) -> String
+      def producer_names: (Array[String]) -> String
+
       # What a claim step's claims read, from the producers of its from
       # values on the earlier lines of the scenario (ClaimCheck).
       # : (Scenario) -> void

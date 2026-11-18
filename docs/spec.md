@@ -2075,7 +2075,15 @@ migrations/0002_add_note.sql", "wrote exactly these files", "changed no
 file under src/". The claim step names the list in `files`, and a claim
 reads its key as its actual:
 
-<!-- engine: typescript -->
+```ruby
+# features/steps/build_writes_nothing.rb
+class BuildWritesNothing < Nukadoko::Step
+  pattern "the build writes nothing"
+  files written: { of: RunBuild }
+  claims [{ actual: "written", compare: "equal", expected: { literal: [] } }]
+end
+```
+
 ```ts
 // features/steps/build-writes-nothing.ts
 import { defineStep, z } from "nukadoko";
@@ -2090,7 +2098,7 @@ export default defineStep({
 ```
 
 nukadoko makes the list from the earlier step's record: the paths its
-`runCommand` processes added, changed, or removed under their working
+`runCommand` processes (`Nukadoko.run_command` in Ruby) added, changed, or removed under their working
 directory (`observed.processes[].files`, see "Records"). A value the
 step's code returned never makes it, so a step that runs a command
 returns what the command says, and the claim reads what nukadoko

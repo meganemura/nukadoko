@@ -77,9 +77,16 @@ module Nukadoko
     def run_one: (Engine::Check) -> Integer
 
     # Each from key of the step, from the newest record --use names whose
-    # step gives it, and where it came from.
-    # : (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]]]
-    def used_args: (singleton(Step), Array[String]) -> [ Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]] ]
+    # step gives it, and where it came from; and for each files key, the
+    # record of the one --use value whose step its `of` names.
+    # : (singleton(Step), Array[String]) -> [Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped]]
+    def used_args: (singleton(Step), Array[String]) -> [ Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], ^(String, untyped) -> Hash[Symbol, untyped] ]
+
+    # A list is the files of one execution, so two --use records for one
+    # files key are refused, and a key no --use supplies is unjudged: under
+    # nuka do no earlier line ran, and --use is how a producer is named.
+    # : (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
+    def used_files: (singleton(Step), Array[untyped]) -> ^(String, untyped) -> Hash[Symbol, untyped]
 
     # The record `nuka do` prints, in the TypeScript engine's shape.
     # : (Hash[Symbol, untyped], String, singleton(Step), Hash[untyped, untyped], Hash[untyped, String], Array[Hash[Symbol, untyped]], Engine::Environment) -> Hash[Symbol, untyped]

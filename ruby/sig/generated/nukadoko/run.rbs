@@ -181,6 +181,18 @@ module Nukadoko
       # : (PickleStep, Array[untyped], World) -> Hash[Symbol, untyped]
       def play_step: (PickleStep, Array[untyped], World) -> Hash[Symbol, untyped]
 
+      # The step a files key reads the changed paths of: the one of its
+      # `of` steps that passed on an earlier line, as nuka check reports a
+      # line where none or two did (files-producer-missing,
+      # files-producer-ambiguous); under --no-check the claim is unjudged.
+      # : (Hash[untyped, Hash[Symbol, untyped]], String, Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+      def scenario_files_source: (Hash[untyped, Hash[Symbol, untyped]], String, Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+
+      # Each files key of a claim step: the list read from its producer's
+      # record, or why there is none.
+      # : (untyped) -> Hash[String, Hash[Symbol, untyped]]
+      def files_sides: (untyped) -> Hash[String, Hash[Symbol, untyped]]
+
       # A step that declares it mutates does not run in a read-only
       # environment: the declaration is trusted, not checked against what
       # the step does.
@@ -193,8 +205,8 @@ module Nukadoko
       # line or by earlier records (`origins` says which), in a world
       # started for this one execution, its evidence in this run's
       # directory, which is the record's own.
-      # : (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
-      def do_step: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment) -> Hash[Symbol, untyped]
+      # : (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
+      def do_step: (singleton(Step), Hash[String, untyped], Hash[String, String], Hash[String, String], Environment, ?(^(String, untyped) -> Hash[Symbol, untyped])?) -> Hash[Symbol, untyped]
 
       # What `nuka do` writes its stdout and its record through.
       # : (untyped) -> untyped

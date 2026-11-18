@@ -44,13 +44,16 @@ module Nukadoko
         # Why a claim cannot compare with an args key, for each key the
         # matched pattern fills with a parameter type that has a transformer.
         :transformed, #: Hash[String, String]
+        # Each files key: the list read from an earlier step's record
+        # (`label`, `paths`, `measured`), or why there is none (`unjudged`).
+        :files, #: Hash[String, Hash[Symbol, untyped]]
       )
 
       # A Data block's methods are its own, but rbs-inline reads only a class
       # body, so they are written in one.
       class Inputs
-        #: (?transformed: Hash[String, String], **untyped) -> void
-        def initialize(transformed: {}, **rest) = super
+        #: (?transformed: Hash[String, String], ?files: Hash[String, Hash[Symbol, untyped]], **untyped) -> void
+        def initialize(transformed: {}, files: {}, **rest) = super
       end
 
       #: (Place, String?) -> Place
@@ -354,6 +357,9 @@ module Nukadoko
       # A top-level comparison claim, judged as Claims.judge_one reports one.
       #: (Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
       def self.judge(claim, inputs)
+        files = inputs.files[claim[:actual].to_s]
+        return judge_files(claim, files, inputs) if files
+
         raw, at_read = top_side(claim, inputs)
         judge_comparison(claim, raw, inputs, at_read)
       rescue StandardError => e
@@ -379,6 +385,25 @@ module Nukadoko
         unjudgeable(claim, e)
       end
       
+      # A claim on a files key reads the list nukadoko made from an earlier
+      # step's record, never what observe returned: a key observe returns
+      # under the same name breaks the claim, so each name has one source.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped], Inputs) -> Hash[Symbol, untyped]
+      def self.judge_files(claim, files, inputs)
+        key = claim[:actual].to_s
+        observed = inputs.observed
+        if inputs.observes && observed.is_a?(Hash) && (observed.key?(key) || observed.key?(key.to_sym))
+          return { compare: claim[:compare], holds: false,
+                   reason: %(observe returned "#{key}", and files has a key of the same name, so actual "#{key}" reads the paths an earlier step's commands changed and never what observe returned. ) +
+                           "Rename the key observe returns, or the files key, so each name has one source" }
+        end
+
+        place = Place.new(origin: "files:#{key}", segments: [], label: files[:label], open: false)
+        found = files[:paths] ? { value: files[:paths] } : { unjudged: files[:unjudged] }
+        judged = judge_comparison(claim, Side.new(place: place, found: found), inputs)
+        files[:paths] ? judged.merge(files_read: true) : judged
+      end
+
       #: (Hash[Symbol, untyped], StandardError) -> Hash[Symbol, untyped]
       def self.unjudgeable(claim, error)
         { compare: claim[:compare], holds: false, reason: "nukadoko could not judge this claim: #{error.message}", unjudged: true }

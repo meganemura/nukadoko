@@ -56,6 +56,18 @@ module Nukadoko
       #: () -> untyped
       def timeout(ms = nil) = ms.nil? ? @timeout : (@timeout = ms)
 
+      # The paths an earlier step's commands changed, by the key a claim
+      # reads them as: `files written: { of: RunBuild, change: "added",
+      # under: "src/" }`. nukadoko reads the list from that step's record,
+      # never from what its code returned.
+      #: (Hash[Symbol | String, untyped]) -> Hash[String, untyped]
+      #: () -> Hash[String, untyped]
+      def files(map = nil)
+        return @files || {} unless map
+
+        @files = map.is_a?(Hash) ? map.transform_keys(&:to_s) : map
+      end
+
       # The states a line of this step needs held (`requires`), leaves
       # held (`gives`), and leaves not held (`ends`), each a name
       # ("book-open") or a name and the args key that tells one holder from

@@ -114,6 +114,10 @@ Then の step は、`run` の代わりに `claims` と、世界を読む `observ
 各 claim は nukadoko が判定します([spec](../spec.ja.md#claims) の「Claims」)。
 claim が比べる args のキーは、`observe` には渡りません。
 
+`files written: { of: RunBuild, change: "added", under: "src" }` は、前の step のコマンドが加えた、変えた、消したパスを名指しします。
+claim はそのキーを実際の値として読みます([spec](../spec.ja.md) の「前の step が変えたファイル」)。
+一覧はその step の record から、その step が走らせた各 `Nukadoko.run_command` から作られ、`run` が返したものからは作られません。
+
 ## 連鎖(`from`)
 
 `from id: [StartJob, :id]` は、`StartJob` という step がこの scenario で先に返した値で `id` を埋めます。
@@ -199,7 +203,7 @@ TypeScript エンジンにあって、このエンジンにまだないもので
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
 - プログラムの `lists` と、`{events}` のプレースホルダと、それが読む実行イベント。
-- step の `files`(コマンドが書いたもの)と `events`(プログラムがしたこと)。
+- step の `events`(プログラムがしたこと)。
 - fixture の `use` が返すもの。
 TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
 - MCP クライアントの呼び出しを記録する `measureMcp`。

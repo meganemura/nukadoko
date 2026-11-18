@@ -22,7 +22,16 @@ module Nukadoko
         :from_keys, #: Array[String]
         :capture_keys, #: Array[String]
         :observe, #: bool
+        # The keys of the step's files, each a list a claim reads by its key alone.
+        :files, #: Array[String]
       )
+
+      # A Data block's methods are its own, but rbs-inline reads only a class
+      # body, so they are written in one.
+      class Shape
+        #: (?files: Array[String], **untyped) -> void
+        def initialize(files: [], **rest) = super
+      end
 
       VIEWS = %w[text lines json comma-list].freeze
       COMPARISON_KEYS = %w[actual view at count compare expected expected_view].freeze
@@ -365,7 +374,12 @@ module Nukadoko
           refuse("#{label} must be an object with actual, compare, and expected, or actual and each") unless claim.is_a?(Hash)
 
           check_path("#{label}.actual", claim[:actual], false)
+          if shape.files.include?(claim[:actual])
+            check_files_claim(label, claim, claim[:actual], shape)
+            next
+          end
           head = claim[:actual].split(".").first.to_s
+          refuse(%(#{label}.actual reads inside files.#{head}, a list of paths with nothing to walk into. Name the key alone: actual "#{head}")) if shape.files.include?(head)
           from_observe = !shape.from_keys.include?(head)
           refuse(%(#{label}.actual starts with "#{head}", which is not a key of this step's from, and the step has no observe to read it)) if from_observe && !shape.observe
           if !from_observe && shape.capture_keys.include?(head)
@@ -384,8 +398,73 @@ module Nukadoko
           check_common(label, claim)
           check_each(label, claim[:each], shape, from_observe)
         end
+        check_files(claims, shape)
         check_observe_read(claims, shape)
         check_captures_read(claims, shape)
+      end
+
+      # The compares a list of paths can take: a text or order compare
+      # breaks on an array on every line, and is-a list holds on every one.
+      FILES_COMPARES = %w[equal not-equal has-item has-same-items].freeze
+      FILES_CLAIM_KEYS = %w[actual count compare expected expected_view].freeze
+
+      # A claim on a files key reads the list nukadoko made from an earlier
+      # step's record, so it takes no path, view, or at, and compares the
+      # whole list or its count. Its expected value is the sentence's: a
+      # list from { from } or { observe } would be one step code chose.
+      #: (String, Hash[Symbol, untyped], String, Shape) -> void
+      def check_files_claim(label, claim, key, shape)
+        reads = "#{label} reads files.#{key}, the list of paths an earlier step's commands changed"
+        refuse("#{reads}, and a claim on it compares the whole list or counts it. Compare it with #{FILES_COMPARES.join(", ")}, or count it") unless claim[:each].nil?
+        check_keys(label, claim, FILES_CLAIM_KEYS, "a claim on files")
+        expected = claim[:expected]
+        if expected.is_a?(Hash) && (expected.key?(:from) || expected.key?(:observe))
+          source = expected.key?(:from) ? "from" : "observe"
+          refuse("#{reads}, and its expected value is { #{source} }, a value step code #{source == "from" ? "returned" : "read"}, so step code would choose the list the measured one is compared with. " \
+                 "State the expected paths in the sentence: a capture, the docstring, or the pattern's words")
+        end
+        if claim[:count].nil? && !FILES_COMPARES.include?(claim[:compare])
+          refuse("#{reads}, which is an array of paths, and #{describe(claim[:compare])} does not compare it, so the claim would break on every line or hold on every line. " \
+                 "Compare it with #{FILES_COMPARES.join(", ")}, or count it")
+        end
+        check_expected(label, expected, claim[:compare], shape, false)
+        check_expected_view(label, claim, shape)
+        check_count(label, claim)
+        return unless claim[:count].nil?
+
+        # has-item compares with one path, and the other compares with a
+        # list: an expected value of the other kind breaks the claim on
+        # every line, or, under not-equal, holds on every one.
+        one = claim[:compare] == "has-item"
+        wanted = one ? "a text" : "an array"
+        fix = one ? "State the path in the pattern's fixed words, or capture it" : "State the list with a word such as nothing or no, or read the docstring with expected_view lines"
+        literal = literal_of(expected)
+        if literal && (one ? !literal[:literal].is_a?(String) : !literal[:literal].is_a?(Array))
+          refuse("#{reads}, and its expected value is the literal #{describe(literal[:literal])}, which is never #{wanted}, so #{claim[:compare]} judges it the same way on every line. #{fix}")
+        end
+        return unless expected.is_a?(String) && shape.string_args.include?(expected)
+
+        view = claim[:expected_view]
+        makes = view.nil? ? "string" : VIEW_MAKES[view]
+        return if makes.nil? || makes == (one ? "string" : "array")
+
+        how = view.nil? ? "a plain z.string()" : "a plain z.string() read through expected_view #{view}"
+        refuse("#{reads}, and its expected value is args.#{expected}, #{how}, which is never #{wanted}, so #{claim[:compare]} judges it the same way on every line. #{fix}")
+      end
+
+      # A files key that collides with another source of a claim's actual,
+      # or that no claim reads.
+      #: (Array[Hash[Symbol, untyped]], Shape) -> void
+      def check_files(claims, shape)
+        shape.files.each do |key|
+          other = if shape.from_keys.include?(key) then "a key of from"
+                  elsif shape.args_keys.include?(key) || shape.capture_keys.include?(key) then "an args key"
+                  end
+          refuse(%(files.#{key} has the name of #{other}, so a claim's actual "#{key}" would have two sources. Rename one of them)) if other
+          next if claims.any? { _1[:actual] == key }
+
+          refuse(%(files.#{key} is read by no claim, so the list it names changes no verdict. Compare a claim with actual "#{key}", or take the key out of files))
+        end
       end
 
       #: (String, untyped, Shape, bool) -> void
@@ -471,6 +550,7 @@ module Nukadoko
         return unless shape.observe
 
         read = claims.any? do |claim|
+          next false if shape.files.include?(claim[:actual])
           next true unless shape.from_keys.include?(claim[:actual].to_s.split(".").first.to_s)
 
           entries = claim[:each] ? [*(claim[:each][:where] || []), *claim[:each][:claims]] : [claim]

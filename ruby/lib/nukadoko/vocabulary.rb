@@ -14,7 +14,7 @@ module Nukadoko
         name: step.step_name, kind: "typed", file: step.file.delete_prefix("#{project}/"),
         patterns: step.patterns, description: step.description, mutates: step.mutating?, timeout: step.timeout,
         parts: step.parts.empty? ? nil : step.parts.map(&:step_name),
-        from: from(step), claims: step.claims, poll: step.poll, **states(step, steps),
+        from: from(step), claims: step.claims, poll: step.poll, files: files(step), **states(step, steps),
         needs: step.bag.map(&:to_s).sort, needs_browser: step.bag.intersect?(BROWSER)
       }.compact
     end
@@ -26,6 +26,17 @@ module Nukadoko
       entry(step, project, steps).merge(args: step.args.json_schema, returns: returns)
     end
 
+
+    # `files` for a claim step that declares any: each key's `of` by step
+    # name, and its change and directory when it names them.
+    #: (singleton(Step)) -> Hash[String, Hash[Symbol, untyped]]?
+    def self.files(step)
+      return nil unless step.claims && step.files.any?
+
+      step.files.transform_values do |entry|
+        { of: Engine::ChangedFiles.producers(entry).map(&:step_name), change: entry[:change] || entry["change"], under: Engine::ChangedFiles.under(entry) }.compact
+      end
+    end
 
     # `requires`, `gives`, and `ends` for a step that declares any.
     # `given_by` names each step with a pattern whose gives names the
@@ -58,30 +69,56 @@ module Nukadoko
 
     #: (singleton(Step), ?Array[singleton(Step)]) -> String
     def self.text(step, steps = [step])
-      lines = ["#{step.step_name}  typed  #{step.claims ? "claims" : step.mutating? ? "mutates" : "read-only"}#{"  timeout #{step.timeout}ms" if step.timeout}",
-               *(step.patterns.empty? ? ["  (no pattern)"] : step.patterns.map { "  #{_1}" }), "  #{step.description}"]
-      (step.claims || []).each { lines << "  claim: #{claim_text(_1)}" }
-      ((step.poll.is_a?(Hash) && step.poll[:settled]) || []).each { lines << "  settled: #{claim_text(_1)}" }
+      browser = step.bag.intersect?(BROWSER) ? "  browser" : ""
+      header = "#{step.step_name}  typed  #{step.claims ? "claims" : step.mutating? ? "mutates" : "read-only"}#{browser}#{"  timeout #{step.timeout}ms" if step.timeout}"
+      items = [*(step.patterns.empty? ? ["(no pattern)"] : step.patterns), step.description]
+      (files(step) || {}).each do |key, entry|
+        items << "files: #{key} lists the files the commands of #{entry[:of].join(" or ")} #{Engine::ChangedFiles.describe(entry)}"
+      end
+      (step.claims || []).each { items << "claim: #{claim_text(_1)}" }
+      ((step.poll.is_a?(Hash) && step.poll[:settled]) || []).each { items << "settled: #{claim_text(_1)}" }
       states = states(step, steps)
       (states[:requires] || []).each do |use|
-        lines << "  requires: #{use[:key] ? "#{use[:state]} for #{use[:key]}" : use[:state]}, #{use[:given_by].empty? ? "given by no step" : "given by #{use[:given_by].join(" or ")}"}"
+        items << "requires: #{use[:key] ? "#{use[:state]} for #{use[:key]}" : use[:state]}, #{use[:given_by].empty? ? "given by no step" : "given by #{use[:given_by].join(" or ")}"}"
       end
-      (states[:gives] || []).each { lines << "  gives: #{_1[:key] ? "#{_1[:state]} for #{_1[:key]}" : _1[:state]}" }
-      (states[:ends] || []).each { lines << "  ends: #{_1[:key] ? "#{_1[:state]} for #{_1[:key]}" : _1[:state]}" }
-      lines.join("\n")
+      (states[:gives] || []).each { items << "gives: #{_1[:key] ? "#{_1[:state]} for #{_1[:key]}" : _1[:state]}" }
+      (states[:ends] || []).each { items << "ends: #{_1[:key] ? "#{_1[:state]} for #{_1[:key]}" : _1[:state]}" }
+      [header, *items.flat_map { wrap(_1.to_s) }].join("\n")
     end
 
+    WIDTH = 80
+
+    # One item at two spaces, broken at spaces only, its later lines at
+    # four: a pattern or a description split mid-word could not be copied
+    # as the thing it names, so a word wider than the line keeps a line of
+    # its own.
+    #: (String) -> Array[String]
+    def self.wrap(text)
+      lines = [] #: Array[String]
+      current = ""
+      indent = 2
+      text.split(/ /, -1).each do |word|
+        candidate = current.empty? ? "#{" " * indent}#{word}" : "#{current} #{word}"
+        if !current.empty? && candidate.size > WIDTH
+          lines << current
+          indent = 4
+          current = "#{" " * indent}#{word}"
+        else current = candidate
+        end
+      end
+      lines << current unless current.empty?
+      lines
+    end
+
+    # A declared claim as one line: `count of orders equal n`, or
+    # `each of items: price greater-than 0` for a claim on each item.
     #: (Hash[Symbol, untyped]) -> String
     def self.claim_text(claim)
-      return "each #{claim[:actual]}" if claim[:each]
+      return Engine::RunRecord.describe_comparison(claim) unless claim[:each]
 
-      actual = [claim[:actual], claim[:view] && "as #{claim[:view]}", claim[:at] && "at #{claim[:at]}"].compact.join(" ")
-      expected = case claim[:expected]
-                 in String => key then key
-                 in { literal: value } then value.to_json
-                 in { from: key } then "from #{key}"
-                 end
-      "#{actual} #{claim[:compare]} #{expected}"
+      item = ->(entry) { Engine::RunRecord.describe_comparison({ actual: "item" }.merge(entry.compact)) }
+      where = claim[:each][:where] ? " where #{claim[:each][:where].map(&item).join(" and ")}" : ""
+      "each of #{claim[:actual]}#{" as #{claim[:view]}" if claim[:view]}#{" at #{claim[:at]}" if claim[:at]}#{where}: #{claim[:each][:claims].map(&item).join(" and ")}"
     end
   end
 end

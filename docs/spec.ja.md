@@ -1752,7 +1752,15 @@ Then は、前の step のコマンドがディスクに何をしたかを claim
 "the build writes nothing"、"wrote the migration file migrations/0002_add_note.sql"、"wrote exactly these files"、"changed no file under src/" のような文です。
 claim step はその一覧を `files` で名指し、claim はそのキーを実際の値として読みます:
 
-<!-- engine: typescript -->
+```ruby
+# features/steps/build_writes_nothing.rb
+class BuildWritesNothing < Nukadoko::Step
+  pattern "the build writes nothing"
+  files written: { of: RunBuild }
+  claims [{ actual: "written", compare: "equal", expected: { literal: [] } }]
+end
+```
+
 ```ts
 // features/steps/build-writes-nothing.ts
 import { defineStep, z } from "nukadoko";
@@ -1767,7 +1775,7 @@ export default defineStep({
 ```
 
 nukadoko はその一覧を前の step の record から作ります。
-その step の `runCommand` のプロセスが、作業ディレクトリの下で加えた、変えた、消したパスです(`observed.processes[].files`、「Records」を参照)。
+その step の `runCommand`(Ruby では `Nukadoko.run_command`)のプロセスが、作業ディレクトリの下で加えた、変えた、消したパスです(`observed.processes[].files`、「Records」を参照)。
 step のコードが返した値から作ることはありません。
 そのため、コマンドを走らせる step はコマンドが言うことを返し、claim は nukadoko が計測したものを読みます。
 

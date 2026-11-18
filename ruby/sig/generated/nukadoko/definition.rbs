@@ -20,6 +20,32 @@ module Nukadoko
 
       private
 
+      # : (untyped) -> String?
+      def claim_step_problem: (untyped) -> String?
+
+      # : () -> String?
+      def run_step_problem: () -> String?
+
+      FILES_ENTRY_KEYS: untyped
+
+      FILE_CHANGES: untyped
+
+      UNWALKED: untyped
+
+      # Why `files` is not a hash of lists the run can read: each key one
+      # word a claim's actual can name, each entry `{ of:, change:, under: }`
+      # with `of` a step or a list of distinct ones, `change` one of the
+      # changes a record lists or a list of them, and `under` a directory
+      # relative to the working directory that a walk enters.
+      # : () -> String?
+      def files_problem: () -> String?
+
+      # A record's paths are relative and `/`-separated, so an absolute
+      # path, a backslash, or a `.` or `..` segment matches none of them,
+      # and a list under node_modules or .git is empty whatever the command did.
+      # : (untyped) -> String?
+      def under_problem: (untyped) -> String?
+
       # : () -> ClaimRules::Shape
       def shape: () -> ClaimRules::Shape
 

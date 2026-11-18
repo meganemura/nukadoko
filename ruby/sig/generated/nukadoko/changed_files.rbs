@@ -1,0 +1,42 @@
+# Generated from lib/nukadoko/changed_files.rb with RBS::Inline
+
+# The list of paths a claim step's `files` key reads: made from an earlier
+# step's record, never from what its code returned. Each of that step's
+# run_command processes lists the paths it added, changed, or removed
+# under its working directory (`observed.processes[].files`); the key
+# selects some changes and a directory. It does not choose the earlier
+# step (the run and `nuka do --use` do) and does not judge a claim.
+#
+# A list is made only where every process of the step was walked whole,
+# so an absence a claim reads is one nukadoko saw. A step that ran no
+# process measured nothing, which is not an empty list.
+module Nukadoko
+  module Engine
+    module ChangedFiles
+      CHANGES: untyped
+
+      # The step classes a files entry's `of` names.
+      # : (Hash[untyped, untyped]) -> Array[singleton(Step)]
+      def self?.producers: (Hash[untyped, untyped]) -> Array[singleton(Step)]
+
+      # : (Hash[untyped, untyped]) -> Array[String]
+      def self?.changes: (Hash[untyped, untyped]) -> Array[String]
+
+      # : (Hash[untyped, untyped]) -> String?
+      def self?.under: (Hash[untyped, untyped]) -> String?
+
+      # : (String) -> String
+      def self?.directory: (String) -> String
+
+      # `added or changed under src/`: how a record names what a key selects.
+      # : (Hash[untyped, untyped]) -> String
+      def self?.describe: (Hash[untyped, untyped]) -> String
+
+      # The list `entry` reads from `source`, or why there is none. A source
+      # is `{ of:, record: { step_record_id:, processes: } }` for a chosen
+      # step, or `{ of:, unchosen: }`.
+      # : (Hash[untyped, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.side: (Hash[untyped, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+    end
+  end
+end

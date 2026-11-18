@@ -28,12 +28,21 @@ module Nukadoko
 
         attr_reader observe(): bool
 
-        def self.new: (Array[String] patterns, Array[String] args_keys, Array[String] string_args, Array[String] from_keys, Array[String] capture_keys, bool observe) -> instance
-                    | (patterns: Array[String], args_keys: Array[String], string_args: Array[String], from_keys: Array[String], capture_keys: Array[String], observe: bool) -> instance
+        attr_reader files(): Array[String]
 
-        def self.members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe ]
+        def self.new: (Array[String] patterns, Array[String] args_keys, Array[String] string_args, Array[String] from_keys, Array[String] capture_keys, bool observe, Array[String] files) -> instance
+                    | (patterns: Array[String], args_keys: Array[String], string_args: Array[String], from_keys: Array[String], capture_keys: Array[String], observe: bool, files: Array[String]) -> instance
 
-        def members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe ]
+        def self.members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe, :files ]
+
+        def members: () -> [ :patterns, :args_keys, :string_args, :from_keys, :capture_keys, :observe, :files ]
+      end
+
+      # A Data block's methods are its own, but rbs-inline reads only a class
+      # body, so they are written in one.
+      class Shape
+        # : (?files: Array[String], **untyped) -> void
+        def initialize: (?files: Array[String], **untyped) -> void
       end
 
       VIEWS: untyped
@@ -139,6 +148,24 @@ module Nukadoko
 
       # : (untyped, Shape) -> void
       def self?.validate: (untyped, Shape) -> void
+
+      # The compares a list of paths can take: a text or order compare
+      # breaks on an array on every line, and is-a list holds on every one.
+      FILES_COMPARES: untyped
+
+      FILES_CLAIM_KEYS: untyped
+
+      # A claim on a files key reads the list nukadoko made from an earlier
+      # step's record, so it takes no path, view, or at, and compares the
+      # whole list or its count. Its expected value is the sentence's: a
+      # list from { from } or { observe } would be one step code chose.
+      # : (String, Hash[Symbol, untyped], String, Shape) -> void
+      def self?.check_files_claim: (String, Hash[Symbol, untyped], String, Shape) -> void
+
+      # A files key that collides with another source of a claim's actual,
+      # or that no claim reads.
+      # : (Array[Hash[Symbol, untyped]], Shape) -> void
+      def self?.check_files: (Array[Hash[Symbol, untyped]], Shape) -> void
 
       # : (String, untyped, Shape, bool) -> void
       def self?.check_each: (String, untyped, Shape, bool) -> void

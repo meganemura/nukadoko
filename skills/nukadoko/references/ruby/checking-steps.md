@@ -87,3 +87,20 @@ class ScoresFormShows < Nukadoko::Step
   def observe(page:, args:) = { form: page.get_by_role("form", name: "Scores") }
 end
 ```
+
+## The files an earlier step changed
+
+`files` names the paths the `Nukadoko.run_command` processes of an
+earlier step changed, read from that step's record, and a claim reads the
+key as its actual. `of` is the step class, or a list of them.
+
+```ruby
+# conformance/engine/projects/changed-files/steps-rb/notes_include.rb
+class NotesInclude < Nukadoko::Step
+  pattern "the notes include {path:string}"
+  description "The notes the program added include one path"
+  args { string :path, "A path under notes/" }
+  files written: { of: WriteNotes, change: "added", under: "notes" }
+  claims [{ actual: "written", compare: "has-item", expected: "path" }]
+end
+```

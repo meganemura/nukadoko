@@ -127,6 +127,13 @@ place of `run`. nukadoko judges each claim ("Claims" in
 [the spec](../spec.md#claims)). `observe` does not receive an args key
 that a claim compares with.
 
+`files written: { of: RunBuild, change: "added", under: "src" }` names
+the paths the commands of an earlier step added, changed, or removed,
+and a claim reads the key as its actual ("Files an earlier step
+changed" in [the spec](../spec.md#files-an-earlier-step-changed)). The
+list comes from that step's record, from each `Nukadoko.run_command` it
+ran, never from what its `run` returned.
+
 ## Chaining (`from`)
 
 `from id: [StartJob, :id]` fills `id` with what the step `StartJob`
@@ -233,8 +240,7 @@ each of its examples with `<!-- engine: typescript -->`.
 
 - In the program: `lists`, and the `{events}` placeholder with the
   execution events it reads.
-- On a step: `files` (what a command wrote) and `events` (what the
-  program did).
+- On a step: `events` (what the program did).
 - What a fixture's `use` returns: the TypeScript engine gives back the
   scenario's outcome, so a teardown can keep what a failure left.
 - `measureMcp`, which records the MCP calls a client makes.

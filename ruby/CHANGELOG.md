@@ -48,6 +48,20 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Added
 
+- A claim step reads the files an earlier step's commands changed:
+  `files written: { of: RunBuild, change: "added", under: "src" }` names
+  the paths each `Nukadoko.run_command` of that step added, changed, or
+  removed, as its record lists them, and a claim reads the key as its
+  actual, compared whole or counted. The claim record names the list as
+  `files:<step>@<line>` and its `measured` channel in the producer's
+  record. `nuka check` reports `files-producer-missing` and
+  `files-producer-ambiguous` for a line whose key no single earlier line
+  can supply, `nuka do --use` names the record to read, `nuka steps`
+  lists each key, and a key that no list could fill is
+  `step-file-import-failed`.
+- `nuka steps` writes each claim as the TypeScript engine does (`count of`
+  a counted claim, `each of` a claim on each item), wraps a long line at
+  80 columns, and marks a step that opens a browser.
 - A step declares states: `requires` the states a line needs held,
   `gives` the states it leaves held, and `ends` the states it leaves not
   held, each a name or a name and the args key that tells holders apart

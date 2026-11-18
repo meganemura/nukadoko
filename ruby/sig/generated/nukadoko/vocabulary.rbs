@@ -13,6 +13,11 @@ module Nukadoko
     # : (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
     def self.describe: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
 
+    # `files` for a claim step that declares any: each key's `of` by step
+    # name, and its change and directory when it names them.
+    # : (singleton(Step)) -> Hash[String, Hash[Symbol, untyped]]?
+    def self.files: (singleton(Step)) -> Hash[String, Hash[Symbol, untyped]]?
+
     # `requires`, `gives`, and `ends` for a step that declares any.
     # `given_by` names each step with a pattern whose gives names the
     # state: the steps a line can run.
@@ -25,6 +30,17 @@ module Nukadoko
     # : (singleton(Step), ?Array[singleton(Step)]) -> String
     def self.text: (singleton(Step), ?Array[singleton(Step)]) -> String
 
+    WIDTH: ::Integer
+
+    # One item at two spaces, broken at spaces only, its later lines at
+    # four: a pattern or a description split mid-word could not be copied
+    # as the thing it names, so a word wider than the line keeps a line of
+    # its own.
+    # : (String) -> Array[String]
+    def self.wrap: (String) -> Array[String]
+
+    # A declared claim as one line: `count of orders equal n`, or
+    # `each of items: price greater-than 0` for a claim on each item.
     # : (Hash[Symbol, untyped]) -> String
     def self.claim_text: (Hash[Symbol, untyped]) -> String
   end
