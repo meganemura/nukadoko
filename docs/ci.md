@@ -50,7 +50,7 @@ a project that does not list it stops this job at the check, as
 `nuka check` on its own still has two uses: `additionalFeatureDirs`, which
 only `nuka check` walks, and a gate that has to stay seconds
 long when the run does not. That gate takes the targets the run takes,
-files or directories (`npx nuka check features/checkout`), and reports the
+files or directories (`nuka check features/checkout`), and reports the
 errors the run would stop on for them.
 
 ## A browser project: a workflow you can copy whole
@@ -237,7 +237,7 @@ of the above; these four are what changes.
   GitHub-hosted runner is a fresh virtual machine per job, so it does not
   matter there. A self-hosted or otherwise persistent runner has two
   fixes for it: `rm -rf .nukadoko` at the start of the job, or
-  `npx nuka clean` (see its own `--help`), which does the same thing more
+  `nuka clean` (see its own `--help`), which does the same thing more
   narrowly.
 
 ## What a team adds on top

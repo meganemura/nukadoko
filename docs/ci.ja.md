@@ -43,7 +43,7 @@ jobs:
 単独の `nuka check` には、まだ 2 つの使い道があります。
 1 つは `additionalFeatureDirs` で、これを辿るのは `nuka check` だけです。
 もう 1 つは、run が数秒で終わらないときにも数秒で終わらなければならないゲートです。
-このゲートは run と同じ対象、つまりファイルやディレクトリ(`npx nuka check features/checkout`)を受け、それについて run が止まるはずの error を報告します。
+このゲートは run と同じ対象、つまりファイルやディレクトリ(`nuka check features/checkout`)を受け、それについて run が止まるはずの error を報告します。
 
 ## ブラウザのプロジェクト: そのままコピーできる workflow
 
@@ -196,7 +196,7 @@ fetch が無ければ、`nuka run` は `base-shallow` で拒否し、同じ `git
   決して消さないのは、nukadoko が run ごとのファイル一覧を残すようになる前に書かれた `allure-results/` です。
   GitHub がホストするランナーはジョブごとに新しい仮想マシンなので、そこでは問題になりません。
   セルフホストや、それ以外の理由で永続するランナーでは、それに対して手当てが 2 つあります。
-  ジョブの先頭で `rm -rf .nukadoko` するか、`npx nuka clean`(自身の `--help` を参照)を叩くかです。
+  ジョブの先頭で `rm -rf .nukadoko` するか、`nuka clean`(自身の `--help` を参照)を叩くかです。
   後者は同じことをより狭く行います。
 
 ## チームがその上に足すもの
