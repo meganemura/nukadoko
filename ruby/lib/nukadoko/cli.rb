@@ -1075,7 +1075,7 @@ module Nukadoko
       table = envelope[:table] #: Hash[Symbol, untyped]
       rows = table[:rows] #: Array[Hash[Symbol, untyped]]
       based = !table[:base].nil?
-      if based || counts[:controls].positive?
+      if based || counts[:controls].positive? || envelope[:scenarios].any? { !_1[:world] && Engine::Underneath.demoting(_1) }
         count = ->(word) { rows.count { _1[:verdict] == word } }
         extra = based ? ", #{count.("unproven")} unproven, #{count.("moved")} moved, #{count.("removed")} removed" : ""
         io.puts "criteria: #{count.("held")} held, #{count.("proven")} proven, #{count.("failed")} failed#{extra}"

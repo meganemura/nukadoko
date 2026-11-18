@@ -210,8 +210,6 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- 下にある失敗(通った scenario が名指ししていない応答、エラー、ページのエラー)でセルを broke にすること。
-`@expects:` タグで名指ししたものは除きます。
 - fixture の `use` が返すもの。
 TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
 - MCP クライアントの呼び出しを記録する `measureMcp`。

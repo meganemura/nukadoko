@@ -110,8 +110,49 @@ module Nukadoko
       # : [T] () { () -> T } -> T
       def reading: [T] () { () -> T } -> T
 
-      # : () -> nil
-      def begin_step: () -> nil
+      # A step's page events start empty, and so does its tally of the
+      # page's requests left out of http.jsonl.
+      # : () -> void
+      def begin_step: () -> void
+
+      PAGE_EVENT_KINDS: untyped
+
+      # A redirect loop or a chatty page can emit thousands of these in one
+      # step, so each kind keeps 100 entries and counts the rest under
+      # `truncated`, never by changing the kind's own shape.
+      PAGE_EVENTS_CAP: ::Integer
+
+      # The page's requests that land in http.jsonl, with their status; a
+      # script, a stylesheet, or an image is only counted, by its type.
+      PAGE_LOGGED_TYPES: untyped
+
+      # What the page of `context` did that no step asked about: each
+      # console.error call, each error it threw that nothing caught (the
+      # name an @expects:page-error= tag accepts), and each request that
+      # failed at the network level, each with `as` for a named context.
+      # : (untyped, String?) -> void
+      def watch_page: (untyped, String?) -> void
+
+      # : (Symbol, Hash[Symbol, untyped]) -> void
+      def note_page_event: (Symbol, Hash[Symbol, untyped]) -> void
+
+      # The step's page events as its record holds them, nil when there
+      # were none: each kind a bare array, and `truncated` naming each kind
+      # that hit the cap with its true total.
+      # : () -> Hash[Symbol, untyped]?
+      def page_events: () -> Hash[Symbol, untyped]?
+
+      # The page's requests the step's http.jsonl left out, by type, nil
+      # when there were none.
+      # : () -> Hash[String, Integer]?
+      def http_omitted: () -> Hash[String, Integer]?
+
+      # A listener that writes each response the page received to `log`:
+      # a document, a fetch, or an XMLHttpRequest with its status, so a
+      # failure underneath a step is the server's own answer; any other
+      # request is counted by its type.
+      # : (Array[Hash[Symbol, untyped]], String?) -> ^(untyped) -> void
+      def page_logger: (Array[Hash[Symbol, untyped]], String?) -> ^(untyped) -> void
 
       # A claim step's `pages`, `page_requests`, and `judged_view`, after
       # the reading its claims were judged on, when a page was open.

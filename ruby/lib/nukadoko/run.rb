@@ -313,6 +313,9 @@ module Nukadoko
         @state_writes.merge!(found[:state_writes])
         places.zip(found[:recounted]).each { |(step, claim, read), recounted| after_world_stop(step, claim, read, recounted) }
         executions.each { judged_too_early(_1) }
+        # An unhandled error on a step's path, which the stop just
+        # attached, can turn a pass broke too.
+        executions.each { _1[:execution] = demoted(_1[:execution], _1[:json]) }
         { file: found[:copied] ? File.join("worlds", File.basename(world_dir), Events::WORLD_FILE) : nil, lines: found[:lines], owned: found[:owned],
           late: found[:late].values.sum { _1[:lines] }, unowned: found[:unowned], unreadable: found[:unreadable], undefined_kinds: found[:undefined_kinds] }
       end
@@ -548,7 +551,8 @@ module Nukadoko
           row = { feature: scenario.uri, line: scenario.line, name: scenario.name, change: change&.dig(:change) }
           row[:renamed_from] = change[:renamed_from] if change&.dig(:renamed_from)
           row[:retagged] = true if change&.dig(:retagged)
-          row.merge(conditions: Table.row_tags(scenario.tags), cells: row_cells, verdict: verdict, reason: reason)
+          expects = Underneath.tags_of(scenario.tags)
+          row.merge(conditions: Table.row_tags(scenario.tags), **(expects.empty? ? {} : { expects: expects }), cells: row_cells, verdict: verdict, reason: reason)
         end
         rows.sort_by! { [_1[:feature], _1[:line]] }
         rows.concat(removed_rows) if @base
@@ -614,7 +618,7 @@ module Nukadoko
           **(routes.nil? ? {} : { routes: routes }),
           **(paths.empty? ? {} : { paths: paths }),
           **(intent.nil? ? {} : { intent: intent }),
-          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + judged_rows + @judged_early.values + undeclared_writes(scenarios) + judged + intent_found + @incomplete,
+          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + judged_rows + @judged_early.values + underneath_findings(scenarios) + undeclared_writes(scenarios) + judged + intent_found + @incomplete,
           # A criterion whose Then asks for a judgment holds only once one
           # cites what it read: the judgment column has a gate of its own.
           # A change that declares its intent opts into one more gate: a
@@ -622,6 +626,19 @@ module Nukadoko
           passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty? &&
                   intent_found.none? { _1[:severity] == "failed" },
           **(@walk ? { walk: @walk.record } : {}) }
+      end
+
+      # The cells a failure underneath made broke, and each tag that
+      # accepts a failure that no longer happens.
+      #: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def underneath_findings(scenarios)
+        name = ->(scenario) { label(scenario[:scenario], scenario[:environment]) }
+        rerun = lambda do |scenario|
+          criterion = @scenarios.find { _1.uri == scenario[:feature] && _1.line == scenario[:line] }
+          environment = @environments.find { _1.name == scenario[:environment] }
+          criterion && environment ? again(criterion, environment) : nil
+        end
+        Underneath.unexpected_findings(scenarios, label: name, rerun: rerun) + Underneath.unseen_notes(scenarios, label: name)
       end
 
       # A step that declares mutates: false and whose trace holds a write
@@ -867,6 +884,8 @@ module Nukadoko
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
         json[:evidence] = { dir: File.join("scenarios", scenario_record_id), screenshots: final } if final.any?
         json[:do] = again(scenario, environment) if (failed || status == "stopped") && role != "control"
+        expects = Underneath.tags_of(scenario.tags)
+        json[:expects] = expects if expects.any?
         json[:claims] = RunRecord.claim_counts(records)
         # A scenario in which no claim on a Then line was judged says so,
         # since a pass there shows only that nothing raised. A Then whose
@@ -886,7 +905,19 @@ module Nukadoko
                       message: "#{scenario.name}: the walk was stopped after step #{where[:after_step]}#{at} with nuka step stop, so the steps after it did not run",
                       do: json[:do] }
                   end
-        { execution: execution, actual: stopped && stopped[3], json: json, failure: failure }
+        { execution: demoted(execution, json), actual: stopped && stopped[3], json: json, failure: failure }
+      end
+
+      # What a pass comes to once a failure underneath it that no tag of its
+      # scenario accepts is known: broke, at that failure's step. Claims
+      # that held over a program that failed underneath them prove nothing
+      # about the criterion.
+      #: (Array[untyped], Hash[Symbol, untyped]) -> Array[untyped]
+      def demoted(execution, json)
+        return execution unless execution == [:pass]
+
+        failure = Underneath.demoting(json)
+        failure ? [:broke, failure[:line], Underneath.reason(failure)] : execution
       end
 
       # The pause after the step that ran `number`th, under --step. Before
@@ -935,6 +966,7 @@ module Nukadoko
           entry[:observation] = record[:observation] || "observed"
           entry.merge!(RunRecord.poll_fields(record).except(:readings), **RunRecord.read_fields(record, File.join("steps", record[:step_record_id].to_s)))
         end
+        entry[:underneath] = record[:underneath] if record[:underneath]
         entry
       end
 
@@ -1215,6 +1247,7 @@ module Nukadoko
 
           @browser&.step = { step_record_id: record[:step_record_id], step: record[:step], line: at_line }
           @browser&.begin_step
+          began = true
           Trace.within(boundary) do
             fixtures, finish = build_fixtures(step, dir, log, world, record, results)
             HttpRecording.collect(log) do
@@ -1230,6 +1263,12 @@ module Nukadoko
         ensure
           @browser&.step = nil
           finish&.call
+          if began && (browser = @browser)
+            page_events = browser.page_events
+            record[:page_events] = page_events if page_events
+            omitted = browser.http_omitted
+            record[:http_omitted] = omitted if omitted
+          end
           log.concat(@request_log.log) if @request_log
           @request_log = nil
           if boundary
@@ -1273,6 +1312,8 @@ module Nukadoko
           record.delete(:required_env) if record[:required_env] && record[:required_env].empty?
           # A page's own traffic is in http.jsonl and the trace, not counted as the step's.
           record[:http_count] = log.count { _1[:via] != "page" }
+          underneath = Underneath.of_record(record[:page_events], log, nil, record[:http_omitted])
+          record[:underneath] = underneath if underneath
           File.write(File.join(dir, "http.jsonl"), "#{log.map { JSON.generate(secrets.redact(_1)) }.join("\n")}\n") if log.any?
           record[:http_file] = log.any?
           if (traced = TraceActions.read(File.join(dir, "trace.zip")))

@@ -148,6 +148,11 @@ module Nukadoko
       # : (Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]], ?Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> Hash[Symbol, untyped]
       def finish: (Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]], ?Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> Hash[Symbol, untyped]
 
+      # The cells a failure underneath made broke, and each tag that
+      # accepts a failure that no longer happens.
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def underneath_findings: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
       # A step that declares mutates: false and whose trace holds a write
       # the program committed to a table that holds state: one note per
       # step line of each scenario and environment, the first execution's
@@ -226,6 +231,13 @@ module Nukadoko
 
       # : (Scenario, Environment, String, World) -> Hash[Symbol, untyped]
       def play: (Scenario, Environment, String, World) -> Hash[Symbol, untyped]
+
+      # What a pass comes to once a failure underneath it that no tag of its
+      # scenario accepts is known: broke, at that failure's step. Claims
+      # that held over a program that failed underneath them prove nothing
+      # about the criterion.
+      # : (Array[untyped], Hash[Symbol, untyped]) -> Array[untyped]
+      def demoted: (Array[untyped], Hash[Symbol, untyped]) -> Array[untyped]
 
       # The pause after the step that ran `number`th, under --step. Before
       # the walk waits, the open page's traffic moves to the pause's own

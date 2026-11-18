@@ -1,0 +1,3 @@
+{
+  "serve": { "command": "node server.mjs {port} {events}", "ready": "/up" }
+}

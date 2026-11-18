@@ -349,7 +349,7 @@ module Nukadoko
           execution = doc[:scenarios].find do |scenario|
             at = scenario[:row] || { feature: scenario[:feature], line: scenario[:line] }
             at[:feature] == row[:feature] && at[:line] == row[:line] && (scenario[:world] || "head") == world &&
-              scenario[:environment] == cell[:environment] && scenario[:status] != "passed"
+              scenario[:environment] == cell[:environment] && (scenario[:status] != "passed" || Underneath.demoting(scenario))
           end
           failure = execution && describe_failure(execution)
           lines << "  - #{world == "head" ? "" : "#{world}: "}#{failure}" if failure
@@ -369,7 +369,7 @@ module Nukadoko
           return parts.join("; ")
         end
         step = scenario[:steps].find { !%w[passed skipped].include?(_1[:status]) }
-        return nil unless step
+        return underneath_failure(scenario) unless step
 
         parts = ["#{cell_text("step \"#{step[:text]}\"")}: #{code_span(first_error_line(step.dig(:error, :message)))}"]
         exited_producers(step[:used]).each do |name, code, output|
@@ -380,6 +380,20 @@ module Nukadoko
         parts << "record #{code_span(step[:record])}" if step[:record]
         seen = step[:claims] ? seen_text(seen_links(step)) : ""
         parts << "seen #{seen}" unless seen.empty?
+        parts.join("; ")
+      end
+
+      # Where a pass a failure underneath made broke failed: the step and
+      # each failure there that no tag of the scenario accepts.
+      #: (Hash[Symbol, untyped]) -> String?
+      def underneath_failure(scenario)
+        first = Underneath.demoting(scenario)
+        return nil unless first
+
+        at = scenario[:steps][first[:step]]
+        unexpected = Underneath.failures(scenario).select { _1[:step] == first[:step] && _1[:expected_by].nil? }
+        parts = ["#{cell_text("step \"#{at[:text]}\"")}: #{code_span(unexpected.map { Underneath.text(_1) }.join("; "))}"]
+        parts << "record #{code_span(at[:record])}" if at[:record]
         parts.join("; ")
       end
 

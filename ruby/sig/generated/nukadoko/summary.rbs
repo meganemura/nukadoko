@@ -132,6 +132,11 @@ module Nukadoko
       # : (Hash[Symbol, untyped]) -> String?
       def self?.describe_failure: (Hash[Symbol, untyped]) -> String?
 
+      # Where a pass a failure underneath made broke failed: the step and
+      # each failure there that no tag of the scenario accepts.
+      # : (Hash[Symbol, untyped]) -> String?
+      def self?.underneath_failure: (Hash[Symbol, untyped]) -> String?
+
       # : (Array[Hash[Symbol, untyped]]?) -> Array[[untyped, Integer, String]]
       def self?.exited_producers: (Array[Hash[Symbol, untyped]]?) -> Array[[ untyped, Integer, String ]]
 

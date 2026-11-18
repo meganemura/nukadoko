@@ -1,0 +1,141 @@
+# Generated from lib/nukadoko/underneath.rb with RBS::Inline
+
+# The failures underneath an execution (docs/spec.md "Failures
+# underneath"): what its steps saw of the program failing, grouped by what
+# an `@expects:` tag names; which of them no tag of the scenario accepts,
+# which turns a pass broke in its cell; and the findings that say so.
+# Pure, over a step's page events and the entries of its http.jsonl, and
+# over run.json's scenarios. Writing those is Run#execute's, and folding
+# the program's execution events into a step's `path` is the world's stop.
+#
+# Only a measured failure is counted: an entry of http.jsonl with a status
+# from 500 to 599, and an error the page threw that nothing caught. Each is
+# the failing party's own statement: the server chose the status, and the
+# browser found no handler for what the page threw. What could not be seen
+# (a page error past the record's cap, a page's request left out of
+# http.jsonl, whose status was never kept) is kept apart as `unseen`, and
+# is never counted as a failure.
+module Nukadoko
+  module Engine
+    module Underneath
+      PREFIX: ::String
+
+      FAILED_STATUS: Range[Integer]
+
+      # The kinds in the order a failure is looked for under one step: the
+      # server's answer, the program's own report, then the page.
+      KIND_ORDER: untyped
+
+      # The failure `tag` names, as [kind, value], or nil when it does not
+      # read as `@expects:<kind>=<value>` (Check.expects_problem says why).
+      # : (String) -> [String, String]?
+      def self?.read_tag: (String) -> [ String, String ]?
+
+      # : (String, String) -> String
+      def self?.tag_text: (String, String) -> String
+
+      # The `@expects:` tags among a criterion's tags that read, each once,
+      # in the order the tags first name them.
+      # : (Array[String]) -> Array[String]
+      def self?.tags_of: (Array[String]) -> Array[String]
+
+      # A step's `underneath`, from its page events, its http.jsonl entries
+      # (nil when the file could not be read), how many entries could not
+      # be written, and the page requests left out of it by type. nil when
+      # the step saw no failure and missed nothing.
+      # : (Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]?]?, Integer?, Hash[untyped, Integer]?) -> Hash[Symbol, untyped]?
+      def self?.of_record: (Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]?]?, Integer?, Hash[untyped, Integer]?) -> Hash[Symbol, untyped]?
+
+      # : (Array[Hash[Symbol, untyped]?]) -> Array[Hash[Symbol, untyped]]
+      def self?.status_groups: (Array[Hash[Symbol, untyped]?]) -> Array[Hash[Symbol, untyped]]
+
+      # : (Hash[Symbol, untyped]?) -> Array[Hash[Symbol, untyped]]
+      def self?.page_error_groups: (Hash[Symbol, untyped]?) -> Array[Hash[Symbol, untyped]]
+
+      # A field of a hash read from either engine's run.json or in process.
+      # : (Hash[untyped, untyped]?, Symbol) -> untyped
+      def self?.at: (Hash[untyped, untyped]?, Symbol) -> untyped
+
+      # Whether a hash holds a key, a null value included: an unread
+      # http.jsonl is a null count.
+      # : (untyped, Symbol) -> bool
+      def self?.has?: (untyped, Symbol) -> bool
+
+      # What one step shows of one kind, each as the key a tag names, a
+      # count, and where the first one is. An unhandled error is the step's
+      # `path` entry, which the world's stop folded from every line of its
+      # trace; a `handled: true` error is the program going on, not failing.
+      # : (String, Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.found_under: (String, Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
+      # Every failure underneath `execution`, steps in order and, within a
+      # step, in KIND_ORDER, each with the tag that accepts it or nil.
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.failures: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
+      # The first failure underneath `execution` no tag of its scenario
+      # accepts: what turns a pass broke.
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def self?.first_unexpected: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+
+      # A request as a reason names it: its method and its path. The port
+      # of a world differs from run to run, so the full URL would make two
+      # runs that failed the same way disagree.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.request_of: (Hash[Symbol, untyped]) -> String
+
+      # The cell's reason for `failure`: the step's line and the failure's
+      # key, never a count or a message, so two runs that failed the same
+      # way agree.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.reason: (Hash[Symbol, untyped]) -> String
+
+      # : (Integer, String, String) -> String
+      def self?.count_of: (Integer, String, String) -> String
+
+      # `failure` as a finding and the summary name it, with where its
+      # first occurrence is.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.text: (Hash[Symbol, untyped]) -> String
+
+      # Whether a claim of `steps` was judged on lines still on their way.
+      # : (Array[Hash[Symbol, untyped]]) -> bool
+      def self?.judged_too_early?: (Array[Hash[Symbol, untyped]]) -> bool
+
+      # The failure underneath that turns `execution` broke in its cell:
+      # it passed, no claim of it was judged too early (its own broke), and
+      # a failure underneath it is one no tag of its scenario accepts. Only
+      # a pass: a fail is already the first failure that counts.
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def self?.demoting: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+
+      # One `unexpected-failure` finding per head required execution a
+      # failure underneath turned broke, per scenario and environment,
+      # since the runs of `--repeat` would say it again. It names every
+      # failure no tag accepts under the first step that has one, and its
+      # `fix:` spells the tag for each.
+      # : (Array[Hash[Symbol, untyped]], label: ^(Hash[Symbol, untyped]) -> String, rerun: ^(Hash[Symbol, untyped]) -> String?) -> Array[Hash[Symbol, untyped]]
+      def self?.unexpected_findings: (Array[Hash[Symbol, untyped]], label: ^(Hash[Symbol, untyped]) -> String, rerun: ^(Hash[Symbol, untyped]) -> String?) -> Array[Hash[Symbol, untyped]]
+
+      # Whether an execution was watched for a kind whole, so a tag of that
+      # kind that matched nothing there matched nothing that happened:
+      # every entry of http.jsonl read and no page request left out of it,
+      # the page errors of a browser kept, or the program's events read
+      # with no line that may be any line and no gap where an error could
+      # still be. A step that sent no request has a gap too
+      # (`no-requests`), and no error of its trace can be missing.
+      # : (String, Hash[Symbol, untyped]) -> bool
+      def self?.watched?: (String, Hash[Symbol, untyped]) -> bool
+
+      NOT_SEEN: Hash[String, ^(String) -> String]
+
+      # One `expects-unseen` note per tag of a head required scenario, per
+      # environment, whose every execution passed and matched no failure
+      # that tag accepts, where each was watched for its kind whole. A tag
+      # left in place after its failure stopped happening accepts that
+      # failure in every later run.
+      # : (Array[Hash[Symbol, untyped]], label: ^(Hash[Symbol, untyped]) -> String) -> Array[Hash[Symbol, untyped]]
+      def self?.unseen_notes: (Array[Hash[Symbol, untyped]], label: ^(Hash[Symbol, untyped]) -> String) -> Array[Hash[Symbol, untyped]]
+    end
+  end
+end

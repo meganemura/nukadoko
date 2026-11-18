@@ -253,9 +253,6 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- Failures underneath: a response, an error, or a page error a passed
-  scenario did not name turns its cell broke, unless an `@expects:` tag
-  names it.
 - What a fixture's `use` returns: the TypeScript engine gives back the
   scenario's outcome, so a teardown can keep what a failure left.
 - `measureMcp`, which records the MCP calls a client makes.

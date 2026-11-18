@@ -172,14 +172,15 @@ module Nukadoko
         @context ||= @browser.new_context(baseURL: @base_url).tap do |context|
           context.tracing.start(screenshots: true, snapshots: true)
           watch_requests(context)
+          watch_page(context, nil)
         end
         @page ||= @context.new_page.tap { stamp(_1) }
         @context.tracing.start_chunk
         @boundary = Trace.current
-        listener = ->(req) { log << { method: req.method, url: req.url, via: "page" } }
-        @page.on("request", listener)
+        listener = page_logger(log, nil)
+        @page.on("response", listener)
         finish = lambda do
-          @page.off("request", listener)
+          @page.off("response", listener)
           @boundary = nil
           @context.tracing.stop_chunk(path: File.join(step_dir, "trace.zip"))
         end
@@ -232,8 +233,89 @@ module Nukadoko
         @reading ||= [started, monotonic] if started
       end
 
-      #: () -> nil
-      def begin_step = (@reading = nil)
+      # A step's page events start empty, and so does its tally of the
+      # page's requests left out of http.jsonl.
+      #: () -> void
+      def begin_step
+        @reading = nil
+        @page_events = PAGE_EVENT_KINDS.to_h { [_1, [0, []]] }
+        @http_omitted = Hash.new(0)
+      end
+
+      PAGE_EVENT_KINDS = %i[console_errors page_errors failed_requests].freeze
+      # A redirect loop or a chatty page can emit thousands of these in one
+      # step, so each kind keeps 100 entries and counts the rest under
+      # `truncated`, never by changing the kind's own shape.
+      PAGE_EVENTS_CAP = 100
+      # The page's requests that land in http.jsonl, with their status; a
+      # script, a stylesheet, or an image is only counted, by its type.
+      PAGE_LOGGED_TYPES = %w[document xhr fetch].freeze
+
+      # What the page of `context` did that no step asked about: each
+      # console.error call, each error it threw that nothing caught (the
+      # name an @expects:page-error= tag accepts), and each request that
+      # failed at the network level, each with `as` for a named context.
+      #: (untyped, String?) -> void
+      def watch_page(context, as)
+        named_as = as ? { as: as } : {}
+        context.on("console", lambda do |message|
+          next unless message.type == "error"
+
+          location = message.location || {}
+          note_page_event(:console_errors, { text: message.text, location: { url: location["url"], lineNumber: location["lineNumber"], columnNumber: location["columnNumber"] },
+                                             **named_as })
+        end)
+        context.on("weberror", lambda do |web_error|
+          error = web_error.error
+          name = error.respond_to?(:name) ? error.name.to_s : ""
+          note_page_event(:page_errors, { **(name.empty? ? {} : { name: name }), message: error.respond_to?(:message) ? error.message.to_s : error.to_s, **named_as })
+        end)
+        context.on("requestfailed", lambda do |request|
+          failure = request.failure
+          note_page_event(:failed_requests, { method: request.method, url: request.url, **(failure ? { failure: failure } : {}), **named_as })
+        end)
+      end
+
+      #: (Symbol, Hash[Symbol, untyped]) -> void
+      def note_page_event(kind, entry)
+        tally = @page_events&.[](kind) or return
+        tally[0] += 1
+        tally[1] << entry.merge(at: Time.now.utc.iso8601(3)) if tally[1].size < PAGE_EVENTS_CAP
+      end
+
+      # The step's page events as its record holds them, nil when there
+      # were none: each kind a bare array, and `truncated` naming each kind
+      # that hit the cap with its true total.
+      #: () -> Hash[Symbol, untyped]?
+      def page_events
+        tallies = (@page_events || {}).reject { |_, (total, _)| total.zero? }
+        return nil if tallies.empty?
+
+        truncated = tallies.select { |_, (total, _)| total > PAGE_EVENTS_CAP }.transform_values(&:first)
+        { **tallies.transform_values { _1[1].dup }, **(truncated.empty? ? {} : { truncated: truncated }) }
+      end
+
+      # The page's requests the step's http.jsonl left out, by type, nil
+      # when there were none.
+      #: () -> Hash[String, Integer]?
+      def http_omitted = @http_omitted&.any? ? @http_omitted.to_h : nil
+
+      # A listener that writes each response the page received to `log`:
+      # a document, a fetch, or an XMLHttpRequest with its status, so a
+      # failure underneath a step is the server's own answer; any other
+      # request is counted by its type.
+      #: (Array[Hash[Symbol, untyped]], String?) -> ^(untyped) -> void
+      def page_logger(log, as)
+        lambda do |response|
+          request = response.request
+          type = request.resource_type
+          unless PAGE_LOGGED_TYPES.include?(type)
+            @http_omitted[type] += 1 if @http_omitted
+            next
+          end
+          log << { method: request.method, url: response.url, status: response.status, via: "page", **(as ? { as: as } : {}) }
+        end
+      end
 
       # A claim step's `pages`, `page_requests`, and `judged_view`, after
       # the reading its claims were judged on, when a page was open.
@@ -361,12 +443,15 @@ module Nukadoko
         return [] unless @page
 
         log = File.join(dir, "http.jsonl")
-        @held = lambda do |req|
-          File.open(log, "a") { _1.puts JSON.generate({ method: req.method, url: req.url, via: "page" }) }
+        @held = lambda do |response|
+          request = response.request
+          next unless PAGE_LOGGED_TYPES.include?(request.resource_type)
+
+          File.open(log, "a") { _1.puts JSON.generate({ method: request.method, url: response.url, status: response.status, via: "page" }) }
         rescue StandardError
           nil
         end
-        @page.on("request", @held)
+        @page.on("response", @held)
         # The caret shows, as the person would see the field they type in.
         shot = masked_shot(@page, File.join(dir, "page.png"), monotonic + VIEW_TIMEOUT_MS / 1000.0, caret: "initial") ? "#{recorded_as}/page.png" : nil
         aria = begin
@@ -383,7 +468,7 @@ module Nukadoko
       # The pause is answered: the page's requests are the next step's again.
       #: () -> void
       def release
-        @page.off("request", @held) if @page && @held
+        @page.off("response", @held) if @page && @held
         @held = nil
       end
 
@@ -448,12 +533,13 @@ module Nukadoko
           launch
           context = @browser.new_context(baseURL: @base_url, **(asked || {}))
           context.tracing.start(screenshots: true, snapshots: true)
+          watch_page(context, name)
           held = named[name] = { context: context, page: context.new_page, options: asked || {} }
         end
         unless step_named.key?(name)
           held[:context].tracing.start_chunk
-          listener = ->(req) { log << { method: req.method, url: req.url, via: "page", as: name } }
-          held[:page].on("request", listener)
+          listener = page_logger(log, name)
+          held[:page].on("response", listener)
           step_named[name] = [step_dir, listener]
         end
         held[:page]
@@ -468,7 +554,7 @@ module Nukadoko
           step_dir, listener = step_named[name]
           next unless step_dir
 
-          held[:page].off("request", listener)
+          held[:page].off("response", listener)
           file = "trace.#{name}.zip"
           held[:context].tracing.stop_chunk(path: File.join(step_dir, file))
           traces << { as: name, file: file }

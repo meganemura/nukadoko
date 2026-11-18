@@ -186,6 +186,17 @@ Each release's notes come from the section below whose heading starts with `## [
   read (`intent-unread`) fail the run. A writer's own kind counts in a
   path by the fields the rows read on it. The same as the TypeScript
   engine.
+- Failures underneath (docs/spec.md "Failures underneath"): a passed
+  scenario whose steps got a response from 500 to 599, whose program
+  reported an error with `handled: false`, or whose page threw an error
+  nothing caught, is broke in its cell unless an `@expects:` tag of the
+  scenario names the failure, with an `unexpected-failure` finding that
+  spells the tag. A tag that matched nothing that happened gets an
+  `expects-unseen` note. run.json's scenarios carry `expects`, rows
+  `expects`, and steps `underneath`. A step record gains `page_events`
+  (console errors, page errors, failed requests) and `http_omitted`, and
+  the page's requests in http.jsonl are its documents, fetches, and
+  XMLHttpRequests with their status. The same as the TypeScript engine.
 
 ## [0.6.0] - 2026-11-17
 
