@@ -98,7 +98,9 @@ module Nukadoko
         pid = Process.spawn(env, command, out: log, err: log, pgroup: true, chdir: project)
         world = World.new(base_url: "http://localhost:#{port}", pid: pid, log: log, env: env, trace_prefix: prefix, log_path: log_path,
                           commands: [{ phase: "serve", argv: Shellwords.split(command) }], timings: {})
-        world.wait_ready(@options[:serve][:ready])
+        # Without a ready path the program is ready once "/" answers, as in the
+        # TypeScript engine, so a serve block needs only its command.
+        world.wait_ready(@options[:serve][:ready] || "/")
         world.timings[:serve_ms] = Request.since(started)
         world
       end

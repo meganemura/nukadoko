@@ -6,6 +6,11 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ## [Unreleased]
 
+### Fixed
+
+- A program whose `serve` names no `ready` path is ready once `/` answers,
+  as in the TypeScript engine. It crashed while it waited for the program.
+
 ### Added
 
 - `nuka <command> --help` prints that command's usage, what it is for, and
