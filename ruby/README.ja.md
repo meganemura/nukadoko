@@ -133,6 +133,10 @@ Nukadoko.config(
 )
 ```
 
+`ready` が `timeout_ms`(既定は 60000)のうちに 2xx を返した時点で、world の準備ができたとみなします。
+コマンドは空白で分け、シェルは通しません。
+すべてのフィールドは [docs/ruby/reference.ja.md](../docs/ruby/reference.ja.md#プログラム) にあります。
+
 ## 開発
 
 - このディレクトリで `bundle install` を実行します。

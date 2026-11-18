@@ -6,11 +6,13 @@ What the program is, how a world starts it, and every field are in
 ## The program
 
 `program:` is a lambda that returns how the program starts. The gem reads
-`serve` (`command` and `ready`, `/` when it names none), `env`,
-`environments`, and `defaultEnvironments`. It has no `build`, `prepare`,
-`setup`, `url`, `lists`, `policy`, or `{events}` yet: run a build
-before `bundle exec nuka run`, and prepare state from the `serve` command
-itself (`bin/rails db:prepare && bin/rails server` through `sh -c`).
+`serve` (`command`; `port`, `ready`, and `timeout_ms` as in `../program.md`),
+`env`, `environments`, and `defaultEnvironments`, and refuses any other
+key. It has no `build`, `prepare`, `setup`, `url`, `lists`, `policy`, or
+`{events}` yet: run a build before `bundle exec nuka run`, and prepare
+state from the `serve` command itself, which never goes through a shell
+unless it names one:
+`["sh", "-c", "bin/rails db:prepare && bin/rails server -p {port}"]`.
 
 ```ruby
 Nukadoko.config(

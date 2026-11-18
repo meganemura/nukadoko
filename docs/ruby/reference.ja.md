@@ -150,6 +150,13 @@ Nukadoko.config(
 ```
 
 フィールドは [spec](../spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」にあります。
+`serve` は `command`、`port`(既定の `"auto"` か、まだ何も応答しない番号)、`ready`(既定は `/`)、`timeout_ms`(既定は 60000)を取ります。
+`ready` が `timeout_ms` のうちに 2xx を返した時点で、world の準備ができたとみなします。
+コマンドは単語の Array か、空白で分ける String です。
+どちらもシェルを通さないので、シェルが要るプログラムは `["sh", "-c", "..."]` と書きます。
+プログラムが知らないキーは止めます。
+TypeScript エンジンが読んでこのエンジンがまだ読まないキー(下)も止めます。
+プログラムが起動しなかった world ではシナリオを 1 つも走らせず、実行は `program-start-failed` と world の `program.log` の終わりを示して失敗します。
 
 ## 型とツール
 
@@ -161,7 +168,6 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- `nuka check --codes` と `nuka check --fail-on`。
 - プログラムの `build`、`prepare`、`setup`、`url`(nukadoko が起動しないプログラム)、`lists`、`policy`、それに `{events}` のプレースホルダと、それが読む実行イベント。
 - step の `requires`、`gives`、`ends`(state)、`files`(コマンドが書いたもの)、`events`(プログラムがしたこと)。
 - fixture の `use` が返すもの。

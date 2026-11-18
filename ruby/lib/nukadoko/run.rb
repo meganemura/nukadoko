@@ -108,10 +108,21 @@ module Nukadoko
           world_dir = File.join(@dir, "worlds", @world == "head" ? environment.name : "#{environment.name}@#{@world}")
           FileUtils.mkdir_p(world_dir)
           read_env(environment)
-          world = @program.start(environment, world_dir, @project)
+          roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
+          begin
+            world = @program.start(environment, world_dir, @project)
+          rescue Program::StartFailed => e
+            # No scenario runs in a world whose program did not start: each
+            # cell is not run, saying why, and the run fails outside them.
+            @incomplete << { severity: "failed", code: "program-start-failed", message: e.message, fix: Codes.fix("program-start-failed") }
+            @world_entries << { name: environment.name, tree: @world, url: e.world.base_url, commands: e.world.commands, timings: {},
+                                log: File.join("worlds", File.basename(world_dir), "program.log"), error: e.cause_text }
+            @scenarios.each { cells[_1] << cell([], environment, roles[_1], _1).merge(reason: "the program did not start for its world") }
+            world = nil
+            next
+          end
           @program_log = world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
           @base_urls[environment.name] = world.base_url
-          roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
           runs = Hash.new { |h, k| h[k] = [] }
           ran = lambda do |scenario, execution|
             runs[scenario] << execution
@@ -371,7 +382,7 @@ module Nukadoko
         judged += Judgments.findings(rows, @id) + problems
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
           environments: @environments.map { environment_entry(_1) }, worlds: @world_entries, order: @order,
-          counts: RunRecord.counts(scenarios.reject { _1[:world] }), scenarios: scenarios,
+          counts: RunRecord.counts(scenarios.reject { _1[:world] }, rows), scenarios: scenarios,
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                    mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
                    worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },

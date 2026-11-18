@@ -8,6 +8,28 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Changed
 
+- **Breaking.** The program's `serve.command` no longer goes through a
+  shell: a String is split on whitespace, as in the TypeScript engine, and
+  an Array is the words as written. A command that used the shell (`&&`,
+  a pipe, a redirect, `VAR=value` in front) is now one program with odd
+  arguments. To move: write it as `["sh", "-c", "the same text"]`, or
+  move a variable into `env:`.
+- **Breaking.** The program is checked before anything starts, and a key
+  it does not know is refused (`config-invalid`), with the known key it
+  matches when only its case differs: a misspelt `ready` used to leave the
+  world ready on any answer from `/`. A key the TypeScript engine reads
+  and this one does not yet (`build`, `prepare`, `url`, `lists`,
+  `setup`, `policy`, `version`) is refused too, naming it, rather than
+  skipped. To move: correct or remove the key the message names.
+- **Breaking.** A world is ready once `ready` answers 2xx, as in the
+  TypeScript engine; any answer counted before, a 404 or a 503 from a
+  server still starting included. `serve` takes `timeout_ms` (default
+  60000, was a fixed 30 s) and `port` (`"auto"`, the default, or a fixed
+  number nothing answers on yet). A program that exits first, or never
+  answers 2xx, now fails the run with `program-start-failed` and the end
+  of the world's `program.log`, and runs none of that world's scenarios;
+  it used to crash the run. To move: point `ready` at a path that answers
+  2xx once the program can take requests.
 - The gem ships `docs/` beside `skills/` and `llms.txt`, as the npm
   package does, so a finding that cites `docs/spec.md` and a skill that
   links to a document open in the installed gem.
@@ -22,8 +44,8 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Fixed
 
-- A program whose `serve` names no `ready` path is ready once `/` answers,
-  as in the TypeScript engine. It crashed while it waited for the program.
+- A program whose `serve` names no `ready` path is ready once `/` answers
+  2xx, as in the TypeScript engine. It crashed while it waited for the program.
 
 ### Added
 

@@ -25,20 +25,21 @@ module Nukadoko
       UPGRADING = 'CHANGELOG.md, under "The program moves into the config"'
 
       # The program of the tree at `root`, whose config is already loaded.
+      # Its shape is checked whichever file holds it (ProgramShape).
       #: (String) -> Hash[Symbol, untyped]
       def self.read(root)
         raise called_in_config unless Nukadoko.legacy_program.nil?
 
         legacy_copy = File.join(root, TREE_LEGACY_PROGRAM)
-        return elsewhere(legacy_copy, legacy: true) || {} if File.exist?(legacy_copy)
+        return ProgramShape.read(elsewhere(legacy_copy, legacy: true) || {}, LEGACY_PROGRAM) if File.exist?(legacy_copy)
 
         tree_copy = File.join(root, TREE_PROGRAM)
-        return elsewhere(tree_copy, legacy: false) || {} if File.exist?(tree_copy)
+        return ProgramShape.read(elsewhere(tree_copy, legacy: false) || {}, CONFIG) if File.exist?(tree_copy)
 
         legacy = File.join(root, LEGACY_PROGRAM)
         raise moved if File.exist?(legacy)
 
-        called(Nukadoko.config_options[:program], CONFIG) || {}
+        ProgramShape.read(called(Nukadoko.config_options[:program], CONFIG) || {}, CONFIG)
       end
 
       # Nukadoko.program called from the config would describe a program

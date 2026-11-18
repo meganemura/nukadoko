@@ -486,12 +486,16 @@ module Nukadoko
         ["unproven", "passes in #{passed_in}, and nothing shows a Then failing where its behaviour is absent (#{absent.join(", ")})"]
       end
 
-      #: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
-      def counts(scenarios)
+      # The head scenarios by status, and the head cells of the table that
+      # did not run, a required one and a control apart: a world whose
+      # program did not start runs none of its cells.
+      #: (Array[Hash[Symbol, untyped]], ?Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
+      def counts(scenarios, rows = [])
         head = scenarios.reject { _1[:role] == "control" }
         controls = scenarios.select { _1[:role] == "control" }
+        not_run = ->(role) { rows.sum { |row| row[:cells].count { _1[:world] == "head" && _1[:role] == role && _1[:outcome] == "not-run" } } }
         { scenarios: head.size, passed: head.count { _1[:status] == "passed" }, failed: head.count { _1[:status] == "failed" },
-          stopped: head.count { _1[:status] == "stopped" }, not_run: 0, controls: controls.size, controls_not_run: 0 }
+          stopped: head.count { _1[:status] == "stopped" }, not_run: not_run.("required"), controls: controls.size, controls_not_run: not_run.("control") }
       end
 
       # The commit HEAD named when the run started, whether the tree had an

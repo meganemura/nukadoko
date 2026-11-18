@@ -30,7 +30,7 @@ class ProjectProgramTest < Minitest::Test
   end
 
   def test_the_program_lambda_is_called_for_its_options
-    assert_equal({ url: "http://a.example" }, P.called(-> { { url: "http://a.example" } }, "nukadoko.config.rb"))
+    assert_equal({ env: { SITE: "a" } }, P.called(-> { { env: { SITE: "a" } } }, "nukadoko.config.rb"))
     assert_nil P.called(nil, "nukadoko.config.rb")
     refusal = assert_raises(Nukadoko::Engine::Refusal) { P.called({ url: "x" }, "nukadoko.config.rb") }
     assert_equal "config-invalid", refusal.code
@@ -39,7 +39,7 @@ class ProjectProgramTest < Minitest::Test
 
   def test_a_program_file_of_an_earlier_release_is_refused
     Dir.mktmpdir do |dir|
-      File.write(File.join(dir, "nukadoko.program.rb"), "Nukadoko.program(url: \"http://a.example\")\n")
+      File.write(File.join(dir, "nukadoko.program.rb"), "Nukadoko.program(env: { SITE: \"a\" })\n")
       refusal = assert_raises(Nukadoko::Engine::Refusal) { P.read(dir) }
       assert_equal "program-file-moved", refusal.code
       assert_includes refusal.message, "nukadoko.program.rb is no longer read"
@@ -48,22 +48,22 @@ class ProjectProgramTest < Minitest::Test
 
   def test_nukadoko_program_called_from_the_config_is_refused
     Dir.mktmpdir do |dir|
-      File.write(File.join(dir, "nukadoko.config.rb"), "Nukadoko.config\nNukadoko.program(url: \"http://a.example\")\n")
+      File.write(File.join(dir, "nukadoko.config.rb"), "Nukadoko.config\nNukadoko.program(env: { SITE: \"a\" })\n")
       refusal = assert_raises(Nukadoko::Engine::Refusal) { Nukadoko.load_project(dir) }
       assert_equal "config-invalid", refusal.code
       assert_includes refusal.message, "Nukadoko.program is no longer read"
-      File.write(File.join(dir, "nukadoko.config.rb"), "Nukadoko.config(program: -> { { url: \"http://a.example\" } })\n")
+      File.write(File.join(dir, "nukadoko.config.rb"), "Nukadoko.config(program: -> { { env: { SITE: \"a\" } } })\n")
       Nukadoko.load_project(dir)
-      assert_equal({ url: "http://a.example" }, Nukadoko.program_options)
+      assert_equal({ env: { SITE: "a" } }, Nukadoko.program_options)
     end
   end
 
   def test_a_tree_reads_the_copy_beside_its_config
     Dir.mktmpdir do |dir|
-      File.write(File.join(dir, "nukadoko.tree-program.rb"), config(%({ url: "http://other.example" })))
-      assert_equal({ url: "http://other.example" }, P.read(dir))
-      File.write(File.join(dir, "nukadoko.tree-legacy-program.rb"), "Nukadoko.program(url: \"http://old.example\")\n")
-      assert_equal({ url: "http://old.example" }, P.read(dir))
+      File.write(File.join(dir, "nukadoko.tree-program.rb"), config(%({ env: { SITE: "other" } })))
+      assert_equal({ env: { SITE: "other" } }, P.read(dir))
+      File.write(File.join(dir, "nukadoko.tree-legacy-program.rb"), "Nukadoko.program(env: { SITE: \"old\" })\n")
+      assert_equal({ env: { SITE: "old" } }, P.read(dir))
     end
   end
 end

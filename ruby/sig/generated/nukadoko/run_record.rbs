@@ -155,8 +155,11 @@ module Nukadoko
       # : (Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> [String, String]
       def self?.judge_row: (Array[Hash[Symbol, untyped]], ?Hash[Symbol, untyped]?) -> [ String, String ]
 
-      # : (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
-      def self?.counts: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
+      # The head scenarios by status, and the head cells of the table that
+      # did not run, a required one and a control apart: a world whose
+      # program did not start runs none of its cells.
+      # : (Array[Hash[Symbol, untyped]], ?Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
+      def self?.counts: (Array[Hash[Symbol, untyped]], ?Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
 
       # The commit HEAD named when the run started, whether the tree had an
       # uncommitted change, and the working tree as one git tree id, written

@@ -81,6 +81,8 @@ Nukadoko.config(
 )
 ```
 
+The world is ready once `ready` answers 2xx within `timeout_ms` (default 60000). The command is split on whitespace and never goes through a shell; [docs/ruby/reference.md](../docs/ruby/reference.md#program) has every field.
+
 ## Development
 
 - `bundle install` in this directory.

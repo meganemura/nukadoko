@@ -77,32 +77,94 @@ module Nukadoko
         end
       end
 
+      # Started, or StartFailed with the world as far as it got, and the
+      # message the run reports as program-start-failed.
       #: (Environment, String, String) -> World
       def start(environment, dir, project)
-        port = if @options[:serve]
-          server = TCPServer.new("127.0.0.1", 0)
-          server.addr[1].tap { server.close }
-        end
+        serve = @options[:serve]
+        port = (serve[:port] == "auto" ? Program.free_port : serve[:port]) if serve
         fill = ->(text) { placeholders(text.to_s, port, dir, environment) }
         # The world's env is what its program and the steps' env fixture get.
         env = (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, fill.(v)] }.freeze
         prefix = Trace.new_prefix
-        unless @options[:serve]
-          return World.new(base_url: @options[:base_url], pid: nil, log: nil, env: env, trace_prefix: prefix, log_path: nil, commands: [], timings: {})
+        unless serve
+          return World.new(base_url: nil, pid: nil, log: nil, env: env, trace_prefix: prefix, log_path: nil, commands: [], timings: {})
         end
 
         log_path = File.join(dir, "program.log")
         log = File.open(log_path, "w")
-        command = fill.(@options[:serve][:command])
-        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        pid = Process.spawn(env, command, out: log, err: log, pgroup: true, chdir: project)
-        world = World.new(base_url: "http://localhost:#{port}", pid: pid, log: log, env: env, trace_prefix: prefix, log_path: log_path,
-                          commands: [{ phase: "serve", argv: Shellwords.split(command) }], timings: {})
-        # Without a ready path the program is ready once "/" answers, as in the
-        # TypeScript engine, so a serve block needs only its command.
-        world.wait_ready(@options[:serve][:ready] || "/")
-        world.timings[:serve_ms] = Request.since(started)
-        world
+        log.sync = true
+        # A command is an argv array, or a string split on whitespace, as in
+        # the TypeScript engine; neither goes through a shell, so what runs
+        # does not depend on the host's shell. A program that needs one
+        # writes ["sh", "-c", "..."].
+        argv = Program.words(serve[:command]).map { fill.(_1) }
+        world = World.new(base_url: "http://localhost:#{port}", pid: nil, log: log, env: env, trace_prefix: prefix, log_path: log_path,
+                          commands: [{ phase: "serve", argv: argv }], timings: {})
+        begin
+          Program.unanswered(port.to_i) unless serve[:port] == "auto"
+          log.puts "$ #{Program.display(argv)}"
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          begin
+            pid = Process.spawn(env, [argv.first, argv.first], *argv.drop(1), out: log, err: log, pgroup: true, chdir: project)
+          rescue SystemCallError => e
+            raise StartError, "serve command #{Program.display(argv)} could not start: #{e.message}"
+          end
+          world = world.with(pid: pid)
+          world.wait_ready(serve[:ready], serve[:timeout_ms], argv)
+          world.timings[:serve_ms] = Request.since(started)
+          world
+        rescue StartError => e
+          world.stop
+          tail = File.readlines(log_path).last(20).join.chomp
+          message = "the program did not start for world #{environment.name}: #{e.message}#{". The end of #{log_path.delete_prefix("#{project}/")}:\n#{tail}" unless tail.empty?}"
+          raise StartFailed.new(message, world, e.message)
+        end
+      end
+
+      # Why a world did not start, in the TypeScript engine's words.
+      class StartError < StandardError; end
+
+      # A world that did not start: the message program-start-failed
+      # carries, and the world as far as it got, which run.json names with
+      # its cause.
+      class StartFailed < StandardError
+        attr_reader :world #: World
+        attr_reader :cause_text #: String
+
+        #: (String, World, String) -> void
+        def initialize(message, world, cause_text)
+          super(message)
+          @world = world
+          @cause_text = cause_text
+        end
+      end
+
+      # argv as a shell would read it back, for a message and the log.
+      #: (Array[String]) -> String
+      def self.display(argv) = argv.map { Selection.shell_word(_1) }.join(" ")
+
+      # A command's words: an Array as written, a String split on whitespace.
+      #: (String | Array[String]) -> Array[String]
+      def self.words(command) = command.is_a?(Array) ? command.map(&:to_s) : command.to_s.split
+
+      #: () -> Integer
+      def self.free_port
+        server = TCPServer.new("127.0.0.1", 0)
+        server.addr[1].tap { server.close }
+      end
+
+      # A port the program names is checked before it starts: one something
+      # already answers on would send every request to a server nukadoko
+      # did not start.
+      #: (Integer) -> Integer
+      def self.unanswered(port)
+        begin
+          TCPSocket.new("localhost", port).close
+        rescue SystemCallError
+          return port
+        end
+        raise StartError, %(something already answers on port #{port}, so every request would reach a server nukadoko did not start; stop it, or write port: "auto")
       end
 
       private
@@ -118,7 +180,7 @@ module Nukadoko
     # A started program: where it answers, its env, the prefix of every
     # trace id its steps carry, and its log. `timings` gains stop_ms at its stop.
     World = Data.define(
-      :base_url, #: String
+      :base_url, #: String?
       :pid, #: Integer?
       :log, #: File?
       :env, #: Hash[String, String]
@@ -129,17 +191,40 @@ module Nukadoko
     )
 
     class World
-      #: (String) -> void
-      def wait_ready(path)
-        uri = URI.join(base_url, path)
-        deadline = Time.now + 30
-        begin
-          Net::HTTP.get_response(uri)
-        rescue SystemCallError
-          raise "the program did not answer #{uri} within 30s" if Time.now > deadline
+      # Ready once `path` answers 2xx, as in the TypeScript engine: a 404 or
+      # a 503 from a server still starting is not a program that can take
+      # requests. A program that exits first, or never answers 2xx within
+      # `timeout_ms`, stops the world.
+      # A redirect is an answer, not ready: following one would let a ready
+      # path that sends the check elsewhere answer for the program.
+      #: (String, Integer, Array[String]) -> void
+      def wait_ready(path, timeout_ms, argv)
+        uri = URI.join(base_url.to_s, path)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + (timeout_ms / 1000.0)
+        last = nil #: String?
+        shown = Program.display(argv)
+        loop do
+          if pid && (status = Process.waitpid2(pid, Process::WNOHANG)&.last)
+            exit = status.signaled? ? "on #{Signal.signame(status.termsig.to_i).then { "SIG#{_1}" }}" : "with code #{status.exitstatus}"
+            raise Program::StartError, "serve command #{shown} exited #{exit} before #{uri} answered"
+          end
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          if remaining <= 0
+            raise Program::StartError, "serve command #{shown} did not answer #{uri} with a 2xx status within #{timeout_ms} ms (timeout_ms)#{"; #{last}" if last}"
+          end
+          begin
+            response = Net::HTTP.start(uri.host.to_s, uri.port, open_timeout: [remaining, 2].min, read_timeout: [remaining, 2].min) { _1.get("#{uri.path}#{"?#{uri.query}" if uri.query}") }
+            return if response.code.start_with?("2")
 
+            location = response["location"]
+            last = if response.code.start_with?("3") && location
+                     "the last answer was #{response.code}, a redirect to #{location}, which the ready check does not follow"
+                   else "the last answer was #{response.code}"
+                   end
+          rescue SystemCallError, IOError, Net::OpenTimeout, Net::ReadTimeout
+            nil
+          end
           sleep 0.1
-          retry
         end
       end
 
@@ -149,7 +234,7 @@ module Nukadoko
         begin
           Process.kill("TERM", -pid) if pid
           Process.wait(pid) if pid
-        rescue Errno::ESRCH, Errno::ECHILD
+        rescue Errno::ESRCH, Errno::ECHILD, Errno::EPERM
           nil
         end
         log&.close

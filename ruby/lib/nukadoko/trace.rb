@@ -79,7 +79,7 @@ module Nukadoko
       #: () -> Boundary?
       def self.current = Thread.current[:nukadoko_trace]
 
-      #: [T] (Boundary) { () -> T } -> T
+      #: [T] (Boundary?) { () -> T } -> T
       def self.within(boundary)
         Thread.current[:nukadoko_trace] = boundary
         yield

@@ -37,7 +37,7 @@ The `nukadoko` gem is a second engine that reads the same feature files and judg
 - `Nukadoko.config(envFiles: [".env"], secrets: { public: [...], redact: [...] })` loads env files and classifies their secrets as above.
 - `Nukadoko.config(parameterTypes: [{ name: "priority", regexp: /高|低/, transformer: ->(s) { s == "高" ? "high" : "low" } }])` registers a parameter type as `parameterTypes` does in the TypeScript config: a Ruby Regexp or a string, and a lambda given the groups the regexp captured.
 - The gem has one command the npm package does not, `sig`: it writes `sig/nukadoko/steps.rbs`, the RBS of each step's args and returns, so Steep checks the step bodies.
-- Not in the gem yet: a step's `patterns` and `timeout` and the config's `stepTimeout`; `requires`, `gives`, and `ends`; a claim step's `files` and `events`; the program's `build`, `prepare`, `setup`, `url`, `lists`, `policy`, `version`, and `{events}` with the execution events it reads; `measureMcp`; and the `nukadoko/compat` door.
+- Not in the gem yet: a step's `patterns` and `timeout` and the config's `stepTimeout`; `requires`, `gives`, and `ends`; a claim step's `files` and `events`; the program's `build`, `prepare`, `setup`, `url`, `lists`, `policy`, `version`, and `{events}` with the execution events it reads; what a fixture's `use` returns; `measureMcp`; and the `nukadoko/compat` door.
 
 ## The loop
 

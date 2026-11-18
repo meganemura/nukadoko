@@ -472,6 +472,8 @@ module Nukadoko
       record[:status] == "passed" ? 0 : 1
     rescue Engine::Refusal => e
       refuse(e)
+    rescue Engine::Program::StartFailed => e
+      finish("do", false, findings: [{ severity: "failed", code: "program-start-failed", message: e.message, fix: Engine::Codes.fix("program-start-failed") }])
     end
 
     # Each from key of the step, from the newest record --use names whose

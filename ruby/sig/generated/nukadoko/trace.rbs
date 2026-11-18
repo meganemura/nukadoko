@@ -47,8 +47,8 @@ module Nukadoko
       # : () -> Boundary?
       def self.current: () -> Boundary?
 
-      # : [T] (Boundary) { () -> T } -> T
-      def self.within: [T] (Boundary) { () -> T } -> T
+      # : [T] (Boundary?) { () -> T } -> T
+      def self.within: [T] (Boundary?) { () -> T } -> T
 
       # One step's trace: what it stamped, and when it last did.
       class Boundary

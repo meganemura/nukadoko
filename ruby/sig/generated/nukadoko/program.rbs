@@ -54,8 +54,43 @@ module Nukadoko
       # : () -> String
       def chosen_by: () -> String
 
+      # Started, or StartFailed with the world as far as it got, and the
+      # message the run reports as program-start-failed.
       # : (Environment, String, String) -> World
       def start: (Environment, String, String) -> World
+
+      # Why a world did not start, in the TypeScript engine's words.
+      class StartError < StandardError
+      end
+
+      # A world that did not start: the message program-start-failed
+      # carries, and the world as far as it got, which run.json names with
+      # its cause.
+      class StartFailed < StandardError
+        attr_reader world: World
+
+        attr_reader cause_text: String
+
+        # : (String, World, String) -> void
+        def initialize: (String, World, String) -> void
+      end
+
+      # argv as a shell would read it back, for a message and the log.
+      # : (Array[String]) -> String
+      def self.display: (Array[String]) -> String
+
+      # A command's words: an Array as written, a String split on whitespace.
+      # : (String | Array[String]) -> Array[String]
+      def self.words: (String | Array[String]) -> Array[String]
+
+      # : () -> Integer
+      def self.free_port: () -> Integer
+
+      # A port the program names is checked before it starts: one something
+      # already answers on would send every request to a server nukadoko
+      # did not start.
+      # : (Integer) -> Integer
+      def self.unanswered: (Integer) -> Integer
 
       private
 
@@ -66,7 +101,7 @@ module Nukadoko
     # A started program: where it answers, its env, the prefix of every
     # trace id its steps carry, and its log. `timings` gains stop_ms at its stop.
     class World < Data
-      attr_reader base_url(): String
+      attr_reader base_url(): String?
 
       attr_reader pid(): Integer?
 
@@ -82,8 +117,8 @@ module Nukadoko
 
       attr_reader timings(): Hash[Symbol, Integer]
 
-      def self.new: (String base_url, Integer? pid, File? log, Hash[String, String] env, String trace_prefix, String? log_path, Array[Hash[Symbol, untyped]] commands, Hash[Symbol, Integer] timings) -> instance
-                  | (base_url: String, pid: Integer?, log: File?, env: Hash[String, String], trace_prefix: String, log_path: String?, commands: Array[Hash[Symbol, untyped]], timings: Hash[Symbol, Integer]) -> instance
+      def self.new: (String? base_url, Integer? pid, File? log, Hash[String, String] env, String trace_prefix, String? log_path, Array[Hash[Symbol, untyped]] commands, Hash[Symbol, Integer] timings) -> instance
+                  | (base_url: String?, pid: Integer?, log: File?, env: Hash[String, String], trace_prefix: String, log_path: String?, commands: Array[Hash[Symbol, untyped]], timings: Hash[Symbol, Integer]) -> instance
 
       def self.members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings ]
 
@@ -91,8 +126,14 @@ module Nukadoko
     end
 
     class World
-      # : (String) -> void
-      def wait_ready: (String) -> void
+      # Ready once `path` answers 2xx, as in the TypeScript engine: a 404 or
+      # a 503 from a server still starting is not a program that can take
+      # requests. A program that exits first, or never answers 2xx within
+      # `timeout_ms`, stops the world.
+      # A redirect is an answer, not ready: following one would let a ready
+      # path that sends the check elsewhere answer for the program.
+      # : (String, Integer, Array[String]) -> void
+      def wait_ready: (String, Integer, Array[String]) -> void
 
       # : () -> void
       def stop: () -> void

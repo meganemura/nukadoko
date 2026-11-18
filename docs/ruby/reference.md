@@ -169,6 +169,16 @@ Nukadoko.config(
 ```
 
 Its fields are under "Program" in [the spec](../spec.md#program).
+`serve` takes `command`, `port` (`"auto"`, the default, or a number
+nothing answers on yet), `ready` (default `/`), and `timeout_ms`
+(default 60000): the world is ready once `ready` answers 2xx within
+`timeout_ms`. A command is an Array of words, or a String split on
+whitespace; neither goes through a shell, so a program that needs one
+writes `["sh", "-c", "..."]`. A key the program does not know is
+refused, and so is a key the TypeScript engine reads and this one does
+not yet (below). A world whose program does not start runs none of its
+scenarios, and the run fails with `program-start-failed` and the end
+of the world's `program.log`.
 
 ## Types and tooling
 
@@ -181,7 +191,6 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- `nuka check --codes` and `nuka check --fail-on`.
 - In the program: `build`, `prepare`, `setup`, `url` (a program nukadoko
   does not start), `lists`, `policy`, and the `{events}` placeholder with
   the execution events it reads.
