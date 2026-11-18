@@ -1,946 +1,1135 @@
 {
   "additional-feature-dir-missing": {
     "severity": "error",
+    "source": "check",
     "description": "An entry in additionalFeatureDirs does not exist on disk.",
     "fix": "Create the directory, or remove the entry from additionalFeatureDirs in the config file."
   },
   "alias-key-mismatch": {
     "severity": "error",
+    "source": "check",
     "description": "A step has more than one pattern, and the patterns bind different sets of keys.",
     "fix": "Edit the step's patterns so that each one captures the same set of keys."
   },
   "ambiguous-step": {
     "severity": "error",
+    "source": "check",
     "description": "A line in a feature file matches more than one step definition.",
     "fix": "Reword the feature line, or edit one of the matching patterns, so that exactly one step matches. nuka steps lists each pattern."
   },
   "args-not-object": {
     "severity": "error",
+    "source": "check",
     "description": "A step has a pattern, but its args schema is not a z.object, so there is no key to check that pattern's captures against.",
     "fix": "Declare the step's args as a z.object whose keys the pattern captures fill."
   },
   "base-feature-unparsed": {
     "severity": "warning",
+    "source": "run",
     "description": "Under nuka run --base, the base's copy of a feature file does not parse, so its criteria were not compared with head's and each counts as new.",
     "fix": "Nothing needs changing at head. Each criterion of the file is judged as new, so its base cell has to show a Then failing; to compare them with the base, name a base whose copy of the file parses."
   },
   "base-features-at-root": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run --base needs the scenarios and their steps in a directory of their own, and featuresDir is the project root, where the program's code is too.",
     "fix": "Move the feature files and the step files into a directory of their own, such as features/, and set featuresDir to it."
   },
   "base-git-failed": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run --base could not ask git what it needs, or could not check the base out into the run's directory: git is missing, or a git command failed.",
     "fix": "Run the git command the message names to see its error, or install git."
   },
   "base-outside-git": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run --base compares with a git commit, and the project is not inside a git repository.",
     "fix": "Run nuka run --base inside the git repository that holds the project, or run without --base."
   },
   "base-ref-unknown": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run --base names a ref that is no commit in the project's repository.",
     "fix": "Name a branch, tag, or commit the repository holds, such as the pull request's base."
   },
   "base-shallow": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run --base names a ref that this shallow clone does not hold, because it holds only part of the history.",
     "fix": "Fetch the base first with the command the refusal names, or fetch-depth: 0 on actions/checkout."
   },
   "capture-type-mismatch": {
     "severity": "error",
+    "source": "check",
     "description": "A pattern captures a key with a built-in type whose JS value is a number, string, or bigint, but the args schema declares that key as a different primitive (number, string, boolean, or bigint) and does not coerce the captured value.",
     "fix": "Make the capture type and the args field type agree: change the {key:type} in the pattern, or declare the field with z.coerce."
   },
   "check-errors": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run did not start, because nuka check reports errors for the selected scenarios.",
     "fix": "Correct each error the findings name, or pass --no-check to run anyway."
   },
   "claim-args-dropped": {
     "severity": "error",
+    "source": "check",
     "description": "A claim reads a path into a value an earlier step returned, that step's returns schema may hold the path, and the claim step's own args schema declares the value through an object schema that does not declare a key on the path and keeps no key it does not declare: a z.object drops the key when it parses the args, and a z.strictObject refuses it. The run leaves a claim unjudged when its args schema changed the value it reads, and breaks one whose value is undefined, so the claim never holds, whatever the behaviour is. Also reported for a lacks-field claim, or a where claim that selects by one, whose field the args object drops: that claim never breaks, and that where never leaves an item out. Only a key under the from key is checked; an args schema that may keep the key (z.looseObject, a catchall, a union, a transform, or a default or a catch on the path) is taken to keep it.",
     "fix": "Declare the value in the claim step's args with the producing step's own schema (such as user: signUp.returns.shape.user), or with z.looseObject, so args keeps the key the claim reads."
   },
   "claim-aria-snapshot-names-nothing": {
     "severity": "error",
+    "source": "check",
     "description": "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with an ARIA snapshot that names no node: only comments, an empty text, a /children line, or nothing at all. Every page holds such a tree, so it states nothing, and nuka run breaks the claim on every page, --no-check included.",
     "fix": "State in the expected ARIA snapshot (the docstring or the capture) at least one node the page must show: a role with its name in double quotes, a text, or a /url, as the browser's ARIA snapshot prints it."
   },
   "claim-aria-snapshot-unreadable": {
     "severity": "error",
+    "source": "check",
     "description": "A fits-aria-snapshot claim's expected value is a sentence key the line fills, through its docstring or a {word}, {string}, or anonymous capture, with a text that does not read as an ARIA snapshot, or that states what nukadoko does not judge: a name or a text between slashes, the [active] state, a prop that would describe no node, or a plain text that YAML reads as a number, a boolean, or null. The claim would break whatever the page shows, so the finding names the line of the expected snapshot and how to write it.",
     "fix": "Write the line of the expected ARIA snapshot the finding names as the browser's ARIA snapshot prints it: a YAML list, each item starting with \"- \", a name in double quotes, and a text that YAML reads as something else in quotes."
   },
   "claim-compares-itself": {
     "severity": "error",
+    "source": "check",
     "description": "A claim's actual value and its expected value resolve to the same place: the same path of the same earlier line's result, or the same observe path, with a view and an at counted as steps of the path. Such a claim holds whatever the behaviour is. Also reported for a claim step whose observe receives a from value that an expected from reads, or one that holds it or that it holds, so observe could return the expected value as the actual one, and for one whose observe receives another from key that holds, or sits inside, the from value an actual reads when that claim's expected value is { observe }, so observe could return the actual value as the expected one. observe never receives the expected key itself, nor the actual from key of a claim whose expected value is { observe }. nuka run and nuka do break such a claim at run time too, so --no-check does not let it hold.",
     "fix": "Take the expected value from the sentence (a capture, the docstring, or the table), or from another step's result, so the two sides can differ. For observe, take the key the finding names out of from, so observe does not receive it, or fill it from another step's result."
   },
   "claim-expected-transformed": {
     "severity": "error",
+    "source": "check",
     "description": "A claim step names an args key as its expected value, and a pattern fills that key with a parameter type that config.parameterTypes or a compat defineParameterType registered with a transformer. The transformer rewrites the line's text before the claim reads it, so code would decide what the claim compares while the record labels the value as the sentence's. Under --no-check, nuka run leaves a claim that compares with such a key unjudged, so the run agrees with the check.",
     "fix": "Capture the key with a type that has no transformer, such as {key:string}, and declare expected_view (text, lines, json, or comma-list) on the claim if the text needs one."
   },
   "claim-field-stripped": {
     "severity": "error",
+    "source": "check",
     "description": "A lacks-field claim reads a value an earlier step returned, and that step's returns schema declares the value as an object that does not declare the field and keeps no key it does not declare: a z.object, which drops such a key when it parses the result, or a z.strictObject, which refuses it. The field is never there, so the claim never breaks, whatever the behaviour is. Also reported for a where claim that selects the items lacking such a field, which then never leaves an item out. Only a field the claim names as a literal, or that the line fills through a {word}, {string}, or anonymous capture, is checked; a schema that may keep the key (z.looseObject, a catchall, a union, a transform, or a default or a catch anywhere on the path, whose own value skips the schema at every depth below it) is taken to keep it. Under --no-check, nuka run and nuka do judge such a claim on what the step returned, as the producing step's record names the keys its returns dropped (returns_dropped): unjudged when the step returned the field, and held when it did not. Through a z.strictObject, the producing step fails when its result holds the field.",
     "fix": "Declare the field in the producing step's returns as optional (such as password: z.unknown().optional()), so a result that holds it keeps it and one without it still parses, or declare that object with z.looseObject, which keeps the keys it does not declare."
   },
   "claim-judged-early": {
     "severity": "failed",
+    "source": "run",
     "description": "A claim on a count of execution events was judged before every line it counts had arrived: the world's stop counted every line of the producer's trace, and the whole count judges the claim otherwise, so its cell is broke and proves nothing.",
     "fix": "Have the program write a request's line after the work inside it, and run work that outlives the request as a job, which a reading waits for (docs/execution-events.md \"Inside first\")."
   },
   "claim-kind-unknown": {
     "severity": "error",
+    "source": "check",
     "description": "An is-a claim's expected value is a plain string args key, read as it is or with expected_view text, and the line fills it through a {word}, {string}, or anonymous capture with a name that is none of the kinds is-a names, so the claim always breaks on that line. defineStep refuses a literal that names no kind; only the line says what a capture holds, so this half is the check's.",
     "fix": "Write one of the kinds is-a names in the line (string, text, number, integer, boolean, list, array, object, null, uuid, date, timestamp, or url), or compare with another claim if the line states something else."
   },
   "claim-not-an-array": {
     "severity": "error",
+    "source": "check",
     "description": "A claim counts the items of a value an earlier step returned, or an each claim reads each of its items, and that step's returns schema parses the value as something that is never an array: a string, a number, a boolean, an object, or a union, literal, or enum of only such values. count and each read an array alone, so the claim never holds, whatever the behaviour is. Only a value read with no view is checked, through the parsing wrappers (optional, nullable, readonly); a schema that may parse to an array (z.unknown, a transform, a default or a catch, whose own value skips the schema) is taken to be one.",
     "fix": "Read the value through a view that makes an array (lines, comma-list, or json), point the claim at the array the step returns, or return the value as an array from the producing step."
   },
   "claim-path-unknown": {
     "severity": "error",
+    "source": "check",
     "description": "A claim reads a path into a value an earlier step returned, and that step's returns schema has nothing at the path, so the value is undefined and the claim always breaks.",
     "fix": "Correct the path to one the producing step's returns declares, or add the key to that step's returns."
   },
   "claim-poll-unstated": {
     "severity": "error",
+    "source": "check",
     "description": "A claim step's observe reaches a browser page and the step does not state poll. A page between two renders can show any state for one frame, so the step has to say whether it reads once or until the claims hold.",
     "fix": "Add poll: { timeout_ms } to read until every claim holds on two consecutive readings, or poll: false to read once."
   },
   "claim-sentence-unread": {
     "severity": "error",
+    "source": "check",
     "description": "A claim step with no observe is bound to a line whose docstring or table fills an args key, and no claim reads that key (as an actual, an expected value, or in where), so nothing checks the value the line states. defineStep refuses a pattern capture no claim reads; only the line says whether a docstring or a table fills a key, so this half is the check's, and nuka run breaks the step's claims for it too.",
     "fix": "Compare a claim with the key (expected: \"<key>\"), or take the docstring or table off the line."
   },
   "claims-outside-then": {
     "severity": "error",
+    "source": "check",
     "description": "A claim step is bound in Given or When position, or on a * line, which Gherkin gives no position. Only a Then judges, so a broken claim there would read as a setup that broke instead of a criterion that failed.",
     "fix": "Move the line to Then position, or bind a step that runs (defineStep with run) at this line."
   },
   "compat-step-not-runnable": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka do names a compat step, which has no typed contract to run alone.",
     "fix": "Promote the step to defineStep to run it with nuka do."
   },
   "condition-tag-malformed": {
     "severity": "error",
+    "source": "check",
     "description": "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition. @with:<condition>=true and =false are malformed too: a value written as text is not the boolean the program declares.",
     "fix": "Rewrite the tag as @with:<condition>, @with:<condition>=<value>, or @without:<condition>; a condition name holds letters, digits, \"_\", \".\", or \"-\", a value holds no whitespace and no \"@\", and a boolean is @with:<condition> or @without:<condition>."
   },
   "condition-unknown": {
     "severity": "error",
+    "source": "check",
     "description": "A condition tag names a condition that no environment in the program in nukadoko.config.ts declares under conditions, so no environment sets it up.",
     "fix": "Declare the condition under the conditions of the environments that set it up in the program in nukadoko.config.ts, or remove the tag."
   },
   "condition-unmet": {
     "severity": "error",
+    "source": "check",
     "description": "No environment the run selects meets every condition a scenario's tags name, so the scenario has no required cell and nothing shows that it holds.",
     "fix": "Add an environment whose conditions meet the scenario's tags, name one with --env, or correct the tags."
   },
   "config-exists": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka init found a config file, and writes nothing over it.",
     "fix": "Edit the config file that exists, or delete it to start again."
   },
   "config-in-parent": {
     "severity": "refused",
+    "source": "refusal",
     "description": "There is no config file here, and one exists in a parent directory, so a file written here is not one that config reads.",
     "fix": "Run the command from the directory that holds the config file."
   },
   "config-invalid": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The config file did not load: it does not import, it has no default export, or a field is wrong.",
     "fix": "Correct the config file as the message says."
   },
   "config-key-removed": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The config file sets a key that an earlier release removed.",
     "fix": "Remove the key from the config file, and do what the message names in its place."
   },
   "config-missing": {
     "severity": "warning",
+    "source": "refusal",
     "description": "There is no config file in the directory nuka runs in, so the defaults apply.",
     "fix": "Run nuka from the directory that holds the config file, or run nuka init to write one."
   },
   "contract-unreadable": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka steps --json or nuka describe could not read part of a step's contract: its needs, a from entry, or an args or returns schema that JSON Schema cannot represent. The rest is printed, and the command exits 1.",
     "fix": "Correct what the message names in the step file; a schema JSON Schema cannot represent, such as z.date(), still runs, and only its published contract is missing."
   },
   "criteria-unchanged": {
     "severity": "note",
+    "source": "run",
     "description": "nuka verdict found that, under --base, no criterion of the newest run is new or changed: the run shows the criteria that were there still hold, and says nothing of what the change was for.",
     "fix": "No change is necessary for a change that needs no criterion of its own, such as a refactor. A change of behaviour gets a scenario that says what it does."
   },
   "criterion-moved": {
     "severity": "failed",
+    "source": "run",
     "description": "Under nuka run --base, an unchanged criterion passes at head, its mapping or its tags changed since the base, and the old world, head's code under the base's feature files and mapping, did not pass it or could not run it: the approved sentence no longer holds under the steps it was approved with.",
     "fix": "Restore what the changed step, helper, or tag did, so the base's steps still pass on head's code, or correct what kept the old world from running, which the message names; a sentence that should now mean something else is edited, which makes it a changed criterion to prove."
   },
   "criterion-unproven": {
     "severity": "failed",
+    "source": "run",
     "description": "Under nuka run --base, a new or changed criterion passes at head, and nothing shows a Then failing where its behaviour is absent: its base cells passed, broke, were flaky, failed in fewer than --proof-runs runs, or did not run, and no control proves it.",
     "fix": "Make a Then claim what the change added, so that it fails on the base's code; tag the scenario @held when the base already has the behaviour; or correct what kept its base cell from running, which the message names."
   },
   "criterion-without-required-cell": {
     "severity": "failed",
+    "source": "run",
     "description": "A row of the verdict table has no required cell: no environment the run started meets every condition its scenario's tags name, so the row is failed and nothing ran that shows it holds. Only a run under --no-check reaches it; nuka check reports the scenario as condition-unmet.",
     "fix": "Add an environment whose conditions meet the scenario's tags, run one that does with --env, or correct the tags."
   },
   "done-callback-arity": {
     "severity": "error",
+    "source": "check",
     "description": "A compat hook or a matched compat step declares more parameters than nukadoko passes, which cucumber-js reads as a done() callback.",
     "fix": "Remove the done callback parameter, and return a promise from the function instead."
   },
   "duplicate-capture-key": {
     "severity": "error",
+    "source": "check",
     "description": "A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value.",
     "fix": "Rename one of the captures, so that each key occurs once in the pattern."
   },
   "duplicate-pattern": {
     "severity": "error",
+    "source": "check",
     "description": "Two or more patterns, once capture names are stripped, normalize to the same text, so one step text could match more than one step.",
     "fix": "Reword one of the patterns, so that the two texts differ when the capture names are removed."
   },
   "duplicate-step": {
     "severity": "refused",
+    "source": "refusal",
     "description": "Two step files register the same typed step name, or two registrations have the same compat pattern.",
     "fix": "Rename or remove one of the two definitions the message names."
   },
   "duplicate-world": {
     "severity": "refused",
+    "source": "refusal",
     "description": "defineWorld is called more than once in the step files.",
     "fix": "Keep one defineWorld call, and remove the others."
   },
   "env-file-missing": {
     "severity": "warning",
+    "source": "check",
     "description": "A configured envFile does not exist on disk, so nothing in it is ever loaded.",
     "fix": "Create the file, or remove it from envFiles in the config file."
   },
   "env-file-skipped-line": {
     "severity": "warning",
+    "source": "check",
     "description": "A line in a configured envFile is not a blank line, a comment, or a binding, so nothing on it was loaded.",
     "fix": "Rewrite the line as KEY=value, or start it with # to make it a comment."
   },
   "env-file-unreadable": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A configured envFiles path is on disk and could not be read: a directory, or a file without read permission. The run stops before any step runs.",
     "fix": "Make the file readable, replace the directory with a file, or remove the path from envFiles."
   },
   "environment-env-file-missing": {
     "severity": "warning",
+    "source": "check",
     "description": "An entry in one environment's own envFiles does not exist on disk.",
     "fix": "Create the file, or remove it from that environment's envFiles in the program in nukadoko.config.ts."
   },
   "events-inlet-missing": {
     "severity": "error",
+    "source": "check",
     "description": "A step's events counts execution events, and a world the run would serve names no {events} in its program, so the program has no file to write them to and each claim on the count is unjudged there (inlet-unnamed).",
     "fix": "Set the variable the program reads to {events} under env in the program, such as EXECUTION_EVENTS: \"{events}\", and have the program append its execution events to that file."
   },
   "events-late": {
     "severity": "note",
+    "source": "run",
     "description": "nuka do found lines of the program's execution events that carry the step's trace id and arrived after the step ended, when the world stopped. They are in events-late.jsonl beside the step record, and are not in its observed.events.",
     "fix": "No change is necessary. A job the step enqueued that performed after the step ended writes its lines then; observed.events.open names a job that had not performed."
   },
   "events-producer-ambiguous": {
     "severity": "error",
+    "source": "check",
     "description": "A step's events names more than one candidate step in of, and more than one of them runs earlier in the scenario, so the run cannot choose whose execution events to count and each claim on the count is unjudged.",
     "fix": "Remove or move lines so that exactly one of the candidate steps runs before the line that counts their events."
   },
   "events-producer-missing": {
     "severity": "error",
+    "source": "check",
     "description": "A step's events counts the execution events of a step that no earlier line in the scenario runs, so each claim on the count is unjudged (producer-not-run).",
     "fix": "Put a line that runs the step earlier in the scenario, or list the step an earlier line runs in that key's of."
   },
   "events-unread": {
     "severity": "warning",
+    "source": "check",
     "description": "A step's events counts execution events, and a world the run would start is one nukadoko does not serve (a url, or a project whose config has no program), so it reads no execution events there and each claim on the count is unjudged (world-unread).",
     "fix": "Run those scenarios in a world nukadoko serves, with {events} in env, or select one with --env."
   },
   "expects-tag-malformed": {
     "severity": "error",
+    "source": "check",
     "description": "A tag starts with @expects: but does not read as @expects:status=<500-599>, @expects:error=<class>, or @expects:page-error=<name>: an unknown kind, no value, a status outside 500 to 599, or a value with whitespace or \"@\". It accepts nothing, so under nuka run --no-check the failure it meant stays unexpected and its cell is broke.",
     "fix": "Rewrite the tag as @expects:status=<500-599>, @expects:error=<class>, or @expects:page-error=<name>, one status, class, or name per tag; the unexpected-failure finding of a run spells the tag for what it saw."
   },
   "expects-unread": {
     "severity": "warning",
+    "source": "check",
     "description": "An @expects:error= tag accepts an unhandled error the program reports in its execution events, and no world the run would start reads them (the program names no {events}, the world runs at a url, or there is no program), so the tag can never match.",
     "fix": "Name {events} in env of the program in nukadoko.config.ts for a world the run starts, such as env: { EXECUTION_EVENTS: \"{events}\" }, and have the program append its execution events there, or remove the tag."
   },
   "expects-unseen": {
     "severity": "note",
+    "source": "run",
     "description": "A scenario whose every execution passed carries an @expects: tag that matched nothing: the run saw every response, page error, or execution event of that kind in each execution, and none was the failure the tag accepts. A tag left in place accepts that failure in every later run.",
     "fix": "Remove the tag when the failure it accepts no longer happens. When the failure is meant to happen, make the scenario cause it, so the tag names what the scenario does."
   },
   "fail-on-note-with-targets": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka check with targets was given a --fail-on note code, and a check with targets computes no notes, so the gate could never fire.",
     "fix": "Run nuka check without targets to gate on a note, or leave the note out of --fail-on."
   },
   "fail-on-unknown-code": {
     "severity": "refused",
+    "source": "refusal",
     "description": "--fail-on names a code that a nuka check report never contains.",
     "fix": "Name an error, warning, or note code that nuka check --codes lists."
   },
   "feature-parse-error": {
     "severity": "error",
+    "source": "check",
     "description": "A .feature file could not be parsed, so nothing in it was checked.",
     "fix": "Correct the Gherkin at the line that the message names, then run nuka check on the file again."
   },
   "features-dir-missing": {
     "severity": "error",
+    "source": "check",
     "description": "The configured featuresDir does not exist on disk, so no feature or step file under it can load.",
     "fix": "Create the featuresDir directory, or correct featuresDir in the config file."
   },
   "file-edited": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The file nuka scaffold would replace is not what scaffold wrote, so --replace leaves it.",
     "fix": "Edit the file by hand, or delete it and run nuka scaffold again."
   },
   "file-exists": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The file nuka scaffold would write exists.",
     "fix": "Pass --replace if scaffold wrote the file and nobody edited it, or delete the file."
   },
   "files-producer-ambiguous": {
     "severity": "error",
+    "source": "check",
     "description": "A step's files names more than one candidate step in of, and more than one of them runs earlier in the scenario, so the run cannot choose whose files to read and each claim on the list is unjudged.",
     "fix": "Remove or move lines so that exactly one of the candidate steps runs before the line that reads their files."
   },
   "files-producer-missing": {
     "severity": "error",
+    "source": "check",
     "description": "A step's files reads the files the commands of a step changed, and no earlier line in the scenario runs that step, so each claim on the list is unjudged.",
     "fix": "Put a line that runs the step earlier in the scenario, or list the step an earlier line runs in that key's of."
   },
   "fixture-cycle": {
     "severity": "error",
+    "source": "check",
     "description": "config.fixtures definitions depend on each other in a cycle, so none of them can ever resolve.",
     "fix": "Remove one dependency from the cycle in config.fixtures."
   },
   "fixture-scope-violation": {
     "severity": "error",
+    "source": "check",
     "description": "A config.fixtures definition scoped to run once per process depends on one scoped to run once per scenario.",
     "fix": "Scope the dependent fixture per scenario, or scope the fixture that it depends on per process."
   },
   "fixture-structural-violation": {
     "severity": "error",
+    "source": "check",
     "description": "A step's run(), or a config.fixtures definition's own function, is not a plain object-destructuring parameter, or destructures a fixture name nukadoko does not know. A fixture that destructures call is the same finding: call is only available inside a step's run().",
     "fix": "Give the function one object-destructuring parameter that names only known fixtures. The message names the name that is not known."
   },
   "fixture-teardown-failed": {
     "severity": "warning",
+    "source": "run",
     "description": "A fixture's teardown threw after its scenario or the run finished.",
     "fix": "Correct the teardown code of the fixture the message names."
   },
   "fixture-unused": {
     "severity": "note",
+    "source": "check",
     "description": "No typed step requires a config.fixtures definition, directly or through another fixture.",
     "fix": "Remove the fixture from config.fixtures, or keep it for nuka do."
   },
   "from-order-check-suppressed": {
     "severity": "warning",
+    "source": "check",
     "description": "A step's from names a producer that no earlier line runs, but a line before it matches no step and may be meant to run that producer, so the from-order-violation findings that line could explain are held back until it matches a step.",
     "fix": "Reword the undefined line to match the producer's pattern if it is meant to run that producer. Otherwise fix the undefined-step finding first, then run nuka check again."
   },
   "from-order-violation": {
     "severity": "error",
+    "source": "check",
     "description": "A step declares from for a key, and the step or steps it names have not run earlier in the same scenario, or (when the key names more than one candidate) more than one candidate has.",
     "fix": "Put a line that runs one producer step earlier in the scenario, or list the step an earlier line runs as another candidate for the key in from. When more than one candidate ran earlier, keep only one."
   },
   "from-structural-violation": {
     "severity": "error",
+    "source": "check",
     "description": "A step's from names a value that is not a registered step, or is otherwise structurally malformed.",
     "fix": "Make each from entry name a step that a step file registers, and a key that step's returns declares."
   },
   "from-unused": {
     "severity": "note",
+    "source": "check",
     "description": "A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture.",
     "fix": "Remove the from entry for the key, or keep it for nuka do --use."
   },
   "hook-failed": {
     "severity": "failed",
+    "source": "run",
     "description": "A BeforeAll or AfterAll hook threw, so the run is red.",
     "fix": "Correct the hook the message names."
   },
   "intent-not-happening": {
     "severity": "failed",
+    "source": "run",
     "description": "Under nuka run --base, a row of the change's INTENT.md aimed at a compared criterion, by its target, and that criterion did not do what the row says: a count did not go from before to after, a value did not, or what the row says does not change did. docs/intent.md is the format.",
     "fix": "Make the change do what the row says there, or narrow the row's target if the row means less."
   },
   "intent-unintended": {
     "severity": "failed",
+    "source": "run",
     "description": "Under nuka run --base, the change declares its intent in INTENT.md, and an unchanged criterion did something at head that it did not do at the base, which no row of the intent declares. The summary's \"base → head\" lists the difference.",
     "fix": "Declare the difference with a row in INTENT.md if the change means it, or change the code back if it does not."
   },
   "intent-unread": {
     "severity": "failed",
+    "source": "run",
     "description": "Under nuka run --base, the change's INTENT.md holds a row, or a table, that cannot be read as an intent, or git did not answer what the run asked of the file. A row that cannot be read declares nothing, so the run fails rather than judge less than the file says.",
     "fix": "Write the row as docs/intent.md describes, so each difference the change means is declared."
   },
   "invalid-arguments": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The command line names an unknown command or flag, or leaves out a required one.",
     "fix": "Correct the command line; the command's --help lists its flags."
   },
   "invalid-capture-key": {
     "severity": "error",
+    "source": "check",
     "description": "A pattern capture's name is not a valid identifier: a capture key must start with a letter or underscore and contain only letters, digits, and underscores.",
     "fix": "Rename the capture: a letter or an underscore first, then only letters, digits, and underscores."
   },
   "invalid-step-definition": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A step file calls defineStep with a definition nukadoko cannot register.",
     "fix": "Correct the defineStep call the message names."
   },
   "invalid-value": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A flag has a value the command cannot use.",
     "fix": "Correct the flag's value as the message says."
   },
   "judgment-misses": {
     "severity": "failed",
+    "source": "run",
     "description": "A criterion's Then asks for a judgment, and the committed judgment that cites the value this run read says the value does not meet the sentence. The criterion fails until the value changes, and the judgment of the new value says it meets.",
     "fix": "Change the program until the value meets the sentence, run the criterion again, and have a judge who did not write the change judge the new value with nuka judge."
   },
   "judgment-pending": {
     "severity": "failed",
+    "source": "run",
     "description": "A criterion's Then asks for a judgment (a judged-as claim), the run read the value, and no committed judgment cites that claim yet. nukadoko compares nothing for such a claim, so nothing shows the criterion holds until a reader judges the value.",
     "fix": "Have a judge who did not write the change read the value with nuka judge <file>:<line> --run <run>, then record it with --meets or --misses, --by, and --because, commit the judgment file, and run again."
   },
   "judgment-refused": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka judge cannot record the judgment: the target names no criterion of the run, the criterion did not pass or asks for no judgment, a value is in no recorded channel, the step record and run.json disagree about a value, or the flags do not say meets or misses, by whom, and why.",
     "fix": "Run the criterion, read what nuka judge <file>:<line> prints, and record with exactly one of --meets and --misses, and with --by and --because."
   },
   "judgment-stale": {
     "severity": "failed",
+    "source": "run",
     "description": "A criterion's Then asks for a judgment, and the committed judgments of its claim cite other values than the one this run read: the value changed since it was judged, so no judgment covers what ran.",
     "fix": "Have a judge who did not write the change read the new value with nuka judge <file>:<line> --run <run> and record a judgment of it; a value that changes on every run (a time, an id) means the claim reads too much, so narrow it with at."
   },
   "judgment-uncitable": {
     "severity": "failed",
+    "source": "run",
     "description": "A criterion's Then asks for a judgment of a value that no channel nukadoko recorded holds (measured: none): a value step code wrote or worked out. A judgment cites only a value the tool measured, so none can cite this one.",
     "fix": "Read the value whole from a channel the step record holds (a response body, a process's output, a file) and narrow it with view and at, or return the locator or page from observe so nukadoko takes its ARIA snapshot."
   },
   "judgments-not-compared": {
     "severity": "warning",
+    "source": "run",
     "description": "Under nuka run --base, git did not answer when the run compared the judgment files with the base, so the summary lists no changed judgment.",
     "fix": "Run the git command the message names to see its error; the verdicts and the judgments themselves are not affected."
   },
   "judgments-unread": {
     "severity": "failed",
+    "source": "run",
     "description": "A judgment file under judgments/ does not parse or lacks a field, so the criteria of its feature file read as judged by nothing.",
     "fix": "Repair the file the message names by hand, or remove it and judge its criteria again with nuka judge."
   },
   "line-not-supported": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A target has a :line suffix, and the command reads whole files: nuka check analyzes every scenario in a file.",
     "fix": "Remove the :line suffix from the target."
   },
   "line-on-directory": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A target names a directory with a :line suffix, and a line selects a scenario in one file only.",
     "fix": "Remove the :line suffix from the directory, or name a feature file."
   },
   "markdown-target": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A target names a Markdown file: Markdown oaths were removed, and scenarios live in .feature files only.",
     "fix": "Write the scenarios of the file as Gherkin in a .feature file, and name that file."
   },
   "mcp-transport-unmeasured": {
     "severity": "note",
+    "source": "check",
     "description": "A config fixture or a typed step connects an MCP client to a transport it builds inside the connect call, so measureMcp never wraps it and the client's calls reach no step record.",
     "fix": "Pass the transport through measureMcp (from nukadoko): client.connect(measureMcp(new StdioClientTransport(...)))."
   },
   "no-feature-files": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A target directory holds no feature file, so nothing can run.",
     "fix": "Add a feature file under the directory, or name another target."
   },
   "no-scenario-at-line": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A target's :line is not the line a scenario or an Examples row starts on.",
     "fix": "Name the line that a scenario or an Examples row starts on."
   },
   "no-step-files-found": {
     "severity": "error",
+    "source": "check",
     "description": "featuresDir exists, but no .ts/.mts/.js/.mjs step file was found while scanning it, so no step can ever be registered.",
     "fix": "Add a step file under featuresDir. nuka scaffold writes one."
   },
   "nothing-selected": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka run selected no scenario: its targets hold none, or --env leaves out every one they hold, so nothing ran and nothing was checked. The run writes no run directory.",
     "fix": "Name a target that holds a scenario, or run in an environment that meets the scenarios' tags."
   },
   "outline-does-not-run": {
     "severity": "error",
+    "source": "check",
     "description": "A scenario outline has no Examples row that will run, so the boundary the feature names is absent from the run.",
     "fix": "Add an Examples row for each case that must run, or remove the empty Examples table."
   },
   "outline-rows-share-name": {
     "severity": "warning",
+    "source": "check",
     "description": "A scenario outline has more than one Examples row, and its name holds no <column> of its Examples, so every row is reported under the same name.",
     "fix": "Add an Examples column to the outline's name, such as <column>, so that each row has its own name."
   },
   "package-type-missing": {
     "severity": "note",
+    "source": "check",
     "description": "A package.json with no \"type\" field governs a .ts or .js file nukadoko loads, so Node parses the file twice and prints a MODULE_TYPELESS_PACKAGE_JSON warning on every load.",
     "fix": "Add \"type\": \"module\" to the package.json, or rename the files to .mts if the project's own .js files are CommonJS."
   },
   "page-override-unowned": {
     "severity": "error",
+    "source": "check",
     "description": "A config.fixtures definition overrides page, but owns none of page, context, and pageAs.",
     "fix": "Make the fixture that overrides page own page, context, or pageAs, or remove the override."
   },
   "parameter-type-collision": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A parameter type has the name of a built-in type or of another registered type.",
     "fix": "Rename the parameter type, or remove one of the two registrations."
   },
   "parameter-type-invalid": {
     "severity": "error",
+    "source": "check",
     "description": "A custom parameter type takes the name of a built-in type, two parameter types share the same name (from config.parameterTypes or a compat defineParameterType call), or a type sets preferForRegexpMatch on a regexp that another type, built-in or custom, already prefers.",
     "fix": "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch."
   },
   "parameter-type-unused": {
     "severity": "note",
+    "source": "check",
     "description": "No typed or compat pattern names a config.parameterTypes entry.",
     "fix": "Remove the entry from config.parameterTypes, or use it in a pattern."
   },
   "part-cycle": {
     "severity": "error",
+    "source": "check",
     "description": "A step's parts form a cycle: the step reaches itself, directly or through other steps' own parts.",
     "fix": "Remove one part from the chain, so that no step reaches itself."
   },
   "part-mutates-contradiction": {
     "severity": "error",
+    "source": "check",
     "description": "A step declares mutates: false, but declares a part that declares mutates: true.",
     "fix": "Declare mutates: true on the step, or remove the part that declares mutates: true."
   },
   "part-structural-violation": {
     "severity": "error",
+    "source": "check",
     "description": "A step's parts names a value that is not a registered step, or is otherwise structurally malformed.",
     "fix": "Make each parts entry a step that a step file registers."
   },
   "pattern-error": {
     "severity": "error",
+    "source": "check",
     "description": "A step's pattern could not be parsed, for a reason other than an unnamed, invalid, or unterminated capture.",
     "fix": "Correct the pattern at the position that the message names."
   },
   "pattern-syntax-error": {
     "severity": "error",
+    "source": "check",
     "description": "A pattern failed to build into a cucumber expression, for a reason cucumber-expressions itself reports (not an unknown parameter type).",
     "fix": "Correct the pattern at the position that the message names. Escape a literal ( ) or / as \\( \\) or \\/."
   },
   "pattern-unbound": {
     "severity": "note",
+    "source": "check",
     "description": "A typed step has a pattern, and no feature line resolves to that step alone.",
     "fix": "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step."
   },
   "pause-answered": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka step names a pause that was already answered the other way, so this answer changes nothing.",
     "fix": "Run nuka step wait --walk <n> to see where the walk stands, and answer the pause it shows."
   },
   "pause-not-current": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka step answers a pause that is not the one the walk waits at: the walk has not reached it yet, has moved past it without that answer, or ended without reaching it.",
     "fix": "Run nuka step wait --walk <n> to see the pause the walk waits at, and answer that pause."
   },
   "playwright-missing": {
     "severity": "error",
+    "source": "check",
     "description": "A feature line binds a step whose fixtures build page, context, pageAs, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs; or a step file imports playwright, playwright-core, or @playwright/test, itself or through another project file that the message names, which the project has not installed, so the file does not import. A step is reported once, at the first line that binds it.",
     "fix": "Install the package that the message names in the project, at the version that the message names."
   },
   "program-exited": {
     "severity": "warning",
+    "source": "run",
     "description": "The program a world served exited while the scenarios still ran, so the requests after that found nothing listening.",
     "fix": "Read the world's program.log, which the message names, for why the program exited."
   },
   "program-file-moved": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The project root holds a program file (nukadoko.program.ts, .mts, or .rb), which an earlier release read and this one does not: the program is part of the config now.",
     "fix": "Move what the program file describes into the config as its program (program: () => ({ ... }) in nukadoko.config.ts, program: -> { { ... } } in nukadoko.config.rb), and delete the program file; CHANGELOG.md, under \"The program moves into the config\", shows the move."
   },
   "program-list-unread": {
     "severity": "warning",
+    "source": "run",
     "description": "A command under lists in the program in nukadoko.config.ts failed, passed its limit, or printed a line that is not one entry of its list, so that world's list was not read and nothing of it counts.",
     "fix": "Correct the command the message names, or what it prints: one JSON object per line, in the shape docs/spec.md \"Lists\" gives for its kind. Its stderr is in the world's program.log."
   },
   "program-log-late": {
     "severity": "note",
+    "source": "run",
     "description": "nuka do found lines of the program's log that carry the step's trace id and arrived after the step ended, when the world stopped. They are in program-log-late.txt beside the step record, and are not in its observed.program_log.",
     "fix": "No change is necessary. When it happens on every call, the program may buffer its output on a pipe; if so, set STDOUT.sync = true in Ruby, or PYTHONUNBUFFERED=1 for Python."
   },
   "program-placeholder-unfilled": {
     "severity": "error",
+    "source": "check",
     "description": "A command or an env value in the program in nukadoko.config.ts names a placeholder a world that nuka run with the same --env flags would start has no value for: {port} or {url} in a world with neither serve nor url, {condition.<name>} in one whose environment does not declare that condition, or anything but {root} in a build command.",
     "fix": "Remove the placeholder from the field the message names, or give the world what fills it: serve or url for {port} or {url}, the condition under its environment's conditions for {condition.<name>}; in a build command, write only {root}, or move the command to prepare."
   },
   "program-start-failed": {
     "severity": "failed",
+    "source": "run",
     "description": "The program in nukadoko.config.ts did not start for a world: a build or prepare command failed or did not finish within its timeout_ms, the server did not answer its ready path in time, or setup or the url function threw or did not finish within its timeout_ms. The world's scenarios did not run.",
     "fix": "Correct what the message names; the end of the world's program.log is in the message, and the whole file is in the world's directory."
   },
   "proof-run-incomplete": {
     "severity": "warning",
+    "source": "run",
     "description": "Under --concurrency, a proof round could not record a control's run: a BeforeAll or AfterAll hook failed in the worker the round started, or the worker exited without a record. Each control cell the round was given reads broke with the reason and proves nothing, so its row reads as one no control proves: held without --base, and under --base the base world runs for it.",
     "fix": "Correct what the message names, such as the hook; the control proves on the next run."
   },
   "read-only-environment": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A step that declares mutates: true targets an environment whose policy is read-only.",
     "fix": "Run the step against an environment that allows writes, or declare mutates: false if it only reads."
   },
   "record-unmatched": {
     "severity": "warning",
+    "source": "run",
     "description": "A worker reported a record that matches no selected scenario, so nuka report cannot render it.",
     "fix": "Run again without changing feature files while the run is in progress."
   },
   "removed-command": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The command line names a command that an earlier release removed.",
     "fix": "Use what the message names in its place."
   },
   "removed-flag": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The command line names a flag that an earlier release removed.",
     "fix": "Use what the message names in its place."
   },
   "repeated-scenario-prefix": {
     "severity": "note",
+    "source": "run",
     "description": "Scenarios in this run open with the same steps, before the first When, with the same docstrings and tables. The note reports the measured repetition, and names a process-scope fixture only when every shared step declares mutates: false.",
     "fix": "No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false."
   },
   "report-incomplete": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka report left out part of the run it renders: a scenario, a step record, or an attachment it could not read or map. The rest is written, and the report exits 1.",
     "fix": "Correct what the message names, such as a step record removed from the run directory, and run nuka report again."
   },
   "report-out-invalid": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka report --out names a place the render cannot write: a directory where a file goes, a file where a directory goes, a FIFO or another special file, a dangling symbolic link, a path under a regular file, the Allure history file, or a markdown or messages file the file system refuses to write.",
     "fix": "Name a regular file for markdown and messages, or a directory for allure, under a directory that exists or can be created."
   },
   "retention-failed": {
     "severity": "warning",
+    "source": "run",
     "description": "The run finished, and removing old run directories under retention failed.",
     "fix": "Correct what the message names, such as a directory's permissions; the next run tries again."
   },
   "run-failed": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka verdict found that the newest run failed, and its run.json holds no failed finding that says why.",
     "fix": "Read the run summary that the do line renders for why the run failed."
   },
   "run-incomplete": {
     "severity": "failed",
+    "source": "run",
     "description": "A signal or a worker that exited early stopped the run before every scenario had a record.",
     "fix": "Run the scenarios again; the message names what stopped the run."
   },
   "run-invalid": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The run directory's run.json does not parse, has another schema version, or lacks a field nuka report reads.",
     "fix": "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong."
   },
   "run-missing": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka verdict found no run that ended in this project, so nothing judged the working tree.",
     "fix": "Run the criteria the change touches with nuka run, under --base with the commit the change started from, and read the verdict table before nuka verdict."
   },
   "run-not-found": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka report found no run to render: the directory it names holds no run.json, or the state directory holds no run that ended.",
     "fix": "Name a run directory that holds a run.json, or run nuka run first."
   },
   "run-partial": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka verdict found that the newest run left out scenarios of the files it named, with a :line target or --tag, or was a walk (nuka run --step), whose world was open to anything between steps. Such a run is for debugging or exploring, and does not judge the criteria.",
     "fix": "Run the feature files again without :line, --tag, or --step."
   },
   "run-result-not-written": {
     "severity": "failed",
+    "source": "run",
     "description": "The run finished, and run.json could not be written, so the run fails: it has no record for a later command to read.",
     "fix": "Correct what the message names, such as the state directory's permissions."
   },
   "run-sources-invalid": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The run directory's sources.json does not parse, lacks a field, or has another schema version.",
     "fix": "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong."
   },
   "run-sources-missing": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The run directory holds no sources.json, the feature text nuka report --format allure and messages parse the run's scenarios from. A run an earlier release wrote has none.",
     "fix": "Run the scenarios again with this release, and render that run."
   },
   "run-sources-not-written": {
     "severity": "failed",
+    "source": "run",
     "description": "The run finished, and sources.json, the feature text nuka report renders the run from, could not be written, so the run fails.",
     "fix": "Correct what the message names, such as the state directory's permissions, and run again."
   },
   "run-stale": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka verdict found that the newest run judged another working tree than the one there is now: a tracked file, or an untracked file .gitignore does not leave out, changed after it started, or it recorded no working tree id. Its verdicts say nothing about the change since.",
     "fix": "Run the criteria again on the tree as it is. When every run leaves the tree changed, a step or the program writes a file git counts: add that file to .gitignore."
   },
   "run-without-base": {
     "severity": "note",
+    "source": "run",
     "description": "nuka verdict found that the newest run had no --base, so no row of its table says which criteria are new or changed, and a new criterion that passes without the change was not caught as unproven.",
     "fix": "No change is necessary. Run with --base and the commit the change started from to have new and changed criteria proven against it."
   },
   "scenario-failed": {
     "severity": "failed",
+    "source": "run",
     "description": "A scenario ran and failed; its step lines and its record say which step and why.",
     "fix": "Correct the step or the code under test that the error names."
   },
   "scenario-without-then": {
     "severity": "warning",
+    "source": "check",
     "description": "A scenario judges no claim, so it passes whenever its steps run without an error: it has steps of its own and no Then step, in it or in its Background (a scenario of only * lines included, since a * line has no position), or each of its Then lines binds a step that is not a claim step, such as a compat step.",
     "fix": "Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for."
   },
   "schema-field-undescribed": {
     "severity": "note",
+    "source": "check",
     "description": "A field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.",
     "fix": "Add a .describe() that says what the field means to each field that the message names."
   },
   "secrets-public-key-unknown": {
     "severity": "warning",
+    "source": "check",
     "description": "A secrets.public entry names a key that no envFile defines.",
     "fix": "Define the key in an envFile, or remove it from secrets.public."
   },
   "secrets-redact-key-too-short": {
     "severity": "warning",
+    "source": "check",
     "description": "A secrets.redact key's value is shorter than the minimum length build-secret-set.ts will actually redact, so it never gets redacted.",
     "fix": "Use a longer value for the key, or remove the key from secrets.redact."
   },
   "secrets-redact-key-unknown": {
     "severity": "warning",
+    "source": "check",
     "description": "A secrets.redact entry names a key that no envFile defines.",
     "fix": "Define the key in an envFile, or remove it from secrets.redact."
   },
   "serial-tag-on-scenario": {
     "severity": "error",
+    "source": "check",
     "description": "A @nukadoko:serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there.",
     "fix": "Move @nukadoko:serial to the Feature line."
   },
   "show-requests-failed": {
     "severity": "warning",
+    "source": "run",
     "description": "showRequests could not draw a request on its page, so no requests trace was written. http.jsonl still has every request.",
     "fix": "Correct what the message names, such as a browser that is not installed (npx playwright install chromium), or turn showRequests off."
   },
   "state-missing": {
     "severity": "error",
+    "source": "check",
     "description": "A step requires a state, and by what the steps of the earlier lines declare, the line can only be reached with that state not held: no step gives it, no earlier line gives it to that holder, or the last line that touched it ends it. nuka run refuses the scenario before any of its steps runs, --no-check included.",
     "fix": "Put a line that runs a step whose gives names the state before the line that requires it, or move the line that ends it below that line. When the step of an earlier line gives the state without saying so, add the state to that step's gives."
   },
   "state-shape-mismatch": {
     "severity": "error",
+    "source": "check",
     "description": "Steps name one state in two shapes, some with the args key that tells its holders apart ([state, key]) and some with the name alone, so no line that requires it is judged.",
     "fix": "Write the state the same way in every step: with a key in each requires, gives, and ends entry, or with the name alone in all of them."
   },
   "step-args-invalid": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka do has no --args, or --args is not valid JSON.",
     "fix": "Pass --args as a JSON object with the keys that nuka describe <step> lists."
   },
   "step-description-todo": {
     "severity": "note",
+    "source": "check",
     "description": "A typed step's description is still the placeholder nuka scaffold wrote.",
     "fix": "Replace the description with one sentence that says what the step does."
   },
   "step-file-import-failed": {
     "severity": "error",
+    "source": "check",
     "description": "A step file under featuresDir failed to import, so any step it defines never reaches the vocabulary.",
     "fix": "Correct the import or the error that the message names in the file, then run nuka check again."
   },
   "step-file-unsupported-extension": {
     "severity": "error",
+    "source": "check",
     "description": "Discovery found a .cjs or .cts step file; nukadoko is ESM-only and never imports it.",
     "fix": "Write the file as an ES module with a .ts, .mts, .js, or .mjs extension."
   },
   "step-inputs-invalid": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka do cannot run the step as given: a from key, a fixture, or a --use record does not fit.",
     "fix": "Correct the step or the flags as the message says."
   },
   "step-needs-one-scenario": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run --step walks one execution of one scenario, and the run selects more than that: several scenarios, several environments, --repeat above 1, --base, or a scenario whose conditions do not hold in its environment.",
     "fix": "Name one scenario with <file>:<line>, one environment with --env, and leave out --repeat and --base."
   },
   "step-option-ignored": {
     "severity": "warning",
+    "source": "check",
     "description": "A defineStep call passes a key that defineStep does not read, such as rationale, which was removed, so the key has no effect and its value is shown nowhere.",
     "fix": "Delete the key from the defineStep call. Move rationale text into a comment above defineStep first."
   },
   "step-record-unreadable": {
     "severity": "warning",
+    "source": "run",
     "description": "A step wrote a step record that could not be read back, so run.json and the summary have no declaration or measurement for it.",
     "fix": "Correct what the message names, such as a full disk or a process that removed the run directory during the run."
   },
   "summary-not-written": {
     "severity": "warning",
+    "source": "run",
     "description": "The run finished, and a summary file could not be written.",
     "fix": "Correct what the message names, such as the summary path's directory."
   },
   "table-docstring-key-mismatch": {
     "severity": "error",
+    "source": "check",
     "description": "A step's table or docstring is attached to a line, but zero, or more than one, of its args keys is left unconsumed by pattern captures (exactly one must be left for the attachment to fill), or the one key it fills is of a type the attachment can never satisfy (a table is string[][], a docstring is a string).",
     "fix": "Leave exactly one args key that no capture fills, typed string[][] for a table or string for a docstring, or remove the attachment from the line."
   },
   "target-not-found": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A target names a file or a directory that does not exist.",
     "fix": "Name a file or a directory that exists."
   },
   "target-unreadable": {
     "severity": "refused",
+    "source": "refusal",
     "description": "A target exists, and nukadoko could not read it.",
     "fix": "Make the file readable, or name another target."
   },
   "then-compat-step": {
     "severity": "warning",
+    "source": "check",
     "description": "A compat step is bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges.",
     "fix": "Move the step to defineStep with claims, or move the line out of Then position."
   },
   "then-without-claims": {
     "severity": "error",
+    "source": "check",
     "description": "A typed step that runs is bound in Then position. A Then judges through claims; a step that only reads or records a value belongs in a Given or When.",
     "fix": "Bind a claim step (defineStep with claims) at this line, or move the line to Given or When."
   },
   "trace-version-unknown": {
     "severity": "warning",
+    "source": "run",
     "description": "A Playwright trace has a version nukadoko cannot read, so its actions are not in the step record.",
     "fix": "Install the Playwright version nukadoko is tested against."
   },
   "tracked-secret-looking-key": {
     "severity": "warning",
+    "source": "check",
     "description": "An envFile tracked by git defines a key that looks like a secret by name, but that key is not in secrets.redact.",
     "fix": "Add the key to secrets.redact, or move it to an envFile that git does not track."
   },
   "undeclared-write": {
     "severity": "note",
+    "source": "run",
     "description": "A step that declares mutates: false has, in its trace, a write the program committed to a table that holds state: the execution events say the step changed what a later step may read, and its declaration says it did not. A write to a table the program's tables list marks as bookkeeping or infrastructure is not one, and neither is a write that rolled back or whose commit state no line decides.",
     "fix": "Declare mutates: true on the step when it is meant to write, or stop the write in the program when it is not; a table that holds bookkeeping or infrastructure is marked so in the program's tables list (docs/spec.md \"Lists\")."
   },
   "undefined-step": {
     "severity": "error",
+    "source": "check",
     "description": "No step definition matches a line in a feature file.",
     "fix": "Run nuka scaffold --feature with the feature file to write a stub for each undefined line, or reword the line to match a step that exists."
   },
   "undefined-step-check-suppressed": {
     "severity": "warning",
+    "source": "check",
     "description": "A step file failed to import, or a line would match a step whose pattern has an unregistered parameter type, so the undefined-step finding that cause could explain is held back until it is fixed.",
     "fix": "Fix the step-file-import-failed or playwright-missing finding, or the pattern error, that held it back, then run nuka check again."
   },
   "unexpected-error": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The command stopped on an error that has no code of its own.",
     "fix": "Read the message; it is the error the command stopped on."
   },
   "unexpected-failure": {
     "severity": "failed",
+    "source": "run",
     "description": "A scenario's steps passed and the program failed underneath one of them in a way no @expects: tag of the scenario names: a response with a status from 500 to 599, an error the page threw that nothing caught, or an error the program reported in its execution events with handled: false. Its cell is broke, so the claims that held prove nothing about the criterion.",
     "fix": "Fix what failed in the program. A scenario that causes the failure on purpose names it with a tag on its Scenario line, such as @expects:status=503, @expects:error=<class>, or @expects:page-error=<name>; the finding's fix: line spells the tag."
   },
   "unfillable-required-key": {
     "severity": "error",
+    "source": "check",
     "description": "A step's args key is required, but nothing on this line (no pattern capture, no table/docstring attachment, and no declared from) can ever fill it.",
     "fix": "Capture the key in the pattern, attach a table or a docstring, declare from for the key, or make the key optional."
   },
   "unknown-capture-key": {
     "severity": "error",
+    "source": "check",
     "description": "A pattern captures a key that is not a key of the step's args schema.",
     "fix": "Rename the capture to a key of the args schema, or add the key to the schema."
   },
   "unknown-environment": {
     "severity": "refused",
+    "source": "refusal",
     "description": "--env names an environment that the program in nukadoko.config.ts does not define.",
     "fix": "Pass default or an environment the program in nukadoko.config.ts defines, or add it to environments there."
   },
   "unknown-parameter-type": {
     "severity": "error",
+    "source": "check",
     "description": "A pattern names a parameter type this project has not registered, such as {custom} with no matching config.parameterTypes entry.",
     "fix": "Register the type in config.parameterTypes, or use a built-in type such as {key:string}."
   },
   "unknown-step": {
     "severity": "refused",
+    "source": "refusal",
     "description": "The command names a step that is not in the vocabulary.",
     "fix": "Name a step that nuka steps lists."
   },
   "unnamed-capture": {
     "severity": "error",
+    "source": "check",
     "description": "A step's pattern has a capture with no name, such as {int} instead of {key:int}; every capture must name the args key it fills.",
     "fix": "Name the capture after the args key that it fills, as {key:type}."
   },
   "unsupported-hook-tag-expression": {
     "severity": "error",
+    "source": "check",
     "description": "A compat hook's tag expression could not be parsed, so nukadoko cannot tell which scenarios it applies to.",
     "fix": "Rewrite the hook's tags as a tag expression that nukadoko parses, such as @a and not @b."
   },
   "unterminated-capture": {
     "severity": "error",
+    "source": "check",
     "description": "A pattern has an opening { with no matching closing }, so the pattern cannot be parsed.",
     "fix": "Close the capture with }, or escape a literal { as \\{."
   },
   "version-probe-failed": {
     "severity": "warning",
+    "source": "run",
     "description": "The environment's version probe did not answer, so the records have no target version.",
     "fix": "Correct the environment's version setting in the program in nukadoko.config.ts, or the endpoint it names."
   },
   "walk-failed": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka step found the walk paused after a step that failed, or after a step whose AfterStep hook failed: the scenario is failed, and the pause names which of them failed and its message. The walk still waits for its answer, and nothing is left to stop.",
     "fix": "Show the person the failure and the pause's views, answer next when they have seen it, and read the step record for the cause."
   },
   "walk-gone": {
     "severity": "failed",
+    "source": "run",
     "description": "nuka step found a walk whose nuka run --step process ended without recording how: it was killed, or it crashed, so its world, its browser, and its fixtures may not have been torn down.",
     "fix": "Stop what the walk left running, if anything, and start the walk again with the command the finding names."
   },
   "walk-in-progress": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka run --step found another walk in progress in this project: one walk at a time, since nuka step answers the walk the state directory names.",
     "fix": "Finish the walk in progress with nuka step, or stop its nuka run --step process, then start this one."
   },
   "walk-not-current": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka step names a walk that is not the walk in this project: a later walk replaced it, or no walk with that number started yet. An answer names its walk so that it cannot move a walk the person was not shown.",
     "fix": "Run the nuka step wait the finding names, show the person the pause it prints, and answer with that walk's number."
   },
   "walk-not-found": {
     "severity": "refused",
+    "source": "refusal",
     "description": "nuka step found no walk to answer or wait for: no nuka run --step recorded one, or the walk an answer is for was replaced by a later one.",
     "fix": "Start a walk with nuka run <feature>:<line> --step, then run nuka step wait."
   },
   "walk-run-kept": {
     "severity": "note",
+    "source": "run",
     "description": "nuka clean kept a run directory because a walk (nuka run --step) that is live writes there, and nuka step answers its pauses through it. While a walk is starting, every run directory with no run.json is kept, since its run may have made one already.",
     "fix": "Run nuka clean again once the walk ended; nuka step wait --walk <n> reports when it does."
   },
   "walk-stopped": {
     "severity": "failed",
+    "source": "run",
     "description": "A walk (nuka run --step) was stopped at a pause with nuka step stop, so the steps after it did not run and nothing shows the scenario holds. The scenario is stopped, not failed, and its row is red.",
     "fix": "Run the scenario without --step, or walk it to its last step, for a run that shows it holds."
   },
   "worker-output-unreadable": {
     "severity": "warning",
+    "source": "run",
     "description": "A worker, under --concurrency or in a tree of nuka run --base, wrote a line on its stdout that is not one of its messages.",
     "fix": "Remove the code that writes to process.stdout from the step files or the code they import."
   },
   "working-tree-unknown": {
     "severity": "note",
+    "source": "run",
     "description": "nuka verdict could not get a git tree id for the working tree: outside a repository, before its first commit, or a git call failed. Whether the newest run judged this tree is unknown, so the verdict is that run's own table.",
     "fix": "No change is necessary. In a git repository with a commit, nuka verdict compares the tree with the one the run judged."
   },
   "world-setup-failed": {
     "severity": "warning",
+    "source": "run",
     "description": "A compat World could not be set up for a scenario.",
     "fix": "Correct the World class or the defineWorld call the message names."
   }

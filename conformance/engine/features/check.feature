@@ -73,3 +73,44 @@ Feature: nuka check says what is wrong before anything runs
       error	undefined-step	features/greet.feature:5	No step definition matches "the output says "Hello, Ada!""
         do: nuka scaffold --feature features/greet.feature
       """
+
+  Scenario: a note gates the exit code only when --fail-on names it
+    Given the project "fail-on"
+    When nuka runs "check"
+    Then it exits with 0
+    When nuka runs "check --fail-on pattern-unbound"
+    Then it exits with 1
+    And stderr holds "fail-on: pattern-unbound reported 1 finding"
+    When nuka runs "check --fail-on pattern-unbound --json"
+    Then the envelope at "fail_on_hits" is
+      """
+      [
+        {
+          "code": "pattern-unbound",
+          "count": 1
+        }
+      ]
+      """
+
+  Scenario: --fail-on refuses a code a check report never contains
+    Given the project "fail-on"
+    When nuka runs "check --fail-on nope,program-log-late --json"
+    Then it stops with "fail-on-unknown-code"
+    And the envelope at "findings[0].message" is
+      """
+      "--fail-on: \"nope\" is not a code nuka check reports; \"program-log-late\" is a nuka run or refusal code, which a check report never contains"
+      """
+
+  Scenario: a note under targets is a gate that never fires, so it is refused
+    Given the project "fail-on"
+    When nuka runs "check features/press.feature --fail-on pattern-unbound --json"
+    Then it stops with "fail-on-note-with-targets"
+
+  Scenario: --codes lists every code without reading the project
+    Given the project "bare"
+    When nuka runs "check --codes --json"
+    Then it exits with 0
+    And the envelope at "codes[0].code" is
+      """
+      "additional-feature-dir-missing"
+      """

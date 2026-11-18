@@ -74,11 +74,9 @@ export default defineStep({
 
 ## コマンド
 
-コマンドは Ruby 版と同じです。
-片方のエンジンにだけあるフラグは、[プロジェクトの README の表](https://github.com/meganemura/nukadoko/blob/main/README.ja.md#install)にあります。
-今この版にだけあるものは次のとおりです。
-
-- `nuka check --codes` はすべての指摘のコードと意味を並べ、`--fail-on <code>` は注意を検査の失敗にします。
+コマンドとフラグは Ruby 版と同じです。
+ただし `nuka sig` は gem にだけあります。
+両方のコマンドとフラグは[プロジェクトの README の表](https://github.com/meganemura/nukadoko/blob/main/README.ja.md#install)にあります。
 
 ## 開発
 

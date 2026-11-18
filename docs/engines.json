@@ -3,7 +3,7 @@
   "commands": {
     "init": { "ruby": ["--allure"], "typescript": ["--allure"] },
     "scaffold": { "ruby": ["--argv","--body","--command","--cwd","--description","--feature","--from","--pattern","--replace","--request","--then"], "typescript": ["--argv","--body","--command","--cwd","--description","--feature","--from","--pattern","--replace","--request","--then"] },
-    "check": { "ruby": ["--env","--json"], "typescript": ["--codes","--env","--fail-on","--json"] },
+    "check": { "ruby": ["--codes","--env","--fail-on","--json"], "typescript": ["--codes","--env","--fail-on","--json"] },
     "run": { "ruby": ["--base","--concurrency","--env","--json","--no-check","--order","--proof-runs","--records","--repeat","--step","--tag"], "typescript": ["--base","--concurrency","--env","--json","--no-check","--order","--proof-runs","--records","--repeat","--step","--tag"] },
     "report": { "ruby": ["--format","--json","--out"], "typescript": ["--format","--json","--out"] },
     "verdict": { "ruby": ["--json","--trailer"], "typescript": ["--json","--trailer"] },

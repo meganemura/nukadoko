@@ -61,10 +61,7 @@ export default defineStep({
 
 ## Commands
 
-The commands are the same as the Ruby engine's; the [table in the project README](https://github.com/meganemura/nukadoko#install) lists the flags one engine has and the other does not.
-What only this engine has today:
-
-- `nuka check --codes` lists every finding code with its meaning, and `--fail-on <code>` makes a note fail the check.
+The commands and their flags are the same as the Ruby engine's, except `nuka sig`, which only the gem has; the [table in the project README](https://github.com/meganemura/nukadoko#install) lists each command and flag for both.
 
 ## Development
 

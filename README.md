@@ -104,7 +104,7 @@ scenarios check against each engine's `--help`:
 | --- | --- | --- |
 | `nuka init` | yes | yes |
 | `nuka scaffold` | yes | yes |
-| `nuka check` | all but `--codes`, `--fail-on` | yes |
+| `nuka check` | yes | yes |
 | `nuka run` | yes | yes |
 | `nuka report` | yes | yes |
 | `nuka verdict` | yes | yes |

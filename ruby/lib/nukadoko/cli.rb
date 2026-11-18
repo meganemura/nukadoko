@@ -7,8 +7,8 @@ require_relative "command_help"
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
   class CLI
-    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records --meets --misses --step --trailer].freeze
-    REPEATED = %w[--tag --env --use].freeze
+    FLAGS = %w[--json --no-check --dry-run --then --replace --allure --records --meets --misses --step --trailer --codes].freeze
+    REPEATED = %w[--tag --env --use --fail-on].freeze
     VALUED = %w[--format --out --base --repeat --concurrency --order --proof-runs --args --pattern --description --feature --command --request --from --cwd --body --argv
                 --run --by --because --walk --timeout].freeze
 
@@ -104,6 +104,10 @@ module Nukadoko
       return Walked.new(@project, @rest, @options, json: @json, out: @out).call if @command == "step"
       return skill if @command == "skill"
       return init if @command == "init"
+      return codes if @command == "check" && @options.key?("--codes")
+      if @command == "check" && (stop = fail_on_refusal)
+        return refuse(stop)
+      end
 
       begin
         Nukadoko.load_project(@project)
@@ -121,7 +125,7 @@ module Nukadoko
                                 conditions: declared, environments: selected, problems: problems, config: env_findings)
       findings = check.findings.map { relative(_1).to_h }
       case @command
-      when "check" then finish("check", check.passed?, findings: findings)
+      when "check" then checked(check, findings)
       when "sig"
         path = File.join(@project, "sig", "nukadoko", "steps.rbs")
         FileUtils.mkdir_p(File.dirname(path))
@@ -528,6 +532,66 @@ module Nukadoko
     def meets?(scenario, environments)
       tags = Engine::Table.condition_tags(scenario.tags)
       environments.any? { Engine::Table.role(tags, _1.conditions) == "required" }
+    end
+
+    # `nuka check --codes`: every code `nuka check` and `nuka run` can print,
+    # as findings with no location, and no project read. It answers what
+    # could ever be reported, so it holds while the project's config is
+    # broken, which is when a reader often reaches for it.
+    #: () -> Integer
+    def codes
+      listed = Engine::Codes.listed
+      if @json
+        @out.puts JSON.pretty_generate({ **head("check", "passed", []), codes: listed })
+      else
+        emit({}, listed, "codes")
+      end
+      0
+    end
+
+    # `--fail-on` codes, repeated or comma-separated, each once.
+    #: () -> Array[String]
+    def fail_on = @options["--fail-on"].flat_map { _1.split(",") }.map(&:strip).reject(&:empty?).uniq
+
+    # A `--fail-on` gate that could never fire is refused before anything
+    # is read: a code the check never reports (unknown, or a run or refusal
+    # code), and a note under targets, since a note is a fact about the
+    # whole project.
+    #: () -> Engine::Refusal?
+    def fail_on_refusal
+      bad = fail_on.reject { Engine::Codes.check?(_1) }
+      if bad.any?
+        unknown, elsewhere = bad.partition { Engine::Codes.severity(_1).nil? }
+        quoted = ->(codes) { codes.map { %("#{_1}") }.join(", ") }
+        parts = []
+        parts << "#{quoted.(unknown)} #{unknown.size == 1 ? "is not a code" : "are not codes"} nuka check reports" if unknown.any?
+        if elsewhere.any?
+          parts << "#{quoted.(elsewhere)} #{elsewhere.size == 1 ? "is a nuka run or refusal code" : "are nuka run or refusal codes"}, " \
+                   "which a check report never contains"
+        end
+        return Engine::Refusal.new("fail-on-unknown-code", "--fail-on: #{parts.join("; ")}", run: "nuka check --codes")
+      end
+      notes = @rest.empty? ? [] : fail_on.select { Engine::Codes.severity(_1) == "note" }
+      return nil if notes.empty?
+
+      whole = ["nuka", "check", "--fail-on", fail_on.join(","), *@options["--env"].flat_map { ["--env", _1] }].map { Engine::Selection.shell_word(_1) }.join(" ")
+      Engine::Refusal.new("fail-on-note-with-targets",
+                          "--fail-on: #{notes.map { %("#{_1}") }.join(", ")} #{notes.size == 1 ? "is a note" : "are notes"}, and a nuka check with " \
+                          "targets computes no notes, since a note is a fact about the whole project", run: whole)
+    end
+
+    # The report, then one line for each `--fail-on` code it holds, so the
+    # exit code never changes silently. The finding keeps its severity: what
+    # changed is the project's policy, not the finding.
+    #: (Engine::Check, Array[Hash[Symbol, untyped]]) -> Integer
+    def checked(check, findings)
+      hits = fail_on.filter_map do |code|
+        count = findings.count { _1[:code] == code }
+        { code: code, count: count } if count.positive?
+      end
+      exit_code = finish("check", check.passed? && hits.empty?, findings: findings, fail_on_hits: hits)
+      hits.each { $stderr.puts "fail-on: #{_1[:code]} reported #{_1[:count]} #{_1[:count] == 1 ? "finding" : "findings"}" } unless @json
+      exit_code
     end
 
     # The `nuka check` that reports the same errors: the files the targets

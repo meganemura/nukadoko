@@ -2,15 +2,17 @@
 # frozen_string_literal: true
 
 # Writes lib/nukadoko/codes.json from the TypeScript engine's code registry,
-# read as `nuka check --codes --json` prints it on stdin, so a refusal or a
-# finding of this engine gives the same fix for the same code. With
-# --check it writes nothing and exits 1 when the file is not what stdin
-# would write.
+# read as `node typescript/scripts/ruby-codes.ts` prints it on stdin (the
+# list `nuka check --codes --json` prints, in its order, each code with the
+# registry it comes from), so a refusal or a finding of this engine gives
+# the same fix for the same code and `nuka check --codes` lists the same
+# codes in the same order. With --check it writes nothing and exits 1 when
+# the file is not what stdin would write.
 require "json"
 
 path = File.expand_path("../lib/nukadoko/codes.json", __dir__)
-codes = JSON.parse($stdin.binmode.read.force_encoding(Encoding::UTF_8)).fetch("codes").sort_by { _1["code"] }.to_h do |entry|
-  [entry["code"], { "severity" => entry["severity"], "description" => entry["message"], "fix" => entry["fix"] }]
+codes = JSON.parse($stdin.binmode.read.force_encoding(Encoding::UTF_8)).fetch("codes").to_h do |entry|
+  [entry["code"], { "severity" => entry["severity"], "source" => entry["source"], "description" => entry["message"], "fix" => entry["fix"] }]
 end
 text = "#{JSON.pretty_generate(codes)}\n"
 if ARGV.include?("--check")

@@ -27,6 +27,14 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Added
 
+- `nuka check --fail-on <code>` makes a finding of that code fail the
+  check, a note included, and the envelope lists each hit under
+  `fail_on_hits`. A code the check never reports, and a note under
+  targets, are refused, as in the TypeScript engine. `nuka check --codes`
+  lists every code with its meaning without reading the project.
+  `lib/nukadoko/codes.json` now records which registry each code comes
+  from, and `bin/sync-codes` reads it from
+  `typescript/scripts/ruby-codes.ts`.
 - `nuka <command> --help` prints that command's usage, what it is for, and
   the flags it reads, and exits 0. A refusal of an unknown flag already
   pointed at it, and until now it did not exist. `docs/engines.json` lists

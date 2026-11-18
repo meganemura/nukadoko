@@ -88,6 +88,30 @@ module Nukadoko
     # : (Engine::Scenario, Array[Engine::Environment]) -> bool
     def meets?: (Engine::Scenario, Array[Engine::Environment]) -> bool
 
+    # `nuka check --codes`: every code `nuka check` and `nuka run` can print,
+    # as findings with no location, and no project read. It answers what
+    # could ever be reported, so it holds while the project's config is
+    # broken, which is when a reader often reaches for it.
+    # : () -> Integer
+    def codes: () -> Integer
+
+    # `--fail-on` codes, repeated or comma-separated, each once.
+    # : () -> Array[String]
+    def fail_on: () -> Array[String]
+
+    # A `--fail-on` gate that could never fire is refused before anything
+    # is read: a code the check never reports (unknown, or a run or refusal
+    # code), and a note under targets, since a note is a fact about the
+    # whole project.
+    # : () -> Engine::Refusal?
+    def fail_on_refusal: () -> Engine::Refusal?
+
+    # The report, then one line for each `--fail-on` code it holds, so the
+    # exit code never changes silently. The finding keeps its severity: what
+    # changed is the project's policy, not the finding.
+    # : (Engine::Check, Array[Hash[Symbol, untyped]]) -> Integer
+    def checked: (Engine::Check, Array[Hash[Symbol, untyped]]) -> Integer
+
     # The `nuka check` that reports the same errors: the files the targets
     # name, and each --env.
     # : () -> String

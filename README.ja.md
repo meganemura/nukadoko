@@ -92,7 +92,7 @@ Ruby 3.4 以降が必要です。
 | --- | --- | --- |
 | `nuka init` | あり | あり |
 | `nuka scaffold` | あり | あり |
-| `nuka check` | `--codes`、`--fail-on` 以外のすべて | あり |
+| `nuka check` | あり | あり |
 | `nuka run` | あり | あり |
 | `nuka report` | あり | あり |
 | `nuka verdict` | あり | あり |

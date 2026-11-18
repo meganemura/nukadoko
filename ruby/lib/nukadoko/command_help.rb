@@ -39,7 +39,11 @@ module Nukadoko
         usage: "nuka check [feature..]",
         summary: "static checks: pattern/schema mismatches, claim steps and where they are bound, undefined steps per feature, " \
                  "duplicate patterns, config coherence, and notes on unused declarations",
-        flags: [JSON_FLAG, ["--env <name>", "check as a nuka run with the same --env flags would run (repeatable)"]]
+        flags: [JSON_FLAG,
+                 ["--fail-on <code>", "exit 1 when a finding with this code is reported (repeatable, or comma-separated); the finding keeps its " \
+                                      "severity in the output, only the exit code changes. For a job that gates on one note, such as pattern-unbound"],
+                 ["--codes", "list every finding code nuka check can produce, with a one-line description, instead of checking a project"],
+                 ["--env <name>", "check as a nuka run with the same --env flags would run (repeatable)"]]
       },
       "run" => {
         usage: "nuka run [feature..]",

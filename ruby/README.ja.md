@@ -11,8 +11,8 @@ TypeScript 版と同じ feature ファイルを読み、同じ判定を返す必
 HTTP のステップ、ブラウザのステップ、コマンドラインのステップ、プロジェクトが定義するフィクスチャ、parts でできたステップ、poll する Then ステップ、`from`、docstring、Scenario Outline、条件つきの環境、control と proof run、判定表です。
 `--base`、`--step`、`nuka do`、`nuka scaffold`、`nuka init` も動きます。
 `nuka check` は、パターン、ステップの位置、タグ、Scenario Outline、`from` の順番、フィクスチャ、構文エラーについての指摘と、どこにも使われないステップ・フィクスチャ・`from` のキーや scaffold のままの説明についての注意を、TypeScript 版と同じく報告します。
-今 TypeScript 版にだけあるのは `nuka check --codes` と `--fail-on` です。
-片方のエンジンにだけあるフラグは、[プロジェクトの README の表](../README.ja.md#install)にあります。
+TypeScript 版の機能の一部はまだありません。
+何がないかは [llms.txt](../llms.txt) の Ruby の節にあります。
 
 ## インストール
 
@@ -65,7 +65,9 @@ end
 Rakefile に `scenarios` タスクがなければ、`bundle exec nuka run` を実行するタスクを足すので、人も CI も `rake scenarios` を実行します。
 設定ファイルがすでにあれば断ります。
 - `nuka <command> --help` は、そのコマンドの使い方、何のためのものか、読むフラグを出します。
-- `nuka check [--json]` は、実行前にまちがいを報告します。
+- `nuka check [--json] [--fail-on <code>]... [--env <name>]...` は、実行前にまちがいを報告します。
+  `--fail-on` は、そのコードの指摘を注意も含めて検査の失敗にします。
+  `nuka check --codes` はすべてのコードと意味を並べます。
 - `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--concurrency <n>] [--proof-runs <n>] [--step] [--records] [--json] [--no-check]` は、選んだ world ごとにプログラムを起動し、選んだシナリオを実行して、ステップごとの記録を `.nukadoko/runs/` に書きます。
 対象を書かなければ `features/` を実行します。
 `--order shuffled` は、ファイルを、そしてファイルの中のシナリオを、seed が決める順番で実行します。
