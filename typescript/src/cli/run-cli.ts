@@ -757,30 +757,30 @@ export async function runCli(
   });
   const removedHarvestCommand = removedCommand(
     "harvest",
-    "`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)",
+    "`nuka harvest` was removed (see docs/typescript/upgrading.md in the nukadoko package)",
     () => "Write the scenario from the steps you ran in a feature file.",
   );
   const removedSessionCommand = removedCommand(
     "session",
     "`nuka session` was removed with sessions: each nuka do call starts clean, and a step that needs login state " +
-      "gets it from a fixture (see docs/upgrading.md in the nukadoko package)",
+      "gets it from a fixture (see docs/typescript/upgrading.md in the nukadoko package)",
     (stateDir) => `Give the step a fixture that logs in, and delete ${stateDir.replace(/\/+$/, "")}/cache/.`,
   );
   const removedExperimentalCommand = removedCommand(
     "experimental",
-    "`nuka experimental explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
+    "`nuka experimental explore` was removed with models and relations (see docs/typescript/upgrading.md in the nukadoko package)",
     () => "Write each sequence the model found as a scenario in a feature file.",
   );
   const removedExploreCommand = removedCommand(
     "explore",
-    "`nuka explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
+    "`nuka explore` was removed with models and relations (see docs/typescript/upgrading.md in the nukadoko package)",
     () => "Write each sequence the model found as a scenario in a feature file.",
   );
 
   const removedTendCommand = removedCommand(
     "tend",
     "`nuka tend` was removed: `nuka check` reports its findings as notes, and `nuka check --fail-on <code>` " +
-      "turns one into a failing exit (see docs/upgrading.md in the nukadoko package)",
+      "turns one into a failing exit (see docs/typescript/upgrading.md in the nukadoko package)",
     () => "Run nuka check, and add --fail-on <code> for each note a job gates on.",
   );
 

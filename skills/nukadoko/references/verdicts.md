@@ -171,7 +171,7 @@ nothing; `nuka check` reports `expects-tag-malformed` and `expects-unread`.
   meant. Read the reason: a step that now checks something else is a
   change to report to the person; a reason that says the base's steps
   did not load (a module of the program they import moved) means the
-  refactor broke the old steps, and docs/upgrading.md in the package says
+  refactor broke the old steps, and docs/typescript/upgrading.md in the package says
   how to land one.
 - **`removed`**: the base had the criterion and you dropped it. The
   summary quotes it under "Removed criteria" so the person sees it went.

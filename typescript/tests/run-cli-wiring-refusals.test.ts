@@ -17,7 +17,7 @@ describe("nuka harvest, removed", () => {
 
       expect(exitCode).toBe(2);
       expect(stderr.text()).toBe(
-        "refused\tremoved-command\t-\t`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)\n" +
+        "refused\tremoved-command\t-\t`nuka harvest` was removed (see docs/typescript/upgrading.md in the nukadoko package)\n" +
           "  fix: Write the scenario from the steps you ran in a feature file.\n",
       );
       expect(stdout.text()).toBe("");
@@ -28,7 +28,7 @@ describe("nuka harvest, removed", () => {
 describe("nuka tend, removed", () => {
   const TEND_REFUSAL =
     "`nuka tend` was removed: `nuka check` reports its findings as notes, and `nuka check --fail-on <code>` turns one " +
-    "into a failing exit (see docs/upgrading.md in the nukadoko package)";
+    "into a failing exit (see docs/typescript/upgrading.md in the nukadoko package)";
   const TEND_FIX = "Run nuka check, and add --fail-on <code> for each note a job gates on.";
 
   it("exits 2 and points at nuka check --fail-on, with any flag tend once took", async () => {
@@ -59,21 +59,21 @@ describe("nuka session, nuka experimental explore and nuka explore, removed", ()
       argv: ["session", "list"],
       stderr:
         "refused\tremoved-command\t-\t`nuka session` was removed with sessions: each nuka do call starts clean, and a step that needs " +
-        "login state gets it from a fixture (see docs/upgrading.md in the nukadoko package)\n" +
+        "login state gets it from a fixture (see docs/typescript/upgrading.md in the nukadoko package)\n" +
         "  fix: Give the step a fixture that logs in, and delete .nukadoko/cache/.\n",
     },
     {
       argv: ["experimental", "explore", "features/model.ts"],
       stderr:
         "refused\tremoved-command\t-\t`nuka experimental explore` was removed with models and relations " +
-        "(see docs/upgrading.md in the nukadoko package)\n" +
+        "(see docs/typescript/upgrading.md in the nukadoko package)\n" +
         "  fix: Write each sequence the model found as a scenario in a feature file.\n",
     },
     {
       argv: ["explore", "features/model.ts"],
       stderr:
         "refused\tremoved-command\t-\t`nuka explore` was removed with models and relations " +
-        "(see docs/upgrading.md in the nukadoko package)\n" +
+        "(see docs/typescript/upgrading.md in the nukadoko package)\n" +
         "  fix: Write each sequence the model found as a scenario in a feature file.\n",
     },
   ];

@@ -14,7 +14,7 @@ output, see
 Nothing below applies if there is no cucumber-js suite to begin with. A
 project already running Playwright Test directly, with no feature files and
 no glue to switch, starts from a different door instead: see
-[docs/migration-playwright-test.md](migration-playwright-test.md). A suite
+[docs/typescript/migration-playwright-test.md](migration-playwright-test.md). A suite
 already shaped as typed steps, in a DSL of its own, starts at
 [Coming from a typed-step DSL](#coming-from-a-typed-step-dsl). Whatever the
 starting point, [Working rules](#working-rules) holds on every path; an

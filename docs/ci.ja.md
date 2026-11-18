@@ -186,7 +186,7 @@ fetch が無ければ、`nuka run` は `base-shallow` で拒否し、同じ `git
   firefox と webkit もそれぞれ自分自身のバイナリを必要とします(docs/spec.ja.md の「Environment、secret」を参照)。
   `browserType`(や、それを渡り歩く test matrix)が実際に必要とするものを足してください。
 - **テスト対象のアプリは `webServer` ではなく `nukadoko.config.ts` のプログラムから起動します。**
-  `nuka run` と `nuka do` は `playwright.config.ts` を一切読みません([docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照)。
+  `nuka run` と `nuka do` は `playwright.config.ts` を一切読みません([docs/typescript/migration-playwright-test.ja.md](typescript/migration-playwright-test.ja.md) を参照)。
   だからその `webServer` フィールドは何も起動しません。
   その役目はプログラムの `build`、`prepare`、`serve` が果たします。
   起動しなかったプログラムは、`page` や `request` に触れる最初の step の `ECONNREFUSED` ではなく、`program-start-failed` とログの末尾で run を失敗させます(docs/spec.ja.md の「テスト対象のプログラム」を参照)。

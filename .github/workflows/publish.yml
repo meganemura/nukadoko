@@ -161,10 +161,10 @@ jobs:
           PUBLISHED_SHA: ${{ github.sha }}
         run: |
           version="${TAG#v}"
-          # --notes-file CHANGELOG.md would carry every version, so extract only this one.
-          awk -v v="$version" '$0 ~ "^## " v " " {in_version=1; next} /^## /{in_version=0} in_version' CHANGELOG.md > notes.md
+          # --notes-file typescript/CHANGELOG.md would carry every version, so extract only this one.
+          awk -v v="$version" '$0 ~ "^## " v " " {in_version=1; next} /^## /{in_version=0} in_version' typescript/CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then
-            echo "CHANGELOG.md has no section for ${version}" >&2
+            echo "typescript/CHANGELOG.md has no section for ${version}" >&2
             exit 1
           fi
           # A re-run must not fail on a release that already exists.

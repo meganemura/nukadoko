@@ -21,7 +21,7 @@ gate: the publish job waits there until it is approved.
 After `npm publish` succeeds, a third job creates the tag and the
 GitHub release for that version. It checks out the same commit the
 publish job checked out, extracts this version's section of
-`CHANGELOG.md`, and runs `gh release create --target` with the
+`typescript/CHANGELOG.md`, and runs `gh release create --target` with the
 published commit, which creates the tag `v<version>` there. Nobody
 pushes that tag by hand. A release that already exists is left in
 place, so a re-run of the job does not fail. The publish job's
@@ -30,7 +30,7 @@ The release job's permission is `contents: write`. That job does not
 hold the npm OIDC token.
 
 The package ships compiled JavaScript in `dist/` (the `nuka` bin is
-`dist/cli.js`), plus `src/`, `docs/`, `skills/`, `CHANGELOG.md`, and
+`dist/cli.js`), plus `src/`, `docs/`, `skills/`, `CHANGELOG.md` (from `typescript/`), and
 `llms.txt`. `dist/` is gitignored. The workflow builds it from the
 pushed commit. `README.md`, `README.ja.md`, `LICENSE`, and
 `package.json` are in the tarball because npm always packs them.
@@ -97,10 +97,10 @@ registers the trusted publisher.
 
 1. Move the notes under `## Unreleased` to a new version heading and
    leave `## Unreleased` empty. Keep the heading shape already in
-   `CHANGELOG.md`: the release job extracts the section whose heading
+   `typescript/CHANGELOG.md`: the release job extracts the section whose heading
    starts with `##`, the version, and a space. Set the same version in
    `package.json` and `package-lock.json`. The workflow creates the tag
-   from that version. In `docs/upgrading.md` and `docs/upgrading.ja.md`, rename
+   from that version. In `docs/typescript/upgrading.md` and `docs/typescript/upgrading.ja.md`, rename
    the heading that ends in "to the next release" (`から次のリリースへ`
    in Japanese) so it names this version, for example `0.14.1 to 0.15.0`.
    Then run `git grep -n "<old heading text>"` once for each language and
@@ -132,7 +132,7 @@ registers the trusted publisher.
    scenarios. Score the feature it writes against each rule, S1 to S12, of
    `skills/nukadoko/references/scenario-rules.md`: met, not met, or
    not applicable. Put the table, the example's name, and the model
-   under this version's heading in `CHANGELOG.md`, so the release notes
+   under this version's heading in `typescript/CHANGELOG.md`, so the release notes
    carry it. A rule that is not met is a finding for the skill, not a
    gate on this release: the eval is one run of one model, and a second
    run can score differently.
@@ -164,7 +164,7 @@ registers the trusted publisher.
    requirement for people running `nuka`.
 
 6. The workflow's `release` job creates the GitHub release after
-   `npm publish`. It reads `CHANGELOG.md` from the commit the publish
+   `npm publish`. It reads `typescript/CHANGELOG.md` from the commit the publish
    job checked out. `--notes-file CHANGELOG.md` would paste every
    version's notes, so the job extracts only the section whose heading
    starts with `##` plus that version and a space, then runs

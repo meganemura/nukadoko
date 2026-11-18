@@ -679,7 +679,7 @@ function fromInjectionHint(
 export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, value: string): string {
   return (
     `${kind} "${name}" returned ${JSON.stringify(value)}, which nukadoko does not interpret ` +
-    `as pending/skipped (unlike cucumber-js). See docs/migration.md`
+    `as pending/skipped (unlike cucumber-js). See docs/typescript/migration.md`
   );
 }
 

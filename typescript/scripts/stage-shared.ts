@@ -5,11 +5,12 @@
 //
 // The repository holds one engine per language (`typescript/`, `ruby/`) and
 // keeps what both engines follow at its root: the spec, the skills, the
-// changelog, the README. npm packs only what is inside the package's own
-// directory, and it skips a symbolic link, so a link would leave the tarball
-// without its docs. A copy made on every build is the shape that keeps one
-// source at the root and the same tarball as before. The copies are
-// gitignored; edit the root's files, never these.
+// README. Each engine keeps its own changelog in its own directory. npm
+// packs only what is inside the package's own directory, and it skips a
+// symbolic link, so a link would leave the tarball without its docs. A copy
+// made on every build is the shape that keeps one source at the root and
+// the same tarball as before. The copies are gitignored; edit the root's
+// files, never these.
 //
 // Run directly by Node (type stripping), so erasable syntax only.
 
@@ -17,7 +18,7 @@ import { cpSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const SHARED = ["docs", "skills", "README.md", "README.ja.md", "CHANGELOG.md", "llms.txt", "LICENSE"];
+export const SHARED = ["docs", "skills", "README.md", "README.ja.md", "llms.txt", "LICENSE"];
 
 const here = path.resolve(import.meta.dirname, "..");
 const root = path.resolve(here, "..");

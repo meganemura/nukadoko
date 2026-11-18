@@ -3,7 +3,7 @@
 For a project with no cucumber-js and no Gherkin yet: an existing suite
 written directly against Playwright Test, tests shaped as `test("...",
 async ({ page }) => {...})`, with no glue layer and no import to redirect.
-[docs/migration.md](migration.md) covers the other door, the one that
+[docs/typescript/migration.md](migration.md) covers the other door, the one that
 starts from cucumber-js; if that is not your suite, start here instead.
 
 Getting nukadoko itself installed and configured is the same regardless of
@@ -191,7 +191,7 @@ Two ways to get it wrong, both of which are caught rather than silent. A
 spec inside `featuresDir` gets imported by discovery, and Playwright's
 `test()` refuses to be called outside its own runner, so the file fails
 to import: `nuka check` reports it under the same `step-file-import-failed`
-code named in docs/migration.md, carrying Playwright's own error message
+code named in docs/typescript/migration.md, carrying Playwright's own error message
 this time, and `run`/`do` refuse to execute at all,
 exactly as they do for any other broken glue. A step file named like a
 spec collides differently: a step's name is its file's basename, so

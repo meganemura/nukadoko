@@ -176,7 +176,7 @@ export interface DiscoveryResult {
   /** rootDir-relative paths of every `.cjs` or `.cts` file this run's walk found
    * under `featuresDir` (skipping `node_modules` and any dot-directory, the
    * same walk every other file here goes through) and never attempted to
-   * import: nukadoko is ESM-only (docs/migration.md's own go/no-go for
+   * import: nukadoko is ESM-only (docs/typescript/migration.md's own go/no-go for
    * CommonJS glue), and `.cjs` and `.cts` always resolve to CommonJS regardless of
    * the nearest `package.json`'s own `"type"`, so importing one the way a
    * `.ts`/`.mts`/`.js`/`.mjs` file is imported below would just be a

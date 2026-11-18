@@ -219,9 +219,9 @@ installation. While the major version is 0, a caret also pins the minor
 (`^0.14.1` allows `0.14.x` only; for `0.0.x` it pins the patch), so
 `npm update` alone never moves beyond the initially installed minor.
 While this is 0.x, any release can change the public API. Read the
-[changelog](../CHANGELOG.md) instead of relying on the range for safety.
+[changelog](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) instead of relying on the range for safety.
 For what to actually fix after a breaking change, see
-[docs/upgrading.md](upgrading.md).
+[docs/typescript/upgrading.md](typescript/upgrading.md).
 
 ## Secrets need no manifest
 
@@ -480,7 +480,7 @@ The door is an entry point, not a destination. A compat step gains a step
 record with status and timing from the first run; evidence and the page's
 `http.jsonl` lines follow once its glue opens the browser or request through
 `this.openPage()` / `this.openRequest()` (the measured upgrade in
-[docs/migration.md](migration.md)). However, nukadoko discards its return value, and its
+[docs/typescript/migration.md](typescript/migration.md)). However, nukadoko discards its return value, and its
 step record contains `result: null`. Features that require a validated
 result remain unavailable. `nuka check` has no contract to compare with a
 feature, `from` cannot declare a dependency, and a green run summary
@@ -494,7 +494,7 @@ instead of a commitment. It is not a property to build a strategy around.
 A step promoted to `defineStep` has no import to switch back: its body
 still moves, since `run` is written against Playwright's own objects, but
 its schemas and everything built on them do not, and nothing here converts
-one back (docs/migration.md "The way back" covers doing it by hand).
+one back (docs/typescript/migration.md "The way back" covers doing it by hand).
 
 The migration cost was measured instead of assumed. An audit compared the
 glue from eight public cucumber-js suites with this door but did not run
@@ -527,14 +527,14 @@ module format, not the file extension: glue in `.js` or `.mjs` is read
 like any other, and a `.cjs` or `.cts` file is named by `nuka check` rather than
 turning up later as a step nothing defined.
 
-See [docs/migration.md](migration.md) for the step-by-step guide with
+See [docs/typescript/migration.md](typescript/migration.md) for the step-by-step guide with
 the audit's findings, and
 [examples/migration](https://github.com/meganemura/nukadoko/tree/main/typescript/examples/migration)
 for a worked example running end to end.
 
 Already on Playwright Test, with no cucumber and no Gherkin? That is a
 different door, and
-[docs/migration-playwright-test.md](migration-playwright-test.md)
+[docs/typescript/migration-playwright-test.md](typescript/migration-playwright-test.md)
 walks it: the suite stays where it is and keeps its own runner, while an
 operation moves into a plain function that both a spec and a typed step
 call.

@@ -56,7 +56,7 @@ describe("nuka check: done-callback arity", () => {
     for (const issue of hooks) {
       expect(issue.file).toBeUndefined();
       expect(issue.message).toContain("done()");
-      expect(issue.message).toContain("docs/migration.md");
+      expect(issue.message).toContain("docs/typescript/migration.md");
     }
 
     expect(steps.map((issue) => ({ step: issue.step, file: issue.file, line: issue.line }))).toEqual([
@@ -67,7 +67,7 @@ describe("nuka check: done-callback arity", () => {
     ]);
     for (const issue of steps) {
       expect(issue.message).toContain("done()");
-      expect(issue.message).toContain("docs/migration.md");
+      expect(issue.message).toContain("docs/typescript/migration.md");
     }
     const joined = arity.map((issue) => issue.message).join("\n");
     expect(joined).not.toContain("nobody calls");

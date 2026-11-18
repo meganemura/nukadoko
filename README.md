@@ -618,7 +618,7 @@ nuka skill path                              # the copy matching your installed 
 ```
 
 Moving an existing suite across has no skill: it happens once, so point
-the agent at [docs/migration.md](docs/migration.md), whose "Working rules"
+the agent at [docs/typescript/migration.md](docs/typescript/migration.md), whose "Working rules"
 section is written for whoever does the migration.
 
 An agent with no skill loaded starts at `node_modules/nukadoko/llms.txt`:
@@ -647,12 +647,12 @@ move to `defineStep` on its own. The door is an entry point, not a
 destination: a compat step has no contract, so `nuka check` has nothing to
 hold its line against, and a green run confirms only that it ran. A
 CommonJS suite cannot use the door until it changes its module format.
-[docs/migration.md](docs/migration.md) is the step-by-step guide, and
+[docs/typescript/migration.md](docs/typescript/migration.md) is the step-by-step guide, and
 [The compat door](docs/guide.md#the-compat-door) has the audit of eight
 public suites.
 
 A Playwright Test suite with no Gherkin keeps its own runner:
-[docs/migration-playwright-test.md](docs/migration-playwright-test.md)
+[docs/typescript/migration-playwright-test.md](docs/typescript/migration-playwright-test.md)
 moves an operation into a plain function that both a spec and a typed step
 call. To find out whether nukadoko fits before you move anything, paste the
 [evaluation prompt](docs/guide.md#try-it-against-your-own-suite-first) into
@@ -777,8 +777,8 @@ about, the text says so.
 - [docs/adopting.md](docs/adopting.md): add nukadoko to your own project one step at a time, from install to CI.
 - [The guide](docs/guide.md): an HTTP API and `fetch`, setup details, upgrading, secrets, a step before and after its promotion, what nukadoko fixes, reports, self-healing, the compat door in full, CI runs in depth, and the notes `nuka check` adds.
 - [docs/ci.md](docs/ci.md): complete CI workflows.
-- [docs/migration.md](docs/migration.md) and [docs/migration-playwright-test.md](docs/migration-playwright-test.md): bring an existing suite in.
-- [docs/upgrading.md](docs/upgrading.md) and the [changelog](CHANGELOG.md): what changed between versions, and what to do about it.
+- [docs/typescript/migration.md](docs/typescript/migration.md) and [docs/typescript/migration-playwright-test.md](docs/typescript/migration-playwright-test.md): bring an existing suite in.
+- [docs/typescript/upgrading.md](docs/typescript/upgrading.md) and the [changelog](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md): what changed between versions, and what to do about it.
 - [ruby/README.md](https://github.com/meganemura/nukadoko/blob/main/ruby/README.md): the Ruby engine.
 - [conformance/](https://github.com/meganemura/nukadoko/blob/main/conformance/README.md): what both engines must judge the same way.
 

@@ -221,7 +221,7 @@ of the above; these four are what changes.
 - **The app under test starts from the program in `nukadoko.config.ts`, not from
   `webServer`.** `nuka run` and `nuka do` read `playwright.config.ts` for
   nothing at all (see
-  [docs/migration-playwright-test.md](migration-playwright-test.md)), so
+  [docs/typescript/migration-playwright-test.md](typescript/migration-playwright-test.md)), so
   its `webServer` field starts nothing. The program's `build`,
   `prepare`, and `serve` do that job, and a program that does not start
   fails the run with `program-start-failed` and the end of its log, not

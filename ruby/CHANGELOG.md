@@ -1,8 +1,8 @@
 # Changelog
 
 Notable changes to the `nukadoko` gem, the Ruby engine. The npm package has
-its own changelog, `../CHANGELOG.md`, and its own versions. Each release's
-notes come from the section below whose heading starts with `## [<version>]`.
+its own changelog, `../typescript/CHANGELOG.md`, and its own versions.
+Each release's notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 

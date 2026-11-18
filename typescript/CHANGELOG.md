@@ -3567,8 +3567,8 @@ agent wrote an assumption and a weaker claim instead.
   `allure` and `messages` need `sources.json` and refuse with
   `run-sources-missing` or `run-sources-invalid`. Only a file written
   under `<stateDir>/export/` is noted in the exports manifest.
-- **A step-by-step adoption guide, [docs/adopting.md](docs/adopting.md),
-  with its Japanese pair [docs/adopting.ja.md](docs/adopting.ja.md).** It
+- **A step-by-step adoption guide, [docs/adopting.md](https://github.com/meganemura/nukadoko/blob/main/docs/adopting.md),
+  with its Japanese pair [docs/adopting.ja.md](https://github.com/meganemura/nukadoko/blob/main/docs/adopting.ja.md).** It
   takes an existing Node project from `npm install -D -E nukadoko` through
   `nuka init`, a first feature, `nuka check`, `nuka scaffold --feature`
   and its `--replace` lines, `nuka run` with `--probe` and `--env`, the run
@@ -6078,7 +6078,7 @@ example checks is not covered by this run.
   never typed it; a failed record keeps exactly what was given. A part's
   own `CallEntry.args` stays raw on both outcomes deliberately: what
   changed here is what gets accepted, not what gets written down. See
-  [docs/upgrading.md](docs/upgrading.md) for what a project already
+  [docs/upgrading.md](https://github.com/meganemura/nukadoko/blob/main/docs/typescript/upgrading.md) for what a project already
   relying on the old behavior needs to check.
 
 ### Added
@@ -6235,7 +6235,7 @@ example checks is not covered by this run.
   stream, placed there by rename so a reader never catches it half
   written. `nuka clean [--export]` removes both the configured path and
   every run's own file beside it. See
-  [docs/upgrading.md](docs/upgrading.md) for what changes for a script
+  [docs/upgrading.md](https://github.com/meganemura/nukadoko/blob/main/docs/typescript/upgrading.md) for what changes for a script
   that watches this file.
 
 ## 0.6.0 — 2026-08-18
@@ -6486,7 +6486,7 @@ example checks is not covered by this run.
   next run rebuilds it. `cache/` (`cache/sessions/`) is not a record of
   anything that happened, only work avoided, so deleting it costs a
   login, never correctness. See
-  [Artifacts](docs/spec.md#artifacts).
+  [Artifacts](https://github.com/meganemura/nukadoko/blob/main/docs/spec.md#artifacts).
 - **A step record's own field names and id prefix changed.** `receipt_id`
   is now `record_id`, the `rcpt-` id prefix is now `step-`, and a `used`
   entry's `receipt` key is now `record`.
@@ -6524,7 +6524,7 @@ example checks is not covered by this run.
   regression 0.2.0 recorded in its own entry below: a scenario a Before
   hook stops now shows `failed` on its own scenario-level leaf, not only
   `skipped` on every step underneath it. See
-  [Allure emitter](docs/spec.md#allure-emitter).
+  [Allure emitter](https://github.com/meganemura/nukadoko/blob/main/docs/spec.md#allure-emitter).
 - **`nuka init` now writes `historyPath` into the `allurerc.mjs` it
   generates**, pointing Allure's own `generate`/`watch`/`report` at
   `.nukadoko/export/allure-history.jsonl`. Without it, Allure never builds
@@ -6554,7 +6554,7 @@ example checks is not covered by this run.
   untracked or changed no longer counts against that refusal, for any
   feature. A path this cannot even read (most likely one deleted since it
   was measured) still counts as dirty, and anything else dirty still
-  refuses exactly as before. See [Sign-off](docs/spec.md#sign-off).
+  refuses exactly as before. See [Sign-off](https://github.com/meganemura/nukadoko/blob/main/docs/spec.md#sign-off).
 
 ## 0.2.0 — 2026-08-15
 
@@ -6586,7 +6586,7 @@ example checks is not covered by this run.
   nothing by moving; the compat door is for getting a suite in, not for
   where it settles, and time-over-time observation stays available
   through `nuka tend` instead (see
-  [Allure emitter](docs/spec.md#allure-emitter)). One display
+  [Allure emitter](https://github.com/meganemura/nukadoko/blob/main/docs/spec.md#allure-emitter)). One display
   regression: a scenario stopped by its own Before hook now shows every
   step `skipped` rather than one test turning red, because there is no
   longer a scenario-level test for that failure to live on; `nuka run`'s
@@ -7565,4 +7565,4 @@ First published version. Covered by 523 tests.
 ### Not in this release
 
 Compat gap detection in `nuka check`, an AI-assisted glue converter, and
-scenario harvesting. See the [roadmap](docs/spec.md#roadmap).
+scenario harvesting. See the [roadmap](https://github.com/meganemura/nukadoko/blob/main/docs/spec.md#roadmap).

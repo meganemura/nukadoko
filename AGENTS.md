@@ -77,8 +77,10 @@ One engine per language, side by side: `typescript/` is the npm package
 `package.json`; run `npm` there), and `ruby/` is the gem. What both
 engines follow stays at the root: `docs/` (the spec among them),
 `skills/`, `conformance/` (the cases both engines must judge the same
-way), the READMEs, `CHANGELOG.md`, and `llms.txt`. The npm package still
-ships those shared files: `npm run build` copies them into `typescript/`,
+way), the READMEs, and `llms.txt`. Each engine keeps its own changelog
+(`typescript/CHANGELOG.md`, `ruby/CHANGELOG.md`), and what holds for one
+engine only goes under `docs/typescript/` or `docs/ruby/`. The npm package
+still ships the shared files: `npm run build` copies them into `typescript/`,
 where git ignores them. Edit the root's files; a change to a copy is lost
 on the next build.
 
@@ -162,9 +164,10 @@ change against before writing it.
 - Commits are semantic units, in English, matching the existing message
   style; the user reviews direction, the session reviews code.
 - Paired files are kept in sync: README.md/README.ja.md,
-  docs/spec.md/docs/spec.ja.md, docs/migration.md/docs/migration.ja.md
-  (Japanese: one sentence per line; the English file is the source of
-  truth). **Query `docs/glossary.json` before translating anything** — it
+  docs/spec.md/docs/spec.ja.md, and every other document under `docs/`
+  with its `.ja.md` (Japanese: one sentence per line; the English file is
+  the source of truth). **Query `docs/glossary.json` before translating
+  anything** — it
   holds the settled term pairs, which words stay in English and why, and
   the per-file rule for headings. JSON rather than prose because what reads
   it is a model with `jq`: `en` is an array, so
@@ -207,17 +210,19 @@ change against before writing it.
   need checking on every such change: `skills/nukadoko/SKILL.md` (write a
   scenario, run it, open the pull request a person approves) and
   `skills/nukadoko-verification/SKILL.md` (scenarios under a verification skill).
-  Moving a suite across has no skill: docs/migration.md ("Working rules")
+  Moving a suite across has no skill: docs/typescript/migration.md ("Working rules")
   carries it, and needs the same check. Skills never copy a fact the CLI
   itself answers — vocabulary, contracts, refusal reasons go stale the
   moment a command changes — but they must name the commands, flags, and
   checks that exist, and must not name ones that don't.
-- **A breaking change is not finished until `docs/upgrading.md` says how
-  to move across it.** The CHANGELOG records what changed and why;
-  upgrading records what a project already on nukadoko has to do about
-  it, and those are different questions from different readers.
-  `docs/migration.md` is for a cucumber-js suite coming in, not for a
-  project moving between nukadoko versions, so an upgrade note put there
+- **A breaking change is not finished until the engine's upgrade notes say
+  how to move across it:** `docs/typescript/upgrading.md` for the npm
+  package, and the gem's `ruby/CHANGELOG.md` entry for the gem. The
+  CHANGELOG records what changed and why; upgrading records what a
+  project already on nukadoko has to do about it, and those are different
+  questions from different readers.
+  `docs/typescript/migration.md` is for a cucumber-js suite coming in, not
+  for a project moving between nukadoko versions, so an upgrade note put there
   reaches the wrong readers. Both files are paired with their `.ja.md`.
 - Code comments explain why, not what; each module opens with its
   responsibility and boundaries.

@@ -110,7 +110,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
   });
 
   describe('"pending"/"skipped" returns are not interpreted (item 4)', () => {
-    it('a step returning "pending" fails with a readable message pointing at docs/migration.md', async () => {
+    it('a step returning "pending" fails with a readable message pointing at docs/typescript/migration.md', async () => {
       const stdout = createCaptureSink();
       const exitCode = await runCli(["run", "--records", "--no-check", "features/step-pending-skip.feature:3"], {
         rootDir,
@@ -122,7 +122,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain('"pending"');
-      expect(record.steps[0].error.message).toContain("docs/migration.md");
+      expect(record.steps[0].error.message).toContain("docs/typescript/migration.md");
       // A compat-only shape nukadoko doesn't implement classifies as
       // "unsupported", never "step_error" (this is set directly at the
       // point it's detected, not thrown/caught).
@@ -130,7 +130,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
 
-    it('a step returning "skipped" fails with a readable message pointing at docs/migration.md', async () => {
+    it('a step returning "skipped" fails with a readable message pointing at docs/typescript/migration.md', async () => {
       const stdout = createCaptureSink();
       const exitCode = await runCli(["run", "--records", "--no-check", "features/step-pending-skip.feature:6"], {
         rootDir,
@@ -142,7 +142,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain('"skipped"');
-      expect(record.steps[0].error.message).toContain("docs/migration.md");
+      expect(record.steps[0].error.message).toContain("docs/typescript/migration.md");
       const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
       expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });
@@ -164,7 +164,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.steps[0].status).toBe("failed");
       expect(record.steps[0].error.message).toContain("done()");
-      expect(record.steps[0].error.message).toContain("docs/migration.md");
+      expect(record.steps[0].error.message).toContain("docs/typescript/migration.md");
       const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
       expect(stepRecord.error).toMatchObject({ kind: "unsupported" });
     });

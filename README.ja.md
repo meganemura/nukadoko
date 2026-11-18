@@ -566,7 +566,7 @@ nuka skill path                              # the copy matching your installed 
 ```
 
 既存のスイートの移行には skill がありません。
-移行は一度しか起きないので、agent には [docs/migration.ja.md](docs/migration.ja.md) を案内します。
+移行は一度しか起きないので、agent には [docs/typescript/migration.ja.md](docs/typescript/migration.ja.md) を案内します。
 その「進め方の決まり」の節は、移行を行う人やエージェントのために書かれています。
 
 skill を読み込んでいない agent は `node_modules/nukadoko/llms.txt` から始めます。
@@ -592,10 +592,10 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 扉は入口であり、行き先ではありません。
 compat の step には契約がないので、`nuka check` にはその行と照らすものがなく、green の run が確かめるのは step が走ったことだけです。
 CommonJS のスイートは、モジュール形式を変えるまでこの扉を使えません。
-手順は [docs/migration.ja.md](docs/migration.ja.md) にあり、公開されている 8 つのスイートの監査は [The compat door](docs/guide.ja.md#the-compat-door) にあります。
+手順は [docs/typescript/migration.ja.md](docs/typescript/migration.ja.md) にあり、公開されている 8 つのスイートの監査は [The compat door](docs/guide.ja.md#the-compat-door) にあります。
 
 Gherkin のない Playwright Test のスイートは、自分のランナーのままです。
-[docs/migration-playwright-test.ja.md](docs/migration-playwright-test.ja.md) は、操作を普通の関数に移し、spec と型付き step の両方がそれを呼ぶようにします。
+[docs/typescript/migration-playwright-test.ja.md](docs/typescript/migration-playwright-test.ja.md) は、操作を普通の関数に移し、spec と型付き step の両方がそれを呼ぶようにします。
 何かを移す前に nukadoko が合うかを確かめるには、[評価用のプロンプト](docs/guide.ja.md#try-it-against-your-own-suite-first)を、自分のリポジトリで動くエージェントに貼り付けてください。
 
 ## What this does not do
@@ -685,8 +685,8 @@ Ruby のエンジンは同じ feature ファイルを読み、[conformance/](htt
 - [docs/adopting.ja.md](docs/adopting.ja.md): 自分のプロジェクトに、インストールから CI までを 1 手順ずつ導入する。
 - [ガイド](docs/guide.ja.md): HTTP API と `fetch`、セットアップの詳細、アップグレード、secret、昇格の前と後の step、nukadoko が直すもの、レポート、自己修復、compat の扉の全体、CI の詳細、`nuka check` が加える注記。
 - [docs/ci.ja.md](docs/ci.ja.md): CI の完全な workflow。
-- [docs/migration.ja.md](docs/migration.ja.md) と [docs/migration-playwright-test.ja.md](docs/migration-playwright-test.ja.md): 既存のスイートを取り込む。
-- [docs/upgrading.ja.md](docs/upgrading.ja.md) と [changelog](CHANGELOG.md): バージョンの間で何が変わり、何をすればよいか。
+- [docs/typescript/migration.ja.md](docs/typescript/migration.ja.md) と [docs/typescript/migration-playwright-test.ja.md](docs/typescript/migration-playwright-test.ja.md): 既存のスイートを取り込む。
+- [docs/typescript/upgrading.ja.md](docs/typescript/upgrading.ja.md) と [changelog](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md): バージョンの間で何が変わり、何をすればよいか。
 - [ruby/README.ja.md](https://github.com/meganemura/nukadoko/blob/main/ruby/README.ja.md): Ruby のエンジン。
 - [conformance/](https://github.com/meganemura/nukadoko/blob/main/conformance/README.md): 両方のエンジンが同じように判定しなければならないもの。
 

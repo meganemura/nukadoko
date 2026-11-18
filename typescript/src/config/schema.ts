@@ -385,7 +385,7 @@ export const configSchema = z
      * they run unbounded unless their glue declares `{ timeout }` or calls
      * `setDefaultTimeout`, which is what keeps a migrating suite's slow
      * step from starting to fail purely from switching
-     * (src/compat/registry.ts, docs/migration.md). A typed step is not a
+     * (src/compat/registry.ts, docs/typescript/migration.md). A typed step is not a
      * migrating asset, so the same reasoning does not reach it. */
     stepTimeout: z.number().positive().max(MAX_TIMER_DELAY_MS, `must be ${MAX_TIMER_DELAY_REASON}`).default(DEFAULT_STEP_TIMEOUT_MS),
     /** How long measurement stays on disk (docs/spec.md "Artifacts").

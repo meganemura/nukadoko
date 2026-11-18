@@ -24,7 +24,7 @@ npm install -D -E nukadoko
 
 `-E` を付けると、caret の範囲ではなく `"nukadoko": "0.17.0"` が書かれます。
 nukadoko が 0.x のあいだは、どのリリースでも公開 API が変わりえます。
-新しい版へは意図して移り、そのときは [docs/upgrading.ja.md](upgrading.ja.md) を読んでください。
+新しい版へは意図して移り、そのときは [docs/typescript/upgrading.ja.md](typescript/upgrading.ja.md) を読んでください。
 
 `page` か `request` を使う step には Playwright が必要です。
 CLI のプロジェクトには要りません。
@@ -222,7 +222,7 @@ workflow の全体、ブラウザを使う場合、run ディレクトリのア�
 - coding agent は nukadoko の skill([skills/nukadoko/SKILL.md](../skills/nukadoko/SKILL.md))を読み込みます。
   `nuka skill path` は、インストールした版の `skills/` ディレクトリを出力し、そこにそのコピーがあります。
 - cucumber-js のスイートを持つプロジェクトは、import を 1 つ切り替えて取り込みます。
-  [docs/migration.ja.md](migration.ja.md) を参照してください。
+  [docs/typescript/migration.ja.md](typescript/migration.ja.md) を参照してください。
 - 何かが実行される前に `nuka check` が捕まえるもの: [Wrong before it runs](../README.ja.md#wrong-before-it-runs)。
 - すべてのコマンド、config のキー、record のフィールド: [docs/spec.ja.md](spec.ja.md)。
 

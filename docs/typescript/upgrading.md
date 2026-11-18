@@ -2,7 +2,7 @@
 
 For a project already running on nukadoko, moving to a newer release.
 Coming from a cucumber-js suite instead? See
-[docs/migration.md](migration.md); that door and this upgrade are
+[docs/typescript/migration.md](migration.md); that door and this upgrade are
 different questions for different readers.
 
 ## How to upgrade, every time
@@ -598,7 +598,7 @@ This part does not change release to release.
 
   ```text
   refused	config-invalid	-	Could not import config at nukadoko.config.ts: The requested module 'nukadoko' does not provide an export named 'runServer' (nukadoko.config.ts:1); runServer was removed from nukadoko: nukadoko.program.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after
-    fix: Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.
+    fix: Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; docs/typescript/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.
   ```
 
   A step file gets the same sentence and `fix:` line, as
@@ -911,7 +911,7 @@ This part does not change release to release.
 - **The migration skill is gone.** A host that installed it with
   `gh skill install meganemura/nukadoko --all` keeps the old copy until
   it is removed; remove it, and point an agent that is moving a suite at
-  docs/migration.md instead. Its "Working rules" section carries what the
+  docs/typescript/migration.md instead. Its "Working rules" section carries what the
   skill said.
 
 - **Two more evidence names are the harness's.** `ctx.evidence.attach`
@@ -1374,7 +1374,7 @@ This part does not change release to release.
   `UnsupportedExternalFixtureError`.** A Playwright Test spec that imports
   `recordStep` fails to compile. Call the shared function the step's `run`
   calls directly from the spec, and delete the `nukadoko` import: the spec
-  then depends only on Playwright again (docs/migration-playwright-test.md,
+  then depends only on Playwright again (docs/typescript/migration-playwright-test.md,
   "Share the implementation, not the runner"). Records `recordStep` wrote
   stay on disk with `kind: "external"` until retention removes them.
 - **The text output of `nuka check` and `nuka tend` prints a `do:` line
@@ -1489,7 +1489,7 @@ those fixtures is first built. What to do:
 - **CI changes only by that one line in `package.json`.** `npm ci` installs
   `playwright` once it is a devDependency of the project, and
   `npx playwright install --with-deps chromium` keeps downloading the
-  browser in the job that runs browser steps, as [docs/ci.md](ci.md) shows.
+  browser in the job that runs browser steps, as [docs/ci.md](../ci.md) shows.
   A job that runs only `nuka check`, or a project with no browser step, can
   drop any browser install line.
 - **A project without a browser or HTTP step typechecks without
@@ -1512,7 +1512,7 @@ The Allure and messages emitters are off by default now, which a project that re
 **`nuka accept` is gone, and the run summary replaces it.** No project kept
 the records it wrote, and the run summary carries the same claim ("green
 at this commit") as evidence bound to its commit; the approval itself is
-recorded wherever the team records approvals. Every `nuka run` now writes that summary; [docs/ci.md](ci.md) shows
+recorded wherever the team records approvals. Every `nuka run` now writes that summary; [docs/ci.md](../ci.md) shows
 how to post it on the pull request. What to do:
 
 - **Remove `nuka accept` from scripts and CI.** The command no longer
@@ -1520,7 +1520,7 @@ how to post it on the pull request. What to do:
   error (exit 2 from the release after 0.16.1 on, where every refusal
   exits 2). Where a job ran it after a green `nuka run`, post the run summary
   instead: `nuka run <features> --summary <path>`, then a step that comments
-  that file on the pull request (the workflow in [docs/ci.md](ci.md) has
+  that file on the pull request (the workflow in [docs/ci.md](../ci.md) has
   one).
 - **Replace a PR check that a feature has a sign-off record.** A job that
   looked for a `<feature>.*.md` file beside each changed feature, or ran
@@ -1528,7 +1528,7 @@ how to post it on the pull request. What to do:
   The reviewer now reads the `.feature` in the diff and the run summary on
   the pull request; the run is the evidence, and where the approval is
   recorded is the team's process (see "Review" in
-  [docs/spec.md](spec.md#review)). `nuka
+  [docs/spec.md](../spec.md#review)). `nuka
   tend --fail-on` with any of the removed codes (`feature-never-signed`,
   `signed-feature-unscanned`, `signoff-condition-mismatch`,
   `signoff-feature-changed`, `signoff-feature-missing`,
@@ -1811,7 +1811,7 @@ One fix, with two things a project could notice.
 ## 0.9.0 to 0.10.0
 
 `nuka run` writes more on stderr, and `nuka tend` reports one new note.
-Why is in [CHANGELOG.md](../CHANGELOG.md) under `## 0.10.0`.
+Why is in [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under `## 0.10.0`.
 
 - **`nuka run` names each failed scenario on stderr, after the summary
   line.** One line per scenario that did not pass, carrying its feature
@@ -1828,7 +1828,7 @@ Why is in [CHANGELOG.md](../CHANGELOG.md) under `## 0.10.0`.
 
 The acceptance record has one breaking change. `nuka tend`'s
 `post-navigation-read` note also reads from a different place now. Why is
-in [CHANGELOG.md](../CHANGELOG.md) under `## 0.9.0`.
+in [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under `## 0.9.0`.
 
 - **A record `nuka accept` writes from now on drops `actions`,
   `page_events`, `sections`, `polls`, `declared`, `http_omitted`, and
@@ -1879,7 +1879,7 @@ change affects consumers of `nuka tend --json`.
 One breaking change, plus a behavior change that is not breaking but is
 worth knowing about, since it changes what a script watching `nuka run`'s
 output actually sees. The breaking one: why is in
-[CHANGELOG.md](../CHANGELOG.md) under `## 0.7.0`.
+[CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under `## 0.7.0`.
 
 - **An args key a step's schema does not declare is refused now, not
   silently dropped.** `nuka describe` already published each object
@@ -1918,7 +1918,7 @@ output actually sees. The breaking one: why is in
 ## 0.4.1 to 0.5.0
 
 Additive, with one narrow exception. Why is in
-[CHANGELOG.md](../CHANGELOG.md) under `## 0.5.0`.
+[CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under `## 0.5.0`.
 
 - **`Step` now always carries `parts`, so a hand-written `Step` object
   literal no longer typechecks.** `Step` is an exported type and `parts`
@@ -1937,7 +1937,7 @@ Additive, with one narrow exception. Why is in
 ## 0.3.0 to 0.4.0
 
 One breaking change, plus one action that is not breaking. Each entry
-says what to fix; why is in [CHANGELOG.md](../CHANGELOG.md) under
+says what to fix; why is in [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under
 `## 0.4.0`.
 
 - **A step record's and a scenario record's id-bearing field names
@@ -1972,7 +1972,7 @@ says what to fix; why is in [CHANGELOG.md](../CHANGELOG.md) under
 
 Five breaking changes, plus one action that is not breaking but is needed
 to opt in to a new capability. Each entry says what to fix; why is in
-[CHANGELOG.md](../CHANGELOG.md) under `## 0.3.0`.
+[CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under `## 0.3.0`.
 
 - **A step record's JSON changed field names and id prefix.** A script
   reading a step record's or scenario record's JSON needs the current
@@ -2017,7 +2017,7 @@ to opt in to a new capability. Each entry says what to fix; why is in
 ## 0.1.0 to 0.2.0
 
 Three breaking changes. Each entry says what to fix; why is in
-[CHANGELOG.md](../CHANGELOG.md) under `## 0.2.0`.
+[CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under `## 0.2.0`.
 
 - **`nuka steps --json`'s top level changed from a bare array to `{ steps,
   import_failures }`.** Anything reading the old bare array needs to read
@@ -2043,7 +2043,7 @@ Three breaking changes. Each entry says what to fix; why is in
 ## 0.0.5 to 0.1.0
 
 Three breaking changes. Each entry says what to fix; why is in
-[CHANGELOG.md](../CHANGELOG.md) under `## 0.1.0`.
+[CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) under `## 0.1.0`.
 
 - **A typed step's `run` takes a fixture bag now, not `ctx`.** Collect
   every `ctx.foo` a step reads into a destructured first argument
@@ -2059,4 +2059,4 @@ Three breaking changes. Each entry says what to fix; why is in
 
 ## Before 0.0.5
 
-See [CHANGELOG.md](../CHANGELOG.md).
+See [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md).

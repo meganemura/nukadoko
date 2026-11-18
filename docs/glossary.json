@@ -1,5 +1,5 @@
 {
-  "note": "英日の訳語対応。日本語の対訳を持つすべてのファイル(README.ja.md、docs/spec.ja.md、docs/migration.ja.md、docs/migration-playwright-test.ja.md、docs/upgrading.ja.md、docs/ci.ja.md、docs/releasing.ja.md、docs/execution-events.ja.md)を書くとき・レビューするときに引く。ここにあるのはそれらのファイルで実際に使われている訳語であり、ここで発明したものではない。読み手は主に AI なので散文と装飾は置かない。新しい訳語が定まったらここに足す。",
+  "note": "英日の訳語対応。日本語の対訳を持つすべてのファイル(README.ja.md、docs/spec.ja.md、docs/typescript/migration.ja.md、docs/typescript/migration-playwright-test.ja.md、docs/typescript/upgrading.ja.md、docs/ci.ja.md、docs/releasing.ja.md、docs/execution-events.ja.md)を書くとき・レビューするときに引く。ここにあるのはそれらのファイルで実際に使われている訳語であり、ここで発明したものではない。読み手は主に AI なので散文と装飾は置かない。新しい訳語が定まったらここに足す。",
   "usage": [
     "jq -r '.terms[] | select(.en | index(\"contract\")) | .ja' docs/glossary.json",
     "jq -r '.terms[] | select(any(.en[]; test(\"wir\"; \"i\")))' docs/glossary.json",
@@ -121,7 +121,7 @@
       "en": ["validated", "validation", "validate"],
       "ja": "バリデーション(済み)",
       "avoid": ["検証"],
-      "note": "docs/migration.ja.md にだけ 検証 が混在していたが統一済み"
+      "note": "docs/typescript/migration.ja.md にだけ 検証 が混在していたが統一済み"
     },
     {
       "en": ["wire", "wire up", "wired", "wiring", "zero wiring"],
@@ -1078,7 +1078,7 @@
     },
     {
       "term": "live session",
-      "why": "削除された `nuka session start` が保っていた、生きたプロセスとしての session。いまは docs/upgrading と CHANGELOG の履歴にだけ出る。session が keep_english なのは `--session` / `nuka session` と直に対応するからで、分解して live だけ訳すと対応が切れる"
+      "why": "削除された `nuka session start` が保っていた、生きたプロセスとしての session。いまは docs/typescript/upgrading と CHANGELOG の履歴にだけ出る。session が keep_english なのは `--session` / `nuka session` と直に対応するからで、分解して live だけ訳すと対応が切れる"
     },
     {
       "term": "Playwright MCP server",
@@ -1136,7 +1136,7 @@
       "why": "mutates フィールド名と地続きの動詞として常に英語。「状態を mutate する」のように活用させずに使う"
     },
     { "term": "pull request", "why": "GitHub などの forge の機能名。docs/ci.ja.md と docs/spec.ja.md で英語のまま使っている。レビュアーが feature の差分と run サマリを読む場所" },
-    { "term": "sign-off", "why": "承認を指す語。以前は nuka accept が書く記録の呼び名だったが、そのコマンドは削除済み。nukadoko は承認を記録せず、承認をどこに記録するかはチームのプロセスなので、docs/upgrading の移行の説明でだけ使う。常にハイフン付きの英語" },
+    { "term": "sign-off", "why": "承認を指す語。以前は nuka accept が書く記録の呼び名だったが、そのコマンドは削除済み。nukadoko は承認を記録せず、承認をどこに記録するかはチームのプロセスなので、docs/typescript/upgrading の移行の説明でだけ使う。常にハイフン付きの英語" },
     {
       "term": "Export",
       "why": "docs/spec.md \"Artifacts\" の成果物分類表にある行名。allure-results/ と messages.ndjson を指す。TypeScript の export キーワード(小文字、常に英語のまま)とは別の語で、行名としては大文字のまま訳さない"
@@ -1261,10 +1261,10 @@
         ]
       }
     },
-    "docs/migration.ja.md": {
+    "docs/typescript/migration.ja.md": {
       "rule": "日本語化する。ただし Stage N のような段階ラベルと、コードスパンで書かれたコマンド名はそのまま残す"
     },
-    "docs/upgrading.ja.md": {
+    "docs/typescript/upgrading.ja.md": {
       "rule": "日本語化する。ただし版番号(0.0.5 など)や `Unreleased` のような版のラベルはそのまま残す"
     },
     "docs/ci.ja.md": {
@@ -1273,7 +1273,7 @@
     "docs/releasing.ja.md": {
       "rule": "日本語化する。ただしコードスパンで書かれたコマンド名、npm の設定画面のラベル(Trusted Publisher の各フィールド名)、fenced code block 内のシェルはそのまま残す"
     },
-    "docs/migration-playwright-test.ja.md": {
+    "docs/typescript/migration-playwright-test.ja.md": {
       "rule": "日本語化する。ただしコードスパンで書かれたコマンド名とコード識別子はそのまま残す。見出しにコードスパンを含むもの(`from`、`recordStep`)も、前後の句だけを日本語にする"
     },
     "docs/execution-events.ja.md": {

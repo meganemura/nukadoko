@@ -30,8 +30,8 @@ const DOCS = [
   "docs/guide.ja.md",
   "docs/spec.md",
   "docs/spec.ja.md",
-  "docs/migration.md",
-  "docs/migration.ja.md",
+  "docs/typescript/migration.md",
+  "docs/typescript/migration.ja.md",
   "skills/nukadoko/references/program.md",
   "skills/nukadoko/references/perturbed-worlds.md",
 ];

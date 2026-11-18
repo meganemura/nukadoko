@@ -22,7 +22,7 @@ npm install -D -E nukadoko
 
 `-E` writes `"nukadoko": "0.17.0"` instead of a caret range. While
 nukadoko is 0.x, any release can change the public API, so move to a new
-version on purpose and read [docs/upgrading.md](upgrading.md) when you do.
+version on purpose and read [docs/typescript/upgrading.md](typescript/upgrading.md) when you do.
 
 Steps that use `page` or `request` need Playwright. A CLI project does
 not. To add it, follow [Install](../README.md#install).
@@ -241,7 +241,7 @@ Commit `features/`, `nukadoko.config.ts`, and the changes to
   `nuka skill path` prints the `skills/` directory of your installed
   version, which holds that copy.
 - A project with a cucumber-js suite brings it in by switching one
-  import: [docs/migration.md](migration.md).
+  import: [docs/typescript/migration.md](typescript/migration.md).
 - What `nuka check` catches before anything runs:
   [Wrong before it runs](../README.md#wrong-before-it-runs).
 - Every command, config key, and record field: [docs/spec.md](spec.md).

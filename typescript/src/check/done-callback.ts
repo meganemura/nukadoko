@@ -39,6 +39,6 @@ export function doneCallbackMessage(kind: "Step" | "Hook", name: string): string
   return (
     `${kind} "${name}" appears to expect a done() callback (it declares more parameters ` +
     `than nukadoko passes it). nukadoko has no callback form; rewrite it to return a ` +
-    `Promise (async/await). See docs/migration.md`
+    `Promise (async/await). See docs/typescript/migration.md`
   );
 }

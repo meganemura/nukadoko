@@ -10,7 +10,7 @@ M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、�
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
 まだ 0.x で、M3 以降のうち Allure の result と messages ストリームはどちらも実装済み(`nuka report` が描き出します)であり、M5 の両方の skill も実装済みです。
-`nuka check` における compat gap 検出(migration skill 自身の前提条件)も実装済みで(「Compat steps」と docs/migration.ja.md の「ダッシュボードは `nuka check`」を参照)、M1-M5 を締めくくります。
+`nuka check` における compat gap 検出(migration skill 自身の前提条件)も実装済みで(「Compat steps」と docs/typescript/migration.ja.md の「ダッシュボードは `nuka check`」を参照)、M1-M5 を締めくくります。
 
 ## nukadoko とは
 
@@ -2687,14 +2687,14 @@ import { Given, When, Then } from "nukadoko/compat";
   公開されている cucumber-js のスイート 8 本を、この扉に対して監査しました。
   glue はテキストとして読み、実行しませんでした。
   当時はどのスイートも import の差し替えだけでは通りませんでしたが、そこで見つかった障害をふさいだことで、8 本のうち 2 本はその後、glue の中に拒まれるものが何もない状態になりました。
-  残りが何を必要とするかは [docs/migration.ja.md](migration.ja.md) に列挙されています。
+  残りが何を必要とするかは [docs/typescript/migration.ja.md](typescript/migration.ja.md) に列挙されています。
   監査から 1 つの規則を定めました。
   compat がサポートしない挙動は、import 時または最初の run で失敗する必要があります。
   移行するチームは、大きな声の失敗には対処できますが、静かな失敗は見えません。
   だから、黙って振る舞いを変えてしまう抜けは、機能が欠けていることが食ってきた時間よりも多くの信頼を食います。
   import の失敗と下の所見は、この規則を満たします。
   値の水準の違いはまだいくつか残っています。
-  それらは失敗しないので、計測済みのものを 1 つずつ [docs/migration.ja.md](migration.ja.md) の「既知の限界」に挙げています。
+  それらは失敗しないので、計測済みのものを 1 つずつ [docs/typescript/migration.ja.md](typescript/migration.ja.md) の「既知の限界」に挙げています。
 - 明示的な失敗は、静的な所見と step の実行が必要な失敗に分かれます。
   `nuka check` は、静的な所見だけを報告します。
   **`nuka check` が報告できる失敗**: import が例外を投げる step ファイルは `step-file-import-failed` エラーになります。
@@ -2729,8 +2729,8 @@ import { Given, When, Then } from "nukadoko/compat";
   移行途中の「住まいが 2 つある」状態(support コードに登録された parameter type と config に住む parameter type、World のバッグと typed の result の併存)は、禁止するのではなく受け入れます。
   ただしそれらは必ず 1 つの実体を共有し、分散は隠さず `nuka check` が可視化し、個々の移行の一手は意味を変えないものに限ります(だから早く安全に動かせます)。
   扉は両方向に開きます: import を元に戻せることは維持されます。
-- [docs/migration.ja.md](migration.ja.md) は、既存の cucumber-js と Playwright のスイートに対する手順を示します。
-  [docs/upgrading.ja.md](upgrading.ja.md) は、既存の nukadoko プロジェクトを新しいリリースへ移す方法を説明します。
+- [docs/typescript/migration.ja.md](typescript/migration.ja.md) は、既存の cucumber-js と Playwright のスイートに対する手順を示します。
+  [docs/typescript/upgrading.ja.md](typescript/upgrading.ja.md) は、既存の nukadoko プロジェクトを新しいリリースへ移す方法を説明します。
 
 ## 第二の扉: Playwright Test のスイート
 
@@ -2739,8 +2739,8 @@ Playwright Test に対して直接書かれたスイートには、その import
 テストは `test("...", async ({ page }) => {...})` を使い、リダイレクトする glue レイヤーもありません。
 このスイートには、別の移行方法が必要です。
 
-[docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) は、この扉の手順を示します。
-`docs/migration.ja.md` は、最初の扉を扱います。
+[docs/typescript/migration-playwright-test.ja.md](typescript/migration-playwright-test.ja.md) は、この扉の手順を示します。
+`docs/typescript/migration.ja.md` は、最初の扉を扱います。
 Playwright Test のスイートには compat step、World、Cucumber hook がないため、2 つの文書は異なる読み手に向けたものです。
 
 **実装を共有します。**
@@ -5187,7 +5187,7 @@ base や old のセルはある行の head のセルとの比較であり、head
 scenario の鍵は、他に何が選ばれたかに依りません。
 そのため、選択のどの部分も、選択全体が与えた順序で走ります。
 seed は、それを読むどの nukadoko でも同じ順序を名指します。
-鍵は形式の一部であり、その変更は、docs/upgrading.md に移り方を書く破壊的な変更です。
+鍵は形式の一部であり、その変更は、docs/typescript/upgrading.md に移り方を書く破壊的な変更です。
 
 シャッフルした run は、引いた seed も与えられた seed も、4 つの場所で言います。
 1 つ目は stderr で、最初の scenario の前に `order shuffled:<seed>` と書きます。
@@ -8431,7 +8431,7 @@ step record の `error.kind` は「Records」に一覧があります。
   どちらの skill も、CLI がすでに答えられる事実(語彙、契約、拒否の根拠)を書き写しません。
   それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
   migration skill は、のちに削除されました。
-  移行はスイートごとに一度しか起きないので、その決まりは docs/migration.ja.md(「進め方の決まり」)に移り、エージェントはそこを案内されたときに読みます。
+  移行はスイートごとに一度しか起きないので、その決まりは docs/typescript/migration.ja.md(「進め方の決まり」)に移り、エージェントはそこを案内されたときに読みます。
 - **M6(chained arguments)**: `from`、`nuka check` と `nuka run` が共有する scenario 順序チェック、`do` の `--use`、そして引用する step record の隣に step 名を記す `used` のエントリです。
   step の入力がどこから来るかは、`run` の本体の中の散文であることをやめ、ツールが読む宣言になります(「step の連鎖」を参照)。
 - **M7(tending)**: 壊れることではなく腐ることについての所見を出す `tend` コマンドです。

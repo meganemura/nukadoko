@@ -65,9 +65,9 @@ describe("the packed file list", () => {
       "CHANGELOG.md",
       "docs/spec.md",
       "docs/ci.md",
-      "docs/upgrading.md",
-      "docs/migration.md",
-      "docs/migration-playwright-test.md",
+      "docs/typescript/upgrading.md",
+      "docs/typescript/migration.md",
+      "docs/typescript/migration-playwright-test.md",
       ...markdownUnder("skills"),
     ];
     expect(required.filter((file) => !packedSet.has(file))).toEqual([]);

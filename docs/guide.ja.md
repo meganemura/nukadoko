@@ -208,8 +208,8 @@ nukadoko が撮るスクリーンショットは、ページが表示するロ�
 メジャーバージョンが 0 の間は、キャレットが minor も固定します(`^0.14.1` が許すのは `0.14.x` だけで、`0.0.x` では patch まで固定します)。
 そのため `npm update` だけでは最初に入れた minor を超えません。
 0.x の間はどのリリースでも public API が変わり得ます。
-範囲指定に頼らず、[changelog](../CHANGELOG.md) を読んでください。
-破壊的変更のあとに実際に何を直すかは、[docs/upgrading.ja.md](upgrading.ja.md) を参照してください。
+範囲指定に頼らず、[changelog](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) を読んでください。
+破壊的変更のあとに実際に何を直すかは、[docs/typescript/upgrading.ja.md](typescript/upgrading.ja.md) を参照してください。
 
 ## Secrets need no manifest
 
@@ -436,7 +436,7 @@ World のサブクラスは `this.page` と `this.request` に代入できます
 
 扉は入口であり、行き先ではありません。
 compat の step は、最初の run から status と時間を持つ step record を得ます。
-evidence と、page の `http.jsonl` の行が付くのは、その glue がブラウザや request を `this.openPage()` / `this.openRequest()` で開くようにしてからです([docs/migration.ja.md](migration.ja.md) の measured upgrade)。
+evidence と、page の `http.jsonl` の行が付くのは、その glue がブラウザや request を `this.openPage()` / `this.openRequest()` で開くようにしてからです([docs/typescript/migration.ja.md](typescript/migration.ja.md) の measured upgrade)。
 ただし、nukadoko は return 値を捨て、step record には `result: null` が入ります。
 バリデーション済みの result が必要な機能は使えません。
 `nuka check` には feature と比較する契約がなく、`from` は依存関係を宣言できません。
@@ -447,7 +447,7 @@ import を元に戻せば、ただの cucumber-js スイートに戻ります。
 これは変わらない設計上の規則です(compat の資産は、切り替えにも部分的な移行にも耐えなければなりません)。
 その役目は、nukadoko を試すコストを、大きな決断ではなく編集 1 つ分にすることです。
 それは戦略を組み立てるための性質ではありません。
-`defineStep` に昇格させた step には、切り替えて戻す import がありません: `run` は Playwright 自身のオブジェクトに対して書かれているため body は移りますが、そのスキーマとその上に組まれたものは移らず、ここには元に戻す手段は何もありません(手作業での道筋は docs/migration.ja.md の「戻り道」に書いてあります)。
+`defineStep` に昇格させた step には、切り替えて戻す import がありません: `run` は Playwright 自身のオブジェクトに対して書かれているため body は移りますが、そのスキーマとその上に組まれたものは移らず、ここには元に戻す手段は何もありません(手作業での道筋は docs/typescript/migration.ja.md の「戻り道」に書いてあります)。
 
 移行のコストは、推測ではなく計測しました。
 監査では、公開されている 8 本の cucumber-js スイートから glue を読み、この扉と比較しましたが、スイートは実行しませんでした。
@@ -479,10 +479,10 @@ glue をテキストとして読むことは、glue の中に見える障害を�
 これはファイル拡張子の話ではなく、モジュール形式の話です。
 `.js` や `.mjs` の glue は他と同じように読まれ、`.cjs` や `.cts` のファイルは、後になって何も定義していない step として現れる代わりに、`nuka check` がそれを名指しします。
 
-手順を追ったガイド(監査結果を収録)は [docs/migration.ja.md](migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/typescript/examples/migration) を参照してください。
+手順を追ったガイド(監査結果を収録)は [docs/typescript/migration.ja.md](typescript/migration.ja.md) を、最後まで動く実例は [examples/migration](https://github.com/meganemura/nukadoko/tree/main/typescript/examples/migration) を参照してください。
 
 cucumber も Gherkin も無く、Playwright Test だけを使っている場合は別の扉になります。
-[docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) がその道筋です。
+[docs/typescript/migration-playwright-test.ja.md](typescript/migration-playwright-test.ja.md) がその道筋です。
 スイートはいまの場所に残り、自分の runner を使い続けます。
 移るのは操作の実装だけで、spec と typed step の両方がその関数を呼びます。
 

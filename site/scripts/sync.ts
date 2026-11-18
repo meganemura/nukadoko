@@ -73,7 +73,8 @@ function takesIntro(page: Page): boolean {
 
 /** Each source's sections are on exactly one page or left out, and both languages agree. */
 function checkPlacement(): void {
-  for (const file of readdirSync(join(repoDir, "docs"))) {
+  // docs/ and the engine directories under it (docs/ruby/, docs/typescript/).
+  for (const file of readdirSync(join(repoDir, "docs"), { recursive: true, encoding: "utf8" })) {
     const path = `docs/${file}`;
     if (!file.endsWith(".md") || leftOutFiles.includes(path)) continue;
     if (!docs.has(path)) refuse(path, "no page of the site takes this document", `place it in site/pages.ts, or name it in leftOutFiles`);

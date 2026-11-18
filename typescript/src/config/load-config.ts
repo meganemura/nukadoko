@@ -43,7 +43,7 @@ export const CONFIG_FILE_NAME: string = CONFIG_FILE_NAMES[0];
 // and a project with no "type" at all gets Node's reparse warning on
 // every load. .mts is
 // unambiguous ESM regardless of package.json, which is the one thing that
-// lets such a project load a config at all (docs/migration.md "Stage 0:
+// lets such a project load a config at all (docs/typescript/migration.md "Stage 0:
 // install and point nukadoko at your suite"). `nuka init` decides which
 // name to write (src/config/module-kind.ts's isCommonJsProject); this
 // module only reads whichever one is actually on disk.

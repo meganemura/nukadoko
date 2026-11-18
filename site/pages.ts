@@ -16,11 +16,11 @@ export const sources = {
   guide: { en: "docs/guide.md", ja: "docs/guide.ja.md" },
   intent: { en: "docs/intent.md", ja: "docs/intent.ja.md" },
   ci: { en: "docs/ci.md", ja: "docs/ci.ja.md" },
-  migration: { en: "docs/migration.md", ja: "docs/migration.ja.md" },
-  migrationPlaywright: { en: "docs/migration-playwright-test.md", ja: "docs/migration-playwright-test.ja.md" },
+  migration: { en: "docs/typescript/migration.md", ja: "docs/typescript/migration.ja.md" },
+  migrationPlaywright: { en: "docs/typescript/migration-playwright-test.md", ja: "docs/typescript/migration-playwright-test.ja.md" },
   executionEvents: { en: "docs/execution-events.md", ja: "docs/execution-events.ja.md" },
   spec: { en: "docs/spec.md", ja: "docs/spec.ja.md" },
-  upgrading: { en: "docs/upgrading.md", ja: "docs/upgrading.ja.md" },
+  upgrading: { en: "docs/typescript/upgrading.md", ja: "docs/typescript/upgrading.ja.md" },
   ruby: { en: "ruby/README.md", ja: "ruby/README.ja.md" },
 } satisfies Record<string, Source>;
 

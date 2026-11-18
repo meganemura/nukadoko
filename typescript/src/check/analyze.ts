@@ -358,7 +358,7 @@ async function reportFor(
   // never a guess about a file's contents, and both are things a run needs
   // known beforehand, the standard that makes a finding an error or a
   // warning rather than a note. Errors, not warnings: a `.cjs`
-  // file is nukadoko's one already-documented go/no-go (docs/migration.md
+  // file is nukadoko's one already-documented go/no-go (docs/typescript/migration.md
   // "CommonJS glue"), the same certainty `step-file-import-failed` above
   // already gets error severity for, and a featuresDir with nothing loadable
   // in it guarantees every scenario fails as `undefined-step` — strictly

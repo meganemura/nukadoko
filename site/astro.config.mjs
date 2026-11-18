@@ -12,10 +12,12 @@ const sidebar = [
     items: group.pages.map((page) => page.slug),
   })),
   {
-    label: "Changelog",
+    label: "Changelogs",
     translations: { ja: "変更履歴" },
-    link: "https://github.com/meganemura/nukadoko/blob/main/CHANGELOG.md",
-    attrs: { target: "_blank" },
+    items: [
+      { label: "Ruby (gem)", link: "https://github.com/meganemura/nukadoko/blob/main/ruby/CHANGELOG.md", attrs: { target: "_blank" } },
+      { label: "TypeScript (npm)", link: "https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md", attrs: { target: "_blank" } },
+    ],
   },
 ];
 

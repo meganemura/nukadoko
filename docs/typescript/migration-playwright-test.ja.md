@@ -5,7 +5,7 @@
 
 まだ cucumber-js も Gherkin も使っていないプロジェクト向けです。
 Playwright Test に対して直接書かれたスイートには、差し替える import そのものがありません: そのテストは `test("...", async ({ page }) => {...})` であり、リダイレクトする glue レイヤーもありません。
-[docs/migration.ja.md](migration.ja.md) はもう一方の扉、cucumber-js から始まる扉を扱っています。
+[docs/typescript/migration.ja.md](migration.ja.md) はもう一方の扉、cucumber-js から始まる扉を扱っています。
 そちらがあなたのスイートでなければ、ここから始めてください。
 
 nukadoko 自身のインストールと設定は、どちらの扉を使っても同じであり、その手順のどこにも cucumber 固有のものはありません。
@@ -165,7 +165,7 @@ discovery は `featuresDir` の下にある `.ts`/`.mts`/`.js`/`.mjs` をすべ�
 
 間違え方は 2 つあり、どちらも黙っては終わらず捕まります。
 `featuresDir` の内側にある spec は discovery に import されますが、Playwright の `test()` は自分自身の runner の外から呼ばれることを拒否するので、そのファイルは import に失敗します。
-`nuka check` はこれを、docs/migration.ja.md で名指されているのと同じ `step-file-import-failed` のコードで報告し、今回は Playwright 自身のエラーメッセージを運びます。
+`nuka check` はこれを、docs/typescript/migration.ja.md で名指されているのと同じ `step-file-import-failed` のコードで報告し、今回は Playwright 自身のエラーメッセージを運びます。
 `run`/`do` も、他の壊れた glue に対してとまったく同じように、実行そのものを拒否します。
 spec のように名付けられた step ファイルは、また別の形でぶつかります。
 step の名前はそのファイルの basename なので、`open-cart.spec.ts` は最初の step と同じ pattern を持つ、`open-cart.spec` という 2 つ目の step を定義してしまい、`nuka check` はその両方を名指しして `ambiguous-step` を報告します。

@@ -11,7 +11,7 @@ import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDi
 // Responsibility: a config or a step file that still imports an export
 // nukadoko removed (src/config/removed-export.ts) is refused with what
 // replaced it: the message and the `fix:` line name the program in nukadoko.config.ts
-// and the docs/upgrading.md entry, in `nuka check`, `nuka run`, and `nuka
+// and the docs/typescript/upgrading.md entry, in `nuka check`, `nuka run`, and `nuka
 // do`, where Node's own message named only the missing export.
 
 const nodeMessage = (specifier: string, name: string): string => `The requested module '${specifier}' does not provide an export named '${name}'`;
@@ -20,7 +20,7 @@ const SENTENCE =
   "; runServer was removed from nukadoko: the program function of nukadoko.config.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after";
 const FIX =
   "Remove runServer and the fixture that called it, and write the program's command under program in nukadoko.config.ts instead; " +
-  'docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.';
+  'docs/typescript/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.';
 
 describe("removedExport", () => {
   it("names what replaced runServer when nukadoko is the module that lacks it", () => {

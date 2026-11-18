@@ -10,7 +10,7 @@ drafted against real feature files, and the compat door audited against
 real cucumber-js glue (below). Still 0.x; of M3+, the Allure results and the
 messages stream are both implemented (rendered by `nuka report`), and so are both of M5's skills. Compat gap detection in `nuka check` (the
 migration skill's own prerequisite) is implemented too (see "Compat steps"
-and docs/migration.md's "The dashboard is `nuka check`"), closing out
+and docs/typescript/migration.md's "The dashboard is `nuka check`"), closing out
 M1-M5.
 
 ## What nukadoko is
@@ -3421,13 +3421,13 @@ import { Given, When, Then } from "nukadoko/compat";
   eight public cucumber-js suites without running them. At that time, none
   worked after only the import change. Fixes for the observed blockers have
   since brought two suites to a state where compat rejects none of their
-  glue. [docs/migration.md](migration.md) lists the remaining requirements.
+  glue. [docs/typescript/migration.md](typescript/migration.md) lists the remaining requirements.
   The audit established a rule: unsupported compat behavior must fail
   during import or the first run. A migrating team can respond to an
   explicit failure, but it cannot see a silent behavior change. A silent
   change costs more trust than a missing feature costs time. Import
   failures and the findings below meet this rule. Some value-level
-  differences remain. They do not fail, so [docs/migration.md](migration.md)
+  differences remain. They do not fail, so [docs/typescript/migration.md](typescript/migration.md)
   "Known limits" lists each measured one.
 - Explicit failures divide into static findings and failures that require
   step execution. `nuka check` reports only static findings.
@@ -3477,8 +3477,8 @@ import { Given, When, Then } from "nukadoko/compat";
   mechanism. `nuka check` must expose the split. Each migration step must
   preserve semantics so a team can make it early and safely. A team must
   also be able to restore the original import.
-- [docs/migration.md](migration.md) gives a step-by-step procedure for an
-  existing cucumber-js and Playwright suite. [docs/upgrading.md](upgrading.md)
+- [docs/typescript/migration.md](typescript/migration.md) gives a step-by-step procedure for an
+  existing cucumber-js and Playwright suite. [docs/typescript/upgrading.md](typescript/upgrading.md)
   explains how to move an existing nukadoko project to a newer release.
 
 ## The second door: a Playwright Test suite
@@ -3488,8 +3488,8 @@ A suite written directly for Playwright Test has no such import. Its tests
 use `test("...", async ({ page }) => {...})`, with no glue layer to
 redirect. This suite requires a different migration method.
 
-[docs/migration-playwright-test.md](migration-playwright-test.md) gives the
-step-by-step procedure for this door. `docs/migration.md` covers the first
+[docs/typescript/migration-playwright-test.md](typescript/migration-playwright-test.md) gives the
+step-by-step procedure for this door. `docs/typescript/migration.md` covers the first
 door. The documents serve different readers because a Playwright Test suite
 has no compat steps, World, or Cucumber hooks.
 
@@ -10607,7 +10607,7 @@ would be running against glue it never actually read.
   the CLI already answers (vocabulary, contracts, refusal reasons), because
   a skill that copies those starts lying the moment the command changes.
   The migration skill was later removed: a migration happens once per
-  suite, so its rules moved into docs/migration.md ("Working rules"),
+  suite, so its rules moved into docs/typescript/migration.md ("Working rules"),
   which an agent reads when it is pointed there.
 - **M6 (chained arguments)**: `from`, the scenario-order check `nuka check`
   and `nuka run` share, `--use` on `do`, and a `used` entry that names the

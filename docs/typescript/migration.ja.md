@@ -12,7 +12,7 @@ nukadoko の設定と step ファイルの両方で、`.ts` の代わりに `.mt
 
 そもそも cucumber-js のスイートがなければ、以下はどれも当てはまりません。
 Playwright Test に対して直接書かれたプロジェクトで、feature ファイルも切り替える glue もない場合は、別の扉から始まります。
-[docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照してください。
+[docs/typescript/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照してください。
 独自の DSL で、すでに型付き step の形をしたスイートは、[型付き step の DSL から来る場合](#型付き-step-の-dsl-から来る場合)から始まります。
 どこから始めても、[進め方の決まり](#進め方の決まり)はすべての道で成り立ちます。
 移行を行うエージェントは、最初の変更の前にそれを読みます。

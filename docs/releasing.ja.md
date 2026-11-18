@@ -16,7 +16,7 @@ GitHub の Environment `publish` が人のゲートです。
 publish ジョブは承認されるまでそこで待ちます。
 
 `npm publish` が成功したあと、3 つめのジョブがそのバージョンの tag と GitHub release を作ります。
-そのジョブは publish ジョブが checkout したのと同じ commit を checkout し、`CHANGELOG.md` からそのバージョンの節だけを取り出し、publish した commit を指定して `gh release create --target` を実行します。
+そのジョブは publish ジョブが checkout したのと同じ commit を checkout し、`typescript/CHANGELOG.md` からそのバージョンの節だけを取り出し、publish した commit を指定して `gh release create --target` を実行します。
 その呼び出しが、その commit に tag `v<version>` を作ります。
 その tag を手で push する人はいません。
 release が既にあれば、そのまま残します。
@@ -25,7 +25,7 @@ publish ジョブの権限は `id-token: write` と `contents: read` です。
 release ジョブの権限は `contents: write` です。
 そのジョブは npm の OIDC トークンを持ちません。
 
-パッケージが載せるのは、`dist/` にコンパイルした JavaScript(`nuka` の bin は `dist/cli.js`)、それに `src/`、`docs/`、`skills/`、`CHANGELOG.md`、`llms.txt` です。
+パッケージが載せるのは、`dist/` にコンパイルした JavaScript(`nuka` の bin は `dist/cli.js`)、それに `src/`、`docs/`、`skills/`、`CHANGELOG.md`(`typescript/` のもの)、`llms.txt` です。
 `dist/` は `.gitignore` に入っています。
 workflow が push された commit からそれをビルドします。
 `README.md`、`README.ja.md`、`LICENSE`、`package.json` は npm が常に tarball へ入れるので、それらも入ります。
@@ -85,11 +85,11 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
 ## 各バージョン
 
 1. `## Unreleased` の下にあるノートを新しいバージョンの見出しへ移し、`## Unreleased` は空にします。
-   見出しの形は `CHANGELOG.md` に既にあるものを保ちます。
+   見出しの形は `typescript/CHANGELOG.md` に既にあるものを保ちます。
    release ジョブは、見出しが `##` とそのバージョンと空白で始まる節を取り出すからです。
    `package.json` と `package-lock.json` に同じ version を書きます。
    workflow はその version から tag を作ります。
-   `docs/upgrading.md` と `docs/upgrading.ja.md` では、「to the next release」(日本語では「から次のリリースへ」)で終わる見出しを、このバージョンを名指すように書き換えます。
+   `docs/typescript/upgrading.md` と `docs/typescript/upgrading.ja.md` では、「to the next release」(日本語では「から次のリリースへ」)で終わる見出しを、このバージョンを名指すように書き換えます。
    たとえば `0.14.1 to 0.15.0` です。
    次に、英語と日本語の古い見出しの文言それぞれで `git grep -n "<古い見出しの文言>"` を実行し、その見出しの引用をすべて新しい見出しに書き換えます。
    その節を参照する箇条書きは見出しを引用しています。
@@ -106,7 +106,7 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    インストールされた skill から、その例の Markdown ファイルを `node_modules/nukadoko/skills/nukadoko/references/examples/` で削除し、エージェントにはほかの写しも渡しません。
    エージェントにその例の「The ticket」の節を渡し、scenario を書いて実行するよう頼みます。
    エージェントが書いた feature を、`skills/nukadoko/references/scenario-rules.md` の各ルール S1 から S12 について、満たす、満たさない、該当しない、で採点します。
-   その表と、例の名前と、モデルを `CHANGELOG.md` のこのバージョンの見出しの下に書き、release notes に載るようにします。
+   その表と、例の名前と、モデルを `typescript/CHANGELOG.md` のこのバージョンの見出しの下に書き、release notes に載るようにします。
    満たさないルールは skill への指摘であって、このリリースを止める条件ではありません。
    この評価は 1 つのモデルの 1 回の実行で、もう 1 回実行すれば採点は変わりえます。
 
@@ -133,7 +133,7 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    Node 24 は publish ジョブであって、`nuka` を動かす人への新しい要件ではありません。
 
 6. workflow の `release` ジョブが、`npm publish` のあとに GitHub release を作ります。
-   `CHANGELOG.md` は、publish ジョブが checkout した commit から読みます。
+   `typescript/CHANGELOG.md` は、publish ジョブが checkout した commit から読みます。
    `--notes-file CHANGELOG.md` はすべてのバージョンのノートを貼るので、ジョブは見出しが `##` とそのバージョンと空白で始まる節だけを取り出してから、publish した commit を `--target` に指定して `gh release create` を実行します。
    その呼び出しが tag `v<version>` と release を作ります。
    両方を作るのはそのジョブです。

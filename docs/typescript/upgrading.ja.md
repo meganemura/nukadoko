@@ -4,7 +4,7 @@
 > 相違があれば原文が正。
 
 すでに nukadoko の上で動いているプロジェクトが、新しいリリースへ移る場合の文書です。
-cucumber-js のスイートから来た場合は、代わりに [docs/migration.ja.md](migration.ja.md) を参照してください。
+cucumber-js のスイートから来た場合は、代わりに [docs/typescript/migration.ja.md](migration.ja.md) を参照してください。
 その扉と、このアップグレードは、別の読者に向けた別の問いです。
 
 ## 毎回のアップグレードの仕方
@@ -478,7 +478,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
   ```text
   refused	config-invalid	-	Could not import config at nukadoko.config.ts: The requested module 'nukadoko' does not provide an export named 'runServer' (nukadoko.config.ts:1); runServer was removed from nukadoko: nukadoko.program.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after
-    fix: Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.
+    fix: Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; docs/typescript/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.
   ```
 
   step ファイルも、`step-file-import-failed` として同じ文と `fix:` の行を受け取ります。
@@ -729,7 +729,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 - **migration skill はなくなりました。**
   `gh skill install meganemura/nukadoko --all` で入れたホストには、消すまで古いコピーが残ります。
-  それを消し、スイートを移行するエージェントには、代わりに docs/migration.ja.md を案内してください。
+  それを消し、スイートを移行するエージェントには、代わりに docs/typescript/migration.ja.md を案内してください。
   その「進め方の決まり」の節が、skill が言っていたことを運んでいます。
 
 - **evidence の名前が 2 つ、harness のものになりました。**
@@ -1089,7 +1089,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **`recordStep`、`RecordStepOptions`、`StepExecution`、`UnsupportedExternalFixtureError` は export されなくなりました。**
   `recordStep` を import している Playwright Test の spec はコンパイルに失敗します。
   step の `run` が呼んでいる共有関数を spec から直接呼び、`nukadoko` の import を削除してください。
-  そうすると spec は再び Playwright だけに依存します(docs/migration-playwright-test.ja.md の「共有するのは runner ではなく実装」)。
+  そうすると spec は再び Playwright だけに依存します(docs/typescript/migration-playwright-test.ja.md の「共有するのは runner ではなく実装」)。
   `recordStep` が書いた record は、retention が削除するまで `kind: "external"` のままディスクに残ります。
 - **`nuka check` と `nuka tend` のテキスト出力は、各所見の下に `do:` の行を出し、step の所見ではその step ファイルを示します。**
   その行は 2 つの空白で始まります(`  do: nuka scaffold --feature features/greet.feature`)。
@@ -1188,7 +1188,7 @@ nukadoko は今、`playwright` を optional な peer dependency として宣言�
   `nuka run --no-check` なら実行し、最初のそうした step が同じ行を出して失敗します。
   `nuka experimental webmcp-tools` も同じく `playwright` を必要とします。
 - **CI の変更は `package.json` のその 1 行だけです。**
-  `playwright` がプロジェクトの devDependency になれば `npm ci` がそれをインストールし、`npx playwright install --with-deps chromium` はブラウザの step を実行する job でこれまでどおりブラウザをダウンロードします([docs/ci.ja.md](ci.ja.md) のとおりです)。
+  `playwright` がプロジェクトの devDependency になれば `npm ci` がそれをインストールし、`npx playwright install --with-deps chromium` はブラウザの step を実行する job でこれまでどおりブラウザをダウンロードします([docs/ci.ja.md](../ci.ja.md) のとおりです)。
   `nuka check` だけを実行する job や、ブラウザの step を持たないプロジェクトは、ブラウザのインストール行を消してかまいません。
 - **ブラウザの step も HTTP の step も持たないプロジェクトは、`skipLibCheck` の値によらず `playwright` なしで型チェックが通ります。**
   nukadoko 自身の型宣言は、`page` と `request` の fixture のために Playwright の `Page` と `APIRequestContext` を名指しています。
@@ -1216,14 +1216,14 @@ Allure と messages の emitter は既定で無効になりました。
 それが書いた記録を残し続けたプロジェクトはありませんでした。
 run サマリが同じ主張(「このコミットで green」)を、そのコミットに結び付いた証跡として運び、承認そのものはチームが承認を記録する場所に記録されます。
 すべての `nuka run` がそのサマリを書くようになりました。
-pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります。
+pull request に投稿する方法は [docs/ci.ja.md](../ci.ja.md) にあります。
 やることは次のとおりです。
 
 - **スクリプトと CI から `nuka accept` を取り除きます。**
   コマンドはもう存在しないので、`nuka accept <feature>` は yargs の unknown argument のエラーで 1 を返して終わります。
   0.16.1 の次のリリースからは、すべての拒否と同じく 2 を返します。
   green の `nuka run` の後でジョブがそれを実行していたところでは、代わりに run サマリを投稿します。
-  `nuka run <features> --summary <path>` を実行し、そのファイルを pull request にコメントする step を続けます([docs/ci.ja.md](ci.ja.md) の workflow にあります)。
+  `nuka run <features> --summary <path>` を実行し、そのファイルを pull request にコメントする step を続けます([docs/ci.ja.md](../ci.ja.md) の workflow にあります)。
 - **feature に sign-off の記録があるかを見る PR の検査を置き換えます。**
   変更された各 feature の隣に `<feature>.*.md` のファイルを探すジョブや、`nuka tend --fail-on feature-never-signed` を実行するジョブには、もう確かめるものがありません。
   レビュアーは差分の中の `.feature` と pull request 上の run サマリを読みます。
@@ -1480,7 +1480,7 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
 ## 0.9.0 から 0.10.0 へ
 
 `nuka run` が stderr に書くものが増え、`nuka tend` は新しい所見を 1 つ報告します。
-理由は [CHANGELOG.md](../CHANGELOG.md) の `## 0.10.0` にあります。
+理由は [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.10.0` にあります。
 
 - **`nuka run` は、サマリ行の後ろで、失敗した scenario を名指します。**
   通らなかった scenario 1 つにつき 1 行で、feature のパス、行、名前を出します。
@@ -1496,7 +1496,7 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
 
 acceptance record には破壊的変更が 1 つあります。
 `nuka tend` の `post-navigation-read` の note も、いまは違う場所を読みます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.9.0` にあります。
+なぜそう変わったかは [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.9.0` にあります。
 
 - **これから `nuka accept` が書く記録は、各 step から `actions`、`page_events`、`sections`、`polls`、`declared`、`http_omitted`、`truncated` を外します。**
   新しく accept された記録を読むスクリプトは、これらのキーを期待しないようにする必要があります。
@@ -1540,7 +1540,7 @@ Allure のレポート構造には 1 つの破壊的変更があります。
 
 破壊的変更が 1 つ、加えて破壊的ではないものの知っておく価値のある挙動の変化が 1 つあります。
 後者が変わるのは、`nuka run` の出力を見張っているスクリプトが実際に目にするものだからです。
-破壊的なほうについて、なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.7.0` にあります。
+破壊的なほうについて、なぜそう変わったかは [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.7.0` にあります。
 
 - **step のスキーマが宣言していない args キーは、いまや黙って捨てられるのではなく拒否されます。**
   `nuka describe` はすでに各オブジェクトスキーマ自身の `additionalProperties: false` を公開していました。
@@ -1566,7 +1566,7 @@ Allure のレポート構造には 1 つの破壊的変更があります。
 ## 0.4.1 から 0.5.0 へ
 
 追加のみで、狭い例外が 1 つあります。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.5.0` にあります。
+なぜそう変わったかは [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.5.0` にあります。
 
 - **`Step` はいまや常に `parts` を持つため、手で書いた `Step` のオブジェクトリテラルは型検査を通らなくなりました。**
   `Step` は export された型で、`parts` は `from` がすでにそうであるのと同じように必須です。
@@ -1587,7 +1587,7 @@ Allure のレポート構造には 1 つの破壊的変更があります。
 破壊的変更は 1 つです。
 加えて、破壊的ではない対応が 1 つあります。
 各項目は「何を直すか」だけを述べます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.4.0` にあります。
+なぜそう変わったかは [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.4.0` にあります。
 
 - **step record と scenario record の、id を持つフィールド名がまた変わり、いまは 1 つの規則に従います: `<粒度>_record_id`、または run の `run_id` です。**
   どちらの JSON を読んでいたスクリプトも、現在の名前を読む必要があります: step record の `record_id` は `step_record_id` に、step record 上の所属 scenario record の id(旧 `scenario`)は `scenario_record_id` に、scenario record 自身の `scenario_id` は `scenario_record_id` に、scenario record の `steps[].record` は `steps[].step_record_id` になりました。
@@ -1610,7 +1610,7 @@ Allure のレポート構造には 1 つの破壊的変更があります。
 破壊的変更は 5 つです。
 加えて、破壊的ではないものの、新しい機能に乗るために必要な対応が 1 つあります。
 各項目は「何を直すか」だけを述べます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.3.0` にあります。
+なぜそう変わったかは [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.3.0` にあります。
 
 - **step record の JSON は、フィールド名と id 接頭辞が変わりました。**
   step record や scenario record の JSON を読んでいたスクリプトは、現在の名前を読む必要があります: `receipt_id` は `record_id` に、id の接頭辞は `rcpt-` から `step-` に、`used` エントリの参照先フィールドは `receipt` から `record` になりました。
@@ -1644,7 +1644,7 @@ Allure のレポート構造には 1 つの破壊的変更があります。
 
 破壊的変更は 3 つです。
 各項目は「何を直すか」だけを述べます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.2.0` にあります。
+なぜそう変わったかは [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.2.0` にあります。
 
 - **`nuka steps --json` のトップレベルは、素の配列から `{ steps, import_failures }` に変わりました。**
   旧来の素の配列を読んでいたものは、いまや `.steps` を読む必要があります。
@@ -1665,7 +1665,7 @@ Allure のレポート構造には 1 つの破壊的変更があります。
 
 破壊的変更は 3 つです。
 各項目は「何を直すか」だけを述べます。
-なぜそう変わったかは [CHANGELOG.md](../CHANGELOG.md) の `## 0.1.0` にあります。
+なぜそう変わったかは [CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) の `## 0.1.0` にあります。
 
 - **型付き step の `run` は、`ctx` ではなく fixture bag を取るようになりました。**
   step が `ctx` から読んでいたものをすべて、分割代入された第一引数に集めてください(`run({ page, section }, args)`)。
@@ -1679,4 +1679,4 @@ Allure のレポート構造には 1 つの破壊的変更があります。
 
 ## 0.0.5 より前
 
-[CHANGELOG.md](../CHANGELOG.md) を参照してください。
+[CHANGELOG.md](https://github.com/meganemura/nukadoko/blob/main/typescript/CHANGELOG.md) を参照してください。

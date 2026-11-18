@@ -351,7 +351,19 @@ const REMOVED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["do", new Set(["--session"])],
   ["clean", new Set(["--records", "--cache", "--export"])],
 ]);
-const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
+const UPGRADE_NOTES = new Set(["docs/typescript/upgrading.md", "docs/typescript/upgrading.ja.md"]);
+
+// A command only the other engine has (docs/engines.json gives it no
+// TypeScript flags) is named on purpose, in the table of what each engine
+// offers, so it is not a broken name of this CLI.
+const engines = JSON.parse(readFileSync(path.join(repoRoot, "docs/engines.json"), "utf8")) as {
+  commands: Record<string, { typescript: string[] | null }>;
+};
+const otherEngineOnly = new Set(
+  Object.entries(engines.commands)
+    .filter(([, offered]) => offered.typescript === null)
+    .map(([command]) => command),
+);
 
 function citesRemovedCommand(file: DocFile, invocation: string): boolean {
   if (!UPGRADE_NOTES.has(file.relativePath)) return false;
@@ -399,6 +411,7 @@ describe("names in README.md, llms.txt, docs/, and skills/", () => {
       perFile((file) =>
         nukaInvocations(file).flatMap((invocation) => {
           if (citesRemovedCommand(file, invocation)) return [];
+          if (otherEngineOnly.has(invocation.trim().split(/\s+/)[0]!)) return [];
           const problem = invocationProblem(tree, invocation);
           return problem ? [`\`nuka ${invocation}\`: ${problem}`] : [];
         }),
@@ -434,19 +447,19 @@ describe("names in README.md, llms.txt, docs/, and skills/", () => {
 
 describe("the extraction itself", () => {
   it("lets only the upgrade notes cite a removed command", () => {
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "accept features/a.feature")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.ja.md", text: "" }, "accept")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "accept features/a.feature")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.ja.md", text: "" }, "accept")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "accept features/a.feature")).toBe(false);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "acceptx")).toBe(false);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental webmcp-tools <url>")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental explore a.ts")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "acceptx")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "experimental webmcp-tools <url>")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "experimental explore a.ts")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "init --env")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "init --env")).toBe(false);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env-files")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "run features/a.feature --session alice")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "do open-cart --session alice")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "do open-cart --env staging")).toBe(false);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --allure")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "init --env-files")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "run features/a.feature --session alice")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "do open-cart --session alice")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "do open-cart --env staging")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/typescript/upgrading.md", text: "" }, "init --allure")).toBe(false);
   });
 
   // Positive controls: each drift named in this file's header, written as
@@ -499,13 +512,13 @@ describe("the extraction itself", () => {
       "",
       "## 0.10.1 to 0.11.0\n\n- `nuka clean --records` also removes runs.\n",
     ].join("\n");
-    expect(removedCitationsWithoutRemoval(sample("docs/upgrading.md", text))).toEqual([
+    expect(removedCitationsWithoutRemoval(sample("docs/typescript/upgrading.md", text))).toEqual([
       "`nuka clean --records` is named as if it still worked",
     ]);
     expect(
       removedCitationsWithoutRemoval(
         sample(
-          "docs/upgrading.ja.md",
+          "docs/typescript/upgrading.ja.md",
           "## 0.16.1 から次のリリースへ\n\n- `nuka clean --records` を使えば今すぐ消せます。\n",
         ),
       ),

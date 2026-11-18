@@ -16,7 +16,7 @@ export interface RemovedExport {
   readonly fix: string;
 }
 
-const UPGRADING = 'docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts"';
+const UPGRADING = 'docs/typescript/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts"';
 
 const PROGRAM_MOVED = 'CHANGELOG.md in the nukadoko package, under "The program moves into the config"';
 

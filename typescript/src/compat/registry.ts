@@ -257,7 +257,7 @@ export function drainCompatParameterTypes(): CompatParameterTypeRegistration[] {
  * would make an existing suite's slow step start failing purely from
  * switching to nukadoko — the exact regression the migration door forbids
  * (docs/spec.md, migration-door rule). This choice is documented for
- * readers in docs/migration.md.
+ * readers in docs/typescript/migration.md.
  */
 let defaultTimeoutMs: number | undefined;
 
