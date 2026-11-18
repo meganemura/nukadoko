@@ -2692,7 +2692,20 @@ feature、step、fixture、parameter type、secret です。
 `program` はプログラムを返す関数です。
 nukadoko がそれをどう build し、状態をどう用意し、どう起動するかまたはどこに届くか、そしてそのプロセスが受け取る環境変数を書きます。
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      build: ["bundle install"],
+      prepare: ["bin/rails db:prepare"],
+      serve: { command: "bin/rails server -p {port}", ready: "/up" },
+      env: { RAILS_ENV: "test", DATABASE_URL: "sqlite3:{dir}/test.sqlite3" },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -2850,7 +2863,19 @@ world のどの段階にも持ち時間があります。
 | `url` の関数 | 60,000 ms | `url: { resolve, timeout_ms }` |
 | `lists` の各コマンド | 60,000 ms | コマンドの代わりに `{ command, timeout_ms }` |
 
-<!-- engine: typescript -->
+```ruby
+Nukadoko.config(
+  program: -> {
+    {
+      build: [{ command: "bundle install", timeout_ms: 1_200_000 }],
+      prepare: ["bin/rails db:prepare"],
+      serve: { command: "bin/rails server -p {port}", ready: "/up" },
+      setup: { run: ->(world) { seed_admin(world.url) }, timeout_ms: 120_000 },
+    }
+  },
+)
+```
+
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -3078,7 +3103,23 @@ environment が書いたフィールドはトップレベルのものを置き�
 `defaultEnvironments` は、配備先が自分の動くスイッチを宣言しながら、ローカルのすべての run からは外れたままでいるための手段です。
 `--env` は繰り返せ、environment ごとに自分の world を持ちます(「実行」を参照)。
 
-<!-- engine: typescript -->
+```ruby
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "bin/rails server -p {port}", ready: "/up" },
+      env: { PORT: "{port}", CHECKOUT_V2: "{condition.checkout_v2}" },
+      defaultEnvironments: ["checkout-v1", "checkout-v2"],
+      environments: {
+        "checkout-v1": { conditions: { checkout_v2: false } },
+        "checkout-v2": { conditions: { checkout_v2: true } },
+        staging: { url: "https://staging.acme.example", policy: "read-only", conditions: { checkout_v2: true } },
+      },
+    }
+  },
+)
+```
+
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -3103,9 +3144,14 @@ export default defineConfig({
 
 `url` は、nukadoko が動かさない場所で動いているプログラムを名指します。
 配備されたサーバや、pull request ごとのプレビューです。
-関数は、何かに届く前に world の `{ name, root, dir, signal, tree }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照):
+関数は、何かに届く前に world の `{ name, root, dir, signal, tree }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照。gem は `signal` を除く同じ項目を渡し、持ち時間を過ぎた関数をその場で止めます):
 
-<!-- engine: typescript -->
+```ruby
+environments: {
+  "pr-1234": { url: ->(world) { "https://#{world.name}.preview.acme.example" } },
+},
+```
+
 ```ts
 environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
@@ -3353,7 +3399,18 @@ Then は、その数を claim にできます。
 本番でも同じ書き手がこの変数を読むからです。
 名前はプログラムが決めます:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "ruby server.rb", ready: "/up" },
+      env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -4444,10 +4501,27 @@ base で判定する claim は base の tree の一覧を読み、head の claim
 
 ### Ruby のプログラム
 
-ファイルは TypeScript で、コマンドはプロジェクトが実行するものなら何でも構いません。
+どちらのエンジンが設定を読む場合も、コマンドはプロジェクトが実行するものなら何でも構いません。
 Rails のアプリケーションです:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      build: ["bundle install"],
+      prepare: ["bin/rails db:prepare"],
+      serve: { command: "bin/rails server -p {port} -P {dir}/server.pid", ready: "/up" },
+      env: {
+        RAILS_ENV: "test",
+        DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
+        RAILS_LOG_TO_STDOUT: "1",
+      },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";

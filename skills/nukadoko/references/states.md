@@ -7,10 +7,12 @@ cannot carry that, because nothing is returned. Declare it as a state, and
 
 ## Declaring one
 
-States are the TypeScript engine's; the gem has none yet, and a Ruby step
-carries what a later line needs through `from`.
+```ruby
+requires ["signed-in", :person]   # on the step that cannot work without it
+gives ["signed-in", :person]      # on the step that leaves it holding
+ends ["signed-in", :person]       # on the step that undoes it
+```
 
-<!-- engine: typescript -->
 ```ts
 requires: [["signed-in", "person"]],   // on the step that cannot work without it
 gives: [["signed-in", "person"]],      // on the step that leaves it holding
@@ -19,7 +21,7 @@ ends: [["signed-in", "person"]],       // on the step that undoes it
 
 The second element names the args key whose value tells holders apart, so
 aki signed in says nothing about ben. A state one reader holds is the bare
-name: `requires: ["book-open"]`. Write each state the same way in every
+name: `requires "book-open"` (`requires: ["book-open"]`). Write each state the same way in every
 step, keyed everywhere or bare everywhere; `state-shape-mismatch` names
 the steps that differ. A claim step may `requires`; it has no `gives` or
 `ends`, because it changes nothing.

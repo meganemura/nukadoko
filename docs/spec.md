@@ -3416,7 +3416,20 @@ The program under test lives in the same file, as `program`: a function
 that returns how nukadoko builds the program, prepares its state, starts
 it or reaches it, and the environment variables its processes get.
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      build: ["bundle install"],
+      prepare: ["bin/rails db:prepare"],
+      serve: { command: "bin/rails server -p {port}", ready: "/up" },
+      env: { RAILS_ENV: "test", DATABASE_URL: "sqlite3:{dir}/test.sqlite3" },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -3613,7 +3626,19 @@ the terminal to say on what.
 | a `url` function | 60,000 ms | `url: { resolve, timeout_ms }` |
 | each `lists` command | 60,000 ms | `{ command, timeout_ms }` in place of the command |
 
-<!-- engine: typescript -->
+```ruby
+Nukadoko.config(
+  program: -> {
+    {
+      build: [{ command: "bundle install", timeout_ms: 1_200_000 }],
+      prepare: ["bin/rails db:prepare"],
+      serve: { command: "bin/rails server -p {port}", ready: "/up" },
+      setup: { run: ->(world) { seed_admin(world.url) }, timeout_ms: 120_000 },
+    }
+  },
+)
+```
+
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -3912,7 +3937,23 @@ switches it runs with and still stays out of every local run.
 `--env` may repeat; each environment is a world of its own (see
 "Running").
 
-<!-- engine: typescript -->
+```ruby
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "bin/rails server -p {port}", ready: "/up" },
+      env: { PORT: "{port}", CHECKOUT_V2: "{condition.checkout_v2}" },
+      defaultEnvironments: ["checkout-v1", "checkout-v2"],
+      environments: {
+        "checkout-v1": { conditions: { checkout_v2: false } },
+        "checkout-v2": { conditions: { checkout_v2: true } },
+        staging: { url: "https://staging.acme.example", policy: "read-only", conditions: { checkout_v2: true } },
+      },
+    }
+  },
+)
+```
+
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -3940,9 +3981,16 @@ with and is not in `defaultEnvironments`.
 server, a preview per pull request.
 A function receives the world's `{ name, root, dir, signal, tree }`
 before anything is reached, so one entry covers every preview (`signal`
-is aborted when the function is abandoned, see "Limits"):
+is aborted when the function is abandoned, see "Limits"; the gem passes
+the same fields with no `signal`, and stops a function past its limit
+where it is):
 
-<!-- engine: typescript -->
+```ruby
+environments: {
+  "pr-1234": { url: ->(world) { "https://#{world.name}.preview.acme.example" } },
+},
+```
+
 ```ts
 environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
@@ -4303,7 +4351,18 @@ The program names the file with `{events}`.
 The examples use `EXECUTION_EVENTS`, the variable the same writer reads
 in production; the program chooses the name:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "ruby server.rb", ready: "/up" },
+      env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -5707,10 +5766,27 @@ reads head's, and a `--concurrency` worker reads its world's.
 
 ### A Ruby program
 
-The file is TypeScript, and the commands are whatever the project runs.
-A Rails application:
+The commands are whatever the project runs, whichever engine reads the
+config. A Rails application:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      build: ["bundle install"],
+      prepare: ["bin/rails db:prepare"],
+      serve: { command: "bin/rails server -p {port} -P {dir}/server.pid", ready: "/up" },
+      env: {
+        RAILS_ENV: "test",
+        DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
+        RAILS_LOG_TO_STDOUT: "1",
+      },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
