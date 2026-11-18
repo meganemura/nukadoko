@@ -13,6 +13,13 @@ require "rbconfig"
 # The pass writes its step records into the head run's directory, and its
 # executions and cells come back as JSON. A cell whose pass did not run
 # says why.
+#
+# Where both programs name {events}, the base world also runs, once and
+# for run.json's `paths` alone, each row whose head cell is required and
+# ran and that no base cell runs, so a criterion that did not change still
+# shows what the code change did to its path. Such an execution carries
+# `for_paths` and is no cell, so the table, the proof runs, and the
+# verdicts never read it.
 module Nukadoko
   module Engine
     class TreePasses
@@ -21,9 +28,12 @@ module Nukadoko
 
       # `judged_by` says why head's passing executions of a row judged no
       # claim in Then position (Run.then_judged_by).
-      #: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String) -> void
-      def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {}, head_root: Dir.pwd)
+      # `writes_events` says whether head's world of an environment writes
+      # execution events.
+      #: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String, ?writes_events: ^(Environment) -> bool) -> void
+      def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {}, head_root: Dir.pwd, writes_events: ->(_) { false })
         @head_root = head_root
+        @writes_events = writes_events
         @judged_by = judged_by
         @base = base
         @scenarios = scenarios
@@ -47,10 +57,21 @@ module Nukadoko
         [["base", @base.base_root, @environments], ["old", @base.old_root, @old_environments]].each do |world, root, environments|
           environments.each do |environment|
             rows = @scenarios.select { planned[_1][world.to_sym].include?(environment.name) }
-            next if rows.empty?
+            paths = world == "base" && @writes_events.(environment) ? @scenarios.select { !rows.include?(_1) && ran_required?(_1, environment) } : []
+            next if rows.empty? && (paths.empty? || root.nil?)
 
-            outcome = (root ? run_tree(world, root, environment, rows) : { not_run: "the #{world} world was not made" }) #: Hash[Symbol, untyped]
+            outcome = (root ? run_tree(world, root, environment, rows, paths) : { not_run: "the #{world} world was not made" }) #: Hash[Symbol, untyped]
             @worlds.concat(outcome[:worlds] || [])
+            paths.each do |scenario|
+              result = outcome[:results]&.find { |entry| [entry[:feature], entry[:line]] == place(world, scenario) }
+              came = result&.dig(:cell)
+              result&.dig(:executions)&.each do |json|
+                json.delete(:do)
+                json.merge!(role: "required", world: world, row: { feature: scenario.uri, line: scenario.line },
+                            for_paths: { outcome: came&.dig(:outcome), line: came&.dig(:line) }.compact)
+                executions << { json: json }
+              end
+            end
             rows.each do |scenario|
               result = outcome[:results]&.find { |entry| [entry[:feature], entry[:line]] == place(world, scenario) }
               found[[scenario, world, environment.name]] = result || { reason: outcome[:not_run] || "no execution of it was recorded" }
@@ -71,6 +92,13 @@ module Nukadoko
       end
 
       private
+
+      # Whether head's cell of a row in an environment is required and ran.
+      #: (Scenario, Environment) -> bool
+      def ran_required?(scenario, environment)
+        cell = @head_cells[scenario].find { _1[:environment] == environment.name }
+        !cell.nil? && cell[:role] == "required" && cell[:outcome] != "not-run"
+      end
 
       #: (Scenario) -> Hash[Symbol, Array[String]]
       def plan(scenario)
@@ -101,14 +129,17 @@ module Nukadoko
         { **own, world: world, environment: environment.name, role: role, conditions: conditions }
       end
 
-      #: (String, String, Environment, Array[Scenario]) -> Hash[Symbol, untyped]
-      def run_tree(world, root, environment, rows)
+      # `paths` are the rows the tree runs for paths alone, which its pass
+      # drops when the tree's own program names no {events}.
+      #: (String, String, Environment, Array[Scenario], ?Array[Scenario]) -> Hash[Symbol, untyped]
+      def run_tree(world, root, environment, rows, paths = [])
         plan = File.join(@dir, "trees", "#{world}-#{environment.name}.plan.json")
         result = File.join(@dir, "trees", "#{world}-#{environment.name}.result.json")
         targets = rows.map { |scenario| place(world, scenario).then { { feature: _1, line: _2 } } }
+        for_paths = paths.map { |scenario| place(world, scenario).then { { feature: _1, line: _2 } } }
         config = Nukadoko.config_options.fetch(:secrets, {}) #: Hash[Symbol, untyped]
         head = { root: File.expand_path(@head_root), env_files: environment.env_files, public: (config[:public] || []).map(&:to_s), redact: (config[:redact] || []).map(&:to_s) }
-        File.write(plan, JSON.generate(world: world, environment: environment.name, targets: targets, dir: @dir, result: result, head: head))
+        File.write(plan, JSON.generate(world: world, environment: environment.name, targets: targets, for_paths: for_paths, dir: @dir, result: result, head: head))
         output, status = Open3.capture2e(RbConfig.ruby, "-I", LIB, EXE, "__tree", plan, chdir: root)
         @out.write(output.gsub(@dir, File.join(".nukadoko", "runs", File.basename(@dir))))
         return JSON.parse(File.read(result), symbolize_names: true) if File.exist?(result)

@@ -307,7 +307,8 @@ module Nukadoko
       base = if commit
                targets = @rest.empty? ? nil : @rest.map { _1.sub(/:\d+\z/, "") }
                Engine::Base.new(project: @project, ref: ref, commit: commit, run_dir: dir, selected: kept.map { Engine::Criteria.key(_1.uri, _1.line) },
-                                targets: targets, envs: @options["--env"], head_program: Nukadoko.program_options)
+                                targets: targets, envs: @options["--env"], head_program: Nukadoko.program_options,
+                                paths_wanted: environments.any? { program.writes_events?(_1) })
              end
       # Workers are handed whole feature files, so one file has nothing to
       # spread across them.
@@ -378,14 +379,23 @@ module Nukadoko
     #: (Array[singleton(Step)]) -> Integer
     def tree(steps)
       plan = JSON.parse(File.read(@rest.first), symbolize_names: true)
-      found = Dir.chdir(@project) { Engine.load_features(plan[:targets].map { _1[:feature] }.uniq) }
-      scenarios = plan[:targets].filter_map { |target| found.find { _1.uri == target[:feature] && _1.line == target[:line] } }
       result = begin
-        environment = Engine::Program.new(Nukadoko.program_options).environments([plan[:environment]]).first
-        usable = Engine::Check.new(steps, scenarios).usable
-        run = Engine::Run.new(@project, usable, scenarios, Nukadoko.program_options, environments: [environment],
-                              world: plan[:world], dir: plan[:dir], out: @out, head: plan[:head])
-        { results: run.tree_pass, worlds: run.world_entries }
+        program = Engine::Program.new(Nukadoko.program_options)
+        environment = program.environments([plan[:environment]]).first
+        # Paths are compared only where both sides write execution events:
+        # a base that names no {events} would run a pass for nothing to
+        # compare.
+        targets = plan[:targets] + (program.writes_events?(environment) ? plan[:for_paths] || [] : [])
+        found = Dir.chdir(@project) { Engine.load_features(targets.map { _1[:feature] }.uniq) }
+        scenarios = targets.filter_map { |target| found.find { _1.uri == target[:feature] && _1.line == target[:line] } }
+        if scenarios.empty?
+          { results: [], worlds: [] }
+        else
+          usable = Engine::Check.new(steps, scenarios).usable
+          run = Engine::Run.new(@project, usable, scenarios, Nukadoko.program_options, environments: [environment],
+                                world: plan[:world], dir: plan[:dir], out: @out, head: plan[:head])
+          { results: run.tree_pass, worlds: run.world_entries }
+        end
       rescue Engine::Refusal => e
         { not_run: "the #{plan[:world]} tree's program does not give this environment: #{e.message}" }
       end

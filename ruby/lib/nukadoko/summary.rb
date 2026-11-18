@@ -51,7 +51,7 @@ module Nukadoko
       #: (Hash[Symbol, untyped]) -> String
       def render(doc)
         lines = [MARKER, *title(doc), *table(doc), *reasons(doc), *limits_section(doc), *condition(doc),
-                 *removed(doc), *flags(doc), *routes(doc), *claims(doc), *findings(doc), *rerun(doc)]
+                 *removed(doc), *paths(doc), *flags(doc), *routes(doc), *claims(doc), *findings(doc), *rerun(doc)]
         "#{lines.join("\n")}\n"
       end
 
@@ -751,6 +751,414 @@ module Nukadoko
       end
 
       FLAG_VERDICTS = %i[held proven failed unproven moved].freeze
+
+      # How many criteria one pair of sides lists before it counts the rest.
+      PATHS_SHOWN = 20
+
+      # Each kind of a path in words, one and many, in PATH_KINDS order.
+      PATH_KIND_WORDS = {
+        "error" => %w[error errors], "db" => %w[write writes], "http" => ["outgoing call", "outgoing calls"],
+        "job" => %w[job jobs], "request" => %w[request requests], "flag" => %w[flag flags]
+      }.freeze
+
+      # A criterion's results, from the one that says most to the one that
+      # says least, with their words in a count line.
+      PATH_RESULTS = [%w[changed changed], %w[open open], ["same_so_far", "the same so far"],
+                      ["marked_only", "different only in bookkeeping or infrastructure writes"], ["same", "the same"]].freeze
+
+      # Against the base, the groups a listed criterion falls in, in the
+      # order they are listed: what nothing in the feature files accounts
+      # for first, since a refactor must have none and a reader is sent
+      # there; then what a person approves new sentences for; then what may
+      # still read the same.
+      BASE_GROUPS = ["Unchanged criteria that did something else at head, which nothing in the feature files asks for:",
+                     "Criteria whose differences the intent declares:",
+                     "New or changed criteria, whose new sentences account for what they do differently:",
+                     "Criteria that may differ:"].freeze
+
+      #: (untyped) -> String
+      def program_code(value) = code_span(program_word(value.to_s))
+
+      #: (String) -> String
+      def kind_words(kind) = Events.own_kind?(kind) ? program_code(kind) : PATH_KIND_WORDS.fetch(kind)[1]
+
+      # A difference's key, as events/path.rb reads one.
+      #: (Hash[Symbol, untyped]) -> Hash[String, untyped]
+      def difference_key(difference) = difference.except(:holds, :a, :b, :intent).transform_keys(&:to_s)
+
+      #: (Hash[String, untyped], String) -> String
+      def own_field_text(key, field) = program_code("#{field}=#{JSON.generate(key[field])}")
+
+      # What one entry of a path is, the program's own words in code spans.
+      #: (Hash[String, untyped]) -> String
+      def path_entry_text(key)
+        return Events.key_fields(key).map { own_field_text(key, _1) }.join(" ") if Events.own_kind?(key["kind"])
+
+        case key["kind"]
+        when "error" then "#{program_code(key["class"])} #{key["handled"] ? "handled" : "unhandled"}"
+        when "db" then "#{program_code(key["table"])} #{key["op"]}"
+        when "http" then "#{program_code("#{key["method"]} #{key["origin"]}#{key["path"]}")} #{key["status"] || "with no status"}"
+        when "job" then "#{program_code(key["name"])} #{key["phase"]}"
+        when "request" then "#{program_code("#{key["method"]} #{key["route"] || "(no route)"}")} #{key["status"]}"
+        else "#{program_code(key["name"])} #{program_code(key["side"])}"
+        end
+      end
+
+      #: (Hash[Symbol, untyped]) -> String
+      def range_words(range)
+        return "#{range[:at_least]} or more" if range[:at_most].nil?
+
+        range[:at_most] == range[:at_least] ? range[:at_least].to_s : "#{range[:at_least]} to #{range[:at_most]}"
+      end
+
+      # A flag compares as seen or not, so its range reads as whether the
+      # program evaluated it.
+      #: (Hash[Symbol, untyped]) -> String
+      def seen_words(range)
+        return "evaluated" if range[:at_least].positive?
+
+        range[:at_most]&.zero? ? "not evaluated" : "maybe evaluated"
+      end
+
+      #: (Hash[Symbol, untyped]) -> String
+      def difference_text(difference)
+        key = difference_key(difference)
+        words = Events.kind_rule(key["kind"])[:compare] == "seen" ? method(:seen_words) : method(:range_words)
+        holds = difference[:holds].nil? ? "" : " (#{difference[:holds]})"
+        entry = path_entry_text(key)
+        "#{entry.empty? ? "" : "#{entry} "}#{words.(difference[:a])} → #{words.(difference[:b])}#{holds}"
+      end
+
+      # A writer's own value that changed reads as one difference: the
+      # fields that stayed, then the one that changed, old then new, when
+      # exactly one entry went, one came, as many as went, and they differ
+      # in one field.
+      #: (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def own_texts(differences)
+        if differences.size == 2
+          one = differences.fetch(0)
+          other = differences.fetch(1)
+          gone = one[:b][:at_most] == 0 ? one : other
+          came = gone.equal?(one) ? other : one
+          exact = ->(range) { range[:at_most] == range[:at_least] }
+          gone_key = difference_key(gone)
+          came_key = difference_key(came)
+          differ = Events.key_fields(gone_key).reject { JSON.generate(gone_key[_1]) == JSON.generate(came_key[_1]) }
+          if gone[:b][:at_most] == 0 && came[:a][:at_most] == 0 && exact.(gone[:a]) && exact.(came[:b]) &&
+             gone[:a][:at_least] == came[:b][:at_least] && differ.size == 1
+            field = differ.first
+            stayed = Events.key_fields(gone_key).reject { _1 == field }.map { "#{own_field_text(gone_key, _1)} " }.join
+            value = ->(key) { program_code(JSON.generate(key[field])) }
+            return ["#{stayed}#{program_code(field)} #{value.(gone_key)} → #{value.(came_key)}#{gone[:a][:at_least] == 1 ? "" : " #{gone[:a][:at_least]} times"}"]
+          end
+        end
+        differences.map { difference_text(_1) }
+      end
+
+      # A route whose status changed, and a flag whose side did, read as one
+      # difference, what it is then the old value and the new, when every
+      # count on it is exact and as many went as came.
+      #: (Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> String, ^(Hash[Symbol, untyped]) -> String, ^(Hash[Symbol, untyped]) -> String) -> Array[String]
+      def switch_texts(differences, group, what, value)
+        differences.group_by { group.(_1) }.values.flat_map do |list|
+          gone = list.select { _1[:b][:at_most] == 0 && _1[:a][:at_most] == _1[:a][:at_least] }
+          came = list.select { _1[:a][:at_most] == 0 && _1[:b][:at_most] == _1[:b][:at_least] }
+          total = ->(of, side) { of.sum { _1[side][:at_least] } }
+          next list.map { difference_text(_1) } if gone.empty? || came.empty? || gone.size + came.size != list.size || total.(gone, :a) != total.(came, :b)
+
+          ["#{what.(list.first)} #{gone.map { value.(_1) }.join(" and ")} → #{came.map { value.(_1) }.join(" and ")}"]
+        end
+      end
+
+      #: (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def kind_texts(differences)
+        return own_texts(differences) if differences.any? { Events.own_kind?(_1[:kind]) }
+
+        requests = differences.select { _1[:kind] == "request" }
+        flags = differences.select { _1[:kind] == "flag" }
+        [*differences.reject { %w[request flag].include?(_1[:kind]) }.map { difference_text(_1) },
+         *switch_texts(requests, ->(d) { JSON.generate([d[:method], d[:route]]) }, ->(d) { program_code("#{d[:method]} #{d[:route] || "(no route)"}") }, ->(d) { d[:status].to_s }),
+         *switch_texts(flags, ->(d) { d[:name].to_s }, ->(d) { program_code(d[:name]) }, ->(d) { program_code(d[:side]) })]
+      end
+
+      #: (String, String) -> Integer
+      def by_kind(left, right) = [Events.kind_rank(left), left] <=> [Events.kind_rank(right), right] || 0
+
+      # The differences of one step by kind, in rank order.
+      #: (Array[Hash[Symbol, untyped]]) -> String
+      def differences_text(differences)
+        kinds = differences.map { _1[:kind] }.uniq.sort { |a, b| by_kind(a, b) }
+        kinds.map { |kind| "#{kind_words(kind)} #{kind_texts(differences.select { _1[:kind] == kind }).join(", ")}" }.join("; ")
+      end
+
+      #: (Array[Hash[Symbol, untyped]]) -> String
+      def gap_list(gaps)
+        gaps.map do |gap|
+          word = code_span(gap[:gap])
+          case gap[:gap]
+          when "jobs-pending" then "#{word} #{count_of(gap[:job_ids].size, "job", "jobs")}"
+          when "request-unreported" then "#{word} #{count_of(gap[:requests], "request", "requests")}"
+          when "unreadable" then "#{word} #{count_of(gap[:lines], "line", "lines")}"
+          else word
+          end
+        end.join(", ")
+      end
+
+      # Who leaves an open difference open: the sides that are not whole,
+      # or lines on a whole side that may be any line.
+      #: (Hash[Symbol, untyped], ^(Symbol) -> String) -> String
+      def open_why(gaps, side_name)
+        return "neither side is whole (#{side_name.(:a)}: #{gap_list(gaps[:a])}; #{side_name.(:b)}: #{gap_list(gaps[:b])})" if gaps[:a].any? && gaps[:b].any?
+        return "#{side_name.(:a)} is not whole (#{gap_list(gaps[:a])})" if gaps[:a].any?
+        return "#{side_name.(:b)} is not whole (#{gap_list(gaps[:b])})" if gaps[:b].any?
+
+        "a line on a side may be any line"
+      end
+
+      #: (Array[Integer?]) -> String
+      def line_words(lines)
+        known = lines.map { _1.nil? ? "?" : _1.to_s }
+        known.size == 1 ? "line #{known[0]}" : "lines #{known[0]} to #{known[-1]}"
+      end
+
+      # How a comparison names its sides, and which kinds it compares.
+      #: (Hash[Symbol, untyped], Hash[String, Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+      def path_reading(comparison, scenarios)
+        base = comparison.dig(:between, :kind) == "base"
+        { comparison: comparison, scenarios: scenarios,
+          side_name: ->(side) { base ? (side == :a ? "the base" : "head") : code_span(comparison[side][:environment]) },
+          side_where: ->(side) { base ? (side == :a ? "at the base" : "at head") : "in #{code_span(comparison[side][:environment])}" },
+          compared: ->(kind) { base || Events.kind_rule(kind)[:condition_premise] != true } }
+      end
+
+      # What the steps that ran on one side only did there, counted by kind.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Symbol) -> Hash[String, Integer]
+      def one_side_kinds(reading, criterion, steps, side)
+        scenario = reading[:scenarios][criterion[side][:scenario_record_id]]
+        counts = Hash.new(0) #: Hash[String, Integer]
+        steps.each do |step|
+          found = scenario && (scenario[:steps] || []).find { _1[:line] == step[:line] && _1[:text] == step[:text] }&.dig(:path)
+          next if found.nil?
+
+          path = PathView.path_of(found)
+          [*path[:entries], *path[:requests].map { Events.request_key(_1).merge("count" => 1) }].each do |entry|
+            next unless reading[:compared].(entry["kind"])
+
+            counts[entry["kind"]] += Events.kind_rule(entry["kind"])[:compare] == "seen" ? 1 : entry["count"]
+          end
+        end
+        counts
+      end
+
+      # A criterion's step lines, of the differences `marked` picks out:
+      # those on a marked table, or every other.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped], bool) -> Array[String]
+      def step_lines(reading, criterion, marked)
+        (criterion[:steps] || []).flat_map do |step|
+          next [] unless step[:ran] == "both"
+
+          changed = step[:changed].select { !_1[:holds].nil? == marked }
+          open = step[:open].select { !_1[:holds].nil? == marked }
+          parts = [*(differences_text(changed) if changed.any?),
+                   *("open, since #{open_why(step[:gaps], reading[:side_name])}: #{differences_text(open)}" if open.any?)]
+          parts.empty? ? [] : ["  - line #{step[:line] || "?"} #{code_span(step[:text])}: #{parts.join("; ")}"]
+        end
+      end
+
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Array[String]
+      def criterion_lines(reading, criterion)
+        steps = criterion[:steps] || []
+        lines = step_lines(reading, criterion, false)
+        one_side = steps.reject { _1[:ran] == "both" }
+        return lines if one_side.empty?
+
+        ran = one_side.first[:ran].to_sym
+        other = ran == :a ? :b : :a
+        stopped = criterion[other]
+        where = if stopped[:line].nil? then ", since #{reading[:side_name].(other)} did not run #{one_side.size == 1 ? "it" : "them"}"
+                else ", since #{reading[:side_name].(other)} stopped at line #{stopped[:line]} (#{code_span(cell_word(stopped))})"
+                end
+        counts = one_side_kinds(reading, criterion, one_side, ran)
+        did = counts.keys.sort { |a, b| by_kind(a, b) }.map do |kind|
+          Events.own_kind?(kind) ? "#{counts[kind]} #{program_code(kind)}" : count_of(counts[kind], PATH_KIND_WORDS.fetch(kind)[0], PATH_KIND_WORDS.fetch(kind)[1])
+        end
+        lines << "  - #{line_words(one_side.map { _1[:line] })} ran only #{reading[:side_where].(ran)}#{where}: #{did.empty? ? "no execution event" : did.join(", ")}"
+      end
+
+      # A criterion whose open counts read the same on both sides, in one
+      # line: the gap words that leave them open, which both sides share.
+      #: (Hash[Symbol, untyped]) -> String
+      def same_so_far_text(criterion)
+        words = (criterion[:steps] || []).flat_map { _1[:ran] == "both" ? _1[:gaps][:a].map { |gap| gap[:gap] } : [] }.uniq
+        words.empty? ? "the same so far, with lines on both sides that may be any line" : "the same so far, with #{words.map { code_span(_1) }.join(", ")} on both sides"
+      end
+
+      # A criterion ranks by the highest kind among its decided differences
+      # and what its one-side steps did, so what persists outside the
+      # process comes first.
+      #: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Integer
+      def path_rank(reading, criterion)
+        steps = criterion[:steps] || []
+        one_side = steps.reject { _1[:ran] == "both" }
+        kinds = [*steps.flat_map { _1[:ran] == "both" ? _1[:changed].select { |d| d[:holds].nil? }.map { |d| d[:kind] } : [] },
+                 *(one_side.empty? ? [] : one_side_kinds(reading, criterion, one_side, one_side.first[:ran].to_sym).keys)]
+        [Events::PATH_KIND_ORDER.size + 1, *kinds.map { Events.kind_rank(_1) }].min || 0
+      end
+
+      #: (untyped) -> String
+      def condition_value(value)
+        return "not declared" if value.nil?
+
+        [true, false].include?(value) ? value.to_s : code_span(program_word(value.to_s))
+      end
+
+      #: (Hash[Symbol, untyped]) -> String
+      def path_heading(comparison)
+        between = comparison[:between]
+        return "### base → head" if between[:kind] == "base"
+
+        "### #{code_span(comparison[:a][:environment])} → #{code_span(comparison[:b][:environment])} " \
+          "(#{code_span(between[:name])} #{condition_value(between[:a])} → #{condition_value(between[:b])})"
+      end
+
+      #: (String) -> Integer
+      def result_rank(result) = PATH_RESULTS.index { _1.first == result } || PATH_RESULTS.size
+
+      #: (Hash[Symbol, untyped]) -> Integer
+      def base_group(criterion)
+        return 3 unless criterion[:result] == "changed"
+        return 0 if criterion[:explained_by].nil?
+
+        criterion[:explained_by] == "intent" ? 1 : 2
+      end
+
+      #: (Array[String]) -> String
+      def path_results_said(results)
+        PATH_RESULTS.filter_map { |result, word| (n = results.count(result)).zero? ? nil : "#{n} #{word}" }.join(", ")
+      end
+
+      # Against the base, what the unchanged criteria came to, each once,
+      # as what it came to where it says most.
+      #: (Array[Hash[Symbol, untyped]], Hash[String, untyped]) -> Array[String]
+      def unchanged_line(read, change_of)
+        results = {} #: Hash[String, String]
+        read.flat_map { _1[:criteria] }.each do |criterion|
+          place = "#{criterion[:feature]}:#{criterion[:line]}"
+          next unless change_of[place] == "unchanged"
+
+          was = results[place]
+          results[place] = criterion[:result] if was.nil? || result_rank(criterion[:result]) < result_rank(was)
+        end
+        return [] if results.empty?
+
+        all = results.values
+        if all.all?("same")
+          return [all.size == 1 ? "The 1 unchanged criterion compared did the same at the base and at head." : "Each of the #{all.size} unchanged criteria compared did the same at the base and at head."]
+        end
+
+        ["Of the #{count_of(all.size, "unchanged criterion", "unchanged criteria")} compared, #{path_results_said(all)}."]
+      end
+
+      # The comparisons under one heading: a pair of environments alone, or
+      # every environment's base pair. Each criterion counts once, as what
+      # it came to where it says most, and one listed with the same lines in
+      # several base pairs is listed once, naming their environments.
+      #: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Array[String]
+      def path_section(doc, comparisons)
+        heading = path_heading(comparisons.first)
+        named = ->(environments) { environments.map { code_span(_1) }.join(", ") }
+        place = ->(entry) { "#{entry[:feature]}:#{entry[:line]}" }
+        read = comparisons.select { _1[:unread].nil? }
+        unread = {} #: Hash[String, Array[String]]
+        comparisons.each { (unread[_1[:unread]] ||= []) << _1[:b][:environment] unless _1[:unread].nil? }
+        unread_text = unread.map do |reason, environments|
+          read.empty? && unread.size == 1 ? "Not compared: #{reason}." : "Not compared in #{named.(environments)}: #{reason}."
+        end
+        return ["", heading, "", unread_text.join(" ")] if read.empty?
+
+        results = {} #: Hash[String, String]
+        read.flat_map { _1[:criteria] }.each do |criterion|
+          was = results[place.(criterion)]
+          results[place.(criterion)] = criterion[:result] if was.nil? || result_rank(criterion[:result]) < result_rank(was)
+        end
+        compared = results.empty? ? "No criterion was compared." : "#{count_of(results.size, "criterion", "criteria")} compared: #{path_results_said(results.values)}."
+        reasons = {} #: Hash[String, Array[String]]
+        read.flat_map { _1[:not_compared] }.each do |entry|
+          next if results.key?(place.(entry)) || reasons.values.any? { _1.include?(place.(entry)) }
+
+          (reasons[entry[:reason]] ||= []) << place.(entry)
+        end
+        not_compared = reasons.map do |reason, places|
+          " #{count_of(places.size, "criterion", "criteria")} #{reason}, so #{places.size == 1 ? "its path was" : "their paths were"} not compared."
+        end
+
+        scenarios = doc[:scenarios].to_h { [_1[:scenario_record_id], _1] }
+        row_order = doc[:table][:rows].each_with_index.to_h { |row, index| [place.(row), index] }
+        items = {} #: Hash[String, Hash[Symbol, untyped]]
+        asides = {} #: Hash[String, Hash[Symbol, untyped]]
+        read.each do |comparison|
+          reading = path_reading(comparison, scenarios)
+          comparison[:criteria].each do |criterion|
+            marked = step_lines(reading, criterion, true)
+            if marked.any?
+              aside = asides[JSON.generate([place.(criterion), marked])] ||= { criterion: criterion, rank: 0, lines: marked, environments: [] }
+              aside[:environments] << comparison[:b][:environment]
+            end
+            next if %w[same marked_only].include?(criterion[:result])
+
+            lines = criterion[:result] == "same_so_far" ? [same_so_far_text(criterion)] : criterion_lines(reading, criterion)
+            item = items[JSON.generate([place.(criterion), lines])] ||= { criterion: criterion, rank: path_rank(reading, criterion), lines: lines, environments: [] }
+            item[:environments] << comparison[:b][:environment]
+          end
+        end
+        base = comparisons.first.dig(:between, :kind) == "base"
+        group = ->(item) { base ? base_group(item[:criterion]) : 0 }
+        so_far = ->(item) { item[:criterion][:result] == "same_so_far" ? 1 : 0 }
+        listed = items.values.sort_by.with_index { |item, index| [group.(item), so_far.(item), item[:rank], row_order[place.(item[:criterion])] || 0, index] }
+        lines = ["", heading, "", ["#{compared}#{not_compared.join}", *unread_text].join(" ")]
+        lines.concat(unchanged_line(read, doc[:table][:rows].to_h { [place.(_1), _1[:change]] })) if base
+        lines << "" if listed.any? && !base
+        shown_group = nil
+        listed.first(PATHS_SHOWN).each do |item|
+          criterion = item[:criterion]
+          if base && group.(item) != shown_group
+            shown_group = group.(item)
+            lines.push("", BASE_GROUPS[shown_group], "")
+          end
+          head = "- #{cell_code(place.(criterion))} #{cell_text(criterion[:name])}#{read.size > 1 ? ", in #{named.(item[:environments])}" : ""}"
+          lines.concat(criterion[:result] == "same_so_far" ? ["#{head}: #{item[:lines][0]}"] : [head, *item[:lines]])
+        end
+        lines << "- and #{listed.size - PATHS_SHOWN} more in run.json's `paths`" if listed.size > PATHS_SHOWN
+        aside = asides.values.sort_by.with_index { |item, index| [row_order[place.(item[:criterion])] || 0, index] }
+        if aside.any?
+          lines.push("", "Bookkeeping and infrastructure writes that differ, which no sentence is about, though another reader of those tables may be:", "")
+          aside.first(PATHS_SHOWN).each do |item|
+            lines.push("- #{cell_code(place.(item[:criterion]))} #{cell_text(item[:criterion][:name])}#{read.size > 1 ? ", in #{named.(item[:environments])}" : ""}", *item[:lines])
+          end
+          lines << "- and #{aside.size - PATHS_SHOWN} more in run.json's `paths`" if aside.size > PATHS_SHOWN
+        end
+        lines
+      end
+
+      # run.json's `paths`, for the person who decides whether a change may
+      # be turned on for everyone: per pair of sides, each criterion whose
+      # program did something else on one side than on the other, step by
+      # step.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def paths(doc)
+        comparisons = doc[:paths] || []
+        return [] if comparisons.empty?
+
+        base = comparisons.select { _1.dig(:between, :kind) == "base" }
+        sections = [base, *comparisons.select { _1.dig(:between, :kind) == "condition" }.map { [_1] }].reject(&:empty?)
+        lead = "Each criterion below did something else on one side than on the other, or may have, step by step, as the program's execution events report it. " \
+               "A count that a side's missing lines could still reach is listed as open, never as a change. " \
+               "A criterion whose open counts read the same on both sides, under the same gaps, is the same so far, and comes last. " \
+               "Between two environments, what they switch is named in the heading, so no flag's side is listed among the changes." \
+               "#{base.any? ? " Against the base, an unchanged criterion that changed comes first, apart from a new or changed one, whose new sentences account for its difference." : ""}"
+        ["", "## Changed paths", "", lead, *sections.flat_map { path_section(doc, _1) }]
+      end
+
       # At most this many routes are named in one line of "Routes"; the
       # rest are counted, and run.json's `routes` names every one.
       ROUTES_NAMED = 20

@@ -58,8 +58,8 @@ module Nukadoko
 
       # `selected` is each selected scenario's [feature, line]; `targets` the
       # run's targets without a line, or nil for the features directory.
-      # : (project: String, ref: String, commit: String, run_dir: String, selected: Array[[String, Integer]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?) -> void
-      def initialize: (project: String, ref: String, commit: String, run_dir: String, selected: Array[[ String, Integer ]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?) -> void
+      # : (project: String, ref: String, commit: String, run_dir: String, selected: Array[[String, Integer]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?, ?paths_wanted: bool) -> void
+      def initialize: (project: String, ref: String, commit: String, run_dir: String, selected: Array[[ String, Integer ]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?, ?paths_wanted: bool) -> void
 
       # : () -> void
       def cleanup: () -> void

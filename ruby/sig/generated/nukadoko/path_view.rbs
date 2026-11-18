@@ -1,0 +1,105 @@
+# Generated from lib/nukadoko/path_view.rb with RBS::Inline
+
+# Responsibility: run.json's `paths` (docs/spec.md "Execution events"):
+# for each pair of sides the run can compare, what each criterion's steps
+# did differently on one side than on the other, as their paths say
+# (events/path.rb), so a person about to turn a change on for everyone
+# reads what changed in what the program did. Pure: it reads run.json's
+# own fields and nothing else. Boundary: a path, and the range a count on
+# it lies in, are events/path.rb's; the cells and their outcomes are the
+# table's; this module adds no verdict.
+#
+# A pair is two sides of one criterion. Under `nuka run --base`, each
+# environment's base world is paired with its head world, for the rows
+# whose head cell there is required and ran. Otherwise it is two head
+# environments whose declared `conditions` differ in exactly one
+# condition. Steps align by their line in head's feature file, and a
+# criterion whose two step lists differ is not compared. A side is read
+# from its cell's first execution, since repeats and proof runs add more.
+#
+# Two counts are the same when both are exact and equal, changed when
+# their ranges cannot meet, and open otherwise: a count a side's missing
+# lines could still reach never reads as a change. A criterion whose every
+# open count reads the same on both sides, under the same gap words, is
+# `same_so_far`. In a pair of environments, a flag's side differing is the
+# switch the pair was made to compare, so a kind PATH_KINDS marks as the
+# premise is never among what changed. Against the base, it is compared as
+# any kind is.
+#
+# A write to a table the tables list marks is compared too, and its
+# difference carries what the table holds. A criterion's `result` reads
+# the other differences alone, and one whose only differences are on
+# marked tables is `marked_only`, never `same`: something did differ.
+#
+# Against the base, a changed criterion says what accounts for it: on a
+# new or changed criterion, the new sentences a person approves; on an
+# unchanged one, nothing in the feature files, which is the one a reader
+# is sent to first.
+module Nukadoko
+  module Engine
+    module PathView
+      RESULTS: untyped
+
+      # One comparison per pair of sides the run can compare: each base
+      # pair, then each pair of environments, in the run's order of
+      # environments; [] when there is none.
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.compare: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.base_pairs: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
+      # Every two environments whose declared conditions differ in exactly
+      # one: side `a` holds false or no value where `b` holds true, and
+      # otherwise the earlier environment.
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.condition_pairs: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # Whether a side's world read its events: "read", "none" when no
+      # base world started in the environment, or why it gave no paths.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> (String | Hash[Symbol, String])
+      def self?.reading_of: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> (String | Hash[Symbol, String])
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
+      def self?.side_where: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> String
+
+      # A side's first execution of a row, with what its cell came to, or
+      # what it came to itself when the base ran it for paths alone.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def self?.side_of: (Hash[Symbol, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> bool
+      def self?.pair_compares?: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> bool
+
+      # : (Hash[Symbol, untyped]) -> bool
+      def self?.exact?: (Hash[Symbol, untyped]) -> bool
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> bool
+      def self?.apart?: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> bool
+
+      # : (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def self?.gap_words: (Array[Hash[Symbol, untyped]]) -> Array[String]
+
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.unmarked: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # : (Hash[Symbol, untyped]) -> bool
+      def self?.same_so_far?: (Hash[Symbol, untyped]) -> bool
+
+      # A path as events/path.rb reads it, from run.json's own shape or
+      # from one read back with symbol keys: entries and requests keyed by
+      # strings, gaps by symbols.
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.path_of: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], ^(String) -> bool) -> Hash[Symbol, untyped]
+      def self?.step_difference: (Hash[Symbol, untyped], Hash[Symbol, untyped], ^(String) -> bool) -> Hash[Symbol, untyped]
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], ^(String) -> bool) -> Hash[Symbol, untyped]
+      def self?.compare_criterion: (Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], ^(String) -> bool) -> Hash[Symbol, untyped]
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+      def self?.compare_pair: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Hash[Symbol, untyped]?
+    end
+  end
+end

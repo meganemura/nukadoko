@@ -154,6 +154,11 @@ module Nukadoko
       # : (String, String, Hash[String, untyped]) -> String?
       def self.absence: (String, String, Hash[String, untyped]) -> String?
 
+      # Whether a world of the environment writes execution events:
+      # nukadoko serves it, and its program names {events}.
+      # : (Environment) -> bool
+      def writes_events?: (Environment) -> bool
+
       # Whether a field of the world's commands or env names `{name}`.
       # : (Recipe, String) -> bool
       def self.names_placeholder?: (Recipe, String) -> bool

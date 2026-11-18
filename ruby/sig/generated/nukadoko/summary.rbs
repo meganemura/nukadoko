@@ -219,6 +219,146 @@ module Nukadoko
 
       FLAG_VERDICTS: untyped
 
+      # How many criteria one pair of sides lists before it counts the rest.
+      PATHS_SHOWN: ::Integer
+
+      # Each kind of a path in words, one and many, in PATH_KINDS order.
+      PATH_KIND_WORDS: untyped
+
+      # A criterion's results, from the one that says most to the one that
+      # says least, with their words in a count line.
+      PATH_RESULTS: untyped
+
+      # Against the base, the groups a listed criterion falls in, in the
+      # order they are listed: what nothing in the feature files accounts
+      # for first, since a refactor must have none and a reader is sent
+      # there; then what a person approves new sentences for; then what may
+      # still read the same.
+      BASE_GROUPS: untyped
+
+      # : (untyped) -> String
+      def self?.program_code: (untyped) -> String
+
+      # : (String) -> String
+      def self?.kind_words: (String) -> String
+
+      # A difference's key, as events/path.rb reads one.
+      # : (Hash[Symbol, untyped]) -> Hash[String, untyped]
+      def self?.difference_key: (Hash[Symbol, untyped]) -> Hash[String, untyped]
+
+      # : (Hash[String, untyped], String) -> String
+      def self?.own_field_text: (Hash[String, untyped], String) -> String
+
+      # What one entry of a path is, the program's own words in code spans.
+      # : (Hash[String, untyped]) -> String
+      def self?.path_entry_text: (Hash[String, untyped]) -> String
+
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.range_words: (Hash[Symbol, untyped]) -> String
+
+      # A flag compares as seen or not, so its range reads as whether the
+      # program evaluated it.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.seen_words: (Hash[Symbol, untyped]) -> String
+
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.difference_text: (Hash[Symbol, untyped]) -> String
+
+      # A writer's own value that changed reads as one difference: the
+      # fields that stayed, then the one that changed, old then new, when
+      # exactly one entry went, one came, as many as went, and they differ
+      # in one field.
+      # : (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def self?.own_texts: (Array[Hash[Symbol, untyped]]) -> Array[String]
+
+      # A route whose status changed, and a flag whose side did, read as one
+      # difference, what it is then the old value and the new, when every
+      # count on it is exact and as many went as came.
+      # : (Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> String, ^(Hash[Symbol, untyped]) -> String, ^(Hash[Symbol, untyped]) -> String) -> Array[String]
+      def self?.switch_texts: (Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> String, ^(Hash[Symbol, untyped]) -> String, ^(Hash[Symbol, untyped]) -> String) -> Array[String]
+
+      # : (Array[Hash[Symbol, untyped]]) -> Array[String]
+      def self?.kind_texts: (Array[Hash[Symbol, untyped]]) -> Array[String]
+
+      # : (String, String) -> Integer
+      def self?.by_kind: (String, String) -> Integer
+
+      # The differences of one step by kind, in rank order.
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self?.differences_text: (Array[Hash[Symbol, untyped]]) -> String
+
+      # : (Array[Hash[Symbol, untyped]]) -> String
+      def self?.gap_list: (Array[Hash[Symbol, untyped]]) -> String
+
+      # Who leaves an open difference open: the sides that are not whole,
+      # or lines on a whole side that may be any line.
+      # : (Hash[Symbol, untyped], ^(Symbol) -> String) -> String
+      def self?.open_why: (Hash[Symbol, untyped], ^(Symbol) -> String) -> String
+
+      # : (Array[Integer?]) -> String
+      def self?.line_words: (Array[Integer?]) -> String
+
+      # How a comparison names its sides, and which kinds it compares.
+      # : (Hash[Symbol, untyped], Hash[String, Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+      def self?.path_reading: (Hash[Symbol, untyped], Hash[String, Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+
+      # What the steps that ran on one side only did there, counted by kind.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Symbol) -> Hash[String, Integer]
+      def self?.one_side_kinds: (Hash[Symbol, untyped], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Symbol) -> Hash[String, Integer]
+
+      # A criterion's step lines, of the differences `marked` picks out:
+      # those on a marked table, or every other.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped], bool) -> Array[String]
+      def self?.step_lines: (Hash[Symbol, untyped], Hash[Symbol, untyped], bool) -> Array[String]
+
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Array[String]
+      def self?.criterion_lines: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Array[String]
+
+      # A criterion whose open counts read the same on both sides, in one
+      # line: the gap words that leave them open, which both sides share.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.same_so_far_text: (Hash[Symbol, untyped]) -> String
+
+      # A criterion ranks by the highest kind among its decided differences
+      # and what its one-side steps did, so what persists outside the
+      # process comes first.
+      # : (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Integer
+      def self?.path_rank: (Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Integer
+
+      # : (untyped) -> String
+      def self?.condition_value: (untyped) -> String
+
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.path_heading: (Hash[Symbol, untyped]) -> String
+
+      # : (String) -> Integer
+      def self?.result_rank: (String) -> Integer
+
+      # : (Hash[Symbol, untyped]) -> Integer
+      def self?.base_group: (Hash[Symbol, untyped]) -> Integer
+
+      # : (Array[String]) -> String
+      def self?.path_results_said: (Array[String]) -> String
+
+      # Against the base, what the unchanged criteria came to, each once,
+      # as what it came to where it says most.
+      # : (Array[Hash[Symbol, untyped]], Hash[String, untyped]) -> Array[String]
+      def self?.unchanged_line: (Array[Hash[Symbol, untyped]], Hash[String, untyped]) -> Array[String]
+
+      # The comparisons under one heading: a pair of environments alone, or
+      # every environment's base pair. Each criterion counts once, as what
+      # it came to where it says most, and one listed with the same lines in
+      # several base pairs is listed once, naming their environments.
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Array[String]
+      def self?.path_section: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Array[String]
+
+      # run.json's `paths`, for the person who decides whether a change may
+      # be turned on for everyone: per pair of sides, each criterion whose
+      # program did something else on one side than on the other, step by
+      # step.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.paths: (Hash[Symbol, untyped]) -> Array[String]
+
       # At most this many routes are named in one line of "Routes"; the
       # rest are counted, and run.json's `routes` names every one.
       ROUTES_NAMED: ::Integer

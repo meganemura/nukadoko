@@ -73,8 +73,8 @@ module Nukadoko
 
       # `selected` is each selected scenario's [feature, line]; `targets` the
       # run's targets without a line, or nil for the features directory.
-      #: (project: String, ref: String, commit: String, run_dir: String, selected: Array[[String, Integer]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?) -> void
-      def initialize(project:, ref:, commit:, run_dir:, selected:, targets:, envs:, head_program:)
+      #: (project: String, ref: String, commit: String, run_dir: String, selected: Array[[String, Integer]], targets: Array[String]?, envs: Array[String], head_program: Hash[Symbol, untyped]?, ?paths_wanted: bool) -> void
+      def initialize(project:, ref:, commit:, run_dir:, selected:, targets:, envs:, head_program:, paths_wanted: false)
         @project = project
         @ref = ref
         @commit = commit
@@ -83,6 +83,7 @@ module Nukadoko
         @prefix = Base.git(project, "rev-parse", "--show-prefix").first.delete_suffix("/")
         @base_top = File.join(@trees, "base")
         @old_top = File.join(@trees, "old")
+        @paths_wanted = paths_wanted
         prepare(selected, targets, envs, head_program)
       rescue StandardError
         cleanup
@@ -142,7 +143,13 @@ module Nukadoko
         @mapping = compare_mapping(head_files, ref_files, base_project, head_program, ref_program)
 
         wanted = selected.map { @changes[_1] }
-        base_needed = wanted.any? { %w[changed new].include?(_1&.dig(:change)) }
+        # A change with no new or changed criterion, a refactor among them,
+        # is the one whose paths a reader most wants compared: an unchanged
+        # criterion that did the same at the base is its evidence. So the
+        # base world is made for paths alone too, when head's program writes
+        # the events they are read from. Its unchanged rows are no cells, so
+        # they move no verdict.
+        base_needed = wanted.any? { %w[changed new].include?(_1&.dig(:change)) } || (@paths_wanted && wanted.any?)
         old_needed = wanted.any? { _1&.dig(:change) == "unchanged" && (@mapping[:changed] || _1[:retagged] || _1[:renamed_from]) }
         write_old_tree(head_files, ref_files) if old_needed
         if base_needed

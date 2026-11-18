@@ -167,6 +167,16 @@ Each release's notes come from the section below whose heading starts with `## [
   which tables a count of writes leaves out, and run.json gains `routes`,
   each world's `lists`, and a `program-list-unread` warning for a list
   that was not read, as in the TypeScript engine.
+- run.json's `paths` and the summary's Changed paths: for two
+  environments whose conditions differ in one, and under `--base` for the
+  base world and head, what each criterion's steps did differently on one
+  side, as their execution events report it, with a count a side's missing
+  lines could still reach listed as open. Under `--base`, where both
+  programs name `{events}`, the base world also runs each row whose head
+  cell is required and ran, for its path alone (`for_paths`), so an
+  unchanged criterion shows what the code change did to it; the base tree
+  is now made for this too when no criterion is new or changed. The same
+  as the TypeScript engine.
 
 ## [0.6.0] - 2026-11-17
 

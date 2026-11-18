@@ -243,6 +243,14 @@ module Nukadoko
         nil
       end
 
+      # Whether a world of the environment writes execution events:
+      # nukadoko serves it, and its program names {events}.
+      #: (Environment) -> bool
+      def writes_events?(environment)
+        recipe = recipe(environment)
+        recipe.reach[:kind] == "serve" && Program.names_placeholder?(recipe, "events")
+      end
+
       # Whether a field of the world's commands or env names `{name}`.
       #: (Recipe, String) -> bool
       def self.names_placeholder?(recipe, name)

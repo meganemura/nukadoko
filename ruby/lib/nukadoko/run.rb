@@ -66,7 +66,8 @@ module Nukadoko
         tree_cells = {}
         if @base
           begin
-            trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out, ->(scenario) { Run.then_judged_by(scenario, executions) }, head_root: @project)
+            trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out, ->(scenario) { Run.then_judged_by(scenario, executions) }, head_root: @project,
+                                    writes_events: ->(environment) { @program.writes_events?(environment) })
             tree_cells = trees.call(executions)
             @world_entries.concat(trees.worlds)
           ensure
@@ -510,7 +511,10 @@ module Nukadoko
           environments.map(&:name).select { |name| world == "head" || rows.any? { |row| row[:cells].any? { _1[:world] == world && _1[:environment] == name } } }
                       .map { { world: world, environment: _1 } }
         end
-        judged = @base ? judged_findings(rows) : []
+        # An unproven or moved row has no failed execution to carry its
+        # finding, so it gets one of its own, listed before the findings
+        # set beside an execution's steps, as the TypeScript engine lists it.
+        judged_rows = @base ? judged_findings(rows) : []
         # Judgments sit beside the verdicts, read after the table is built
         # and never folded into a row's verdict. A file that cannot be read
         # is a failed finding of its own, and its rows read as judged by
@@ -544,21 +548,25 @@ module Nukadoko
             at_base.fetch(feature) { at_base[feature] = JudgmentFile.at_commit(@project, base.commit, feature)&.dig(:entries) }
           end)
         end
-        judged += Judgments.findings(rows, @id) + problems
+        judged = Judgments.findings(rows, @id) + problems
         listed = ->(kind) { @environments.filter_map { |e| (entries = @listed_places.dig(e.name, kind)) && { environment: e.name, kind.to_sym => entries } } }
         flags = PlaceRows.flag_rows(scenarios, rows, listed.("flags"))
         # With no routes list read, a run has no routes at all, never one
         # that reads as nothing listed.
         routes = listed.("routes").then { _1.empty? ? nil : PlaceRows.route_rows(scenarios, rows, _1) }
+        environments = @environments.map { environment_entry(_1) }
+        table = { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
+                  mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
+                  worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs }
+        paths = PathView.compare({ scenarios: scenarios, table: table, environments: environments, worlds: @world_entries })
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
-          environments: @environments.map { environment_entry(_1) }, worlds: @world_entries, order: @order,
+          environments: environments, worlds: @world_entries, order: @order,
           counts: RunRecord.counts(scenarios.reject { _1[:world] }, rows), scenarios: scenarios,
-          table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
-                   mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
-                   worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },
+          table: table,
           **(flags.empty? ? {} : { flags: flags }),
           **(routes.nil? ? {} : { routes: routes }),
-          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + @judged_early.values + undeclared_writes(scenarios) + judged + @incomplete,
+          **(paths.empty? ? {} : { paths: paths }),
+          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + judged_rows + @judged_early.values + undeclared_writes(scenarios) + judged + @incomplete,
           # A criterion whose Then asks for a judgment holds only once one
           # cites what it read: the judgment column has a gate of its own.
           passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty?,
