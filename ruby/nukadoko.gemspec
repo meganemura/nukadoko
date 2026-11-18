@@ -10,6 +10,11 @@ Gem::Specification.new do |spec|
   spec.homepage = "https://github.com/meganemura/nukadoko"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.4"
+  spec.metadata = {
+    # Rails Hyperdrive installs skills/ into an app that bundles this gem.
+    "hyperdrive_targets" => "*",
+    "hyperdrive_artifacts" => "skill"
+  }
   spec.files = Dir["lib/**/*.rb", "lib/**/*.json", "sig/**/*.rbs", "exe/*", "skills/**/*", "llms.txt", "README.md", "README.ja.md", "CHANGELOG.md", "LICENSE"]
   spec.bindir = "exe"
   spec.executables = ["nuka"]

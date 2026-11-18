@@ -6,6 +6,10 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ## [Unreleased]
 
+### Added
+
+- The gem declares itself a [Rails Hyperdrive](https://github.com/rails-hyperdrive/rails-hyperdrive) companion in its metadata (`hyperdrive_targets: "*"`, `hyperdrive_artifacts: skill`). In a Rails app that bundles it, `bin/rails hyperdrive:init` installs the two skills the gem ships to `.claude/skills/nukadoko/` and `.claude/skills/nukadoko-verification/`.
+
 ## [0.6.0] - 2026-11-17
 
 ### Added

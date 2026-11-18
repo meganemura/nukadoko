@@ -13,6 +13,8 @@ Add it to the Gemfile of the project under test. It needs Ruby 3.4 or later.
 gem "nukadoko", group: :test
 ```
 
+**nukadoko 0.7.0 and later** bundle the skills and offer [Rails Hyperdrive](https://github.com/rails-hyperdrive/rails-hyperdrive) companion installation. For Rails apps bundling nukadoko, `bin/rails hyperdrive:init` installs them to `.claude/skills/nukadoko/SKILL.md` and `.claude/skills/nukadoko-verification/SKILL.md`.
+
 ## A step
 
 One step per file under `features/steps/`. The file name is the step name (`add_todo.rb` is `add-todo`).

@@ -22,6 +22,9 @@ Ruby 3.4 以上が要ります。
 gem "nukadoko", group: :test
 ```
 
+**nukadoko 0.7.0 以降**の gem はスキルを同梱し、[Rails Hyperdrive](https://github.com/rails-hyperdrive/rails-hyperdrive) の companion としての導入に対応します。
+nukadoko を bundle している Rails アプリでは、`bin/rails hyperdrive:init` がスキルを `.claude/skills/nukadoko/SKILL.md` と `.claude/skills/nukadoko-verification/SKILL.md` に入れます。
+
 ## ステップ
 
 `features/steps/` の下に 1 ファイル 1 ステップで書きます。
