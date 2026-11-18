@@ -173,6 +173,21 @@ change against before writing it.
   Terminology drifted twice before it existed, once per translator deciding
   on the spot; add a term there when a new one is settled rather than
   deciding it again next time.
+- **The two engines stand side by side in the documents.** What holds
+  for both (feature files, claims, runs, records, verdicts, findings,
+  review) is written once, in a neutral document, and says `nuka`, not
+  `npx nuka` or `bundle exec nuka`. An example of step code in a neutral
+  document is a pair: a `ruby` block followed, with only blank lines
+  between, by its `ts` twin (alphabetical, not a ranking). A block of one
+  engine only carries `<!-- engine: ruby -->` or
+  `<!-- engine: typescript -->` on the line above it, and code of the
+  program under test, such as a Rails initializer, carries
+  `<!-- engine: neither -->`. What differs per engine goes in that
+  engine's own document. Take a Ruby example from code CI runs (a
+  `conformance/cases/*/steps-rb` file), never from memory.
+  `site/scripts/check-engines.ts` counts what still breaks this in each
+  neutral document and fails when a count grows; after pairing examples,
+  `npm run check:engines -- --write` in `site/` records the lower counts.
 - **No em-dash in prose, English or Japanese.** Split the sentence, or use
   a comma, a colon, or parentheses, picking whichever one the em-dash was
   standing in for (a break, an aside, an apposition). Code blocks are

@@ -165,3 +165,80 @@ export function joinJapaneseLines(lines: string[]): string[] {
   });
   return out;
 }
+
+export type Engine = "typescript" | "ruby";
+
+const engineOfLanguage: Record<string, Engine> = { ts: "typescript", typescript: "typescript", ruby: "ruby", rb: "ruby" };
+
+/**
+ * How a code block in a document stands toward the two engines.
+ * - `pair`: a `ruby` block followed, with only blank lines between, by a `ts` block, the
+ *   same example in each engine. Alphabetical order, so neither engine comes first by rank.
+ * - `only`: a block of one engine, under `<!-- engine: ruby -->` or `<!-- engine: typescript -->`.
+ * - `neither`: code of the program under test, under `<!-- engine: neither -->`, such as a
+ *   Rails initializer, which is Ruby but no step of either engine.
+ * - `unpaired`: an engine's block with no pair and no marker. A neutral document should
+ *   hold none; a document of one engine holds nothing else.
+ */
+export type EngineBlockKind = "pair" | "only" | "neither" | "unpaired";
+
+export interface EngineBlock {
+  /** 1-based line of the block's opening fence (the `ruby` one, for a pair). */
+  line: number;
+  kind: EngineBlockKind;
+  engine?: Engine;
+}
+
+const markerLine = /^\s*<!--\s*engine:\s*(typescript|ruby|neither)\s*-->\s*$/;
+
+/** The engine code blocks of a document, in order. Blocks of other languages are not listed. */
+export function engineBlocks(lines: string[]): EngineBlock[] {
+  interface Fence {
+    line: number;
+    engine?: Engine;
+    marker?: string;
+    /** Only blank lines lie between the previous block's closing fence and this one. */
+    followsBlock: boolean;
+  }
+  const fences: Fence[] = [];
+  let fence: string | undefined;
+  let lastText: string | undefined;
+  let blankSinceClose = false;
+  lines.forEach((line, i) => {
+    const marker = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence === undefined) {
+      if (marker) {
+        const language = marker[2].trim().split(/\s+/)[0] ?? "";
+        const named = markerLine.exec(lastText ?? "")?.[1];
+        fences.push({ line: i + 1, engine: engineOfLanguage[language], marker: named, followsBlock: blankSinceClose });
+        fence = marker[1];
+      } else if (line.trim() !== "") {
+        lastText = line;
+        blankSinceClose = false;
+      }
+    } else if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && marker[2].trim() === "") {
+      fence = undefined;
+      lastText = undefined;
+      blankSinceClose = true;
+    }
+  });
+  const blocks: EngineBlock[] = [];
+  for (let i = 0; i < fences.length; i++) {
+    const f = fences[i];
+    if (f.engine === undefined) continue;
+    if (f.marker === "neither") {
+      blocks.push({ line: f.line, kind: "neither" });
+    } else if (f.marker !== undefined) {
+      blocks.push({ line: f.line, kind: "only", engine: f.marker as Engine });
+    } else {
+      const next = fences[i + 1];
+      if (f.engine === "ruby" && next?.engine === "typescript" && next.followsBlock && next.marker === undefined) {
+        blocks.push({ line: f.line, kind: "pair" });
+        i++;
+      } else {
+        blocks.push({ line: f.line, kind: "unpaired", engine: f.engine });
+      }
+    }
+  }
+  return blocks;
+}

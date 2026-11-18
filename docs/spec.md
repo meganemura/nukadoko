@@ -4403,6 +4403,7 @@ Rails writes the test environment's log to a file, so the program
 sends it to standard output, where nukadoko reads it, and tags each line
 with the request's `traceparent`:
 
+<!-- engine: neither -->
 ```ruby
 # config/environments/test.rb
 config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?
@@ -5783,6 +5784,7 @@ config.
 A Rails application that keeps its telemetry in the model `Event`
 prints:
 
+<!-- engine: neither -->
 ```ruby
 # script/tables.rb, run as bin/rails runner script/tables.rb
 bookkeeping = [Event.table_name]

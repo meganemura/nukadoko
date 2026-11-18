@@ -34,6 +34,7 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - run: npm ci
       - run: npm test
+      - run: npm run check:engines
       - run: npm run build
       # upload-pages-artifact calls actions/upload-artifact by tag, which the repository's
       # rule that every action is pinned to a commit id refuses, so its two steps are inlined.

@@ -98,15 +98,15 @@ the program fails: it holds what the server did for that step. A line that
 arrived after the step ended is still that step's, in `program-log-late.txt`
 beside the record; the run summary names it on the step's `after-record` entry.
 
-`lines: 0` with `stamped` above 0 says only that no line carried the
-step's trace id by the time its record was written. Read the world's
-`unrecorded-log` entry in the summary, decided from the whole log once the
-world stopped: "carries no trace ids" means the program does not tag its
-lines; a late line is on its step's `after-record` entry. When the world's
-entry says none came in time, output buffered on a pipe is a possible cause:
-`STDOUT.sync = true` fixes it in Ruby and `PYTHONUNBUFFERED=1` in Python.
-For Rails, send the test log to stdout and tag it, in `config/environments/test.rb`:
-
+`lines: 0` with `stamped` above 0 says only that no line carried the step's
+trace id by the time its record was written. Read the world's `unrecorded-log`
+entry in the summary, decided from the whole log once the world stopped:
+"carries no trace ids" means the program does not tag its lines; a late line is
+on its step's `after-record` entry. When the world's entry says none came in
+time, output buffered on a pipe is a possible cause: `STDOUT.sync = true` fixes
+it in Ruby and `PYTHONUNBUFFERED=1` in Python. For Rails, send the test log to
+stdout and tag it, in `config/environments/test.rb`:
+<!-- engine: neither -->
 ```ruby
 config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?
 config.log_tags = [ ->(request) { request.headers["traceparent"] } ]

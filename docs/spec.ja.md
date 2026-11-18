@@ -3439,6 +3439,7 @@ world の URL が無い run は何にもヘッダを付けず、`observed.progra
 Rails は test 環境のログをファイルに書きます。
 そこでプログラムはそのログを nukadoko が読む標準出力へ送らせ、各行にリクエストの `traceparent` のタグを付けます:
 
+<!-- engine: neither -->
 ```ruby
 # config/environments/test.rb
 config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?
@@ -4507,6 +4508,7 @@ GET で訪問を記録するページや、キャッシュに無いときにキ�
 そのため、コマンドはそれをプログラムがすでに言っている場所から出力し、config に置いた一覧からは出力しません。
 テレメトリーをモデル `Event` に持つ Rails のアプリケーションは、次のように出力します:
 
+<!-- engine: neither -->
 ```ruby
 # script/tables.rb, run as bin/rails runner script/tables.rb
 bookkeeping = [Event.table_name]
