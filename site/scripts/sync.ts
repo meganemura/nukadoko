@@ -9,7 +9,7 @@ import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import GithubSlugger from "github-slugger";
 import { allPages, leftOut, leftOutFiles, sources, type Page, type SourceName } from "../pages.ts";
-import { headingsOf, joinJapaneseLines, parseDocument, plainText, rewriteLinks, shiftHeadings, type Document } from "./document.ts";
+import { headingsOf, joinJapaneseLines, wrapEngineBlocks, parseDocument, plainText, rewriteLinks, shiftHeadings, type Document } from "./document.ts";
 
 const siteDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoDir = resolve(siteDir, "..");
@@ -212,6 +212,7 @@ function render(page: Page, locale: Locale): string {
   if (firstText >= 0 && lines[firstText].trim() === `**${title}**`) lines.splice(firstText, 1);
   lines = rewriteLinks(lines, (target) => rewriteTarget(target, path));
   if (locale === "ja") lines = joinJapaneseLines(lines);
+  lines = wrapEngineBlocks(lines);
   const frontmatter = [
     "---",
     `title: ${JSON.stringify(title)}`,

@@ -1,0 +1,66 @@
+---
+// Starlight's theme picker, with the engine picker beside it. The documents show an example
+// of step code in both engines; the reader picks one and the site hides the other half of
+// every pair (see src/styles/engines.css). "Both" shows them one after the other, as GitHub
+// does, and is the default so that neither engine is the one a reader meets first.
+import Default from "@astrojs/starlight/components/ThemeSelect.astro";
+import Select from "@astrojs/starlight/components/Select.astro";
+
+const ja = Astro.locals.starlightRoute.lang.startsWith("ja");
+const labels = ja
+  ? { accessible: "コード例のエンジン", both: "両方", ruby: "Ruby", typescript: "TypeScript" }
+  : { accessible: "Engine of the code examples", both: "Both", ruby: "Ruby", typescript: "TypeScript" };
+---
+
+<nukadoko-engine-select>
+  <Select
+    icon="puzzle"
+    label={labels.accessible}
+    options={[
+      { label: labels.both, selected: true, value: "both" },
+      { label: labels.ruby, selected: false, value: "ruby" },
+      { label: labels.typescript, selected: false, value: "typescript" },
+    ]}
+    width="7.5em"
+  />
+</nukadoko-engine-select>
+<Default />
+
+<script>
+  // The choice is kept per browser. The inline script in the page head (astro.config.mjs)
+  // applies it before the first paint, so a page does not show both halves and then hide one.
+  const key = "nukadoko-engine";
+  type Choice = "both" | "ruby" | "typescript";
+  const parse = (value: unknown): Choice => (value === "ruby" || value === "typescript" ? value : "both");
+  const load = (): Choice => {
+    try {
+      return parse(localStorage.getItem(key));
+    } catch {
+      return "both";
+    }
+  };
+
+  function apply(choice: Choice): void {
+    document.documentElement.dataset.engine = choice;
+    try {
+      localStorage.setItem(key, choice);
+    } catch {
+      // A browser that keeps no storage still switches this page.
+    }
+    document.querySelectorAll("nukadoko-engine-select select").forEach((select) => {
+      if (select instanceof HTMLSelectElement) select.value = choice;
+    });
+  }
+
+  class EngineSelect extends HTMLElement {
+    constructor() {
+      super();
+      const select = this.querySelector("select");
+      if (select) select.value = load();
+      select?.addEventListener("change", (event) => {
+        if (event.currentTarget instanceof HTMLSelectElement) apply(parse(event.currentTarget.value));
+      });
+    }
+  }
+  customElements.define("nukadoko-engine-select", EngineSelect);
+</script>

@@ -185,6 +185,10 @@ export type EngineBlockKind = "pair" | "only" | "neither" | "unpaired";
 export interface EngineBlock {
   /** 1-based line of the block's opening fence (the `ruby` one, for a pair). */
   line: number;
+  /** 1-based line of the block's closing fence (the `ts` one, for a pair). */
+  end: number;
+  /** For a pair, the 1-based line of the `ts` block's opening fence. */
+  second?: number;
   kind: EngineBlockKind;
   engine?: Engine;
 }
@@ -195,6 +199,7 @@ const markerLine = /^\s*<!--\s*engine:\s*(typescript|ruby|neither)\s*-->\s*$/;
 export function engineBlocks(lines: string[]): EngineBlock[] {
   interface Fence {
     line: number;
+    end: number;
     engine?: Engine;
     marker?: string;
     /** Only blank lines lie between the previous block's closing fence and this one. */
@@ -210,7 +215,7 @@ export function engineBlocks(lines: string[]): EngineBlock[] {
       if (marker) {
         const language = marker[2].trim().split(/\s+/)[0] ?? "";
         const named = markerLine.exec(lastText ?? "")?.[1];
-        fences.push({ line: i + 1, engine: engineOfLanguage[language], marker: named, followsBlock: blankSinceClose });
+        fences.push({ line: i + 1, end: lines.length, engine: engineOfLanguage[language], marker: named, followsBlock: blankSinceClose });
         fence = marker[1];
       } else if (line.trim() !== "") {
         lastText = line;
@@ -218,6 +223,7 @@ export function engineBlocks(lines: string[]): EngineBlock[] {
       }
     } else if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && marker[2].trim() === "") {
       fence = undefined;
+      fences[fences.length - 1].end = i + 1;
       lastText = undefined;
       blankSinceClose = true;
     }
@@ -227,18 +233,44 @@ export function engineBlocks(lines: string[]): EngineBlock[] {
     const f = fences[i];
     if (f.engine === undefined) continue;
     if (f.marker === "neither") {
-      blocks.push({ line: f.line, kind: "neither" });
+      blocks.push({ line: f.line, end: f.end, kind: "neither" });
     } else if (f.marker !== undefined) {
-      blocks.push({ line: f.line, kind: "only", engine: f.marker as Engine });
+      blocks.push({ line: f.line, end: f.end, kind: "only", engine: f.marker as Engine });
     } else {
       const next = fences[i + 1];
       if (f.engine === "ruby" && next?.engine === "typescript" && next.followsBlock && next.marker === undefined) {
-        blocks.push({ line: f.line, kind: "pair" });
+        blocks.push({ line: f.line, end: next.end, second: next.line, kind: "pair" });
         i++;
       } else {
-        blocks.push({ line: f.line, kind: "unpaired", engine: f.engine });
+        blocks.push({ line: f.line, end: f.end, kind: "unpaired", engine: f.engine });
       }
     }
   }
   return blocks;
+}
+
+/**
+ * Wraps each pair, and each block of one engine, in HTML the site's engine switch reads:
+ * a pair becomes two `data-engine` halves inside `.engine-pair`, so the reader's choice
+ * hides one half; a block of one engine is labelled with it. Markdown inside an HTML block
+ * needs a blank line on each side, which the wrapper gives. A page without JavaScript, and
+ * GitHub, show both halves one after the other.
+ */
+export function wrapEngineBlocks(lines: string[]): string[] {
+  const out = [...lines];
+  // From the end, so the line numbers of the blocks not yet wrapped stay right.
+  for (const block of engineBlocks(lines).reverse()) {
+    const open = block.line - 1;
+    const close = block.end - 1;
+    if (block.kind === "pair") {
+      const second = block.second! - 1;
+      out.splice(close + 1, 0, "", "</div>", "</div>");
+      out.splice(second, 0, "", "</div>", "<div data-engine=\"typescript\">", "");
+      out.splice(open, 0, "<div class=\"engine-pair\">", "<div data-engine=\"ruby\">", "");
+    } else if (block.kind === "only" && block.engine) {
+      out.splice(close + 1, 0, "", "</div>");
+      out.splice(open, 0, `<div class="engine-only" data-engine-only="${block.engine}">`, "");
+    }
+  }
+  return out;
 }

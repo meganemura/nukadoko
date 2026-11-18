@@ -2,7 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { engineBlocks } from "../scripts/document.ts";
+import { engineBlocks, wrapEngineBlocks } from "../scripts/document.ts";
 
 // A document built from pieces whose engine standing is known in advance.
 const pieces = {
@@ -52,3 +52,14 @@ test("a ts block before a ruby block is not a pair, and neither is a pair split 
 test("a fence inside a longer fence is content, not a block", () => {
   assert.deepEqual(shape(["````markdown", "```ts", "x", "```", "````"]), []);
 });
+
+test("wrapping adds only wrapper lines and blank lines, one .engine-pair per pair", () =>
+  hegel.test((tc) => {
+    const drawn = tc.draw(gs.arrays(gs.sampledFrom(names), { maxSize: 12 }));
+    const lines = drawn.flatMap((name) => ["Text between.", "", ...pieces[name], ""]);
+    const wrapped = wrapEngineBlocks(lines);
+    const bare = (ls: string[]) => ls.filter((l) => l.trim() !== "" && !/^<\/?div\b/.test(l));
+    assert.deepEqual(bare(wrapped), bare(lines));
+    assert.equal(wrapped.filter((l) => l === '<div class="engine-pair">').length, drawn.filter((n) => n === "pair").length);
+    assert.equal(wrapped.filter((l) => l.startsWith("<div")).length, wrapped.filter((l) => l === "</div>").length);
+  }));

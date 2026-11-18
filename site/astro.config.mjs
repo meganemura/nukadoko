@@ -36,6 +36,15 @@ export default defineConfig({
       // opens the source rather than the generated copy.
       editLink: { baseUrl: "https://github.com/meganemura/nukadoko/edit/main/" },
       lastUpdated: false,
+      components: { ThemeSelect: "./src/components/ThemeSelect.astro" },
+      customCss: ["./src/styles/engines.css"],
+      head: [
+        {
+          tag: "script",
+          // Applies the reader's engine before the first paint; ThemeSelect.astro keeps it.
+          content: "try{var e=localStorage.getItem(\"nukadoko-engine\");document.documentElement.dataset.engine=e===\"ruby\"||e===\"typescript\"?e:\"both\"}catch(_){document.documentElement.dataset.engine=\"both\"}",
+        },
+      ],
     }),
   ],
 });

@@ -1,0 +1,27 @@
+/* The two halves of an example pair, and blocks of one engine. Each half is labelled with
+   its engine while both show; the reader's choice in the header hides the other half. */
+.engine-pair > [data-engine]::before,
+.engine-only::before {
+  display: block;
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  color: var(--sl-color-gray-3);
+  margin-bottom: 0.25rem;
+}
+.engine-pair > [data-engine="ruby"]::before { content: "Ruby"; }
+.engine-pair > [data-engine="typescript"]::before { content: "TypeScript"; }
+.engine-only[data-engine-only="ruby"]::before { content: "Ruby only"; }
+.engine-only[data-engine-only="typescript"]::before { content: "TypeScript only"; }
+:root[lang|="ja"] .engine-only[data-engine-only="ruby"]::before { content: "Ruby のみ"; }
+:root[lang|="ja"] .engine-only[data-engine-only="typescript"]::before { content: "TypeScript のみ"; }
+
+.engine-pair > [data-engine] + [data-engine] { margin-top: 1rem; }
+
+html[data-engine="ruby"] .engine-pair > [data-engine="typescript"],
+html[data-engine="typescript"] .engine-pair > [data-engine="ruby"] {
+  display: none;
+}
+html[data-engine="ruby"] .engine-pair > [data-engine]::before,
+html[data-engine="typescript"] .engine-pair > [data-engine]::before {
+  content: none;
+}
