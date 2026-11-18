@@ -23,6 +23,11 @@ module Nukadoko
       # : () -> ClaimRules::Shape
       def shape: () -> ClaimRules::Shape
 
+      # A deadline the step could never keep is refused when it loads, as
+      # the TypeScript engine refuses one Node's timer would clamp.
+      # : () -> String?
+      def timeout_problem: () -> String?
+
       # : () -> String?
       def poll_problem: () -> String?
     end

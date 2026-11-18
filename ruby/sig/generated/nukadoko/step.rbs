@@ -20,6 +20,12 @@ module Nukadoko
     def self.pattern: (String) -> String
                     | () -> String?
 
+    # Every wording a line may bind the step by: `pattern` first, then
+    # each of `patterns`, as the TypeScript engine reads both. Each one
+    # must capture the same keys, which nuka check holds them to.
+    # : (*String | Array[String]) -> Array[String]
+    def self.patterns: (*String | Array[String]) -> Array[String]
+
     # : (String) -> String
     # : () -> String?
     def self.description: (String) -> String
@@ -39,6 +45,15 @@ module Nukadoko
     # : () -> untyped
     def self.poll: (untyped) -> untyped
                  | () -> untyped
+
+    # How long `run` (or `observe`) may take, in milliseconds, before the
+    # step fails as timed out. Without it the config's stepTimeout
+    # applies, twenty minutes by default; there is no value for no
+    # limit, since a step that never returns would take the run with it.
+    # : (untyped) -> untyped
+    # : () -> untyped
+    def self.timeout: (untyped) -> untyped
+                    | () -> untyped
 
     # The steps this one may run through the `call` fixture. A part with no
     # pattern exists only for calls.

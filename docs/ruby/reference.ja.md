@@ -30,7 +30,7 @@ bundle exec nuka init
 `nuka init` は `nukadoko.config.rb` を書きます。
 このファイルは `Nukadoko.config(...)` をキーワード引数で呼び、オプションの名前は TypeScript の config と同じです。
 `program` とプロジェクトの fixture はこのページの下にあります。
-`envFiles:` と `secrets:` は `env` fixture のため、`browser:` はブラウザの起動オプション、`parameterTypes:` は文の途中で値を読む parameter type のためのものです。
+`envFiles:` と `secrets:` は `env` fixture のため、`browser:` はブラウザの起動オプション、`stepTimeout:` は step が動いてよい時間(ミリ秒、既定は 20 分)、`parameterTypes:` は文の途中で値を読む parameter type のためのものです。
 
 ```ruby
 Nukadoko.config(parameterTypes: [{ name: "priority", regexp: /高|低/, transformer: ->(s) { s == "高" ? "high" : "low" } }])
@@ -66,6 +66,21 @@ end
 ```
 
 `mutates false` は、何も変えない step であることを宣言します。
+`patterns` は `pattern` のあとに同じ step の別の言い方を足します。
+どの言い方も同じキーをキャプチャしなければなりません(そうでなければ `alias-key-mismatch`)。
+`timeout 5000` は step 自身の `run` か `observe` の時間をミリ秒で区切ります。
+過ぎると step は `error.kind` が `timeout` で失敗し、指定がなければ config の `stepTimeout` が効きます。
+
+```ruby
+class ItemCount < Nukadoko::Step
+  description "Count the items the API lists"
+  pattern "I count the items"
+  patterns "the items are counted"
+  timeout 5000
+  # ...
+end
+```
+
 `features/steps/` の下の `*.rb` は、`features/steps/lib/` の下の補助ファイルも含めてすべて読み込みます。
 そのため、ファイル名どおりの名前の補助モジュールは、`require` なしでどの step からも使えます。
 

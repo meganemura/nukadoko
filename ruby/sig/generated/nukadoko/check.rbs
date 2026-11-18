@@ -71,8 +71,8 @@ module Nukadoko
 
       # Why the step's pattern cannot be read, as the TypeScript engine says
       # it: the first broken capture, then what cucumber-expressions refuses.
-      # : (singleton(Step)) -> [String, String]?
-      def pattern_problem: (singleton(Step)) -> [ String, String ]?
+      # : (singleton(Step), String) -> [String, String]?
+      def pattern_problem: (singleton(Step), String) -> [ String, String ]?
 
       NUMBER_TYPES: untyped
 
@@ -80,11 +80,16 @@ module Nukadoko
 
       # A capture hands the step a number or a string, and an args field of
       # the other kind can never hold it.
-      # : (singleton(Step)) -> Array[Array[untyped]]
-      def capture_mismatches: (singleton(Step)) -> Array[Array[untyped]]
+      # : (singleton(Step), String) -> Array[Array[untyped]]
+      def capture_mismatches: (singleton(Step), String) -> Array[Array[untyped]]
 
       # : (singleton(Step)) -> void
       def check_contract: (singleton(Step)) -> void
+
+      # Every wording of one step must hand it the same args, or which line
+      # was written would decide what the step receives.
+      # : (singleton(Step)) -> void
+      def check_alias_keys: (singleton(Step)) -> void
 
       # Two patterns that read the same once their names go would match the
       # same lines; the later file is named, with every step that shares it.

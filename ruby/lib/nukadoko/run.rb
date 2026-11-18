@@ -4,6 +4,7 @@
 require "securerandom"
 require "fileutils"
 require "time"
+require "timeout"
 
 # One run: for each environment, start its world, play every scenario's steps
 # in order, and write a record per step. A scenario stops at its first step
@@ -662,7 +663,7 @@ module Nukadoko
         origins = {}
         execute(step, record, dir, world, then_line: line_kind(line) == :then, at_line: line.line, results: results, origins: origins) do
           args = bind_args(step, captures, line, results, origins, record)
-          [args, (Pattern.new(step.pattern.to_s).texts(line.text) || {}).merge(attachment_texts(step, captures, line))]
+          [args, (step.patterns.lazy.filter_map { Pattern.new(_1).texts(line.text) }.first || {}).merge(attachment_texts(step, captures, line))]
         end
       end
 
@@ -711,6 +712,27 @@ module Nukadoko
         end
       end
 
+      # stepTimeout's default: long enough for any step that is working, short
+      # enough that one that never returns does not hold the run all day.
+      DEFAULT_STEP_TIMEOUT_MS = 1_200_000
+
+      # A step past its deadline fails as timed out, naming the knob that set it.
+      class StepTimeout < StandardError; end
+
+      # Runs the step's body under its own timeout, or the config's
+      # stepTimeout. Ruby's Timeout stops the body where it is, which the
+      # TypeScript engine cannot do; either way the step is failed and the
+      # scenario moves on.
+      #: (singleton(Step), Hash[Symbol, untyped]) { (Numeric) -> untyped } -> untyped
+      def within_deadline(step, record, &)
+        ms = step.timeout || Nukadoko.config_options.fetch(:stepTimeout, DEFAULT_STEP_TIMEOUT_MS)
+        where = step.timeout ? "the step's own timeout" : "stepTimeout in nukadoko.config.rb; raise it, or give this step its own timeout"
+        Timeout.timeout(ms / 1000.0, StepTimeout, %(Step "#{step.step_name}" timed out after #{ms}ms (#{where})), &)
+      rescue StepTimeout
+        record[:error_kind] = "timeout"
+        raise
+      end
+
       # Runs one step whose args the block binds, and writes its record and
       # HTTP log into `dir`.
       #: (singleton(Step), Hash[Symbol, untyped], String, World, then_line: bool, at_line: Integer?, results: Array[untyped], origins: Hash[String, String]) { () -> [Hash[String, untyped], Hash[String, String]] } -> Hash[Symbol, untyped]
@@ -739,7 +761,7 @@ module Nukadoko
           Trace.within(boundary) do
             fixtures, finish = build_fixtures(step, dir, log, world, record, results)
             HttpRecording.collect(log) do
-              Processes.collect(processes) { RedactedOutput.around(secrets) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) } }
+              Processes.collect(processes) { RedactedOutput.around(secrets) { within_deadline(step, record) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts) } } }
             end
           end
           record[:page_view] = @browser.judged(dir, record[:step_record_id], aria_in_claims: step.claims.to_a.any? { !_1[:each] && _1[:compare] == "fits-aria-snapshot" }) if step.claims && (fixtures[:page] || fixtures[:context]) && record[:observation] != "unobserved"
@@ -806,8 +828,7 @@ module Nukadoko
       # reports such a pattern; a run under --no-check agrees with it.
       #: (untyped, Hash[String, String]) -> Hash[String, String]
       def transformed_fills(step, origins)
-        pattern = step.pattern.to_s
-        pattern.scan(Pattern::NAMED).each_with_object({}) do |(key, type), found|
+        step.patterns.flat_map { |pattern| pattern.scan(Pattern::NAMED).map { [pattern, *_1] } }.each_with_object({}) do |(pattern, key, type), found|
           next unless Pattern.transformed.include?(type.to_s) && !origins.key?(key.to_s)
 
           found[key.to_s] = %(the pattern "#{pattern}" fills args.#{key} with the parameter type {#{type}}, whose transformer rewrites the line's text before the claim reads it, ) +
@@ -849,7 +870,7 @@ module Nukadoko
 
             # observe failing is no claim breaking: nothing was read to judge.
             record[:observation] = "unobserved"
-            record[:claim_records] = step.claims.reject { _1[:each] }.map { RunRecord.unobserved_claim(_1, origins, texts, patterns: [step.pattern].compact) }
+            record[:claim_records] = step.claims.reject { _1[:each] }.map { RunRecord.unobserved_claim(_1, origins, texts, patterns: step.patterns) }
             record[:error_kind] = "unobserved"
             raise e.class, "the step observed nothing, so no claim was judged: #{e.message}"
           end
@@ -867,7 +888,7 @@ module Nukadoko
           rescue StandardError
             nil
           end
-          patterns = [step.pattern].compact
+          patterns = step.patterns
           record[:claim_records] = step.claims.zip(judged).map do |declared, result|
             if declared[:each]
               RunRecord.each_claim(declared, sides.(observed), origins, texts, patterns: patterns)

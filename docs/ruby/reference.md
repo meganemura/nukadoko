@@ -32,8 +32,9 @@ can launch.
 `Nukadoko.config(...)` with the options as keywords, under the same names
 as the TypeScript config: `program` and project fixtures below,
 `envFiles:` and `secrets:` for the `env` fixture, `browser:` for the
-browser's launch options, and `parameterTypes:` for a parameter type
-read inside a sentence:
+browser's launch options, `stepTimeout:` for how long a step may run
+(in milliseconds, twenty minutes by default), and `parameterTypes:` for a
+parameter type read inside a sentence:
 
 ```ruby
 Nukadoko.config(parameterTypes: [{ name: "priority", regexp: /高|低/, transformer: ->(s) { s == "高" ? "high" : "low" } }])
@@ -69,7 +70,24 @@ class AnItemExists < Nukadoko::Step
 end
 ```
 
-`mutates false` declares a step that changes nothing. Every `*.rb` file
+`mutates false` declares a step that changes nothing. `patterns` adds
+more wordings of the same step after `pattern`, and every wording must
+capture the same keys (`alias-key-mismatch` otherwise). `timeout 5000`
+bounds the step's own `run` or `observe` in milliseconds; past it the
+step fails with `error.kind` `timeout`, and without it the config's
+`stepTimeout` applies.
+
+```ruby
+class ItemCount < Nukadoko::Step
+  description "Count the items the API lists"
+  pattern "I count the items"
+  patterns "the items are counted"
+  timeout 5000
+  # ...
+end
+```
+
+Every `*.rb` file
 under `features/steps/` is loaded, a helper under `features/steps/lib/`
 too, so a helper module named after its file can be used from any step
 without a `require`.

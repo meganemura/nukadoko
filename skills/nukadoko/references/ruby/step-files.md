@@ -35,8 +35,10 @@ end
 A field takes `null: true`, `optional: true`, `default:`, `min:`, `max:`,
 `positive: true`, or `negative: true`; `enum :outcome, %w[accepted
 refused]` allows only those words. A step that runs code mutates unless
-it says `mutates false`. `pattern` is one string; the gem has no
-`patterns` list yet.
+it says `mutates false`. `patterns "another wording"` adds wordings
+after `pattern`, each capturing the same keys. `timeout 5000` bounds
+`run` or `observe` in milliseconds; without it the config's
+`stepTimeout` applies (twenty minutes).
 
 ## Loading
 

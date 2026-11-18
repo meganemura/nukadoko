@@ -12,7 +12,7 @@ module Nukadoko
     def self.entry(step, project)
       {
         name: step.step_name, kind: "typed", file: step.file.delete_prefix("#{project}/"),
-        patterns: [step.pattern].compact, description: step.description, mutates: step.mutating?,
+        patterns: step.patterns, description: step.description, mutates: step.mutating?, timeout: step.timeout,
         parts: step.parts.empty? ? nil : step.parts.map(&:step_name),
         from: from(step), claims: step.claims, poll: step.poll,
         needs: step.bag.map(&:to_s).sort, needs_browser: step.bag.intersect?(BROWSER)
@@ -39,8 +39,8 @@ module Nukadoko
 
     #: (singleton(Step)) -> String
     def self.text(step)
-      lines = ["#{step.step_name}  typed  #{step.claims ? "claims" : step.mutating? ? "mutates" : "read-only"}",
-               "  #{step.pattern || "(no pattern)"}", "  #{step.description}"]
+      lines = ["#{step.step_name}  typed  #{step.claims ? "claims" : step.mutating? ? "mutates" : "read-only"}#{"  timeout #{step.timeout}ms" if step.timeout}",
+               *(step.patterns.empty? ? ["  (no pattern)"] : step.patterns.map { "  #{_1}" }), "  #{step.description}"]
       (step.claims || []).each { lines << "  claim: #{claim_text(_1)}" }
       ((step.poll.is_a?(Hash) && step.poll[:settled]) || []).each { lines << "  settled: #{claim_text(_1)}" }
       lines.join("\n")

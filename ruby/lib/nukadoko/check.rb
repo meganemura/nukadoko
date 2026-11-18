@@ -102,10 +102,9 @@ module Nukadoko
       # that fails to import, so it can never match a line.
       #: (singleton(Step)) -> bool
       def definition_broken?(step)
-        if (pattern = pattern_problem(step))
-          findings << Finding.new("error", pattern[0], step.file, nil, step.step_name, pattern[1], Codes.fix(pattern[0]), nil)
-          return true
-        end
+        broken = step.patterns.filter_map { pattern_problem(step, _1) }
+        broken.each { findings << Finding.new("error", _1[0], step.file, nil, step.step_name, _1[1], Codes.fix(_1[0]), nil) }
+        return true if broken.any?
         problems = Definition.new(step).problems
         problems.each do |problem|
           findings << Finding.about_step("error", "step-file-import-failed", step, problem,
@@ -118,9 +117,8 @@ module Nukadoko
 
       # Why the step's pattern cannot be read, as the TypeScript engine says
       # it: the first broken capture, then what cucumber-expressions refuses.
-      #: (singleton(Step)) -> [String, String]?
-      def pattern_problem(step)
-        pattern = step.pattern or return nil
+      #: (singleton(Step), String) -> [String, String]?
+      def pattern_problem(step, pattern)
         head = %(Step "#{step.step_name}" pattern "#{pattern}")
         keys = []
         rest = pattern.gsub(/\./, "")
@@ -154,10 +152,10 @@ module Nukadoko
 
       # A capture hands the step a number or a string, and an args field of
       # the other kind can never hold it.
-      #: (singleton(Step)) -> Array[Array[untyped]]
-      def capture_mismatches(step)
+      #: (singleton(Step), String) -> Array[Array[untyped]]
+      def capture_mismatches(step, pattern)
         fields = step.args.fields.to_h { [_1.name.to_s, _1.type] }
-        step.pattern.to_s.scan(Pattern::NAMED).filter_map do |key, type|
+        pattern.scan(Pattern::NAMED).filter_map do |key, type|
           declared = fields[key]
           captured = if NUMBER_TYPES.include?(type) then "number"
                      elsif STRING_TYPES.include?(type) then "string"
@@ -176,20 +174,23 @@ module Nukadoko
       #: (singleton(Step)) -> void
       def check_contract(step)
         keys = step.args.fields.map { _1.name.to_s }
-        ((pattern = step.pattern) ? Pattern.new(pattern).keys - keys : []).each do |key|
-          findings << Finding.about_step("error", "unknown-capture-key", step,
-                                         %(Step "#{step.step_name}" pattern "#{step.pattern}" binds key "#{key}", which is not a key of its args schema),
-                                         "Rename the capture to a key of the args schema, or add the key to the schema.")
+        step.patterns.each do |pattern|
+          (Pattern.new(pattern).keys - keys).each do |key|
+            findings << Finding.about_step("error", "unknown-capture-key", step,
+                                           %(Step "#{step.step_name}" pattern "#{pattern}" binds key "#{key}", which is not a key of its args schema),
+                                           "Rename the capture to a key of the args schema, or add the key to the schema.")
+          end
         end
+        check_alias_keys(step)
         undescribed = [step.args, step.returns].compact.flat_map(&:fields).reject(&:description)
         if undescribed.any?
           findings << Finding.about_step("note", "schema-field-undescribed", step,
                                          "Step \"#{step.step_name}\" has schema fields with no description: #{undescribed.map(&:name).join(", ")}",
                                          "Give each field a description, so nuka steps and an agent can say what it means.")
         end
-        capture_mismatches(step).each do |key, type, captured, held|
+        step.patterns.flat_map { |pattern| capture_mismatches(step, pattern).map { [pattern, *_1] } }.each do |pattern, key, type, captured, held|
           findings << Finding.new("error", "capture-type-mismatch", step.file, nil, step.step_name,
-                                  %(Step "#{step.step_name}" pattern "#{step.pattern}" binds key "#{key}" as {#{type}} (a #{captured}), but args declares "#{key}" as a #{held}),
+                                  %(Step "#{step.step_name}" pattern "#{pattern}" binds key "#{key}" as {#{type}} (a #{captured}), but args declares "#{key}" as a #{held}),
                                   "Make the capture type and the args field type agree: change the {key:type} in the pattern, or declare the field with the type the capture gives.", nil)
         end
         known = FIXTURES + Nukadoko.project_fixtures.keys.map(&:to_s)
@@ -200,16 +201,31 @@ module Nukadoko
         end
       end
 
+      # Every wording of one step must hand it the same args, or which line
+      # was written would decide what the step receives.
+      #: (singleton(Step)) -> void
+      def check_alias_keys(step)
+        return if step.patterns.size < 2
+
+        keys = step.patterns.map { [_1, Pattern.new(_1).keys.uniq] }
+        return if keys.map { _2.sort }.uniq.size == 1
+
+        findings << Finding.about_step("error", "alias-key-mismatch", step,
+                                       "Step \"#{step.step_name}\" has patterns that bind different key sets: #{keys.map { %("#{_1}" -> {#{_2.join(", ")}}) }.join("; ")}",
+                                       Codes.fix("alias-key-mismatch"))
+      end
+
       # Two patterns that read the same once their names go would match the
       # same lines; the later file is named, with every step that shares it.
       #: () -> void
       def check_duplicate_patterns
-        @usable.select(&:pattern).group_by { _1.pattern.to_s.gsub(Pattern::NAMED) { "{#{Regexp.last_match(2)}}" } }.each do |text, group|
+        owned = @usable.sort_by(&:file).flat_map { |step| step.patterns.map { |pattern| [step, pattern] } } #: Array[[singleton(Step), String]]
+        owned.group_by { |_, pattern| pattern.gsub(Pattern::NAMED) { "{#{Regexp.last_match(2)}}" } }.each do |text, group|
           next if group.size < 2
 
-          sorted = group.sort_by(&:file)
-          findings << Finding.new("error", "duplicate-pattern", sorted.last.file, nil, nil,
-                                  %(Multiple patterns normalize to the same text "#{text}": #{sorted.map { %(#{_1.step_name} ("#{_1.pattern}")) }.join(", ")}),
+          last = group.last or next
+          findings << Finding.new("error", "duplicate-pattern", last[0].file, nil, nil,
+                                  %(Multiple patterns normalize to the same text "#{text}": #{group.map { |step, pattern| %(#{step.step_name} ("#{pattern}")) }.join(", ")}),
                                   Codes.fix("duplicate-pattern"), nil)
         end
       end
@@ -233,7 +249,7 @@ module Nukadoko
       # A config parameter type no pattern names.
       #: () -> void
       def check_unused_parameter_types
-        used = @steps.flat_map { (pattern = _1.pattern) ? pattern.scan(/\{(?:[^}:]*:)?([^}]*)\}/).flatten : [] }
+        used = @steps.flat_map { _1.patterns.flat_map { |pattern| pattern.scan(/\{(?:[^}:]*:)?([^}]*)\}/).flatten } }
         (Nukadoko.config_options[:parameterTypes] || []).each do |type|
           name = type[:name].to_s
           next if used.include?(name)
@@ -250,8 +266,7 @@ module Nukadoko
       def check_transformed(step)
         transformed = Pattern.transformed
         claims = step.claims
-        pattern = step.pattern
-        return if transformed.empty? || claims.nil? || pattern.nil?
+        return if transformed.empty? || claims.nil? || step.patterns.empty?
 
         keys = {} #: Hash[String, String]
         claims.each_with_index do |claim, index|
@@ -265,8 +280,7 @@ module Nukadoko
                   Array(each[:claims]).each_with_index.map { |item, i| ["#{label}.each.claims[#{i}]", item] }) #: Array[[String, Hash[Symbol, untyped]]]
           items.each { |item_label, item| keys[item[:expected].to_s] ||= item_label if item[:expected].is_a?(String) }
         end
-        pattern.scan(Pattern::NAMED).each do |match|
-          key, type = Array(match).map(&:to_s)
+        step.patterns.flat_map { |pattern| pattern.scan(Pattern::NAMED).map { [pattern, *Array(_1).map(&:to_s)] } }.each do |pattern, key, type|
           label = keys[key.to_s]
           next unless label && transformed.include?(type.to_s)
 
@@ -666,7 +680,7 @@ module Nukadoko
         @unbound_steps ||= begin
           bound = @scenarios.flat_map(&:steps).filter_map { |line| (m = Engine.matches(@usable, line.text)).size == 1 ? m.first.first : nil }
           unread = findings.select { _1.code == "step-file-import-failed" }.map(&:step)
-          @steps.select(&:pattern).reject { bound.include?(_1) || unread.include?(_1.step_name) }.sort_by(&:file)
+          @steps.reject { _1.patterns.empty? }.reject { bound.include?(_1) || unread.include?(_1.step_name) }.sort_by(&:file)
         end
       end
 
@@ -678,7 +692,7 @@ module Nukadoko
         steps = unbound_steps
         return "" if steps.empty?
 
-        named = steps.first(3).map { %(#{_1.step_name} ("#{_1.pattern}", #{_1.file})) }
+        named = steps.first(3).map { %(#{_1.step_name} (#{_1.patterns.map { |text| %("#{text}") }.join(", ")}, #{_1.file})) }
         rest = steps.size - named.size
         "; patterned steps no scanned feature line binds: #{rest.positive? ? "#{named.join(", ")}, and #{rest} more" : named.join(", ")}"
       end
@@ -882,7 +896,7 @@ module Nukadoko
 
     #: (Array[singleton(Step)], String) -> Array[[singleton(Step), Hash[String, untyped]]]
     def self.matches(steps, text)
-      steps.filter_map { |step| (pattern = step.pattern) && (captures = Pattern.new(pattern).match(text)) && [step, captures] }
+      steps.filter_map { |step| (captures = step.patterns.lazy.filter_map { Pattern.new(_1).match(text) }.first) && [step, captures] }
     end
   end
 end

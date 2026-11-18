@@ -49,6 +49,14 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Added
 
+- A step can name more than one wording: `patterns "another wording"`
+  adds wordings after `pattern`, and `nuka check` reports
+  `alias-key-mismatch` when they capture different keys. `nuka steps`
+  lists every wording.
+- `timeout <ms>` on a step, and `stepTimeout:` in the config (default
+  twenty minutes), bound a step's `run` or `observe`. A step past its
+  deadline fails with `error.kind` `timeout` and a message naming which
+  of the two fired; `nuka steps` shows a step's own timeout.
 - `nuka check --fail-on <code>` makes a finding of that code fail the
   check, a note included, and the envelope lists each hit under
   `fail_on_hits`. A code the check never reports, and a note under

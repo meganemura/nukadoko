@@ -21,6 +21,9 @@ module Nukadoko
 
       #: () -> Array[String]
       def problems
+        problem = timeout_problem
+        return ["#{@step.name} #{problem}."] if problem
+
         claims = @step.claims
         return [] unless claims
 
@@ -35,11 +38,21 @@ module Nukadoko
       def shape
         fields = @step.args.fields
         ClaimRules::Shape.new(
-          patterns: [@step.pattern].compact, args_keys: fields.map { _1.name.to_s },
+          patterns: @step.patterns, args_keys: fields.map { _1.name.to_s },
           string_args: fields.select { _1.type == :string }.map { _1.name.to_s },
-          from_keys: @step.from.keys.map(&:to_s), capture_keys: @step.pattern ? Pattern.new(@step.pattern).keys : [],
+          from_keys: @step.from.keys.map(&:to_s), capture_keys: @step.patterns.flat_map { Pattern.new(_1).keys }.uniq,
           observe: @observe
         )
+      end
+
+      # A deadline the step could never keep is refused when it loads, as
+      # the TypeScript engine refuses one Node's timer would clamp.
+      #: () -> String?
+      def timeout_problem
+        timeout = @step.timeout
+        return nil if timeout.nil? || (timeout.is_a?(Integer) && timeout.positive? && timeout <= MAX_TIMEOUT_MS)
+
+        "timeout must be a whole number of milliseconds greater than 0 and at most #{MAX_TIMEOUT_MS}; got #{ClaimRules.describe(timeout)}"
       end
 
       #: () -> String?
