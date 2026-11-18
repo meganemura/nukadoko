@@ -184,8 +184,10 @@ module Nukadoko
       # `lists` reads the program's routes and flags lists in head's worlds,
       # as `nuka run` does; `tables` reads its tables list in a world of any
       # tree, which `nuka do` leaves out when its step reads no events.
-      # : (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool) -> World
-      def start: (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool) -> World
+      # `progress` gets one line per phase as it starts, and one when the
+      # world is ready, redacted, since a `{token}` can be in a command.
+      # : (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool, ?progress: untyped) -> World
+      def start: (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool, ?progress: untyped) -> World
 
       # What setup receives once its program answers, as the TypeScript
       # engine's ProgramWorld names it.
@@ -280,8 +282,8 @@ module Nukadoko
 
       # The tree's build, once per run: a world whose build already ran for
       # another world waits on nothing and notes it in its log.
-      # : (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void) -> Integer?
-      def build: (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void) -> Integer?
+      # : (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void, ?^(String) -> void) -> Integer?
+      def build: (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void, ?^(String) -> void) -> Integer?
 
       # A url function's answer, under its limit, checked by the rule a
       # written url is checked by when the file is read.

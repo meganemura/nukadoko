@@ -9,6 +9,10 @@ just until 0.1.
 
 ### Changed
 
+- A fixture teardown error whose message has more than one line is one
+  `fixture-teardown-failed` warning on stderr, its message folded onto one
+  line; each further line used to read as a warning of its own. The
+  record's `teardown_errors` keeps the message as it was.
 - The bundled skill shows step code on each engine's own pages:
   `skills/nukadoko/references/ruby/` and `references/typescript/` hold the
   same pages under the same headings (step files, claim steps, fixtures,

@@ -40,6 +40,8 @@ module Nukadoko
         @target_versions = {} #: Hash[String, String]
         # Findings that are told and never fail the run.
         @warnings = [] #: Array[Hash[Symbol, untyped]]
+        # A process fixture's teardown errors, which no scenario record holds.
+        @process_teardown = [] #: Array[Hash[Symbol, untyped]]
         @judged_early = {} #: Hash[String, Hash[Symbol, untyped]]
         @state_writes = {} #: Hash[String, untyped]
         @world_entries = []
@@ -170,7 +172,7 @@ module Nukadoko
           probe_version(environment)
           roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
           begin
-            world = @program.start(environment, world_dir, @project, tree: @world, lists: true)
+            world = @program.start(environment, world_dir, @project, tree: @world, lists: true, progress: @out)
           rescue Program::Unavailable => e
             # A base with no URL of its own runs no cell, and nothing failed.
             @scenarios.each { cells[_1] << cell([], environment, roles[_1], _1).merge(reason: "the #{@world} world has no URL to reach: #{e.message}") }
@@ -227,7 +229,9 @@ module Nukadoko
           end
         ensure
           @browser&.close
-          @process_fixtures&.teardown
+          errors = @process_fixtures&.teardown(runs && !$! && runs.values.flatten.all? { _1[:json][:status] == "passed" } ? "passed" : "failed") || []
+          FixtureCache.warnings(errors) { redact(_1) }.each { @out.puts _1 }
+          @process_teardown.concat(FixtureCache.findings(errors) { redact(_1) })
           world&.stop
           @world_entries << world_entry(environment, world, world_dir, (runs&.values || []).flatten) if world && @program.file?
           # Cells are folded once the world stopped, so a claim its stop judged
@@ -479,17 +483,20 @@ module Nukadoko
         @records = nil
         @process_fixtures = FixtureCache.new
         @browser = Browser.new(world.base_url, Nukadoko.config_options.fetch(:browser, {}), secrets: -> { secrets })
+        passed = true
         list.each do |scenario|
           execution = play(scenario, environment, roles[scenario], world)
+          passed &&= execution[:json][:status] == "passed"
           Marshal.dump([:execution, [scenario.uri, scenario.line], execution, @out.take], pipe)
         end
         0
       rescue Exception => e # rubocop:disable Lint/RescueException
+        passed = false
         Marshal.dump([:line, "worker #{number} stopped: #{e.class}: #{e.message}"], pipe) rescue nil
         1
       ensure
         @browser&.close
-        @process_fixtures&.teardown
+        FixtureCache.warnings(@process_fixtures&.teardown(passed ? "passed" : "failed") || []) { redact(_1) }.each { $stderr.puts _1 }
         pipe.close
       end
 
@@ -625,7 +632,9 @@ module Nukadoko
           # difference it does not declare, or a row that did not happen.
           passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty? &&
                   intent_found.none? { _1[:severity] == "failed" },
-          **(@walk ? { walk: @walk.record } : {}) }
+          **(@walk ? { walk: @walk.record } : {}),
+          # Printed as they happened; a --json envelope lists them instead.
+          teardown_warnings: scenarios.flat_map { FixtureCache.findings(_1[:teardown_errors] || []) { |text| text } } + @process_teardown }
       end
 
       # The cells a failure underneath made broke, and each tag that
@@ -867,7 +876,8 @@ module Nukadoko
         end
         browser = @browser.scenario_browser
         final = @browser.end_scenario(File.join(@dir, "scenarios", scenario_record_id))
-        @scenario_fixtures.teardown
+        teardown_errors = @scenario_fixtures.teardown(stopped || walk_stopped ? "failed" : "passed")
+        FixtureCache.warnings(teardown_errors) { redact(_1) }.each { @out.puts _1 }
         @scratch.remove_all
         execution = if stopped then stopped[0, 3].to_a.compact
                     elsif walk_stopped then [:stopped, walk_stopped[:line]]
@@ -883,6 +893,7 @@ module Nukadoko
                  started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
                  steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
         json[:evidence] = { dir: File.join("scenarios", scenario_record_id), screenshots: final } if final.any?
+        json[:teardown_errors] = redact(teardown_errors) if teardown_errors.any?
         json[:do] = again(scenario, environment) if (failed || status == "stopped") && role != "control"
         expects = Underneath.tags_of(scenario.tags)
         json[:expects] = expects if expects.any?
@@ -1146,7 +1157,7 @@ module Nukadoko
         world_dir = File.join(@dir, "world")
         FileUtils.mkdir_p(world_dir)
         # Its tables list is read only for a step that counts execution events.
-        world = @program.start(environment, world_dir, @project, tables: step.events.any?)
+        world = @program.start(environment, world_dir, @project, tables: step.events.any?, progress: $stderr)
         @world_tables = world.tables
         warn_do_lists_unread(world)
         @secrets = secrets.with(Secrets.new({ "WORLD_TOKEN" => world.token }))
@@ -1168,8 +1179,9 @@ module Nukadoko
         own = record&.dig(:events)
         Events.settle(@events, @events.producer(own[:trace_id]), Events.clock + (EVENTS_WAIT_MS / 1000.0)) if @events && own && !own[:whole]
         @browser&.close
-        @scenario_fixtures&.teardown
-        @process_fixtures&.teardown
+        outcome = record&.dig(:status) == "passed" ? "passed" : "failed"
+        errors = [*@scenario_fixtures&.teardown(outcome), *@process_fixtures&.teardown(outcome)]
+        FixtureCache.warnings(errors) { redact(_1) }.each { $stderr.puts _1 }
         @scratch&.remove_all
         world&.stop
         # The record is written after this stop, so it names its own late lines.

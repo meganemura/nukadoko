@@ -116,14 +116,25 @@ module Nukadoko
       end
       steps = Nukadoko.load_steps(File.join(@project, "features", "steps"))
       problems = []
-      scenarios = Dir.chdir(@project) { Engine.load_features("features", problems: problems) }
+      # nuka check with targets reads those feature files alone, and
+      # computes no notes: a note is a fact about the whole project.
+      targets = @command == "check" ? @rest : []
+      begin
+        paths = targets.empty? ? "features" : check_targets(targets)
+      rescue Engine::Refusal => e
+        return refuse(e)
+      end
+      scenarios = Dir.chdir(@project) { Engine.load_features(paths, problems: problems) }
       declared = (Nukadoko.program_options[:environments] || {}).values.flat_map { (_1[:conditions] || {}).keys.map(&:to_s) }
       # condition-unmet is judged for the selection a run without --env
       # starts; a selection --env names is a choice of where to run.
       selected = (Engine::Program.new(Nukadoko.program_options).environments if Array(@options["--env"]).empty?) rescue nil
-      check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")), full: @command == "check",
+      check = Engine::Check.new(steps, scenarios, features: Dir.exist?(File.join(@project, "features")), full: @command == "check" && targets.empty?,
                                 conditions: declared, environments: selected, problems: problems, config: env_findings, worlds: events_worlds)
       findings = check.findings.map { relative(_1).to_h }
+      # steps and describe print what they could read and name the step
+      # files they could not, never the rest of what check reports.
+      findings = findings.select { DEFINITION_CODES.include?(_1[:code]) } if %w[steps describe].include?(@command)
       case @command
       when "check" then checked(check, findings)
       when "sig"
@@ -322,7 +333,8 @@ module Nukadoko
                                repeat: repeat, concurrency: concurrency, order: order, records: records, walk: @walk,
                                rerun: { targets: @rest, tags: @options["--tag"].flat_map { ["--tag", _1] }, whole_files: selection.whole_files }).call
       passed = result.delete(:passed)
-      findings += result.delete(:failures)
+      teardown = result.delete(:teardown_warnings)
+      findings += (@json ? teardown : []) + result.delete(:failures)
       started = result.slice(:run_id, :run_dir, :started_at, :finished_at, :commit, :environments, :worlds)
       rest = result.except(*started.keys)
       envelope = { **head("run", passed ? "passed" : "failed", findings), **started, selection: selection.selection, tag_selection: selection.tag_selection,
@@ -471,7 +483,9 @@ module Nukadoko
       args = given.merge(args.reject { |key, _| given.key?(key) })
       given.each_key { origins[_1] = "command_line:#{_1}" }
       program = Engine::Program.new(Nukadoko.program_options)
-      environment = program.environments(@options["--env"].last(1)).first
+      # Without --env, nuka do runs in the environment named default,
+      # whatever a run would start.
+      environment = program.environments(@options["--env"].last(1).then { _1.empty? ? ["default"] : _1 }).first
       if step.mutating? && program.policy(environment.name) == "read-only"
         return refuse(Engine::Refusal.new("read-only-environment", %(Step "#{step.step_name}" mutates state but environment "#{environment.name}" has policy "read-only")))
       end
@@ -675,9 +689,35 @@ module Nukadoko
       0
     end
 
+    # What makes a step file's definition unreadable, as check names it.
+    DEFINITION_CODES = %w[step-file-import-failed duplicate-capture-key invalid-capture-key unknown-parameter-type unnamed-capture unterminated-capture].freeze
+
     # `--fail-on` codes, repeated or comma-separated, each once.
     #: () -> Array[String]
     def fail_on = @options["--fail-on"].flat_map { _1.split(",") }.map(&:strip).reject(&:empty?).uniq
+
+    # The feature files `nuka check <targets>` reads, relative to the
+    # project: a file, or each feature file under a directory. A target
+    # with a `:line` is refused, since check analyzes whole files.
+    #: (Array[String]) -> Array[String]
+    def check_targets(targets)
+      targets.flat_map do |target|
+        absolute = File.expand_path(target, @project)
+        relative = absolute.delete_prefix("#{File.expand_path(@project)}/")
+        shown = relative.start_with?("/") ? absolute : relative
+        unless File.exist?(absolute)
+          line = shown.match(/\A(.+):(\d+)\z/)
+          if line && File.exist?(File.expand_path(line[1], @project))
+            raise Engine::Refusal.new("line-not-supported", "nuka check: #{line[1]}:#{line[2]}: :line is not supported; check analyzes the whole file, not one scenario",
+                                      run: "nuka check #{Engine::Selection.shell_word(line[1])}")
+          end
+          raise Engine::Refusal.new("target-not-found", "nuka check: feature file not found: #{shown}")
+        end
+        next [shown] unless File.directory?(absolute)
+
+        Dir.glob("**/*.feature", base: absolute).sort.map { File.join(shown, _1) }
+      end.uniq
+    end
 
     # A `--fail-on` gate that could never fire is refused before anything
     # is read: a code the check never reports (unknown, or a run or refusal
@@ -1038,8 +1078,17 @@ module Nukadoko
     def finish(command, passed, findings:, verdict: passed ? "passed" : "failed", exit_code: passed ? 0 : 1, **rest)
       # What a walk that stops here ends with.
       @stopped_with = findings
-      emit({ **head(command, verdict, findings), **rest }, findings, command)
+      # A refusal is not the command's output: the TypeScript engine writes
+      # it to stderr, where a shell that keeps stdout for a result leaves it.
+      emit({ **head(command, verdict, findings), **rest }, findings, command, io: verdict == "refused" ? $stderr : @out)
       exit_code
+    end
+
+    # A finding is one line and its fix and do one line each, so a reader
+    # that splits on newlines and tabs gets the fields back.
+    #: (untyped) -> String
+    def one_line(text)
+      text.to_s.gsub(/\s*[\r\n  ]\s*/, " ").tr("\t", " ")
     end
 
     #: (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void
@@ -1048,9 +1097,9 @@ module Nukadoko
         @out.puts JSON.pretty_generate(envelope)
       else
         findings.each do |f|
-          io.puts [f[:severity], f[:code], Engine::Summary.where_of(f), f[:message]].join("\t")
-          io.puts "  fix: #{f[:fix]}" if f[:fix]
-          io.puts "  do: #{f[:do]}" if f[:do]
+          io.puts [f[:severity], f[:code], one_line(Engine::Summary.where_of(f)), one_line(f[:message])].join("\t")
+          io.puts "  fix: #{one_line(f[:fix])}" if f[:fix]
+          io.puts "  do: #{one_line(f[:do])}" if f[:do]
         end
         io.puts "ok: no issues found" if command == "check" && findings.empty?
       end

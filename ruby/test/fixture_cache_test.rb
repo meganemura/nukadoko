@@ -16,14 +16,23 @@ class FixtureCacheTest < Minitest::Test
     assert_equal ["up a", "up b", "down b", "down a"], log
   end
 
-  def test_every_teardown_runs_when_one_raises
+  def test_every_teardown_runs_and_each_error_is_returned
     log = []
     cache = Nukadoko::Engine::FixtureCache.new
     cache.build(fixture(:a, log), {})
     cache.build(Nukadoko::Fixture.new(:bad, :scenario, ->(use) { use.(1); raise "no" }), {})
-    error = assert_raises(RuntimeError) { cache.teardown }
-    assert_equal "no", error.message
+    assert_equal [{ fixture: "bad", message: "no" }], cache.teardown
     assert_equal ["up a", "down a"], log
+  end
+
+  def test_use_returns_how_the_scope_ended
+    seen = []
+    cache = Nukadoko::Engine::FixtureCache.new
+    cache.build(Nukadoko::Fixture.new(:a, :scenario, ->(use) { seen << use.(1) }), {})
+    cache.teardown("passed")
+    cache.build(Nukadoko::Fixture.new(:a, :scenario, ->(use) { seen << use.(1) }), {})
+    cache.teardown
+    assert_equal %w[passed failed], seen
   end
 
   def test_a_fixture_that_never_calls_use_is_refused

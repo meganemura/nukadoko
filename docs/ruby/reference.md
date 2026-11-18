@@ -170,7 +170,11 @@ end
 `use` with the value, and what follows is its teardown. A keyword
 argument names a fixture it needs, and a fixture named like a builtin
 replaces it for every step. `scope: :process` keeps one value for the
-whole run of an environment:
+whole run of an environment. `use` returns how the scope ended,
+`"passed"` or `"failed"`, so a teardown can keep what a failure left. A
+teardown that raises is a `fixture-teardown-failed` warning, and the
+scenario keeps its status; the scenario record keeps the error in
+`teardown_errors`:
 
 ```ruby
 Nukadoko.fixture(:page) do |use, page:|
@@ -253,8 +257,6 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- What a fixture's `use` returns: the TypeScript engine gives back the
-  scenario's outcome, so a teardown can keep what a failure left.
 - `measureMcp`, which records the MCP calls a client makes.
 - The two doors that bring an existing suite in, from cucumber-js and from
   Playwright Test. Both are JavaScript suites, so they are the TypeScript

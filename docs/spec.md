@@ -1131,7 +1131,14 @@ For `process` scope, setup cannot know the outcome of the run.
 Therefore, the fixture function does not receive the outcome as a second argument.
 Instead, `use()` returns the outcome:
 
-<!-- engine: typescript -->
+```ruby
+Nukadoko.fixture(:tenant) do |use, request:|
+  t = create_tenant(request)
+  outcome = use.(t)                      # "passed" | "failed"
+  destroy_tenant(request, t) if outcome == "passed"
+end
+```
+
 ```ts
 tenant: async ({ request }, use) => {
   const t = await createTenant(request);

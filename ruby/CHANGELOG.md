@@ -8,6 +8,11 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Changed
 
+- A refusal is written to stderr in text mode, and a finding's message,
+  fix, and do are each folded onto one line, as in the TypeScript engine.
+- `nuka steps` and `nuka describe` report only the findings about the step
+  definitions, and `nuka do` without `--env` runs in the environment named
+  `default`, as in the TypeScript engine.
 - **Breaking.** The program's `serve.command` no longer goes through a
   shell: a String is split on whitespace, as in the TypeScript engine, and
   an Array is the words as written. A command that used the shell (`&&`,
@@ -197,6 +202,20 @@ Each release's notes come from the section below whose heading starts with `## [
   (console errors, page errors, failed requests) and `http_omitted`, and
   the page's requests in http.jsonl are its documents, fetches, and
   XMLHttpRequests with their status. The same as the TypeScript engine.
+
+- A fixture's `use` returns how its scope ended, `"passed"` or
+  `"failed"`, so a teardown can keep what a failure left. A teardown that
+  raises no longer stops the run: it is a `fixture-teardown-failed`
+  warning on stderr (in the envelope's findings under `--json`), the
+  scenario keeps its status, and the scenario's record keeps the error in
+  `teardown_errors`. The same as the TypeScript engine.
+- `nuka check <targets>` checks only the files and directories named, and
+  refuses a `file:line` (`line-not-supported`) or a path that does not
+  exist (`target-not-found`). The same as the TypeScript engine.
+- A world prints its progress on stderr as it starts: a line as each of
+  build, prepare, serve, and setup starts, and one with each phase's time
+  and the path of `program.log` once it is ready. The same as the
+  TypeScript engine.
 
 ## [0.6.0] - 2026-11-17
 

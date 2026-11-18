@@ -215,9 +215,12 @@ export function redactString(input: string, secrets: SecretSet): string {
 
 /** The stderr warning `nuka do` and `nuka run` share for a
  * fixture teardown that failed. The message is the fixture's own text, so it
- * is redacted here, once. No trailing newline: the caller frames the line. */
+ * is redacted here, once. No trailing newline: the caller frames the line.
+ * The message is folded onto that one line: the warning sink makes a finding
+ * of each line it is given, so a second line of the fixture's text would read
+ * as a second warning. The record keeps the text as it was. */
 export function fixtureTeardownWarning(fixture: string, message: string, secrets: SecretSet): string {
-  return `Warning: fixture "${fixture}" teardown failed: ${redactString(message, secrets)}`;
+  return `Warning: fixture "${fixture}" teardown failed: ${redactString(message, secrets).replace(/\s*[\r\n\u2028\u2029]\s*/g, " ")}`;
 }
 
 /** The same for a failed version probe, whose reason can quote a request

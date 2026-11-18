@@ -287,11 +287,17 @@ module Nukadoko
       # `lists` reads the program's routes and flags lists in head's worlds,
       # as `nuka run` does; `tables` reads its tables list in a world of any
       # tree, which `nuka do` leaves out when its step reads no events.
-      #: (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool) -> World
-      def start(environment, dir, project, tree: "head", lists: false, tables: true)
+      # `progress` gets one line per phase as it starts, and one when the
+      # world is ready, redacted, since a `{token}` can be in a command.
+      #: (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool, ?progress: untyped) -> World
+      def start(environment, dir, project, tree: "head", lists: false, tables: true, progress: nil)
         recipe = self.recipe(environment)
         reach = recipe.reach
         token = SecureRandom.hex(16)
+        announce = lambda do |text|
+          line = "world #{tree == "head" ? environment.name : "#{environment.name} (#{tree})"}: #{text}"
+          progress&.puts Secrets.new({ "WORLD_TOKEN" => token }).redact(line).gsub("#{project}/", "")
+        end
         prefix = Trace.new_prefix
         log_path = File.join(dir, "program.log")
         world = World.new(base_url: nil, pid: nil, log: nil, env: {}, trace_prefix: prefix, log_path: nil, commands: [], timings: {}, token: token,
@@ -315,7 +321,7 @@ module Nukadoko
             Program.run_to_end(phase, argv, timeout_ms, env, project, open_log.())
           end
 
-          built = build(recipe, project, environment.name, open_log, run_command)
+          built = build(recipe, project, environment.name, open_log, run_command, announce)
           world.timings[:build_ms] = built if built
           place = SetupWorld.new(name: environment.name, root: project, dir: dir, tree: tree, url: nil, port: nil, env: {})
           port = nil #: Integer?
@@ -342,7 +348,9 @@ module Nukadoko
 
           unless recipe.prepare.empty?
             started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-            recipe.prepare.each { run_command.("prepare", _1[:command].map { |word| fill.(word) }, _1[:timeout_ms], env) }
+            prepares = recipe.prepare.map { [_1[:command].map { |word| fill.(word) }, _1[:timeout_ms]] }
+            announce.("prepare started: #{prepares.map { |argv, _| Program.display(argv) }.join("; ")}")
+            prepares.each { |argv, timeout_ms| run_command.("prepare", argv, timeout_ms, env) }
             world.timings[:prepare_ms] = Request.since(started)
           end
 
@@ -357,6 +365,7 @@ module Nukadoko
             out = open_log.()
             out.puts "$ #{Program.display(argv)}"
             started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            announce.("serve started: #{Program.display(argv)}, waiting for #{URI.join(url.to_s, serve[:ready].to_s)}")
             begin
               pid = Process.spawn(env, [argv.first, argv.first], *argv.drop(1), out: out, err: out, pgroup: true, chdir: project)
             rescue SystemCallError => e
@@ -369,6 +378,7 @@ module Nukadoko
 
           if (setup = recipe.setup)
             started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            announce.("setup started")
             open_log.().puts "# setup"
             within("setup", setup[:timeout_ms]) do
               setup[:run].call(SetupWorld.new(name: environment.name, root: project, dir: dir, tree: tree, url: url, port: port, env: env.dup))
@@ -388,6 +398,7 @@ module Nukadoko
             started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
             places = {} #: Hash[String, Array[Hash[Symbol, untyped]]]
             listed = {} #: Hash[String, Hash[Symbol, untyped]]
+            announce.("lists started: #{wanted.map { |list| Program.display(list[:command].map { fill.(_1) }) }.join("; ")}")
             wanted.each do |list|
               list_argv = list[:command].map { fill.(_1) }
               world.commands << { phase: "lists", argv: list_argv }
@@ -407,6 +418,11 @@ module Nukadoko
                      else Events::NO_MARKED_TABLES
                      end
             world = world.with(places: places, listed: listed, tables: marked)
+          end
+          if world.commands.any? || recipe.setup
+            phases = %w[build prepare serve setup lists].filter_map { |phase| (ms = world.timings[:"#{phase}_ms"]) && format("%s %.1fs", phase, ms / 1000.0) }
+            log_shown = world.log_path && "  (log #{world.log_path.delete_prefix("#{project}/")})"
+            announce.("#{[*phases, *url].join(", ")}#{log_shown}")
           end
           world
         rescue Unavailable
@@ -583,8 +599,8 @@ module Nukadoko
 
       # The tree's build, once per run: a world whose build already ran for
       # another world waits on nothing and notes it in its log.
-      #: (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void) -> Integer?
-      def build(recipe, project, name, open_log, run_command)
+      #: (Recipe, String, String, ^() -> File, ^(String, Array[String], Integer, Hash[String, String]) -> void, ?^(String) -> void) -> Integer?
+      def build(recipe, project, name, open_log, run_command, announce = ->(_) {})
         return if recipe.build.empty?
 
         commands = recipe.build.map { |entry| [entry[:command].map { Program.filled(_1, { "root" => project }, {}) }, entry[:timeout_ms]] }
@@ -596,6 +612,7 @@ module Nukadoko
           return
         end
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        announce.("build started: #{commands.map { |argv, _| Program.display(argv) }.join("; ")}")
         begin
           commands.each { |argv, timeout_ms| run_command.("build", argv, timeout_ms, ENV.to_h) }
         rescue StartError

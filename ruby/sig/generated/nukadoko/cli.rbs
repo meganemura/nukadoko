@@ -117,9 +117,18 @@ module Nukadoko
     # : () -> Integer
     def codes: () -> Integer
 
+    # What makes a step file's definition unreadable, as check names it.
+    DEFINITION_CODES: untyped
+
     # `--fail-on` codes, repeated or comma-separated, each once.
     # : () -> Array[String]
     def fail_on: () -> Array[String]
+
+    # The feature files `nuka check <targets>` reads, relative to the
+    # project: a file, or each feature file under a directory. A target
+    # with a `:line` is refused, since check analyzes whole files.
+    # : (Array[String]) -> Array[String]
+    def check_targets: (Array[String]) -> Array[String]
 
     # A `--fail-on` gate that could never fire is refused before anything
     # is read: a code the check never reports (unknown, or a run or refusal
@@ -216,6 +225,11 @@ module Nukadoko
 
     # : (String?, bool, findings: Array[untyped], ?verdict: String, ?exit_code: Integer, **untyped) -> Integer
     def finish: (String?, bool, findings: Array[untyped], ?verdict: String, ?exit_code: Integer, **untyped) -> Integer
+
+    # A finding is one line and its fix and do one line each, so a reader
+    # that splits on newlines and tabs gets the fields back.
+    # : (untyped) -> String
+    def one_line: (untyped) -> String
 
     # : (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void
     def emit: (Hash[Symbol, untyped], Array[untyped], String?, ?io: IO) -> void

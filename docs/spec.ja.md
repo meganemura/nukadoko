@@ -893,7 +893,14 @@ setup は、その fixture を名指した step の成否を知ることがで�
 したがって、fixture 関数は成否を第二引数として受け取りません。
 代わりに、`use()` が成否を返します。
 
-<!-- engine: typescript -->
+```ruby
+Nukadoko.fixture(:tenant) do |use, request:|
+  t = create_tenant(request)
+  outcome = use.(t)                      # "passed" | "failed"
+  destroy_tenant(request, t) if outcome == "passed"
+end
+```
+
 ```ts
 tenant: async ({ request }, use) => {
   const t = await createTenant(request);

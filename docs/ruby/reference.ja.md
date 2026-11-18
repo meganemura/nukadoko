@@ -147,6 +147,9 @@ config の `Nukadoko.fixture` で、プロジェクトの fixture を足しま�
 ブロックが値を渡して `use` を呼び、そのあとが後片付けです。
 必要な fixture はキーワード引数で挙げ、組み込みと同じ名前の fixture は、すべての step でその組み込みに置き換わります。
 `scope: :process` は、1 つの environment の run 全体で 1 つの値を使い続けます。
+`use` はスコープがどう終わったかを `"passed"` か `"failed"` で返すので、後片付けで失敗の跡を残せます。
+後片付けが例外を出すと `fixture-teardown-failed` の警告になり、scenario の結果は変わりません。
+scenario の記録は、そのエラーを `teardown_errors` に残します。
 
 ```ruby
 Nukadoko.fixture(:page) do |use, page:|
@@ -210,8 +213,6 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- fixture の `use` が返すもの。
-TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
 - MCP クライアントの呼び出しを記録する `measureMcp`。
 - 既存のスイートを取り込む 2 つの扉、cucumber-js からと Playwright Test から。
 どちらも JavaScript のスイートなので、TypeScript エンジンのものです([doors.ja.md](../typescript/doors.ja.md))。
