@@ -4,7 +4,7 @@ import { defineWorld, setWorldConstructor } from "nukadoko/compat";
 // Stage 1.5 of README.md: exactly one World key promoted so far --
 // `seededCount`, written by ../steps/seed-legacy-todos.ts -- validated on
 // every write from here on (a write that fails this schema fails the step
-// and is never recorded, docs/spec.md "Compat steps"). `note` stays an
+// and is never recorded, docs/typescript/doors.md "Compat steps"). `note` stays an
 // ordinary, undeclared bag field: the migration hasn't reached it yet, and
 // leaving it that way on purpose is the point of a mid-migration example
 // (docs/spec.md, migration-door rule: "transitional two-home states ...

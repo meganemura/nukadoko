@@ -23,7 +23,7 @@ import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.j
 // registering the exact same pattern text "at the same time" in both never
 // cross-contaminates either one's buffer.
 //
-// compat is the migration door (docs/spec.md "Compat steps"): a compat asset
+// compat is the migration door (docs/typescript/doors.md "Compat steps"): a compat asset
 // that works today must not stop working. This module's whole job is to
 // record what was called, faithfully, and nothing more — it does no
 // validation of its own beyond the shape of its own arguments; duplicate-

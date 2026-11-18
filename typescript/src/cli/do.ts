@@ -246,7 +246,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `nuka do` cannot name a compat
     // step by name — a compat step has no typed contract (no args/returns
     // schema, no validated result), so there is nothing for `nuka do` to
-    // validate or run in isolation (docs/spec.md "Compat steps (the migration door)").
+    // validate or run in isolation (docs/typescript/doors.md "Compat steps (the migration door)").
     // This is a setup failure, not an execution one: no step record is written.
     if (entry.kind === "compat") {
       return refuse(sinks, `Step "${name}" is a compat step and has no typed contract, so nuka do cannot run it alone`, "compat-step-not-runnable");

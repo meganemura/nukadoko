@@ -1,6 +1,6 @@
 Feature: a Playwright Test suite and nukadoko share one implementation
 
-  # Pins docs/spec.md's "The second door: a Playwright Test suite": sharing
+  # Pins docs/typescript/doors.md's "The second door: a Playwright Test suite": sharing
   # works by moving an operation into a plain function over Playwright's
   # own objects, importable from both a spec file and a typed step's `run`,
   # with the contract (zod schemas) living beside it in that same shared

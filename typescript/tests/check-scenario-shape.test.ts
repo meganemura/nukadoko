@@ -141,7 +141,7 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
       {
         code: "then-compat-step",
         message:
-          'Step "compat: the word was seen" is a compat step bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Claims")',
+          'Step "compat: the word was seen" is a compat step bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges; this is a static coverage gap, not something the tool caught at run time (docs/typescript/doors.md "Compat steps", docs/spec.md "Claims")',
         file: "features/shapes.feature",
         line: 37,
         step: "compat: the word was seen",

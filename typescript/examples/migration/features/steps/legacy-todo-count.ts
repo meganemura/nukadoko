@@ -3,7 +3,7 @@ import type { MigrationWorld } from "../support/world.ts";
 
 // RegExp pattern, not a cucumber-expression -- legacy glue is often
 // regex-heavy, and the migration door has to admit it unchanged
-// (docs/spec.md "Compat steps"). `(\d+)` is the built-in int parameter
+// (docs/typescript/doors.md "Compat steps"). `(\d+)` is the built-in int parameter
 // type, so the captured count arrives as a number, the same conversion
 // cucumber-js applies to that group.
 Then(/^the todo list has (\d+) todos?$/, async function (this: MigrationWorld, count: number) {

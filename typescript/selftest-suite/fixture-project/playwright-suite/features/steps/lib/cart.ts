@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "playwright";
 import { z } from "zod";
 
-// The shared unit docs/spec.md "The second door: a Playwright Test suite"
+// The shared unit docs/typescript/doors.md "The second door: a Playwright Test suite"
 // describes: plain functions over Playwright's own APIRequestContext, plus
 // the zod schemas both e2e/cart.spec.ts and the sibling typed steps
 // (open-cart.ts, add-item.ts) declare their contract with. Nothing here

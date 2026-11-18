@@ -928,7 +928,7 @@ export function describeContract(
       file,
       pattern: entry.compat.patternSource,
       message:
-        'compat steps have no type contract; promote this pattern to defineStep to add one (docs/spec.md "Compat steps (the migration door)")',
+        'compat steps have no type contract; promote this pattern to defineStep to add one (docs/typescript/doors.md "Compat steps (the migration door)")',
     };
   }
   const fromResult = fromSummary(entry.step.from, stepNames);

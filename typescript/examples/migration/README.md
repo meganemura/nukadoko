@@ -2,7 +2,7 @@
 
 This is a hands-on walkthrough, not just a fixture to read: it backs up
 [docs/spec.md](../../docs/spec.md)'s
-["Compat steps (the migration door)"](../../docs/spec.md#compat-steps-the-migration-door)
+["Compat steps (the migration door)"](../../docs/typescript/doors.md#compat-steps-the-migration-door)
 section with something real instead of prose -- the claim that adopting
 nukadoko is a gradual door, not an all-or-nothing rewrite. A smoke test,
 [`tests/examples-migration.test.ts`](../../tests/examples-migration.test.ts),

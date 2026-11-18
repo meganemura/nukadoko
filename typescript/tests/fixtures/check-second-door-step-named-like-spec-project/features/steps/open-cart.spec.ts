@@ -6,7 +6,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // step, "open-cart.spec", carrying the identical pattern open-cart.ts
 // already registers under "open-cart". features/cart.feature's own step
 // text matches both, which is the case `nuka check` reports as
-// ambiguous-step (docs/spec.md "The second door").
+// ambiguous-step (docs/typescript/doors.md "The second door").
 export default defineStep({
   pattern: "the cart is opened",
   description: "Open the cart",

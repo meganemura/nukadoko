@@ -51,7 +51,7 @@ import { eventsShapeOf, sentenceUnreadReason } from "../step/claims.js";
 // apply: compat cannot declare claims and has no args schema to check a
 // table/docstring against. Then-position compat instead gets its own soft
 // warning, since compat has no claims to read: a static coverage gap, not a
-// run-time finding (docs/spec.md "Compat steps", "Claims").
+// run-time finding (docs/typescript/doors.md "Compat steps", docs/spec.md "Claims").
 //
 // `StepTextMatcher`/`MatchResult` are exported so `./from-order.ts`'s own
 // scenario-order check can use the same per-text resolution as undefined-
@@ -350,7 +350,7 @@ export function checkFeatures(
           } else if (entry.kind === "compat") {
             warnings.push({
               code: "then-compat-step",
-              message: `Step "${stepName}" is a compat step bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Claims")`,
+              message: `Step "${stepName}" is a compat step bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges; this is a static coverage gap, not something the tool caught at run time (docs/typescript/doors.md "Compat steps", docs/spec.md "Claims")`,
               file: feature.relativePath,
               line,
               step: stepName,

@@ -528,10 +528,10 @@ describe("the extraction itself", () => {
   it("reports a quoted heading that the file it points at does not have", () => {
     expect(
       headingProblems(
-        sample("docs/spec.md", 'Compat steps (see "What compat\nsteps lack") and see "Compat steps" and "Records".\n'),
+        sample("docs/spec.md", 'Typed steps (see "What compat\nsteps lack") and see "Typed steps" and "Records".\n'),
       ),
     ).toEqual(['"What compat steps lack" is not a heading of docs/spec.md']);
-    expect(headingProblems(sample("docs/spec.ja.md", "「Compat steps」を参照。「成果物」を参照。\n"))).toEqual([]);
+    expect(headingProblems(sample("docs/spec.ja.md", "「型付き step」を参照。「成果物」を参照。\n"))).toEqual([]);
   });
 
   it("reports a command or a subcommand llms.txt leaves out", async () => {

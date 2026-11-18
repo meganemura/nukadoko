@@ -37,7 +37,7 @@ Status: still 0.x — the public API can change in any release until 1.0, and
 that is the whole 0.x range rather than something that ends at 0.1. M1
 (engine core) and M2 (compat) are implemented, both real-world
 gates have been run (typed-step drafting, and the compat audit reported
-under docs/spec.md "Compat steps"). Of M3+, the Allure emitter and the
+under docs/typescript/doors.md "Compat steps"). Of M3+, the Allure emitter and the
 cucumber-messages emitter, both agent skills, and compat gap detection in
 `nuka check` (the migration path's prerequisite) are all implemented,
 closing out M1-M5. Sign-off (M4) shipped as `nuka accept` and was later

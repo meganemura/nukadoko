@@ -180,7 +180,7 @@ lists the measured ones.
   no-op would be worse than refusing it: it would import cleanly, run, and
   leave a suite believing its parallel-assignment rule was in effect while
   nothing enforced it, exactly the quiet failure this door exists to refuse
-  (docs/spec.md "Compat steps (the migration door)"). Failing at the import
+  (docs/typescript/doors.md "Compat steps (the migration door)"). Failing at the import
   instead keeps that promise, the same way every other name on this list
   fails. `nuka run --concurrency <n>` is what hands those whole feature
   files to worker processes.

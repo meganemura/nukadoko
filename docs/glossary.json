@@ -1267,6 +1267,9 @@
     "docs/typescript/upgrading.ja.md": {
       "rule": "日本語化する。ただし版番号(0.0.5 など)や `Unreleased` のような版のラベルはそのまま残す"
     },
+    "docs/typescript/doors.ja.md": {
+      "rule": "docs/spec.ja.md から移した 2 つの節なので、その見出し(「Compat steps(移行の扉)」「第二の扉: Playwright Test のスイート」)と規則をそのまま引き継ぐ"
+    },
     "docs/ruby/reference.ja.md": {
       "rule": "日本語化する。ただし keep_english の語(Claims、Parts、Fixtures、Context)が主題の見出しは英語のまま。docs/typescript/reference.ja.md と同じ見出しを同じ順に並べる(site/scripts/check-engines.ts が確かめる)"
     },

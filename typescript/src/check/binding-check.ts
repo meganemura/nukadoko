@@ -45,7 +45,7 @@ export const CAPTURED_CLASS: ReadonlyMap<string, PrimitiveClass> = new Map([
 // detection *across* kind — a compat string pattern is built as a plain
 // cucumber-expression with **no named-capture requirement** (the migration
 // door's promise: compat prose is unmodified cucumber-expressions syntax,
-// docs/spec.md "Compat steps"), so it is never run through
+// docs/typescript/doors.md "Compat steps"), so it is never run through
 // `stripCaptureNames`. A compat RegExp pattern needs no "building" at all —
 // it is matched as-is — and is compared for duplicates only against other
 // RegExp patterns (a distinct text namespace from cucumber-expression

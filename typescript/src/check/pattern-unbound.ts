@@ -8,7 +8,7 @@ import type { StepOccurrences } from "./step-bindings.js";
 // resolves uniquely to it (src/check/step-bindings.ts's "bound": its header
 // says why ambiguous and undefined lines count neither way). Boundary:
 // compat steps are out of scope. An unused compat glue file mid-migration is
-// the expected, healthy state (docs/spec.md "Compat steps"), so this reads
+// the expected, healthy state (docs/typescript/doors.md "Compat steps"), so this reads
 // only `vocabulary`'s typed entries. Which steps are unbound comes from
 // src/check/unbound-patterned.ts, the list the `undefined-step` suffix reads
 // too, so both findings name the same steps on the same files.

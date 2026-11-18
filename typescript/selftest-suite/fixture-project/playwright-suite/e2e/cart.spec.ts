@@ -1,7 +1,7 @@
 import { expect, test } from "playwright/test";
 import { addItem, addItemReturns, openCart } from "../features/steps/lib/cart.js";
 
-// Outside featuresDir on purpose (docs/spec.md "The second door": a
+// Outside featuresDir on purpose (docs/typescript/doors.md "The second door": a
 // `.spec.ts` file under featuresDir would get imported by nukadoko's own
 // discovery walk, and Playwright's `test()` refuses to be called outside
 // its own runner). Imports the exact same helpers and schema the sibling

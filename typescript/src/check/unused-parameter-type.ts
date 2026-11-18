@@ -12,7 +12,7 @@ import type { CheckIssue } from "./types.js";
 // `stripCaptureNames` throws `UnnamedCaptureError` on any typed pattern
 // token without a `:`, so every token binding-check.ts accepts already has
 // one); a compat pattern's token is plain, unnamed cucumber-expressions
-// syntax, `{type}` with no key at all (docs/spec.md "Compat steps": compat
+// syntax, `{type}` with no key at all (docs/typescript/doors.md "Compat steps": compat
 // prose needs no named-capture syntax, src/check/binding-check.ts's header
 // on why compat is never run through `stripCaptureNames`). Those are two
 // different token grammars, so this cannot reuse `stripCaptureNames` (which

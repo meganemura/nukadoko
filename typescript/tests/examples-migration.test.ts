@@ -82,7 +82,7 @@ describe("examples/migration", () => {
       }
       // The one Before hook this suite keeps (features/steps/hooks.ts) ran
       // for every pickle, and reported ok -- no step record of its own, per
-      // docs/spec.md "Compat steps"/"Running".
+      // docs/typescript/doors.md "Compat steps", docs/spec.md "Running".
       expect(record.hooks).toEqual([{ type: "before", status: "passed" }]);
     }
 

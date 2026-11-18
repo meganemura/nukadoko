@@ -33,7 +33,7 @@ import {
 //      stripped (zod's parsed output, not the raw response); the compat
 //      step's own step record result is always null
 //   3. only the typed side runs standalone via `nuka do`; the compat step
-//      is refused by name (docs/spec.md "Compat steps")
+//      is refused by name (docs/typescript/doors.md "Compat steps")
 //
 // This is a different axis than selftest-suite/ (this repo's own root),
 // which compares "the same code under two runtimes" (the compat door) —

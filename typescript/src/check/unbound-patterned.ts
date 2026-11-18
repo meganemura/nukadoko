@@ -27,7 +27,7 @@ import { createStepTextMatcher } from "./feature-check.js";
 
 /** Typed steps with at least one pattern and no name in `boundNames`, in
  * vocabulary order. Compat steps are left out: an unused compat glue file
- * mid-migration is the expected state (docs/spec.md "Compat steps"). */
+ * mid-migration is the expected state (docs/typescript/doors.md "Compat steps"). */
 export function findUnboundPatternedEntries(
   vocabulary: Vocabulary,
   boundNames: ReadonlySet<string>,

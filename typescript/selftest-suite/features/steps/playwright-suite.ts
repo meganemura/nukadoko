@@ -7,7 +7,7 @@ import { After, Given, Then, When } from "./runtime.js";
 import { startServer, type RunningServer } from "../../fixture-project/playwright-suite/server.js";
 
 // Responsibility: selftest-suite/features/playwright-suite.feature's own
-// glue -- proves docs/spec.md's "The second door: a Playwright Test suite"
+// glue -- proves docs/typescript/doors.md's "The second door: a Playwright Test suite"
 // for real. selftest-suite/fixture-project/playwright-suite/ shares one
 // implementation (its own features/steps/lib/cart.ts) between a genuine
 // `playwright test` run and a genuine `nuka run`/`nuka do`, never a
