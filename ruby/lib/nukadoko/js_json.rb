@@ -31,7 +31,8 @@ module Nukadoko
       raise Error, failure if failure
 
       begin
-        JSON.parse(text)
+        # JSON.parse keeps the last of two values for one key, and so does this.
+        JSON.parse(text, allow_duplicate_key: true)
       rescue JSON::ParserError => e
         # JSON.parse keeps a lone surrogate escape (\ud800) in its string; a
         # Ruby string has no way to hold one, so the text is refused here.

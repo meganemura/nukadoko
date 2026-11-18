@@ -1,0 +1,121 @@
+# Generated from lib/nukadoko/events/tally.rb with RBS::Inline
+
+# What the lines of one trace say about the work they report, folded in
+# the order the file holds them: how many there are of each kind, whether
+# every request the step sent and every job it enqueued has reported its
+# end, and, for each selection a count names, how many lines match, what
+# they were (Counted), and how many may. Pure. Which lines are the
+# trace's, and reading and redacting them, are the caller's.
+#
+# The format writes an operation's line when the operation ends, after the
+# lines of everything inside it. So a request's line closes what the
+# request did, and a job's `perform` line closes that run of the job: the
+# work a trace reports is whole once every request the step stamped has
+# its line and every job enqueued in the trace has performed. A request's
+# line names the span the step put in its `traceparent`, so each one is
+# matched to the request that sent it; a line with a bare trace id stands
+# for one request. Lines of several processes are in write order, so the
+# counts per job are compared, never their order. A run_command process
+# is work no count bounds while it may still run, so a trace whose step
+# ran one is not whole until it closed with no process of its group left.
+#
+# A count never drops a line it cannot read as a match or a miss: a line
+# that may be any line is counted as one that may match, by its cause, and
+# so is a readable line no step owns in the step's window, when it could
+# match. A db line whose match depends on its commit state is kept until
+# the reading, since a later `tx` line of the trace decides it.
+#
+# Whether a db line's change persisted is decided from the trace's lines
+# alone, as the format states it: a line with `committed` is in that state
+# unless a `tx` on its parent chain rolled back, which makes it unknown;
+# otherwise the change persisted when every `tx` on its parent chain
+# committed and did not when one rolled back; anything else is unknown.
+module Nukadoko
+  module Engine
+    module Events
+      # Why a reading of a step's events may not hold everything its work
+      # did, in the order a record lists them.
+      GAP_WORDS: untyped
+
+      # Why a line may match a selection, as a count's `maybe` names it.
+      MAYBE_CAUSES: untyped
+
+      TABLE_HOLDS: untyped
+
+      # The tables of a world whose program names no tables list.
+      NO_MARKED_TABLES: Hash[Symbol, untyped]
+
+      # What `table` holds by `tables`, when it is marked; nil for a table
+      # that holds state, or when the list was not read.
+      # : (Hash[Symbol, untyped], untyped) -> String?
+      def self.mark_of: (Hash[Symbol, untyped], untyped) -> String?
+
+      # What `tables` says of a line a count of `selection` would count:
+      # "counted", a holding the count leaves out, or "unknown". Only a db
+      # selection that names no table leaves a line out.
+      # : (Hash[String, untyped], Line, Hash[Symbol, untyped]) -> String
+      def self.table_rule: (Hash[String, untyped], Line, Hash[Symbol, untyped]) -> String
+
+      # The gaps of a reading of a selection of `kind`: the trace's, and
+      # `kind-unreported` when the world's program reported no line of it.
+      # : (Array[Hash[Symbol, untyped]], String, KindsSeen) -> Array[Hash[Symbol, untyped]]
+      def self.reading_gaps: (Array[Hash[Symbol, untyped]], String, KindsSeen) -> Array[Hash[Symbol, untyped]]
+
+      # The kinds a world's program has reported so far.
+      class KindsSeen
+        # : () -> void
+        def initialize: () -> void
+
+        # : (Line) -> void
+        def note: (Line) -> void
+
+        # : (String) -> bool
+        def has?: (String) -> bool
+      end
+
+      # Whether a db line's change persisted, from the lines noted so far.
+      class CommitIndex
+        # : () -> void
+        def initialize: () -> void
+
+        # : (Line) -> void
+        def note: (Line) -> void
+
+        # "persisted", "not-persisted", or "unknown".
+        # : (Hash[String, untyped]) -> String
+        def state_of: (Hash[String, untyped]) -> String
+      end
+
+      # One trace's lines, folded in file order.
+      class Tally
+        # `inputs`: `spans` (the span ids of the requests the step stamped),
+        # `spans_not_kept`, `processes` ("none", "ended", or "unbounded"),
+        # `process_spans`, `mcp_spans`, `selections`, and `tables`.
+        # : (Hash[Symbol, untyped]) -> void
+        def initialize: (Hash[Symbol, untyped]) -> void
+
+        # A readable line whose trace is the tally's, in file order.
+        # : (Line) -> void
+        def owned: (Line) -> void
+
+        # An unreadable line whose text carries the tally's trace id.
+        # : () -> void
+        def damaged: () -> void
+
+        # A readable line no step owns, written in the step's window.
+        # : (Line) -> void
+        def unowned: (Line) -> void
+
+        # What the lines folded so far say, with whether the reader cut the
+        # lines it kept and whether the file was replaced under it.
+        # : (truncated: bool, replaced: bool) -> Hash[Symbol, untyped]
+        def reading: (truncated: bool, replaced: bool) -> Hash[Symbol, untyped]
+
+        private
+
+        # : (Hash[String, untyped], Integer) -> Hash[Symbol, untyped]
+        def decided: (Hash[String, untyped], Integer) -> Hash[Symbol, untyped]
+      end
+    end
+  end
+end

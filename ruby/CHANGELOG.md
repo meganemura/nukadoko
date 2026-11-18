@@ -45,9 +45,31 @@ Each release's notes come from the section below whose heading starts with `## [
 
 - A program whose `serve` names no `ready` path is ready once `/` answers
   2xx, as in the TypeScript engine. It crashed while it waited for the program.
+- A claim's json view reads a text that holds one key twice as
+  JavaScript's `JSON.parse` does, keeping the last value, instead of
+  refusing it as no JSON.
+- `nuka do` starts its world in `world/` beside the record, as the
+  TypeScript engine does, so its `program.log` and `{dir}` are there, not
+  in the record's own directory.
 
 ### Added
 
+- The program's `{events}` placeholder: a served world whose program
+  names it gets an empty file outside the run directory, made with mode
+  0600 in a directory of its own, and the program appends its execution
+  events there. Each step's lines, the ones whose `trace` holds the
+  step's trace id, are kept redacted in `events.jsonl` beside its record,
+  and its `observed.events` says what they add up to: the lines of each
+  kind, the lines that did not read, and whether the work the step sent
+  is whole (`whole`, `open`). Once the world stops, run.json's
+  `worlds[].events` counts the whole file, the world's redacted copy goes
+  beside `program.log`, and a step's lines that arrived after its record
+  go to `events-late.jsonl` beside it, named by the step's `events_late`
+  (by the record itself, and the `events-late` note, under `nuka do`).
+  `{events}` in a world at a `url`, or in a world with neither `serve` nor
+  `url`, is `program-placeholder-unfilled`, and every
+  `program-placeholder-unfilled` finding now names the edit for its own
+  field, as the TypeScript engine's does.
 - A claim step reads the files an earlier step's commands changed:
   `files written: { of: RunBuild, change: "added", under: "src" }` names
   the paths each `Nukadoko.run_command` of that step added, changed, or

@@ -1,0 +1,8 @@
+{
+  "serve": { "command": "node server.mjs {port} {events}", "ready": "/up" },
+  "env": { "EVENTS_FILE": "{events}", "SITE": "{url}" },
+  "environments": {
+    "default": {},
+    "remote": { "url": "http://localhost:9" }
+  }
+}

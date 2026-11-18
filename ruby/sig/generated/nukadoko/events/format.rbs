@@ -1,0 +1,163 @@
+# Generated from lib/nukadoko/events/format.rb with RBS::Inline
+
+# The execution events line format, version 1 (docs/execution-events.md),
+# as data: every kind and every field it defines, and the one function
+# that turns a line of text into what the line is. Pure: no I/O, no
+# secrets, no clock. Which step a line belongs to is decided from the trace
+# id this module reads and the world's prefix the caller passes
+# (`owner_of`); what the lines of one trace add up to is Tally's.
+#
+# A line is an event only when its kind's required fields hold values the
+# format allows. A line that breaks that is unreadable, with the reason,
+# and so is one that is not one JSON object, repeats a key in one object
+# (a parser keeps one of the two values, so a record would show one and
+# say nothing), holds an integer past 2^53 - 1 (the TypeScript engine's
+# parser rounds it, so an id would change silently there), or has no valid
+# `trace` or `kind`. An unreadable line has no owner: no trace id read
+# from it is trusted, so no step's events take data from it.
+module Nukadoko
+  module Engine
+    module Events
+      FORMAT_VERSION: ::Integer
+
+      DB_OPS: untyped
+
+      # The most primary keys one `ids` field holds.
+      IDS_CAP: ::Integer
+
+      SAFE: untyped
+
+      EXTENSION_PREFIX: ::String
+
+      # One field of a kind: its type, whether the format requires it,
+      # whether it may hold null, and the values a string field may hold.
+      class Field < Data
+        attr_reader type(): Symbol
+
+        attr_reader required(): bool
+
+        attr_reader nullable(): bool
+
+        attr_reader values(): Array[String]?
+
+        def self.new: (Symbol type, bool required, bool nullable, Array[String]? values) -> instance
+                    | (type: Symbol, required: bool, nullable: bool, values: Array[String]?) -> instance
+
+        def self.members: () -> [ :type, :required, :nullable, :values ]
+
+        def members: () -> [ :type, :required, :nullable, :values ]
+      end
+
+      # A Data block's methods are its own, but rbs-inline reads only a
+      # class body, so they are written in one.
+      class Field
+        # : (type: Symbol, required: bool, ?nullable: bool, ?values: Array[String]?) -> Field
+        def self.of: (type: Symbol, required: bool, ?nullable: bool, ?values: Array[String]?) -> Field
+      end
+
+      KINDS: Hash[String, Hash[String, Field]]
+
+      # What a line's `trace` field says: the trace id, in lowercase, and
+      # the span a whole `traceparent` names, nil for a bare trace id.
+      class TraceRef < Data
+        attr_reader trace_id(): String
+
+        attr_reader span(): String?
+
+        def self.new: (String trace_id, String? span) -> instance
+                    | (trace_id: String, span: String?) -> instance
+
+        def self.members: () -> [ :trace_id, :span ]
+
+        def members: () -> [ :trace_id, :span ]
+      end
+
+      # What one line is: an `event`; an `extension`, a kind the writer
+      # made up (`x_`), kept and read for nothing; an `undefined-kind`, a
+      # mistake or a later version's kind; an `unknown-version`, whose
+      # meaning is not known; or `unreadable`, with why.
+      class Line < Data
+        attr_reader state(): String
+
+        attr_reader trace(): TraceRef?
+
+        attr_reader kind(): String?
+
+        attr_reader object(): Hash[String, untyped]?
+
+        attr_reader why(): String?
+
+        def self.new: (String state, TraceRef? trace, String? kind, Hash[String, untyped]? object, String? why) -> instance
+                    | (state: String, trace: TraceRef?, kind: String?, object: Hash[String, untyped]?, why: String?) -> instance
+
+        def self.members: () -> [ :state, :trace, :kind, :object, :why ]
+
+        def members: () -> [ :state, :trace, :kind, :object, :why ]
+      end
+
+      # A Data block's methods are its own, but rbs-inline reads only a
+      # class body, so they are written in one.
+      class Line
+        # : (state: String, ?trace: TraceRef?, ?kind: String?, ?object: Hash[String, untyped]?, ?why: String?) -> Line
+        def self.of: (state: String, ?trace: TraceRef?, ?kind: String?, ?object: Hash[String, untyped]?, ?why: String?) -> Line
+
+        # : () -> bool
+        def readable?: () -> bool
+
+        # : () -> bool
+        def event?: () -> bool
+      end
+
+      TRACEPARENT: ::Regexp
+
+      BARE_TRACE_ID: ::Regexp
+
+      ALL_ZEROS: ::Regexp
+
+      # A W3C `traceparent` (any version but `ff`) or a bare 32-character
+      # trace id, in either case, with no id of all zeros; nil otherwise.
+      # : (untyped) -> TraceRef?
+      def self?.trace_ref_of: (untyped) -> TraceRef?
+
+      # The trace id of the step a line belongs to, in a world whose trace
+      # ids start with `prefix`, or nil: an unreadable line, or a trace the
+      # program made for a request nukadoko did not stamp.
+      # : (Line, String) -> String?
+      def self?.owner_of: (Line, String) -> String?
+
+      # The first key one object of `text` holds twice, or nil. `text` is
+      # JSON that parsed, so every string and bracket is whole.
+      # : (String) -> String?
+      def self?.repeated_key: (String) -> String?
+
+      # Whether `value` is one integer JavaScript holds exactly, as a whole
+      # float is in its one number type.
+      # : (untyped) -> bool
+      def self?.safe_integer?: (untyped) -> bool
+
+      # Why `value` does not fit `field`, or nil when it does.
+      # : (untyped, Field) -> String?
+      def self?.field_problem: (untyped, Field) -> String?
+
+      # An integer literal past 2^53 - 1 anywhere in the parsed value.
+      # : (untyped) -> bool
+      def self?.unsafe_integer?: (untyped) -> bool
+
+      # : (String) -> Line
+      def self?.unreadable: (String) -> Line
+
+      # Reads one line of a world's events file, without its line feed.
+      # : (String) -> Line
+      def self?.parse_line: (String) -> Line
+
+      # The flag a `flag` event reports, `{ name:, side:, gate: }` with the
+      # gate nil when the line names none as text; nil for any other line.
+      # : (Line) -> Hash[Symbol, untyped]?
+      def self?.flag_of: (Line) -> Hash[Symbol, untyped]?
+
+      # The request a `request` event reports, `{ method:, route:, status: }`.
+      # : (Line) -> Hash[Symbol, untyped]?
+      def self?.request_of: (Line) -> Hash[Symbol, untyped]?
+    end
+  end
+end

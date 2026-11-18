@@ -137,6 +137,7 @@ module Nukadoko
           end
           @secrets = secrets.with(Secrets.new({ "WORLD_TOKEN" => world.token }))
           @program_log = world.pid && world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
+          @events = world.events_path && Events::Reader.new(world.events_path, world.trace_prefix, -> { secrets })
           @base_urls[environment.name] = world.base_url
           runs = Hash.new { |h, k| h[k] = [] }
           ran = lambda do |scenario, execution|
@@ -173,7 +174,8 @@ module Nukadoko
           @process_fixtures&.teardown
           world&.stop
           @world_entries << world_entry(environment, world, world_dir, (runs&.values || []).flatten) if world && @program.file?
-          @browser = @process_fixtures = @program_log = nil
+          world&.remove_events
+          @browser = @process_fixtures = @program_log = @events = nil
         end
         [executions, cells]
       end
@@ -186,8 +188,8 @@ module Nukadoko
         entry = { name: environment.name, tree: @world, url: world.base_url, commands: redact(world.commands), timings: world.timings,
                   log: world.log_path && File.join("worlds", File.basename(world_dir), "program.log"), error: nil }
         return entry unless world.base_url
-        # A world at a URL has a log nukadoko does not read.
-        return entry.merge(program_log: nil) unless world.pid && world.log_path
+        # A world at a URL has a log and events nukadoko does not read.
+        return entry.merge(program_log: nil, events: nil) unless world.pid && world.log_path
 
         steps = executions.flat_map { _1[:json][:steps] || [] }.select { _1.dig(:observed, :program_log) }
         traced = steps.to_h { |step| [step[:observed][:program_log][:trace_id], [step[:observed][:program_log][:lines], File.join(@dir, step[:record])]] }
@@ -197,7 +199,25 @@ module Nukadoko
           step[:program_log_late] = late if late
         end
         sum = ->(key) { steps.sum { _1[:observed][:program_log][key] } }
-        entry.merge(program_log: { stamped: sum.(:stamped), lines: sum.(:lines), late: found[:late].values.sum { _1[:lines] }, tagged: found[:tagged] })
+        entry = entry.merge(program_log: { stamped: sum.(:stamped), lines: sum.(:lines), late: found[:late].values.sum { _1[:lines] }, tagged: found[:tagged] })
+        world.events_path ? entry.merge(events: world_events(world, world_dir, executions)) : entry
+      end
+
+      # The stopped world's events as run.json names them: its redacted
+      # copy beside program.log, and each step's lines that came after its
+      # record beside that record, which its run.json entry names.
+      #: (World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+      def world_events(world, world_dir, executions)
+        steps = executions.flat_map { _1[:json][:steps] || [] }.select { _1.dig(:observed, :events) }
+        traced = steps.to_h { |step| [step[:observed][:events][:trace_id], [step[:observed][:events][:lines], File.join(@dir, step[:record])]] } #: Hash[String, [Integer, String]]
+        copy = File.join(world_dir, Events::WORLD_FILE)
+        found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets }).collect(copy, traced)
+        steps.each do |step|
+          late = found[:late][step[:observed][:events][:trace_id]]
+          step[:events_late] = late if late
+        end
+        { file: found[:copied] ? File.join("worlds", File.basename(world_dir), Events::WORLD_FILE) : nil, lines: found[:lines], owned: found[:owned],
+          late: found[:late].values.sum { _1[:lines] }, unowned: found[:unowned], unreadable: found[:unreadable], undefined_kinds: found[:undefined_kinds] }
       end
 
       # Under --concurrency the files go to worker processes in the run's
@@ -670,7 +690,8 @@ module Nukadoko
         # run.json keeps the record's observed without file content, so it stays small.
         entry[:observed] = { processes: processes&.any? ? processes : nil, http: record[:http_count]&.positive? ? record[:http_count] : nil,
                              files: record[:files]&.map { _1.except(:content) }, unmeasured: [],
-                             **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}) }
+                             **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}),
+                             **(record.key?(:events) ? { events: record[:events] } : {}) }
         # A refused line never began, so its error has no kind, as the
         # TypeScript engine writes it.
         entry[:error] = record[:refused] ? { kind: nil, message: record[:error] } : { kind: record[:error_kind], message: record[:error] }.compact if record[:error]
@@ -780,9 +801,13 @@ module Nukadoko
         read_env(environment)
         @environment = environment
         probe_version(environment)
-        world = @program.start(environment, @dir, @project)
+        # The world's own files go in a directory beside the record's.
+        world_dir = File.join(@dir, "world")
+        FileUtils.mkdir_p(world_dir)
+        world = @program.start(environment, world_dir, @project)
         @secrets = secrets.with(Secrets.new({ "WORLD_TOKEN" => world.token }))
         @program_log = world.pid && world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
+        @events = world.events_path && Events::Reader.new(world.events_path, world.trace_prefix, -> { secrets })
         @scratch = Scratch.new(@project)
         @scenario_fixtures = FixtureCache.new
         @process_fixtures = FixtureCache.new
@@ -790,13 +815,22 @@ module Nukadoko
         record = { step_record_id: @id, step: step.step_name, started_at: now }
         version = @target_versions[environment.name]
         execute(step, record, @dir, world, then_line: true, at_line: nil, results: [], origins: origins) { [args, texts] }
-        version ? record.merge(target_version: version) : record
+        record[:target_version] = version if version
+        record
       ensure
         @browser&.close
         @scenario_fixtures&.teardown
         @process_fixtures&.teardown
         @scratch&.remove_all
         world&.stop
+        # The record is written after this stop, so it names its own late lines.
+        if world&.events_path && record&.dig(:events)
+          found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets })
+                                .collect(File.join(@dir, "world", Events::WORLD_FILE), { record[:events][:trace_id] => [record[:events][:lines], @dir] })
+          late = found[:late].values.first
+          record[:events_late] = late if late
+        end
+        world&.remove_events
       end
 
       # What `nuka do` writes its stdout and its record through.
@@ -881,8 +915,15 @@ module Nukadoko
           finish&.call
           log.concat(@request_log.log) if @request_log
           @request_log = nil
-          # A world at a URL has a log nukadoko does not read.
-          record[:program_log] = @program_log&.slice(dir, boundary) if boundary
+          if boundary
+            # Both slices wait at once, so a step that stamped a request
+            # waits for the slower of the two, not for both in turn.
+            events = @events && Thread.new { @events.slice(dir, boundary, processes) }
+            # A world at a URL has a log and events nukadoko does not read.
+            record[:program_log] = @program_log&.slice(dir, boundary)
+            record[:events] = events.value if events
+            record[:events] = nil if !events && !world.pid
+          end
           record[:finished_at] = Time.now.utc.iso8601(3)
           # Each process's output is a file of the step's own, named by its number.
           processes.each.with_index(1) do |process, n|

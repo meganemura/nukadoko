@@ -6,8 +6,9 @@ What the program is, how a world starts it, and every field are in
 ## The program
 
 `program:` is a lambda that returns how the program starts. The gem reads
-every field `../program.md` names except `lists` and `{events}`, which it
-refuses by name, and refuses any key it does not know. A command never
+every field `../program.md` names except `lists`, which it refuses by
+name, and refuses any key it does not know. A claim on a count of the
+`{events}` lines is not in the gem yet. A command never
 goes through a shell unless it names one (`["sh", "-c", "..."]`).
 `setup`, a `url` that is not a fixed URL, and an environment's `version`
 are lambdas; `setup` and a `url` lambda receive the world (`name`,

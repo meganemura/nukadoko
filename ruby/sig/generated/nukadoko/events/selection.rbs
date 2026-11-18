@@ -1,0 +1,100 @@
+# Generated from lib/nukadoko/events/selection.rb with RBS::Inline
+
+# What a count over execution events selects (one kind, and for each field
+# it names, the values a line must hold), the refusal of a selection the
+# format cannot judge, and what one line says about one selection. Pure.
+# Which lines are a trace's, and whether a line's change persisted, are
+# the caller's (Tally, CommitIndex).
+#
+# A field a selection names is one whose value is one string, one number,
+# or true or false: lists (`ids`, `calls`) are not what a count selects by.
+# `committed` is not a field of the line to compare but the commit state
+# the format defines, so it has a rule of its own: a db selection whose
+# `op` may be a write states it, since a write that was rolled back would
+# otherwise count as written, and one that selects reads alone leaves it
+# out, since a read persists nothing.
+#
+# A line answers a selection with `yes`, `no`, or why it may match: a kind
+# the format does not define, a later version, a selected field that is
+# missing or invalid, or a commit state still to be decided. A definite
+# `no` on any field wins over an unknown one. A writer's own kind (`x_`)
+# is never one of the kinds a selection names.
+#
+# A selection here is a Hash with String keys, as a line's object is: the
+# step's declaration is read into one with Selection.normalize.
+module Nukadoko
+  module Engine
+    module Events
+      module Selection
+        # Every write whose change persisted, as "nothing was written"
+        # selects them.
+        PERSISTED_WRITES: untyped
+
+        VALUE_WORDS: untyped
+
+        # A declaration with its keys as strings, a value from the sentence
+        # (`{ sentence: "table" }`) kept as `{ "sentence" => "table" }`.
+        # : (untyped) -> untyped
+        def self?.normalize: (untyped) -> untyped
+
+        # : (String, Field) -> bool
+        def self?.selectable?: (String, Field) -> bool
+
+        # : (untyped, Field) -> bool
+        def self?.fits?: (untyped, Field) -> bool
+
+        # : (Field) -> String
+        def self?.value_words: (Field) -> String
+
+        # : (untyped) -> bool
+        def self?.sentence_value?: (untyped) -> bool
+
+        # : (untyped) -> Array[untyped]
+        def self?.values_of: (untyped) -> Array[untyped]
+
+        # : (untyped) -> bool
+        def self?.reads_alone?: (untyped) -> bool
+
+        # : (untyped) -> String
+        def self?.shown: (untyped) -> String
+
+        # Why `value` is not a selection the format can judge, one message
+        # per problem, each starting with `where`. Empty when it is one.
+        # : (untyped, String) -> Array[String]
+        def self?.problems: (untyped, String) -> Array[String]
+
+        # Each value a declared selection takes from the sentence: the field
+        # that names it and the capture's name.
+        # : (untyped) -> Array[Hash[Symbol, String]]
+        def self?.sentence_values: (untyped) -> Array[Hash[Symbol, String]]
+
+        # The selection with each value from the sentence filled in by
+        # `capture`, or why it is not one the format can judge.
+        # : (Hash[String, untyped], ^(String) -> untyped, String) -> Hash[Symbol, untyped]
+        def self?.resolve: (Hash[String, untyped], ^(String) -> untyped, String) -> Hash[Symbol, untyped]
+
+        # Whether a line's value may be one of the wanted values although
+        # it equals none: `table: "unknown"` names a table the writer could
+        # not tell, and `op: "other"` may be an upsert.
+        # : (String, String, untyped, Array[untyped]) -> bool
+        def self?.undecided?: (String, String, untyped, Array[untyped]) -> bool
+
+        # What `line` says about `selection`: "yes", "no", "commit-state",
+        # or a cause a count's `maybe` counts by.
+        # : (Hash[String, untyped], Line) -> String
+        def self?.match: (Hash[String, untyped], Line) -> String
+
+        # A value as a label names it: a word of letters, digits, and
+        # `_:/.@-` as it is, any other value as JSON, and a value from the
+        # sentence as `sentence:<capture>`.
+        # : (untyped) -> String
+        def self?.value_text: (untyped) -> String
+
+        # The selection in the words a record's label and a summary use:
+        # `db where op in [insert, update, delete, other], committed true`.
+        # : (Hash[String, untyped]) -> String
+        def self?.describe: (Hash[String, untyped]) -> String
+      end
+    end
+  end
+end

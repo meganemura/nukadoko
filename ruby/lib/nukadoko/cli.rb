@@ -470,6 +470,11 @@ module Nukadoko
       run = Engine::Run.new(@project, check.usable, [], Nukadoko.program_options, environments: [environment], dir: dir, out: $stderr)
       texts = given.to_h { |key, value| [key, JSON.generate(value)] }
       record = run.do_step(step, args, origins, texts, environment, files)
+      if (late = record[:events_late])
+        where = late[:file] ? "see #{File.join(".nukadoko", "do", id, late[:file])}" : "they could not be written beside the record"
+        message = "world #{environment.name}: #{late[:lines]} line(s) of the program's execution events carry the step's trace id and arrived after the step ended; #{where}"
+        $stderr.puts ["note", "events-late", "-", message].join("\t"), "  fix: #{Engine::Codes.fix("events-late")}"
+      end
       written = run.redact(do_record(record, id, step, given, origins, used, environment))
       File.write(File.join(dir, "record.json"), JSON.pretty_generate(written))
       $stdout.puts JSON.pretty_generate(written)
@@ -562,8 +567,9 @@ module Nukadoko
         scenario_record_id: nil, run_id: nil, started_at: record[:started_at], finished_at: record[:finished_at],
         evidence: { dir: File.join(".nukadoko", "do", id), screenshots: [] },
         observed: { processes: processes&.any? ? processes : nil,
-                    http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [] },
-        mutates: record[:mutates], **(used.any? ? { used: used } : {}),
+                    http: record[:http_count]&.positive? ? record[:http_count] : nil, files: nil, unmeasured: [],
+                    **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}), **(record.key?(:events) ? { events: record[:events] } : {}) },
+        mutates: record[:mutates], **(used.any? ? { used: used } : {}), **(record[:events_late] ? { events_late: record[:events_late] } : {}),
         **(record[:claim_records] ? { claims: record[:claim_records], observation: record[:observation] || "observed", attempts: 1 } : {}) }
     end
 
@@ -907,9 +913,10 @@ module Nukadoko
         []
       end
       environments.flat_map do |environment|
-        Engine::Program.placeholder_gaps(program.recipe(environment)).map do |gap|
-          Engine::Finding.new("error", "program-placeholder-unfilled", Engine::CONFIG, nil, nil, "world #{environment.name}: #{gap}",
-                              Engine::Codes.fix("program-placeholder-unfilled"), nil)
+        Engine::Program.placeholder_gap_list(program.recipe(environment)).map do |gap|
+          text = "#{gap[:where]} names {#{gap[:name]}}, which has no value here: #{gap[:why]}"
+          fix = Engine::Program.placeholder_gap_fix(gap, environment.name, Engine::CONFIG, Nukadoko.program_options[:environments] || {})
+          Engine::Finding.new("error", "program-placeholder-unfilled", Engine::CONFIG, nil, nil, "world #{environment.name}: #{text}", fix, nil)
         end
       end
     end

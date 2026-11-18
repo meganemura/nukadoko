@@ -227,6 +227,13 @@ every record as `target_version`. A placeholder a world has no value for
 (`{port}` in a world with neither `serve` nor `url`, anything but
 `{root}` in `build`) is `program-placeholder-unfilled` in `nuka check`.
 
+A served world whose program names `{events}` gets an empty file outside
+the run directory, which the program appends its execution events to.
+Each step's lines are kept beside its record and summed up in its
+`observed.events`, and the world's redacted copy goes beside
+`program.log` once the world stops ([spec](../spec.md), "Execution
+events").
+
 ## Types and tooling
 
 `nuka sig` writes `sig/nukadoko/steps.rbs`, the RBS of each step's args
@@ -238,9 +245,9 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- In the program: `lists`, and the `{events}` placeholder with the
-  execution events it reads.
-- On a step: `events` (what the program did).
+- In the program: `lists`.
+- On a step: `events`, a claim on a count of execution events, and
+  `path`, the flags and requests among a step's events.
 - What a fixture's `use` returns: the TypeScript engine gives back the
   scenario's outcome, so a teardown can keep what a failure left.
 - `measureMcp`, which records the MCP calls a client makes.

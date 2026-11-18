@@ -1,0 +1,160 @@
+# Generated from lib/nukadoko/events/reader.rb with RBS::Inline
+
+# The execution events a served world's program appends to the file
+# `{events}` names (docs/execution-events.md, docs/spec.md "Execution
+# events"): each step's slice of them, written beside its record when the
+# step ends, and, once the world has stopped, the world's redacted copy
+# and each step's lines that arrived after its record. Boundary: owns no
+# file (the program writes it, Program makes and removes it), and decides
+# nothing a line says (Events, Selection, Tally do).
+#
+# A line belongs to the step whose trace id its parsed `trace` field
+# holds, never to one whose id merely appears in its text: a value inside
+# an event can hold an id too. An unreadable line has no owner, so no
+# step's events take data from it; when its text carries a step's trace
+# id by the program log's rule, the step's slice counts it as damage to
+# its trace, and the line is kept only in the world's copy.
+#
+# The program writes the file directly, not through a pipe nukadoko
+# redacts, so only redacted copies reach the run directory: each line is
+# parsed, redacted with the step's secrets, and written again as JSON, so
+# a copy is JSON wherever a secret was, and a record shows exactly what
+# was read. An unreadable line has no object to redact, so its text is
+# redacted as the program log's is.
+#
+# The file nukadoko made is the one read. A file that is replaced, or made
+# shorter, while the scenarios run is no longer read, and every step from
+# then on says so (`file-replaced`), since what it read may be incomplete.
+#
+# A step that stamped a request, or gave a process its trace, reads the
+# file as it waits, as the program log's slice does (Trace::Log): until no
+# line of its own has arrived for QUIET seconds after the later of its
+# last such line and the moment it ended, and no longer than SETTLE.
+module Nukadoko
+  module Engine
+    module Events
+      SLICE_FILE: ::String
+
+      LATE_FILE: ::String
+
+      WORLD_FILE: ::String
+
+      # The most one of a step's files holds; a step whose lines come to
+      # more keeps the first of them, marked `truncated`.
+      SLICE_CAP: untyped
+
+      QUIET: ::Float
+
+      SETTLE: ::Float
+
+      POLL: ::Float
+
+      READ_CHUNK: untyped
+
+      # The line as a copy keeps it: the parsed object redacted and written
+      # again, or the text redacted when there is no object.
+      # : (String, Line, Secrets) -> String
+      def self.kept_line: (String, Line, Secrets) -> String
+
+      # Hands each complete line of `path` from byte `from` to the block,
+      # with the byte it starts at, a chunk at a time, and returns the byte
+      # after the last complete line: a line still being written is read by
+      # the next call. A file that does not exist yet has no lines.
+      # : (String, Integer) { (String, Integer) -> void } -> Integer
+      def self.each_line: (String, Integer) { (String, Integer) -> void } -> Integer
+
+      # A step's process count as a tally reads it: none, all ended, or one
+      # that may still send.
+      # : (Array[Hash[Symbol, untyped]]?) -> String
+      def self.processes_state: (Array[Hash[Symbol, untyped]]?) -> String
+
+      # What a tally needs of a step's trace.
+      # : (Trace::Boundary, Array[Hash[Symbol, untyped]]?) -> Hash[Symbol, untyped]
+      def self.inputs_of: (Trace::Boundary, Array[Hash[Symbol, untyped]]?) -> Hash[Symbol, untyped]
+
+      # The tally inputs of a recorded slice. The slice's own gaps say what
+      # its processes left open: `processes-unbounded` names one that may
+      # still send, and `no-requests` a step that ran none and stamped
+      # nothing. A step with no gap of either kind that stamped nothing ran
+      # processes that all ended.
+      # : (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self.inputs_of_slice: (Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # What one of a step's files may still hold, out of SLICE_CAP.
+      class Kept
+        attr_reader lines: Array[String]
+
+        attr_reader truncated: bool
+
+        # : () -> void
+        def initialize: () -> void
+
+        # : (String) -> void
+        def keep: (String) -> void
+
+        # Writes the kept lines to `name` in `dir` and returns `name`, or
+        # nil when none were kept or the file could not be written.
+        # : (String, String) -> String?
+        def write: (String, String) -> String?
+      end
+
+      # The events file of one world, read forward as its steps end.
+      class Reader
+        attr_reader path: String
+
+        attr_reader prefix: String
+
+        # : (String, String, ^() -> Secrets) -> void
+        def initialize: (String, String, ^() -> Secrets) -> void
+
+        # Whether the file is still the one nukadoko made, asked before each
+        # read from `offset`: once it answers false, it always does.
+        # : (Integer) -> bool
+        def readable?: (Integer) -> bool
+
+        # : () -> bool
+        def replaced?: () -> bool
+
+        # The kinds the world's program has reported, through the end of
+        # the file as it stands now.
+        # : () -> KindsSeen
+        def kinds_seen: () -> KindsSeen
+
+        # Where the step whose trace is `trace_id` began, nil when this
+        # reader sliced no such step.
+        # : (String) -> Hash[Symbol, untyped]?
+        def producer: (String) -> Hash[Symbol, untyped]?
+
+        # Reads what the file gained since the last call and writes the
+        # slice of `boundary`'s trace into `dir`.
+        # : (String, Trace::Boundary, Array[Hash[Symbol, untyped]]?) -> Hash[Symbol, untyped]
+        def slice: (String, Trace::Boundary, Array[Hash[Symbol, untyped]]?) -> Hash[Symbol, untyped]
+
+        # Once the world stopped: the world's redacted copy at `copy`, each
+        # step's lines past its slice in its LATE_FILE, and what the file
+        # holds. `steps` maps a trace id to [lines its slice read, its
+        # record's directory].
+        # : (String, Hash[String, [Integer, String]]) -> Hash[Symbol, untyped]
+        def collect: (String, Hash[String, [ Integer, String ]]) -> Hash[Symbol, untyped]
+
+        private
+
+        # : (String, Array[String]) -> String?
+        def append: (String, Array[String]) -> String?
+
+        # : () -> [Integer, Integer, Integer]?
+        def identity: () -> [ Integer, Integer, Integer ]?
+
+        # : () -> Float
+        def now: () -> Float
+
+        # Reads what the file gained and hands each line to the block,
+        # which answers whether it is the ending step's; then, when the
+        # step stamped anything, keeps reading as it waits for the step's
+        # lines still on their way (module header).
+        # : (Float?) { (String) -> bool } -> void
+        def read_step: (Float?) { (String) -> bool } -> void
+      end
+    end
+  end
+end

@@ -6,6 +6,8 @@ require "shellwords"
 require "net/http"
 require "securerandom"
 require "timeout"
+require "tmpdir"
+require "fileutils"
 
 # How the program under test starts, once per environment: an environment
 # is a world of its own, with its own port, directory, and process, so one
@@ -162,9 +164,13 @@ module Nukadoko
       # as `<where> names {<name>}, which has no value here: <why>`: build
       # runs before any world exists, a world with neither serve nor url has
       # no port or URL, and a condition must be one the environment declares.
-      # `{events}` is the TypeScript engine's alone, so it never has one here.
+      # `{events}` is the file nukadoko makes only for a world it serves.
       #: (Recipe) -> Array[String]
-      def self.placeholder_gaps(recipe)
+      def self.placeholder_gaps(recipe) = placeholder_gap_list(recipe).map { "#{_1[:where]} names {#{_1[:name]}}, which has no value here: #{_1[:why]}" }
+
+      # The same gaps, each as the field, the placeholder, and why.
+      #: (Recipe) -> Array[Hash[Symbol, String]]
+      def self.placeholder_gap_list(recipe)
         kind = recipe.reach[:kind]
         fields = [
           *recipe.build.each_with_index.map { |entry, i| ["build[#{i}]", entry[:command], "build"] },
@@ -175,9 +181,43 @@ module Nukadoko
         fields.flat_map do |where, texts, reach|
           texts.flat_map { _1.scan(PLACEHOLDER).flatten }.uniq.filter_map do |name|
             why = absence(name, reach, recipe.conditions)
-            "#{where} names {#{name}}, which has no value here: #{why}" if why
+            { where: where, name: name, why: why } if why
           end
         end
+      end
+
+      URL_EVENTS_WHY = "nukadoko does not start this world's program, so it reads no file the program writes"
+
+      # The edit that closes `gap` in world `world` of `file`: it names only
+      # what the world lacks. Outside a build, only a world with neither
+      # serve nor url lacks a value, so the edit offers either one; a world
+      # that has one of them is never told to add the other, which the file
+      # refuses beside it. A condition is declared on the world's
+      # environment, and a world that is no entry of `environments` is sent
+      # to one that declares it.
+      #: (Hash[Symbol, String], String, String, Hash[untyped, untyped]) -> String
+      def self.placeholder_gap_fix(gap, world, file, environments)
+        where = gap[:where]
+        name = gap[:name]
+        condition = name.delete_prefix("condition.")
+        named = environments.transform_keys(&:to_s)
+        if name.start_with?("condition.") && !where.start_with?("build")
+          unless named.key?(world)
+            declaring = named.select { |_, environment| (environment[:conditions] || environment["conditions"] || {}).transform_keys(&:to_s).key?(condition) }.keys
+            outside = "The default world declares no conditions, and only an environment can"
+            return "#{outside}; none in #{file} declares #{condition}. Declare it under conditions of an environment, or remove {#{name}} from #{where}." if declaring.empty?
+
+            return "#{outside}: #{declaring.join(", ")} #{declaring.size == 1 ? "declares" : "declare"} #{condition}. Name one with --env, or remove {#{name}} from #{where}."
+          end
+          return "Declare #{condition} under conditions of world #{world} in #{file}, or remove {#{name}} from #{where}."
+        end
+        return "Write only {root} in #{where} of #{file}, or move the command to prepare, which runs once per world." if where.start_with?("build")
+        if name == "events"
+          # A url world is told to serve in place of its url, never beside it.
+          edit = gap[:why] == URL_EVENTS_WHY ? "serve world #{world} in place of its url" : "give world #{world} serve"
+          return "Remove {events} from #{where} of #{file}, or #{edit}: nukadoko makes the events file only for a program it starts."
+        end
+        "Remove {#{name}} from #{where} of #{file}, or give world #{world} serve or url."
       end
 
       #: (String, String, Hash[String, untyped]) -> String?
@@ -187,11 +227,41 @@ module Nukadoko
           condition = name.delete_prefix("condition.")
           return conditions.key?(condition) ? nil : %(its environment declares no condition "#{condition}" under conditions)
         end
-        return "the Ruby engine reads no execution events yet" if name == "events"
-        return "this world has neither serve nor url" if %w[port url].include?(name) && reach == "none"
+        return "this world has neither serve nor url" if %w[port url events].include?(name) && reach == "none"
+        return URL_EVENTS_WHY if name == "events" && reach == "url"
 
         nil
       end
+
+      # Whether a field of the world's commands or env names `{name}`.
+      #: (Recipe, String) -> bool
+      def self.names_placeholder?(recipe, name)
+        texts = [*recipe.prepare.flat_map { _1[:command] }, *(recipe.reach[:kind] == "serve" ? words(recipe.reach[:serve][:command]) : []), *recipe.env.values]
+        texts.any? { _1.to_s.include?("{#{name}}") }
+      end
+
+      # The file a served world's program appends its execution events to,
+      # made before its first command runs. The program writes it directly,
+      # so it holds whatever the program wrote, secrets included, until
+      # nukadoko reads and redacts it: it lives in a directory of its own
+      # in the system's temporary directory, made with mode 0700, and the
+      # file with mode 0600, never in the run directory, which CI uploads.
+      # Only the redacted copies reach the run directory. The file exists
+      # before the program starts, so every reader opens the same file, and
+      # a reader can tell when the program replaced it.
+      #: () -> String
+      def self.open_events
+        dir = Dir.mktmpdir("nukadoko-events-")
+        File.chmod(0o700, dir)
+        path = File.join(dir, "events.jsonl")
+        File.open(path, File::WRONLY | File::CREAT | File::EXCL, 0o600, &:close)
+        EVENTS_DIRS << dir
+        path
+      end
+
+      # The events directories still to remove, however nukadoko ends.
+      EVENTS_DIRS = [] #: Array[String]
+      at_exit { EVENTS_DIRS.each { FileUtils.rm_rf(_1) } }
 
       # Started, or StartFailed with the world as far as it got, and the
       # message the run reports as program-start-failed. A base world that
@@ -203,7 +273,8 @@ module Nukadoko
         token = SecureRandom.hex(16)
         prefix = Trace.new_prefix
         log_path = File.join(dir, "program.log")
-        world = World.new(base_url: nil, pid: nil, log: nil, env: {}, trace_prefix: prefix, log_path: nil, commands: [], timings: {}, token: token)
+        world = World.new(base_url: nil, pid: nil, log: nil, env: {}, trace_prefix: prefix, log_path: nil, commands: [], timings: {}, token: token,
+                          events_path: nil)
         begin
           gap = Program.placeholder_gaps(recipe).first
           raise StartError, gap if gap
@@ -237,10 +308,16 @@ module Nukadoko
             url = reach_url(reach, place, tree)
             port = Program.url_port(url)
           end
-          values = { "root" => project, "dir" => dir, "world" => environment.name, "token" => token, "port" => port&.to_s, "url" => url }.compact
+          # Before prepare, which may name it too.
+          events = Program.open_events if reach[:kind] == "serve" && Program.names_placeholder?(recipe, "events")
+          world = world.with(events_path: events) if events
+          values = { "root" => project, "dir" => dir, "world" => environment.name, "token" => token, "port" => port&.to_s, "url" => url, "events" => events }.compact
           fill = ->(text) { Program.filled(text.to_s, values, recipe.conditions) }
           env = recipe.env.transform_values { fill.(_1) }.freeze
-          world = world.with(base_url: url, env: env)
+          # A step that could find the events file could append a line the
+          # program never wrote, and a claim would read it as the program's.
+          step_env = env.reject { |key, _| recipe.env[key].to_s.include?("{events}") }.freeze
+          world = world.with(base_url: url, env: step_env)
 
           unless recipe.prepare.empty?
             started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -284,9 +361,12 @@ module Nukadoko
           world
         rescue Unavailable
           world.stop
+          world.remove_events
           raise
         rescue StartError => e
           world.stop
+          # A world that did not start keeps no events: no step read any.
+          world.remove_events
           tail = world.log_path ? File.readlines(log_path).last(20).join.chomp : ""
           message = "the program did not start for world #{environment.name}: #{e.message}#{". The end of #{log_path.delete_prefix("#{project}/")}:\n#{tail}" unless tail.empty?}"
           raise StartFailed.new(message, world, e.message)
@@ -484,6 +564,7 @@ module Nukadoko
       :commands, #: Array[Hash[Symbol, untyped]]
       :timings, #: Hash[Symbol, Integer]
       :token, #: String
+      :events_path, #: String?
     )
 
     class World
@@ -535,6 +616,16 @@ module Nukadoko
         end
         log&.close
         timings[:stop_ms] = Request.since(started) if pid
+      end
+
+      # Removes the events file and its directory, once its lines are read.
+      #: () -> void
+      def remove_events
+        return unless events_path
+
+        dir = File.dirname(events_path.to_s)
+        Program::EVENTS_DIRS.delete(dir)
+        FileUtils.rm_rf(dir)
       end
     end
   end

@@ -42,6 +42,12 @@ module Nukadoko
       # : (Environment, World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
       def world_entry: (Environment, World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
 
+      # The stopped world's events as run.json names them: its redacted
+      # copy beside program.log, and each step's lines that came after its
+      # record beside that record, which its run.json entry names.
+      # : (World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+      def world_events: (World, String, Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+
       # Under --concurrency the files go to worker processes in the run's
       # order, round-robin, and each worker plays its own files --repeat
       # times. A file whose Feature line is @nukadoko:serial runs after

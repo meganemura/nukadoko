@@ -1,0 +1,70 @@
+# Generated from lib/nukadoko/events/counted.rb with RBS::Inline
+
+# What a count of execution events counted, grouped so a record names
+# what the lines were and not only how many: the lines of one kind that
+# hold the same values in the fields that tell them apart, and those
+# groups in words. Pure. Which lines a count matches is Tally's.
+module Nukadoko
+  module Engine
+    module Events
+      module Counted
+        # The fields a group of each kind is told apart by, in the order its
+        # record and its words name them.
+        GROUP_FIELDS: Hash[String, Array[String]]
+
+        OP_WORDS: untyped
+
+        # How many groups a line names before it says how many lines the
+        # rest hold.
+        GROUPS_NAMED: ::Integer
+
+        # The lines a count matched, grouped as they are folded.
+        class Groups
+          # : (String) -> void
+          def initialize: (String) -> void
+
+          # : (Hash[String, untyped]) -> void
+          def add: (Hash[String, untyped]) -> void
+
+          # The groups of the lines added and of `more`, most lines first,
+          # then by their values; `more` is not added.
+          # : (?Array[Hash[String, untyped]]) -> Array[Hash[Symbol, untyped]]
+          def groups: (?Array[Hash[String, untyped]]) -> Array[Hash[Symbol, untyped]]
+        end
+
+        # The values a group is told apart by, as one key. JSON of the
+        # values, compared as text, as the TypeScript engine orders them.
+        # : (String, Hash[untyped, untyped]) -> String
+        def self?.key_of: (String, Hash[untyped, untyped]) -> String
+
+        # The groups `after` holds more lines of than `before`, each with
+        # how many more.
+        # : (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+        def self?.added: (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+        # : (untyped) -> String
+        def self?.text: (untyped) -> String
+
+        # One group in words, by kind: `db insert into events`.
+        # : (Hash[Symbol, untyped]) -> String
+        def self?.words: (Hash[Symbol, untyped]) -> String
+
+        # : (Integer, bool) -> String
+        def self?.lines_text: (Integer, bool) -> String
+
+        # The groups in words: `1 line: db insert into events`, `3 lines: 2
+        # db insert into scores, 1 db update rankings`, and past
+        # GROUPS_NAMED `..., and 4 more lines in 2 groups`.
+        # : (Array[Hash[Symbol, untyped]], ?bool) -> String
+        def self?.describe: (Array[Hash[Symbol, untyped]], ?bool) -> String
+
+        # The groups a count left out, each with what its table holds.
+        # : (Array[Hash[Symbol, untyped]]) -> String
+        def self?.describe_left_out: (Array[Hash[Symbol, untyped]]) -> String
+
+        # : (Array[Hash[Symbol, untyped]], bool) { (Hash[Symbol, untyped]) -> String } -> String
+        def self?.describe_groups: (Array[Hash[Symbol, untyped]], bool) { (Hash[Symbol, untyped]) -> String } -> String
+      end
+    end
+  end
+end

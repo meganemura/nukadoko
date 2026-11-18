@@ -192,6 +192,10 @@ environment は `policy: "read-only"` を取り、mutates を宣言する step �
 `version:` は String を返す lambda で、その値は run.json とすべての記録に `target_version` として入ります。
 world に値がないプレースホルダ(`serve` も `url` もない world の `{port}`、`build` の `{root}` 以外)は、`nuka check` で `program-placeholder-unfilled` になります。
 
+nukadoko が起動する world のプログラムが `{events}` を名指すと、run ディレクトリの外に空のファイルができ、プログラムはそこに実行イベントを書き足します。
+各 step の行は record の隣に残り、`observed.events` にまとめられます。
+world が止まると、redact した world 全体の写しが `program.log` の隣に入ります([spec](../spec.ja.md) の「実行イベント」)。
+
 ## 型とツール
 
 `nuka sig` は、各 step の args と returns の RBS を `sig/nukadoko/steps.rbs` に書きます。
@@ -202,8 +206,8 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- プログラムの `lists` と、`{events}` のプレースホルダと、それが読む実行イベント。
-- step の `events`(プログラムがしたこと)。
+- プログラムの `lists`。
+- step の `events`(実行イベントの数についての claim)と、step のイベントのうちの flag とリクエストの並びである `path`。
 - fixture の `use` が返すもの。
 TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
 - MCP クライアントの呼び出しを記録する `measureMcp`。
