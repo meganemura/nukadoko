@@ -134,9 +134,9 @@ module Nukadoko
         0
       when "steps"
         entries = check.usable.sort_by(&:file)
-        return finish("steps", true, findings: findings, steps: entries.map { Vocabulary.entry(_1, @project) }) if @json
+        return finish("steps", true, findings: findings, steps: entries.map { Vocabulary.entry(_1, @project, entries) }) if @json
 
-        @out.puts entries.map { Vocabulary.text(_1) }.join("\n\n")
+        @out.puts entries.map { Vocabulary.text(_1, entries) }.join("\n\n")
         0
       when "describe"
         step = check.usable.find { _1.step_name == @rest.first }
@@ -146,7 +146,7 @@ module Nukadoko
           return finish("describe", false, findings: findings + [refusal], verdict: "refused")
         end
 
-        finish("describe", true, findings: findings, **Vocabulary.describe(step, @project))
+        finish("describe", true, findings: findings, **Vocabulary.describe(step, @project, check.usable.sort_by(&:file)))
       when "run" then @options.key?("--step") ? walk(steps) : run(steps)
       when "do" then run_one(check)
       when "scaffold" then scaffold(steps, scenarios)

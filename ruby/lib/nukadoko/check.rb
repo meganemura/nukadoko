@@ -71,6 +71,7 @@ module Nukadoko
         @usable.each { check_contract(_1) }
         check_duplicate_patterns
         check_parts
+        check_state_shapes
         check_shapes
         check_tags(conditions)
         check_lines
@@ -584,6 +585,28 @@ module Nukadoko
         end
       end
 
+      # A state some steps name with a holder key and others without leaves
+      # every line that requires it unjudged, so that is said rather than
+      # left silent, pointed at a step of the shape fewer steps use.
+      #: () -> void
+      def check_state_shapes
+        States.shape_issues(@usable).each do |issue|
+          step = @usable.find { _1.step_name == issue[:step] }
+          findings << Finding.new("error", "state-shape-mismatch", step&.file, nil, issue[:step], issue[:message], issue[:fix], nil)
+        end
+      end
+
+      # Per feature file rather than per scenario, so a Background line
+      # every scenario reaches the same way is one finding.
+      #: () -> void
+      def check_state_order
+        @scenarios.group_by(&:uri).each_value do |scenarios|
+          States.findings(@usable, scenarios).each do |found|
+            findings << Finding.new("error", "state-missing", found[:uri], found[:line], found[:step], found[:message], found[:fix], nil)
+          end
+        end
+      end
+
       # Each cycle once, named from the step whose walk first closed it.
       #: () -> Array[Array[singleton(Step)]]
       def part_cycles
@@ -653,6 +676,7 @@ module Nukadoko
         bound.uniq.each { check_transformed(_1) }
         @scenarios.each { check_from_order(_1) }
         @scenarios.each { check_claim_sources(_1) }
+        check_state_order
         suppress_undefined(undefined)
         @scenarios.each { judging_nothing(_1) }
       end

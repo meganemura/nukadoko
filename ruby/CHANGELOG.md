@@ -48,6 +48,17 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Added
 
+- A step declares states: `requires` the states a line needs held,
+  `gives` the states it leaves held, and `ends` the states it leaves not
+  held, each a name or a name and the args key that tells holders apart
+  (`requires ["signed-in", :person]`). `nuka check` walks each scenario
+  and reports `state-missing` at a line that can only run without its
+  state, with the line to add, and `state-shape-mismatch` for a state
+  written with a key in one step and bare in another; `nuka run` refuses
+  such a scenario before any step runs, `--no-check` included. An entry
+  that is no state, and `gives` or `ends` on a claim step, are
+  `step-file-import-failed`. `nuka steps` lists each step's states, a
+  required one with the steps that give it.
 - The program reads `build`, `prepare`, `url`, and `setup`, and an
   environment's `policy` and `version`, as the TypeScript engine does. A
   world runs `build` once per tree, then `prepare`, then `serve` or `url`,

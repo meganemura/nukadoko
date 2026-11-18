@@ -177,6 +177,17 @@ module Nukadoko
       # : () -> void
       def check_parts: () -> void
 
+      # A state some steps name with a holder key and others without leaves
+      # every line that requires it unjudged, so that is said rather than
+      # left silent, pointed at a step of the shape fewer steps use.
+      # : () -> void
+      def check_state_shapes: () -> void
+
+      # Per feature file rather than per scenario, so a Background line
+      # every scenario reaches the same way is one finding.
+      # : () -> void
+      def check_state_order: () -> void
+
       # Each cycle once, named from the step whose walk first closed it.
       # : () -> Array[Array[singleton(Step)]]
       def part_cycles: () -> Array[Array[singleton(Step)]]

@@ -25,6 +25,11 @@ module Nukadoko
         return ["#{@step.name} #{problem}."] if problem
 
         claims = @step.claims
+        if claims && (refused = %i[gives ends].find { @step.public_send(_1).any? })
+          return ["#{@step.name} #{refused} is not an option of a claim step: a claim step has no action, so it leaves no state; it may require one."]
+        end
+        states = States.read(@step)
+        return ["#{@step.name} #{states}."] if states.is_a?(String)
         return [] unless claims
 
         problem = ClaimRules.first_problem(claims, shape) || poll_problem

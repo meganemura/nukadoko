@@ -1627,7 +1627,21 @@ Without a declaration, a scenario that forgets the sign-in looks valid until the
 
 A step declares the states it depends on and the states it changes:
 
-<!-- engine: typescript -->
+```ruby
+class SignOut < Nukadoko::Step
+  description "Sign out from the account menu"
+  pattern "{person:word} signs out"
+  args { string :person, "Who signs out" }
+  requires ["signed-in", :person]
+  ends ["signed-in", :person]
+
+  def run(page_as:, args:)
+    page_as.(args.person).get_by_role("button", name: "Sign out").click
+    nil
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 
@@ -1650,6 +1664,7 @@ export default defineStep({
 
 An entry is a state's name, such as `"book-open"`, or a name and the `args` key whose value tells the holders apart, such as `["signed-in", "person"]`.
 The pair has the shape of a `from` entry, so `tsc` checks the key against `args`.
+Ruby writes the key as a symbol, and a key `args` does not declare refuses the step when it loads.
 A state name is plain text, and steps that write the same text name the same state.
 `defineStep` refuses an entry of neither form, a name that is empty or has a space at either end, a key that `args` does not declare, an entry listed twice, and one state in both `gives` and `ends`.
 It refuses `gives` and `ends` on a claim step, which has no action to change anything.

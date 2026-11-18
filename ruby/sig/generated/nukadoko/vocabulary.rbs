@@ -7,17 +7,23 @@ module Nukadoko
   module Vocabulary
     BROWSER: untyped
 
-    # : (singleton(Step), String) -> Hash[Symbol, untyped]
-    def self.entry: (singleton(Step), String) -> Hash[Symbol, untyped]
+    # : (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
+    def self.entry: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
 
-    # : (singleton(Step), String) -> Hash[Symbol, untyped]
-    def self.describe: (singleton(Step), String) -> Hash[Symbol, untyped]
+    # : (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
+    def self.describe: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
+
+    # `requires`, `gives`, and `ends` for a step that declares any.
+    # `given_by` names each step with a pattern whose gives names the
+    # state: the steps a line can run.
+    # : (singleton(Step), Array[singleton(Step)]) -> Hash[Symbol, untyped]
+    def self.states: (singleton(Step), Array[singleton(Step)]) -> Hash[Symbol, untyped]
 
     # : (singleton(Step)) -> Hash[untyped, untyped]?
     def self.from: (singleton(Step)) -> Hash[untyped, untyped]?
 
-    # : (singleton(Step)) -> String
-    def self.text: (singleton(Step)) -> String
+    # : (singleton(Step), ?Array[singleton(Step)]) -> String
+    def self.text: (singleton(Step), ?Array[singleton(Step)]) -> String
 
     # : (Hash[Symbol, untyped]) -> String
     def self.claim_text: (Hash[Symbol, untyped]) -> String

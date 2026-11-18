@@ -87,6 +87,13 @@ class ItemCount < Nukadoko::Step
 end
 ```
 
+`requires`, `gives`, and `ends` name the states a line needs held, leaves
+held, and leaves not held: a name, or a name and the args key whose value
+tells one holder from another (`requires ["signed-in", :person]`). `nuka
+check` walks each scenario through them and reports `state-missing` at a
+line that can only run without its state, and `nuka run` refuses that
+scenario before any step runs. The spec's "States" says what to declare.
+
 Every `*.rb` file
 under `features/steps/` is loaded, a helper under `features/steps/lib/`
 too, so a helper module named after its file can be used from any step
@@ -226,8 +233,8 @@ each of its examples with `<!-- engine: typescript -->`.
 
 - In the program: `lists`, and the `{events}` placeholder with the
   execution events it reads.
-- On a step: `requires`, `gives`, and `ends` (states), `files` (what a
-  command wrote), and `events` (what the program did).
+- On a step: `files` (what a command wrote) and `events` (what the
+  program did).
 - What a fixture's `use` returns: the TypeScript engine gives back the
   scenario's outcome, so a teardown can keep what a failure left.
 - `measureMcp`, which records the MCP calls a client makes.

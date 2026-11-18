@@ -1,0 +1,214 @@
+# Generated from lib/nukadoko/states.rb with RBS::Inline
+
+# The states a step declares (`requires`, `gives`, `ends`), read and refused
+# as the TypeScript engine's defineStep refuses them, and the walk that
+# judges one scenario against them: whether a line that requires a state
+# can only be reached with it not held. nuka check reports that walk per
+# feature file, and nuka run refuses a scenario it finds before any of its
+# steps runs, so a scenario never passes one and fails the other.
+#
+# The walk follows the one path on which a line runs at all: every line
+# before it passed. A line no step matches makes every state unknown, and
+# unknown is never reported. It never says a state holds, only that it
+# cannot.
+module Nukadoko
+  module Engine
+    module States
+      class Use < Data
+        attr_reader state(): String
+
+        attr_reader key(): String?
+
+        def self.new: (String state, String? key) -> instance
+                    | (state: String, key: String?) -> instance
+
+        def self.members: () -> [ :state, :key ]
+
+        def members: () -> [ :state, :key ]
+      end
+
+      class Declared < Data
+        attr_reader requires(): Array[Use]
+
+        attr_reader gives(): Array[Use]
+
+        attr_reader ends(): Array[Use]
+
+        def self.new: (Array[Use] requires, Array[Use] gives, Array[Use] ends) -> instance
+                    | (requires: Array[Use], gives: Array[Use], ends: Array[Use]) -> instance
+
+        def self.members: () -> [ :requires, :gives, :ends ]
+
+        def members: () -> [ :requires, :gives, :ends ]
+      end
+
+      # One requiring line the walk can only reach with the state not held.
+      class Draft < Data
+        attr_reader index(): Integer
+
+        attr_reader step_name(): String
+
+        attr_reader use(): Use
+
+        attr_reader holder(): String?
+
+        attr_reader cause(): Hash[Symbol, untyped]
+
+        attr_reader also(): Array[Integer]
+
+        def self.new: (Integer index, String step_name, Use use, String? holder, Hash[Symbol, untyped] cause, Array[Integer] also) -> instance
+                    | (index: Integer, step_name: String, use: Use, holder: String?, cause: Hash[Symbol, untyped], also: Array[Integer]) -> instance
+
+        def self.members: () -> [ :index, :step_name, :use, :holder, :cause, :also ]
+
+        def members: () -> [ :index, :step_name, :use, :holder, :cause, :also ]
+      end
+
+      # One line of a scenario: the step it binds alone, and the text each
+      # capture read, or nil for a line no single step matches.
+      class Line < Data
+        attr_reader step(): singleton(Step)
+
+        attr_reader texts(): Hash[String, String]
+
+        def self.new: (singleton(Step) step, Hash[String, String] texts) -> instance
+                    | (step: singleton(Step), texts: Hash[String, String]) -> instance
+
+        def self.members: () -> [ :step, :texts ]
+
+        def members: () -> [ :step, :texts ]
+      end
+
+      # What the walk knows of one state just before a line: a fact per
+      # holder a line has named, and one for every holder none has. A fact
+      # is [:held], [:not_held, the index of the line that ended it or
+      # nil], or [:unknown].
+      class Facts < Data
+        attr_reader by(): Hash[String, Array[untyped]]
+
+        attr_reader unnamed(): Array[untyped]
+
+        def self.new: (Hash[String, Array[untyped]] by, Array[untyped] unnamed) -> instance
+                    | (by: Hash[String, Array[untyped]], unnamed: Array[untyped]) -> instance
+
+        def self.members: () -> [ :by, :unnamed ]
+
+        def members: () -> [ :by, :unnamed ]
+      end
+
+      LISTS: untyped
+
+      FORMS: ::String
+
+      # `signed-in for person`, or `book-open`: how nuka steps names an entry.
+      # : (Use) -> String
+      def self.describe: (Use) -> String
+
+      # : (Use) -> String
+      def self.quoted: (Use) -> String
+
+      # The three lists read against the step's args keys, or the problem
+      # with the first entry that is not a state a line can hold, in the
+      # TypeScript engine's words.
+      # : (singleton(Step)) -> (Declared | String)
+      def self.read: (singleton(Step)) -> (Declared | String)
+
+      # : (untyped) -> Use?
+      def self.entry_use: (untyped) -> Use?
+
+      # What every step of a vocabulary says about each state: which name it
+      # with a key and which without, and which can give it from a line.
+      class Index
+        attr_reader states: Hash[String, Hash[Symbol, Array[untyped]]]
+
+        # : (Array[singleton(Step)]) -> void
+        def initialize: (Array[singleton(Step)]) -> void
+
+        # The states the step's transitive parts give or end.
+        # : (singleton(Step)) -> Array[String]
+        def parts_of: (singleton(Step)) -> Array[String]
+
+        # : (String) -> bool
+        def mismatched?: (String) -> bool
+
+        private
+
+        # : (singleton(Step)) -> Array[String]
+        def through_parts: (singleton(Step)) -> Array[String]
+      end
+
+      # Each line of the scenario as the walk reads it: the one step it
+      # binds and the text each word or string capture read.
+      # : (Array[singleton(Step)], Scenario) -> Array[Line?]
+      def self.lines: (Array[singleton(Step)], Scenario) -> Array[Line?]
+
+      # A {word} capture reads its text as written, and a {string} its text
+      # inside the quotes; another type reads a value only the run knows.
+      # : (String, String) -> Hash[String, String]?
+      def self.captured: (String, String) -> Hash[String, String]?
+
+      # The holder a line names for `use`: "" for an unkeyed state, the
+      # captured text when the key's field is a plain string, or nil when
+      # only the run knows it.
+      # : (Line, Use) -> String?
+      def self.holder_of: (Line, Use) -> String?
+
+      # Walks the scenario once and returns every requiring line that only
+      # one outcome can reach: the state not held. Pure.
+      # : (Array[Line?], Index) -> Array[Draft]
+      def self.walk: (Array[Line?], Index) -> Array[Draft]
+
+      # : (Facts, Symbol, String?, Integer) -> Facts
+      def self.apply: (Facts, Symbol, String?, Integer) -> Facts
+
+      # The scenario's state issues by line index, each the message nuka run
+      # puts on the line it refuses.
+      # : (Array[singleton(Step)], Scenario) -> Hash[Integer, Array[String]]
+      def self.refusals: (Array[singleton(Step)], Scenario) -> Hash[Integer, Array[String]]
+
+      # state-missing over every scenario of one feature file, for nuka
+      # check. A Background line reaches the same finding in every
+      # scenario, so it is reported once with the folded lines of all of
+      # them.
+      # : (Array[singleton(Step)], Array[Scenario]) -> Array[Hash[Symbol, untyped]]
+      def self.findings: (Array[singleton(Step)], Array[Scenario]) -> Array[Hash[Symbol, untyped]]
+
+      # Every state some steps name with a key and others without.
+      # : (Array[singleton(Step)]) -> Array[Hash[Symbol, untyped]]
+      def self.shape_issues: (Array[singleton(Step)]) -> Array[Hash[Symbol, untyped]]
+
+      # : (Array[String]) -> String
+      def self.listed: (Array[String]) -> String
+
+      # : (Draft, ^(Integer) -> String, Scenario, Array[String]) -> String
+      def self.message: (Draft, ^(Integer) -> String, Scenario, Array[String]) -> String
+
+      # : (Array[String]) -> String
+      def self.also_required: (Array[String]) -> String
+
+      # : (Draft, ^(Integer) -> String, Index, String?) -> String
+      def self.fix: (Draft, ^(Integer) -> String, Index, String?) -> String
+    end
+
+    # A feature line a pattern matches, for a finding that tells an agent
+    # which line to add: a capture becomes the value given for its key, an
+    # optional group is dropped (or kept when it stands as a word of its
+    # own), an alternation keeps its first alternative, and an escape gives
+    # its character. It never runs a parameter type.
+    module ExampleLine
+      # : (String, Hash[String, String]) -> String
+      def self.of: (String, Hash[String, String]) -> String
+
+      # {word} matches no space, so a holder a {string} capture read
+      # elsewhere ("Aki Tanaka") would make a line the step never matches.
+      # : (String, Hash[String, String]) -> String
+      def self.capture: (String, Hash[String, String]) -> String
+
+      # : (String, Integer) -> Integer
+      def self.skip_optional: (String, Integer) -> Integer
+
+      # : (String, Integer) -> Integer
+      def self.skip_alternatives: (String, Integer) -> Integer
+    end
+  end
+end

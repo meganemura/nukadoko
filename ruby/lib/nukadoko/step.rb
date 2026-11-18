@@ -56,6 +56,27 @@ module Nukadoko
       #: () -> untyped
       def timeout(ms = nil) = ms.nil? ? @timeout : (@timeout = ms)
 
+      # The states a line of this step needs held (`requires`), leaves
+      # held (`gives`), and leaves not held (`ends`), each a name
+      # ("book-open") or a name and the args key that tells one holder from
+      # another (["signed-in", :person]). nuka check walks them through each
+      # scenario, and nuka run refuses a scenario that can only reach a line
+      # without the state it requires.
+      #: (*untyped) -> Array[untyped]
+      def requires(*entries) = entries.empty? ? (@requires || []) : (@requires = entries.freeze)
+      #: (*untyped) -> Array[untyped]
+      def gives(*entries) = entries.empty? ? (@gives || []) : (@gives = entries.freeze)
+      #: (*untyped) -> Array[untyped]
+      def ends(*entries) = entries.empty? ? (@ends || []) : (@ends = entries.freeze)
+
+      # The three lists read, or nil while one of them is malformed, which
+      # Definition reports.
+      #: () -> Engine::States::Declared?
+      def states
+        read = Engine::States.read(self)
+        read.is_a?(Engine::States::Declared) ? read : nil
+      end
+
       # The steps this one may run through the `call` fixture. A part with no
       # pattern exists only for calls.
       #: (Array[singleton(Step)]) -> Array[singleton(Step)]

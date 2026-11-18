@@ -38,7 +38,10 @@ refused]` allows only those words. A step that runs code mutates unless
 it says `mutates false`. `patterns "another wording"` adds wordings
 after `pattern`, each capturing the same keys. `timeout 5000` bounds
 `run` or `observe` in milliseconds; without it the config's
-`stepTimeout` applies (twenty minutes).
+`stepTimeout` applies (twenty minutes). `requires`, `gives`, and `ends`
+name states a line needs, leaves, and ends: `requires ["signed-in",
+:person]` for a state one person holds, `gives "book-open"` for one a
+scenario holds once.
 
 ## Loading
 

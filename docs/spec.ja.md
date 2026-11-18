@@ -1374,7 +1374,21 @@ state には値がなく、後の line が終わらせることができ、複�
 
 step は、依存する state と変える state を宣言します。
 
-<!-- engine: typescript -->
+```ruby
+class SignOut < Nukadoko::Step
+  description "Sign out from the account menu"
+  pattern "{person:word} signs out"
+  args { string :person, "Who signs out" }
+  requires ["signed-in", :person]
+  ends ["signed-in", :person]
+
+  def run(page_as:, args:)
+    page_as.(args.person).get_by_role("button", name: "Sign out").click
+    nil
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 
@@ -1400,6 +1414,7 @@ export default defineStep({
 
 エントリは `"book-open"` のような state の名前か、`["signed-in", "person"]` のような名前と、持ち主を区別する値を持つ `args` のキーの組です。
 組は `from` のエントリと同じ形なので、`tsc` がキーを `args` と照合します。
+Ruby ではキーをシンボルで書き、`args` にないキーなら step を読み込むときに断ります。
 state の名前はただのテキストで、同じテキストを書く step は同じ state を名指します。
 `defineStep` は、どちらの形でもないエントリ、空の名前や両端に空白のある名前、`args` が宣言しないキー、2 回書かれたエントリ、`gives` と `ends` の両方にある 1 つの state を拒否します。
 claim step の `gives` と `ends` も拒否します。

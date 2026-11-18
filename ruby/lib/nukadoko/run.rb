@@ -567,9 +567,21 @@ module Nukadoko
         @walk&.begin({ run_id: @id, run_dir: File.join(".nukadoko", "runs", @id),
                        scenario: { feature: scenario.uri, line: scenario.line, name: scenario.name, environment: environment.name },
                        world: world.base_url ? { url: world.base_url } : nil })
+        # A line the steps before it can only reach without a state it
+        # requires fails the scenario before any step runs, --no-check
+        # included, as nuka check reports it: each such line carries its
+        # message and every other line is skipped.
+        refusals = States.refusals(@steps, scenario)
         records = scenario.steps.each_with_index.map do |line, index|
           began = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          record = stopped || walk_stopped ? skipped(line) : play_step(line, results, world)
+          record = if refusals.any?
+                     if (messages = refusals[index])
+                       { status: "failed", outcome: :broke, step_record_id: nil, step: Engine.matches(@steps, line.text).first&.first&.step_name, error: messages.join("; "), refused: true }
+                     else skipped(line)
+                     end
+                   elsif stopped || walk_stopped then skipped(line)
+                   else play_step(line, results, world)
+                   end
           stopped ||= [record[:outcome], line.line, record[:claim], record[:broken_actual]] if record[:status] == "failed"
           seconds = format("%.1f", Process.clock_gettime(Process::CLOCK_MONOTONIC) - began)
           @out.puts "  step #{index + 1}/#{scenario.steps.size}  #{record[:status]}  #{seconds}s  #{line.text}"
@@ -655,7 +667,9 @@ module Nukadoko
         entry[:observed] = { processes: processes&.any? ? processes : nil, http: record[:http_count]&.positive? ? record[:http_count] : nil,
                              files: record[:files]&.map { _1.except(:content) }, unmeasured: [],
                              **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}) }
-        entry[:error] = { kind: record[:error_kind], message: record[:error] }.compact if record[:error]
+        # A refused line never began, so its error has no kind, as the
+        # TypeScript engine writes it.
+        entry[:error] = record[:refused] ? { kind: nil, message: record[:error] } : { kind: record[:error_kind], message: record[:error] }.compact if record[:error]
         # Only a failed step names what it read: a reader then sees the value it broke on.
         entry[:used] = record[:used] if record[:used]&.any? && record[:status] == "failed"
         if record[:claim_records]

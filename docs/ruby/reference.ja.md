@@ -81,6 +81,12 @@ class ItemCount < Nukadoko::Step
 end
 ```
 
+`requires` は行の前に成り立っている必要がある state、`gives` は行のあとに成り立つ state、`ends` は行のあとに成り立たなくなる state を名指します。
+エントリは名前か、名前と、持ち主を区別する値を持つ args のキーの組です(`requires ["signed-in", :person]`)。
+`nuka check` は各 scenario をこれに沿ってたどり、state なしでしか着けない行に `state-missing` を報告します。
+`nuka run` はその scenario を、どの step も動かす前に断ります。
+何を宣言するかは spec の「States」に書いてあります。
+
 `features/steps/` の下の `*.rb` は、`features/steps/lib/` の下の補助ファイルも含めてすべて読み込みます。
 そのため、ファイル名どおりの名前の補助モジュールは、`require` なしでどの step からも使えます。
 
@@ -193,7 +199,7 @@ TypeScript エンジンにあって、このエンジンにまだないもので
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
 - プログラムの `lists` と、`{events}` のプレースホルダと、それが読む実行イベント。
-- step の `requires`、`gives`、`ends`(state)、`files`(コマンドが書いたもの)、`events`(プログラムがしたこと)。
+- step の `files`(コマンドが書いたもの)と `events`(プログラムがしたこと)。
 - fixture の `use` が返すもの。
 TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
 - MCP クライアントの呼び出しを記録する `measureMcp`。
