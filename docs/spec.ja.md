@@ -248,6 +248,23 @@ discovery は歩いた各ファイルをインポートします。
 scenario がプロセスとして実行するファイル(偽のサーバ、fixture のスクリプト)は、同じ理由で `featuresDir` の外に置きます。
 discovery は `nuka check` のたびにそれを import し、トップレベルで子プロセスを起こしたり socket で listen したりするモジュールは、そこでそうしてしまうからです。
 
+```ruby
+class CreateProject < Nukadoko::Step
+  pattern "a project {name:string} exists" # named capture, see below
+  description "Create a project and return its id"
+  args { string :name }
+  returns do
+    string :id
+    string :name
+  end
+  mutates true # default true; see keyword semantics
+
+  def run(request:, args:)
+    request.post("/projects", data: { name: args.name }).json
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 
@@ -716,6 +733,16 @@ step 内の片付けは、受け入れ条件ではないものを feature ファ
 片付けを省くと資源が漏れます。
 `nukadoko.config.ts` が必要な場所を提供します。
 
+```ruby
+Nukadoko.fixture(:tenant) do |use, request:|
+  t = create_tenant(request)
+  use.(t)
+  destroy_tenant(request, t)
+end
+
+Nukadoko.fixture(:seededDb, scope: :process) { |use| use.(seed_db) }
+```
+
 ```ts
 export default defineConfig({
   fixtures: {
@@ -755,6 +782,7 @@ TypeScript はそのオブジェクトリテラルをインラインとして扱
 step の `run` は `FixtureBag` を受け取ります。
 プロジェクトは `nukadoko.config.ts` で `StepFixtures` を拡張して、fixture をそこに加えます:
 
+<!-- engine: typescript -->
 ```ts
 declare module "nukadoko" {
   interface StepFixtures {
@@ -865,6 +893,7 @@ setup は、その fixture を名指した step の成否を知ることがで�
 したがって、fixture 関数は成否を第二引数として受け取りません。
 代わりに、`use()` が成否を返します。
 
+<!-- engine: typescript -->
 ```ts
 tenant: async ({ request }, use) => {
   const t = await createTenant(request);
@@ -994,6 +1023,21 @@ feature ファイルは、その作業を読み手に示さなくなります。
 
 `from` はキーの供給元をデータとして宣言し、両方の性質を保ちます。
 
+```ruby
+class ProjectIsArchived < Nukadoko::Step
+  pattern "the project is archived"
+  description "Archive the project created earlier in this scenario"
+  args { string :projectId }
+  returns { boolean :archived }
+  from projectId: [CreateProject, :id]
+
+  def run(request:, args:)
+    # args.projectId is present or this line was never reached.
+    request.post("/projects/#{args.projectId}/archive").json
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 import createProject from "./create-project.ts";
@@ -1026,6 +1070,10 @@ nukadoko は `args` をバリデーションする前に値を注入します。
 たとえば、scenario はプロジェクトを作成するか import できます。
 消費側は、これらの供給元を支えるために 2 つの step を必要としません。
 
+```ruby
+from projectId: [[CreateProject, :id], [ImportProject, :projectId]]
+```
+
 ```ts
 from: { projectId: [[createProject, "id"], [importProject, "projectId"]] }
 ```
@@ -1048,6 +1096,11 @@ step は既定の生産者を指定しません。
 生産者候補は相互排他的であり、正確に 1 つを実行する必要があります。
 代わりに、scenario は両方の生産者を実行し、1 つの record への 2 経路を比較できます。
 その場合は、生産者ごとに別のキーを割り当てます。
+
+```ruby
+from createdId: [CreateProject, :id],
+     importedId: [ImportProject, :id]
+```
 
 ```ts
 from: {
@@ -1152,13 +1205,35 @@ step を分割して最初の scenario を書き換えると、合意済みの r
 代わりに、step は別の step を呼び出せます。
 `parts` は呼び出す step を宣言し、`call` fixture がその 1 つを実行します。
 
+```ruby
+class ProjectWithMember < Nukadoko::Step
+  pattern "a project named {name:string} has {email:string} as a member"
+  description "Create a project and invite one member into it"
+  args do
+    string :name
+    string :email
+  end
+  returns do
+    string :projectId
+    string :memberId
+  end
+  parts [CreateProject, InviteMember]
+
+  def run(call:, args:)
+    project = call.(CreateProject, name: args.name)
+    member = call.(InviteMember, projectId: project.id, email: args.email)
+    { projectId: project.id, memberId: member.id }
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 import createProject from "./parts/create-project.ts";
 import inviteMember from "./parts/invite-member.ts";
 
 export default defineStep({
-  pattern: "a project named {string} has {string} as a member",
+  pattern: "a project named {name:string} has {email:string} as a member",
   description: "Create a project and invite one member into it",
   args: z.object({ name: z.string(), email: z.string() }),
   returns: z.object({ projectId: z.string(), memberId: z.string() }),
@@ -1299,6 +1374,7 @@ state には値がなく、後の line が終わらせることができ、複�
 
 step は、依存する state と変える state を宣言します。
 
+<!-- engine: typescript -->
 ```ts
 import { defineStep, z } from "nukadoko";
 
@@ -1461,6 +1537,19 @@ run サマリは承認された基点から変わったすべての step ファ�
 型付き step は、実行する(`run`)か、claim を宣言する(`claims`)かのどちらかであり、両方はしません。
 `defineStep` の 2 つのオーバーロードが、この 2 つを排他にします。
 `defineStep` は、`run`、`returns`、`mutates`、`parts` のどれかも宣言する claim step と、`observe` や `poll` を宣言する実行する step を拒否します。
+
+```ruby
+class ExitsWith < Nukadoko::Step
+  description "The process exit code is exactly this"
+  pattern "it exits with {code:int}"
+  args do
+    number :code, "The expected exit code"
+    field :exitCode, RunTally.returns[:exitCode]
+  end
+  from exitCode: [RunTally, :exitCode]
+  claims [{ actual: "exitCode", compare: "equal", expected: "code" }]
+end
+```
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -1648,6 +1737,7 @@ Then は、前の step のコマンドがディスクに何をしたかを claim
 "the build writes nothing"、"wrote the migration file migrations/0002_add_note.sql"、"wrote exactly these files"、"changed no file under src/" のような文です。
 claim step はその一覧を `files` で名指し、claim はそのキーを実際の値として読みます:
 
+<!-- engine: typescript -->
 ```ts
 // features/steps/build-writes-nothing.ts
 import { defineStep, z } from "nukadoko";
@@ -1820,6 +1910,10 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 それ以外の期待値は、等しい値にだけ合います。
 docstring は `expected_view` を通して JSON として claim に届きます。
 
+```ruby
+claims [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }]
+```
+
 ```ts
 claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
 ```
@@ -1838,6 +1932,10 @@ literal は語か数値で、行がキーを埋めるのは capture の値、doc
 実際の値がないときは、`undefined` の実際の値と同じく成り立ちません。
 そのため user のない body に対する `actual: "body.user"` は、何も探していないフィールドについて成り立つことはありません。
 文字列でない期待値と、ほとんどどのオブジェクトにもない空白の名前でも、claim は成り立ちません。
+
+```ruby
+claims [{ actual: "body", compare: "lacks-field", expected: { literal: "password" } }]
+```
 
 ```ts
 claims: [{ actual: "body", compare: "lacks-field", expected: { literal: "password" } }],
@@ -1942,6 +2040,14 @@ capture の値は行でしかわからないので、`{word}`、`{string}`、無
 期待値は行が埋める文のキー(docstring か、1 行のツリーなら capture)で、ARIA スナップショット、つまり Playwright の `ariaSnapshot()` がページのアクセシビリティツリーについて出力する YAML として書きます。
 実際の値は、claim のパスにある値ではありません。
 `observe` はそのキーにページかロケーターを返し、nukadoko は `observe` が返した直後に、その値のクラスの `ariaSnapshot()` を通して ARIA スナップショットを取ります。
+
+```ruby
+args { string :tree }
+poll timeout_ms: 5000
+claims [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }]
+
+def observe(page:) = { page: page }
+```
 
 ```ts
 args: z.object({ tree: z.string() }),
@@ -2135,6 +2241,14 @@ step の締め切りは step が読み始めたときに始まり、タイムア
 多くの Then は、一度たどり着くと変わらない状態を読みます。
 読み込みを終えた画面はスライダーかスピンボタンを見せ、そのあとも見せ続けます。
 `timeout_ms` の隣の `settled` はその状態を名指し、その状態で成り立たなかった claim を待つのを poll にやめさせます。
+
+```ruby
+args { string :tree }
+poll timeout_ms: 5000, settled: [{ actual: "busy", count: true, compare: "equal", expected: { literal: 0 } }]
+claims [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }]
+
+def observe(page:) = { page: page, busy: page.locator("[aria-busy=true]").all_text_contents }
+```
 
 ```ts
 args: z.object({ tree: z.string() }),
@@ -2548,6 +2662,7 @@ feature、step、fixture、parameter type、secret です。
 `program` はプログラムを返す関数です。
 nukadoko がそれをどう build し、状態をどう用意し、どう起動するかまたはどこに届くか、そしてそのプロセスが受け取る環境変数を書きます。
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -2705,6 +2820,7 @@ world のどの段階にも持ち時間があります。
 | `url` の関数 | 60,000 ms | `url: { resolve, timeout_ms }` |
 | `lists` の各コマンド | 60,000 ms | コマンドの代わりに `{ command, timeout_ms }` |
 
+<!-- engine: typescript -->
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -2932,6 +3048,7 @@ environment が書いたフィールドはトップレベルのものを置き�
 `defaultEnvironments` は、配備先が自分の動くスイッチを宣言しながら、ローカルのすべての run からは外れたままでいるための手段です。
 `--env` は繰り返せ、environment ごとに自分の world を持ちます(「実行」を参照)。
 
+<!-- engine: typescript -->
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -2958,6 +3075,7 @@ export default defineConfig({
 配備されたサーバや、pull request ごとのプレビューです。
 関数は、何かに届く前に world の `{ name, root, dir, signal, tree }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照):
 
+<!-- engine: typescript -->
 ```ts
 environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
@@ -3205,6 +3323,7 @@ Then は、その数を claim にできます。
 本番でも同じ書き手がこの変数を読むからです。
 名前はプログラムが決めます:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -3736,6 +3855,7 @@ Then は、前の step の中でプログラムが何をしたかを claim に�
 "nothing was written" や "the score row was inserted once" のような文です。
 claim step はその数を `events` で名指し、claim はそのキーを実際の値として読みます:
 
+<!-- engine: typescript -->
 ```ts
 // features/steps/nothing-was-written.ts
 import { defineStep, z } from "nukadoko";
@@ -3936,6 +4056,7 @@ claim はまだ届く途中の行で判定されたので、セルはどちら�
 agent と同じようにそれらを呼び出す step は、このプロトコル自身の SDK の `Client` を使い、nukadoko は自分のクライアントを足しません。
 `nukadoko` の `measureMcp` がクライアントの transport を包み、step がそれを通して送るそれぞれの呼び出しは、その step の record の一部になります:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -4028,6 +4149,7 @@ world への HTTP での呼び出しの行です:
 プログラムの `lists` は、箇所の種類ごとに 1 つのコマンドを名指します。
 各コマンドは、その種類のプログラムの箇所を、1 行に 1 つの JSON オブジェクトで出力します:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -4070,6 +4192,7 @@ export default defineConfig({
 Rails のアプリケーションは、依存無しでルートを出力できます。
 コマンドは `bin/rails runner` への 1 つの argv の語なので、shell はそれを読みません:
 
+<!-- engine: typescript -->
 ```ts
 lists: {
   routes: [
@@ -4245,6 +4368,7 @@ base で判定する claim は base の tree の一覧を読み、head の claim
 ファイルは TypeScript で、コマンドはプロジェクトが実行するものなら何でも構いません。
 Rails のアプリケーションです:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -5375,6 +5499,18 @@ page が読み込む script、stylesheet、画像、フォントなどです。
 挨拶が初めての訪問者に親しみやすいか、エラーメッセージが次に何をすればよいかを読み手に伝えるか、ページが仕上がって見えるか、といったものです。
 それを述べる Then は判断を求めます。
 `compare: "judged-as"` の claim で、実際の値は判断する値、期待値は文が名指す性質で、キャプチャかパターンの固定の語から取ります。
+
+```ruby
+class GreetingReadsAs < Nukadoko::Step
+  pattern "the greeting reads as {quality:string}"
+  args do
+    string :quality
+    field :stdout, RunGreet.returns[:stdout]
+  end
+  from stdout: [RunGreet, :stdout]
+  claims [{ actual: "stdout", view: "text", compare: "judged-as", expected: "quality" }]
+end
+```
 
 ```ts
 export default defineStep({
@@ -6662,6 +6798,16 @@ ASCII の英字に限りません。
 
 `envFiles` と `fixtures` を名指しする例です。
 environment は config の `program` にあります(「テスト対象のプログラム」を参照):
+
+```ruby
+Nukadoko.config(envFiles: [".env"])
+
+Nukadoko.fixture(:tenant) do |use, request:|
+  t = create_tenant(request)
+  use.(t)
+  destroy_tenant(request, t)
+end
+```
 
 ```ts
 export default defineConfig({

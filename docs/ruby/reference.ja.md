@@ -155,5 +155,14 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 
 ## このエンジンにないもの
 
-`nuka check --codes` と `nuka check --fail-on` は TypeScript エンジンにだけあります。
-既存のスイートを取り込む 2 つの扉、cucumber-js からと Playwright Test からは、どちらも JavaScript のスイートなので、TypeScript エンジンのものです。
+TypeScript エンジンにあって、このエンジンにまだないものです。
+spec では、その例に `<!-- engine: typescript -->` を付けています。
+
+- `nuka check --codes` と `nuka check --fail-on`。
+- プログラムの `build`、`prepare`、`setup`、`url`(nukadoko が起動しないプログラム)、`lists`、`policy`、それに `{events}` のプレースホルダと、それが読む実行イベント。
+- step の `requires`、`gives`、`ends`(state)、`files`(コマンドが書いたもの)、`events`(プログラムがしたこと)。
+- fixture の `use` が返すもの。
+TypeScript エンジンは scenario の結果を返すので、後片付けで失敗の跡を残せます。
+- MCP クライアントの呼び出しを記録する `measureMcp`。
+- 既存のスイートを取り込む 2 つの扉、cucumber-js からと Playwright Test から。
+どちらも JavaScript のスイートなので、TypeScript エンジンのものです([doors.ja.md](../typescript/doors.ja.md))。

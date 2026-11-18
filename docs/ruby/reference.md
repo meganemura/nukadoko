@@ -175,7 +175,18 @@ returns the wrong shape is an error.
 
 ## Not in this engine
 
-`nuka check --codes` and `nuka check --fail-on` are in the TypeScript
-engine only. The two doors that bring an existing suite in, from
-cucumber-js and from Playwright Test, are JavaScript suites, so they are
-the TypeScript engine's.
+What the TypeScript engine has and this one does not yet. The spec marks
+each of its examples with `<!-- engine: typescript -->`.
+
+- `nuka check --codes` and `nuka check --fail-on`.
+- In the program: `build`, `prepare`, `setup`, `url` (a program nukadoko
+  does not start), `lists`, `policy`, and the `{events}` placeholder with
+  the execution events it reads.
+- On a step: `requires`, `gives`, and `ends` (states), `files` (what a
+  command wrote), and `events` (what the program did).
+- What a fixture's `use` returns: the TypeScript engine gives back the
+  scenario's outcome, so a teardown can keep what a failure left.
+- `measureMcp`, which records the MCP calls a client makes.
+- The two doors that bring an existing suite in, from cucumber-js and from
+  Playwright Test. Both are JavaScript suites, so they are the TypeScript
+  engine's ([doors.md](../typescript/doors.md)).

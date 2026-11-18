@@ -276,6 +276,23 @@ process, such as a fake server or a fixture script, belongs outside
 `nuka check`, and a module that starts a child process or listens on a
 socket at its top level would do so there.
 
+```ruby
+class CreateProject < Nukadoko::Step
+  pattern "a project {name:string} exists" # named capture, see below
+  description "Create a project and return its id"
+  args { string :name }
+  returns do
+    string :id
+    string :name
+  end
+  mutates true # default true; see keyword semantics
+
+  def run(request:, args:)
+    request.post("/projects", data: { name: args.name }).json
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 
@@ -924,6 +941,16 @@ the feature file.
 Omitted cleanup leaks the resource.
 `nukadoko.config.ts` provides the required place:
 
+```ruby
+Nukadoko.fixture(:tenant) do |use, request:|
+  t = create_tenant(request)
+  use.(t)
+  destroy_tenant(request, t)
+end
+
+Nukadoko.fixture(:seededDb, scope: :process) { |use| use.(seed_db) }
+```
+
 ```ts
 export default defineConfig({
   fixtures: {
@@ -969,6 +996,7 @@ A step that destructures a project fixture needs that fixture's type too.
 A step's `run` receives `FixtureBag`, and a project adds a fixture to it by
 augmenting `StepFixtures` in `nukadoko.config.ts`:
 
+<!-- engine: typescript -->
 ```ts
 declare module "nukadoko" {
   interface StepFixtures {
@@ -1103,6 +1131,7 @@ For `process` scope, setup cannot know the outcome of the run.
 Therefore, the fixture function does not receive the outcome as a second argument.
 Instead, `use()` returns the outcome:
 
+<!-- engine: typescript -->
 ```ts
 tenant: async ({ request }, use) => {
   const t = await createTenant(request);
@@ -1250,6 +1279,21 @@ The feature file would no longer show that work to a reviewer.
 
 `from` preserves both properties by declaring the source of a key as data:
 
+```ruby
+class ProjectIsArchived < Nukadoko::Step
+  pattern "the project is archived"
+  description "Archive the project created earlier in this scenario"
+  args { string :projectId }
+  returns { boolean :archived }
+  from projectId: [CreateProject, :id]
+
+  def run(request:, args:)
+    # args.projectId is present or this line was never reached.
+    request.post("/projects/#{args.projectId}/archive").json
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 import createProject from "./create-project.ts";
@@ -1282,6 +1326,10 @@ A key can name more than one possible producer.
 For example, a scenario can create or import a project.
 The consumer does not need two steps to support these sources:
 
+```ruby
+from projectId: [[CreateProject, :id], [ImportProject, :projectId]]
+```
+
 ```ts
 from: { projectId: [[createProject, "id"], [importProject, "projectId"]] }
 ```
@@ -1304,6 +1352,11 @@ Recency provides a suitable default for freshness, but not for provenance.
 Alternative producers are mutually exclusive, so exactly one must run.
 A scenario can instead exercise both producers and compare two paths to one record.
 In that case, give each producer a separate key:
+
+```ruby
+from createdId: [CreateProject, :id],
+     importedId: [ImportProject, :id]
+```
 
 ```ts
 from: {
@@ -1409,13 +1462,35 @@ implementation refactor must preserve the agreed sentence.
 A step may call another step instead. `parts` declares which ones, and
 the `call` fixture runs one:
 
+```ruby
+class ProjectWithMember < Nukadoko::Step
+  pattern "a project named {name:string} has {email:string} as a member"
+  description "Create a project and invite one member into it"
+  args do
+    string :name
+    string :email
+  end
+  returns do
+    string :projectId
+    string :memberId
+  end
+  parts [CreateProject, InviteMember]
+
+  def run(call:, args:)
+    project = call.(CreateProject, name: args.name)
+    member = call.(InviteMember, projectId: project.id, email: args.email)
+    { projectId: project.id, memberId: member.id }
+  end
+end
+```
+
 ```ts
 import { defineStep, z } from "nukadoko";
 import createProject from "./parts/create-project.ts";
 import inviteMember from "./parts/invite-member.ts";
 
 export default defineStep({
-  pattern: "a project named {string} has {string} as a member",
+  pattern: "a project named {name:string} has {email:string} as a member",
   description: "Create a project and invite one member into it",
   args: z.object({ name: z.string(), email: z.string() }),
   returns: z.object({ projectId: z.string(), memberId: z.string() }),
@@ -1552,6 +1627,7 @@ Without a declaration, a scenario that forgets the sign-in looks valid until the
 
 A step declares the states it depends on and the states it changes:
 
+<!-- engine: typescript -->
 ```ts
 import { defineStep, z } from "nukadoko";
 
@@ -1714,6 +1790,19 @@ A typed step either runs (`run`) or claims (`claims`), never both. The two
 `defineStep` overloads make the options exclusive, and `defineStep`
 refuses a claim step that also declares `run`, `returns`, `mutates`, or
 `parts`, and a step that runs and declares `observe` or `poll`.
+
+```ruby
+class ExitsWith < Nukadoko::Step
+  description "The process exit code is exactly this"
+  pattern "it exits with {code:int}"
+  args do
+    number :code, "The expected exit code"
+    field :exitCode, RunTally.returns[:exitCode]
+  end
+  from exitCode: [RunTally, :exitCode]
+  claims [{ actual: "exitCode", compare: "equal", expected: "code" }]
+end
+```
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -1971,6 +2060,7 @@ migrations/0002_add_note.sql", "wrote exactly these files", "changed no
 file under src/". The claim step names the list in `files`, and a claim
 reads its key as its actual:
 
+<!-- engine: typescript -->
 ```ts
 // features/steps/build-writes-nothing.ts
 import { defineStep, z } from "nukadoko";
@@ -2219,6 +2309,10 @@ list rather than a detail left out. Any other expected value fits only
 an equal one. A docstring reaches the claim as JSON through
 `expected_view`:
 
+```ruby
+claims [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }]
+```
+
 ```ts
 claims: [{ actual: "body", compare: "has-fields", expected: "fields", expected_view: "json" }],
 ```
@@ -2244,6 +2338,10 @@ it as any undefined actual value does, so `actual: "body.user"` on a
 body with no user does not hold for a field nothing looked for. An
 expected value that is not a string breaks the claim, and so does a
 blank name, which almost every object lacks.
+
+```ruby
+claims [{ actual: "body", compare: "lacks-field", expected: { literal: "password" } }]
+```
 
 ```ts
 claims: [{ actual: "body", compare: "lacks-field", expected: { literal: "password" } }],
@@ -2389,6 +2487,14 @@ page's accessibility tree. The actual value is not a value at the
 claim's path: `observe` returns the page or a locator under that key,
 and nukadoko takes its ARIA snapshot right after `observe` returns,
 through the `ariaSnapshot()` of the value's class:
+
+```ruby
+args { string :tree }
+poll timeout_ms: 5000
+claims [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }]
+
+def observe(page:) = { page: page }
+```
 
 ```ts
 args: z.object({ tree: z.string() }),
@@ -2684,6 +2790,14 @@ Thens read a state that cannot change once it is reached: a screen that
 loaded shows a slider or a spinbutton, and goes on showing it. `settled`
 beside `timeout_ms` names that state, so the poll stops waiting for a
 claim that broke on it:
+
+```ruby
+args { string :tree }
+poll timeout_ms: 5000, settled: [{ actual: "busy", count: true, compare: "equal", expected: { literal: 0 } }]
+claims [{ actual: "page", compare: "fits-aria-snapshot", expected: "tree" }]
+
+def observe(page:) = { page: page, busy: page.locator("[aria-busy=true]").all_text_contents }
+```
 
 ```ts
 args: z.object({ tree: z.string() }),
@@ -3272,6 +3386,7 @@ The program under test lives in the same file, as `program`: a function
 that returns how nukadoko builds the program, prepares its state, starts
 it or reaches it, and the environment variables its processes get.
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -3468,6 +3583,7 @@ the terminal to say on what.
 | a `url` function | 60,000 ms | `url: { resolve, timeout_ms }` |
 | each `lists` command | 60,000 ms | `{ command, timeout_ms }` in place of the command |
 
+<!-- engine: typescript -->
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -3766,6 +3882,7 @@ switches it runs with and still stays out of every local run.
 `--env` may repeat; each environment is a world of its own (see
 "Running").
 
+<!-- engine: typescript -->
 ```ts
 import { defineConfig } from "nukadoko";
 
@@ -3795,6 +3912,7 @@ A function receives the world's `{ name, root, dir, signal, tree }`
 before anything is reached, so one entry covers every preview (`signal`
 is aborted when the function is abandoned, see "Limits"):
 
+<!-- engine: typescript -->
 ```ts
 environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
@@ -4155,6 +4273,7 @@ The program names the file with `{events}`.
 The examples use `EXECUTION_EVENTS`, the variable the same writer reads
 in production; the program chooses the name:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -4856,6 +4975,7 @@ A Then can claim what the program did inside an earlier step:
 The claim step names the count in `events`, and a claim reads its key
 as its actual:
 
+<!-- engine: typescript -->
 ```ts
 // features/steps/nothing-was-written.ts
 import { defineStep, z } from "nukadoko";
@@ -5128,6 +5248,7 @@ A step that calls them as an agent would uses the protocol's own SDK
 `measureMcp` from `nukadoko` wraps the client's transport, and each call a
 step sends through it is part of that step's record:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -5247,6 +5368,7 @@ can say which it has, and what each of its tables holds.
 each command prints the program's places of that kind, one JSON object
 per line:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -5291,6 +5413,7 @@ export default defineConfig({
 A Rails application prints its routes with no dependency.
 The command is one argv word to `bin/rails runner`, so no shell reads it:
 
+<!-- engine: typescript -->
 ```ts
 lists: {
   routes: [
@@ -5501,6 +5624,7 @@ reads head's, and a `--concurrency` worker reads its world's.
 The file is TypeScript, and the commands are whatever the project runs.
 A Rails application:
 
+<!-- engine: typescript -->
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -6996,6 +7120,18 @@ next, whether a page reads as finished. A Then that states one asks for a
 judgment: a claim with `compare: "judged-as"`, whose actual is the value
 to judge and whose expected is the quality the sentence names, from a
 capture or from the pattern's fixed words.
+
+```ruby
+class GreetingReadsAs < Nukadoko::Step
+  pattern "the greeting reads as {quality:string}"
+  args do
+    string :quality
+    field :stdout, RunGreet.returns[:stdout]
+  end
+  from stdout: [RunGreet, :stdout]
+  claims [{ actual: "stdout", view: "text", compare: "judged-as", expected: "quality" }]
+end
+```
 
 ```ts
 export default defineStep({
@@ -8749,6 +8885,16 @@ text may be a secret. The run still loads every binding it could read.
 
 This example defines `envFiles` and `fixtures`; its environments are in
 the config's `program` (see "Program"):
+
+```ruby
+Nukadoko.config(envFiles: [".env"])
+
+Nukadoko.fixture(:tenant) do |use, request:|
+  t = create_tenant(request)
+  use.(t)
+  destroy_tenant(request, t)
+end
+```
 
 ```ts
 export default defineConfig({
