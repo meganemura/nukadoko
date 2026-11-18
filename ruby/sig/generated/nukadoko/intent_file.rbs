@@ -1,0 +1,46 @@
+# Generated from lib/nukadoko/intent_file.rb with RBS::Inline
+
+# Responsibility: the intent a change declares (docs/intent.md), read
+# under `nuka run --base`: the file at the repository's top as head's
+# working tree holds it, and what git says of it since the base. Boundary:
+# git and the disk only; the format is Intent's, what each row came to
+# IntentView's.
+#
+# The file is the change's when the change wrote it: a file the base
+# already holds unchanged is an earlier change's intent, merged with it,
+# and says nothing about this one. So a run reads it only when head's
+# text differs from the base's, and a change that removes it declares
+# nothing.
+#
+# The reviewer reads when it was declared: in the change's first commit,
+# before anything it judges was written, or later, and each commit since
+# that changed it again. A change of intent is itself a difference the
+# reviewer approves, so it is named, never folded into the rows.
+module Nukadoko
+  module Engine
+    module IntentFile
+      # git did not answer.
+      class GitFailed < StandardError
+      end
+
+      # The intent the change at `project` declares against `base_commit`:
+      # `{ intent:, record: }`, the record run.json's `intent` before its
+      # rows are judged, or nil when it declares none. Raises GitFailed
+      # when git does not answer.
+      # : (String, String) -> Hash[Symbol, untyped]?
+      def self?.read: (String, String) -> Hash[Symbol, untyped]?
+
+      # : (String, *String) -> String
+      def self?.git: (String, *String) -> String
+
+      # The file at a commit, or nil when the commit holds none.
+      # : (String, String) -> String?
+      def self?.at_commit: (String, String) -> String?
+
+      # The commits after `base` up to HEAD, oldest first, each with its
+      # subject: all of them, or with `file`, those that changed it.
+      # : (String, String, ?String?) -> Array[Hash[Symbol, String]]
+      def self?.commits_since: (String, String, ?String?) -> Array[Hash[Symbol, String]]
+    end
+  end
+end

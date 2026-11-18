@@ -51,7 +51,7 @@ module Nukadoko
       #: (Hash[Symbol, untyped]) -> String
       def render(doc)
         lines = [MARKER, *title(doc), *table(doc), *reasons(doc), *limits_section(doc), *condition(doc),
-                 *removed(doc), *paths(doc), *flags(doc), *routes(doc), *claims(doc), *findings(doc), *rerun(doc)]
+                 *removed(doc), *intent(doc), *paths(doc), *flags(doc), *routes(doc), *claims(doc), *findings(doc), *rerun(doc)]
         "#{lines.join("\n")}\n"
       end
 
@@ -775,6 +775,11 @@ module Nukadoko
                      "Criteria whose differences the intent declares:",
                      "New or changed criteria, whose new sentences account for what they do differently:",
                      "Criteria that may differ:"].freeze
+      BASE_GROUP_UNDECLARED = "Unchanged criteria that did something else at head, which neither the intent nor the feature files ask for:"
+
+      # The words of a row's result, as the intent's readers use them.
+      INTENT_RESULTS = { "as_intended" => "as intended", "not_happening" => "intended but not happening",
+                         "not_reached" => "not reached by the scenarios compared" }.freeze
 
       #: (untyped) -> String
       def program_code(value) = code_span(program_word(value.to_s))
@@ -826,8 +831,12 @@ module Nukadoko
         words = Events.kind_rule(key["kind"])[:compare] == "seen" ? method(:seen_words) : method(:range_words)
         holds = difference[:holds].nil? ? "" : " (#{difference[:holds]})"
         entry = path_entry_text(key)
-        "#{entry.empty? ? "" : "#{entry} "}#{words.(difference[:a])} → #{words.(difference[:b])}#{holds}"
+        "#{entry.empty? ? "" : "#{entry} "}#{words.(difference[:a])} → #{words.(difference[:b])}#{holds}#{intent_text(difference)}"
       end
+
+      # Against the base, the intent row that declares a difference.
+      #: (Hash[Symbol, untyped]) -> String
+      def intent_text(difference) = difference[:intent].nil? ? "" : " (intent row #{difference[:intent]})"
 
       # A writer's own value that changed reads as one difference: the
       # fields that stayed, then the one that changed, old then new, when
@@ -845,11 +854,11 @@ module Nukadoko
           came_key = difference_key(came)
           differ = Events.key_fields(gone_key).reject { JSON.generate(gone_key[_1]) == JSON.generate(came_key[_1]) }
           if gone[:b][:at_most] == 0 && came[:a][:at_most] == 0 && exact.(gone[:a]) && exact.(came[:b]) &&
-             gone[:a][:at_least] == came[:b][:at_least] && differ.size == 1
+             gone[:a][:at_least] == came[:b][:at_least] && differ.size == 1 && gone[:intent] == came[:intent]
             field = differ.first
             stayed = Events.key_fields(gone_key).reject { _1 == field }.map { "#{own_field_text(gone_key, _1)} " }.join
             value = ->(key) { program_code(JSON.generate(key[field])) }
-            return ["#{stayed}#{program_code(field)} #{value.(gone_key)} → #{value.(came_key)}#{gone[:a][:at_least] == 1 ? "" : " #{gone[:a][:at_least]} times"}"]
+            return ["#{stayed}#{program_code(field)} #{value.(gone_key)} → #{value.(came_key)}#{gone[:a][:at_least] == 1 ? "" : " #{gone[:a][:at_least]} times"}#{intent_text(gone)}"]
           end
         end
         differences.map { difference_text(_1) }
@@ -1122,8 +1131,8 @@ module Nukadoko
         listed.first(PATHS_SHOWN).each do |item|
           criterion = item[:criterion]
           if base && group.(item) != shown_group
-            shown_group = group.(item)
-            lines.push("", BASE_GROUPS[shown_group], "")
+            shown_group = now = group.(item)
+            lines.push("", now.zero? && doc.key?(:intent) ? BASE_GROUP_UNDECLARED : BASE_GROUPS[now], "")
           end
           head = "- #{cell_code(place.(criterion))} #{cell_text(criterion[:name])}#{read.size > 1 ? ", in #{named.(item[:environments])}" : ""}"
           lines.concat(criterion[:result] == "same_so_far" ? ["#{head}: #{item[:lines][0]}"] : [head, *item[:lines]])
@@ -1138,6 +1147,58 @@ module Nukadoko
           lines << "- and #{aside.size - PATHS_SHOWN} more in run.json's `paths`" if aside.size > PATHS_SHOWN
         end
         lines
+      end
+
+      # What a row declares, its cells as written.
+      #: (Hash[Symbol, untyped]) -> String
+      def intent_row_text(row)
+        target = row[:target].to_s.empty? ? "every criterion" : code_span(row[:target])
+        change = row[:before].to_s.empty? ? "no change" : "#{code_span(row[:before])} → #{code_span(row[:after])}"
+        "row #{row[:row]} #{target} #{code_span(row[:observation])}: #{change}"
+      end
+
+      # run.json's `intent`, for the person who approves the change: when it
+      # was declared and whether it moved since, and what each row came to.
+      # Each criterion with a difference no row declares is listed under
+      # "Changed paths", so this section counts them and does not repeat
+      # them.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def intent(doc)
+        intent = doc[:intent]
+        return [] if intent.nil?
+
+        file = code_span(intent[:file])
+        commit = ->(entry) { "#{code_span(entry[:commit].to_s[0, 12])} (#{cell_text(entry[:subject])})" }
+        declared = if intent[:declared_in].nil? then "#{file} is declared in the working tree alone, in no commit since the base."
+                   else "#{file} was declared in #{commit.(intent[:declared_in])}, " \
+                        "#{intent[:declared_in][:first] ? "the change's first commit" : "after the change's first commit, so the work it judges began before it"}."
+                   end
+        lines = ["", "## Intent", "", declared]
+        lines << "It changed after that in #{intent[:changed_after].map(&commit).join(", ")}: the change of intent is part of what is approved." if intent[:changed_after].any?
+        lines << "The working tree's #{file} differs from the one at HEAD, and the run read the working tree's." if intent[:uncommitted]
+        rows = intent[:rows]
+        said = INTENT_RESULTS.filter_map { |result, words| (n = rows.count { _1[:result] == result }).zero? ? nil : "#{n} #{words}" }
+        lines.push("", rows.empty? ? "It declares no row: nothing the criteria do is meant to change." : "#{count_of(rows.size, "row", "rows")}: #{said.join(", ")}.")
+        places = ->(list) { list.map { cell_code("#{_1[:feature]}:#{_1[:line]}") }.join(", ") }
+        lines << "" if rows.any?
+        rows.each do |row|
+          parts = [*("#{INTENT_RESULTS["not_happening"]} in #{places.(row[:not_happening])}" if row[:not_happening].any?),
+                   *("#{INTENT_RESULTS["as_intended"]} in #{places.(row[:as_intended])}" if row[:as_intended].any?),
+                   *(INTENT_RESULTS["not_reached"] if row[:result] == "not_reached")]
+          lines << "- #{intent_row_text(row)}; #{parts.join("; ")}"
+        end
+        if intent[:problems].any?
+          lines.push("", "What #{file} holds that could not be read as a row:", "")
+          intent[:problems].each { lines << "- #{_1[:line].nil? ? "the file" : "line #{_1[:line]}"}: #{_1[:message]}" }
+        end
+        undeclared = (doc[:paths] || []).flat_map do |comparison|
+          next [] unless comparison.dig(:between, :kind) == "base"
+
+          comparison[:criteria].select { _1.key?(:explained_by) && _1[:explained_by].nil? }.map { "#{_1[:feature]}:#{_1[:line]}" }
+        end.uniq
+        lines.push("", if undeclared.empty? then "No criterion compared with the base did anything the change does not declare."
+                       else "#{count_of(undeclared.size, "criterion", "criteria")} compared with the base did something the change does not declare, listed first under \"Changed paths\"."
+                       end)
       end
 
       # run.json's `paths`, for the person who decides whether a change may

@@ -62,12 +62,13 @@ module Nukadoko
         @commit = RunRecord.commit(@project)
         # Said before any scenario, so a run a signal stops still names its seed.
         @out.puts "order #{Order.text(@order)}" unless @order[:kind] == "file"
+        read_intent
         executions, cells = pass
         tree_cells = {}
         if @base
           begin
             trees = TreePasses.new(@base, @scenarios, cells, @environments, @dir, @out, ->(scenario) { Run.then_judged_by(scenario, executions) }, head_root: @project,
-                                    writes_events: ->(environment) { @program.writes_events?(environment) })
+                                    writes_events: ->(environment) { @program.writes_events?(environment) }, own_fields: own_fields)
             tree_cells = trees.call(executions)
             @world_entries.concat(trees.worlds)
           ensure
@@ -96,6 +97,52 @@ module Nukadoko
       def role_of(scenario, environment) = Table.role(Table.condition_tags(scenario.tags), environment.conditions)
 
       private
+
+      # The intent the change declares (docs/intent.md), read before any
+      # world starts, since a step's path counts a writer's own kinds by
+      # the fields it names, and the base's world and head's must count
+      # them alike.
+      #: () -> void
+      def read_intent
+        return unless @base && @world == "head"
+
+        @change_intent = IntentFile.read(@project, @base.commit)
+      rescue IntentFile::GitFailed => e
+        @intent_unread = e.message
+      end
+
+      # The fields a path counts each writer's own kind by: the intent's,
+      # or, in a tree's pass, the ones head's run sent with it.
+      #: () -> Hash[String, Array[String]]
+      def own_fields
+        return (@head[:own_fields] || {}).to_h { |kind, fields| [kind.to_s, fields] } if @head
+
+        @change_intent ? Intent.own_fields(@change_intent[:intent]) : {}
+      end
+
+      # run.json's `paths` and `intent`, and the findings an intent adds:
+      # each row judged against the base pairs of the paths.
+      #: (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> [Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]]
+      def paths_and_intent(scenarios, table, environments)
+        compared = PathView.compare({ scenarios: scenarios, table: table, environments: environments, worlds: @world_entries })
+        found = [] #: Array[Hash[Symbol, untyped]]
+        if @intent_unread
+          found << { severity: "failed", code: "intent-unread", message: "the change's intent was not read: #{@intent_unread}" }
+        end
+        change = @change_intent
+        return [compared, nil, found] unless change && @base
+
+        tags_of = ->(place) { @scenarios.find { _1.uri == place[:feature] && _1.line == place[:line] }&.tags || [] }
+        judged = IntentView.judge(change[:intent], compared, scenarios, table[:rows], tags_of)
+        intent = { **change[:record], problems: change[:intent][:problems],
+                   rows: change[:intent][:rows].each_with_index.map do |row, index|
+                     came = judged[:rows].fetch(index)
+                     { row: row[:row], line: row[:line], **row[:cells], result: came[:result], as_intended: came[:as_intended], not_happening: came[:not_happening] }
+                   end }
+        base = @base
+        rerun = ->(place) { ["nuka", "run", "#{place[:feature]}:#{place[:line]}", "--base", base.commit, *@env_flags].map { Selection.shell_word(_1) }.join(" ") }
+        [judged[:paths], intent, found + IntentView.findings(intent, judged[:paths], rerun)]
+      end
 
       #: () -> [Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]]]
       def pass
@@ -256,7 +303,7 @@ module Nukadoko
         end #: Hash[String, Array[untyped]]
         places, recounts = readings_to_recount(executions)
         copy = File.join(world_dir, Events::WORLD_FILE)
-        found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets }).collect(copy, traced, recounts: recounts, tables: world.tables)
+        found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets }).collect(copy, traced, recounts: recounts, tables: world.tables, own_fields: own_fields)
         steps.each do |step|
           id = step[:observed][:events][:trace_id]
           late = found[:late][id]
@@ -558,7 +605,7 @@ module Nukadoko
         table = { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                   mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
                   worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs }
-        paths = PathView.compare({ scenarios: scenarios, table: table, environments: environments, worlds: @world_entries })
+        paths, intent, intent_found = paths_and_intent(scenarios, table, environments)
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
           environments: environments, worlds: @world_entries, order: @order,
           counts: RunRecord.counts(scenarios.reject { _1[:world] }, rows), scenarios: scenarios,
@@ -566,10 +613,14 @@ module Nukadoko
           **(flags.empty? ? {} : { flags: flags }),
           **(routes.nil? ? {} : { routes: routes }),
           **(paths.empty? ? {} : { paths: paths }),
-          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + judged_rows + @judged_early.values + undeclared_writes(scenarios) + judged + @incomplete,
+          **(intent.nil? ? {} : { intent: intent }),
+          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + judged_rows + @judged_early.values + undeclared_writes(scenarios) + judged + intent_found + @incomplete,
           # A criterion whose Then asks for a judgment holds only once one
           # cites what it read: the judgment column has a gate of its own.
-          passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty?,
+          # A change that declares its intent opts into one more gate: a
+          # difference it does not declare, or a row that did not happen.
+          passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty? &&
+                  intent_found.none? { _1[:severity] == "failed" },
           **(@walk ? { walk: @walk.record } : {}) }
       end
 

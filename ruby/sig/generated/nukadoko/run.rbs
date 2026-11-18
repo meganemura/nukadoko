@@ -33,6 +33,23 @@ module Nukadoko
 
       private
 
+      # The intent the change declares (docs/intent.md), read before any
+      # world starts, since a step's path counts a writer's own kinds by
+      # the fields it names, and the base's world and head's must count
+      # them alike.
+      # : () -> void
+      def read_intent: () -> void
+
+      # The fields a path counts each writer's own kind by: the intent's,
+      # or, in a tree's pass, the ones head's run sent with it.
+      # : () -> Hash[String, Array[String]]
+      def own_fields: () -> Hash[String, Array[String]]
+
+      # run.json's `paths` and `intent`, and the findings an intent adds:
+      # each row judged against the base pairs of the paths.
+      # : (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> [Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]]]
+      def paths_and_intent: (Array[Hash[Symbol, untyped]], Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> [ Array[Hash[Symbol, untyped]], Hash[Symbol, untyped]?, Array[Hash[Symbol, untyped]] ]
+
       # : () -> [Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]]]
       def pass: () -> [ Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]] ]
 

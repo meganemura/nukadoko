@@ -1,0 +1,69 @@
+# Generated from lib/nukadoko/intent_view.rb with RBS::Inline
+
+# Responsibility: what each row of a change's intent came to against the
+# base pairs of run.json's `paths` (docs/intent.md), and which row declares
+# each difference there. Pure: it reads the comparisons, the scenarios
+# they name, and each criterion's tags. Boundary: reading the intent is
+# Intent's, comparing two paths PathView's; this module adds the account
+# and changes no count.
+#
+# A row aims at a criterion that carries every tag of its target, and,
+# when its target or a bare field reads a line's values, whose steps on
+# either side hold an entry those values meet. A row that counts lines
+# with no such term aims at every criterion its tags name, since `0 -> 1`
+# must be told apart from nothing happening where nothing was there to
+# see. Each criterion it aims at either did what it says or did not: a
+# row meant to change declares a difference there, and one meant not to
+# change finds no difference on what it observes that no other row
+# declares. A row that aimed at no compared criterion was not reached.
+#
+# A value row declares a difference only in pairs, within one step: the
+# lines that held the old value go, and as many that hold the new one
+# come. A value that went somewhere else is no such pair, so neither half
+# is declared.
+#
+# Only a decided difference (`changed`) is declared or not: an `open` one
+# could still read the same. A changed criterion of a base pair whose
+# every difference a row declares, with no step that ran on one side
+# alone, is explained by the intent; a new or changed criterion keeps its
+# own sentences as the account for the rest; anything else is a
+# difference nothing the change declares asked for.
+module Nukadoko
+  module Engine
+    module IntentView
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.place_text: (Hash[Symbol, untyped]) -> String
+
+      # A difference's key, as a row reads it.
+      # : (Hash[Symbol, untyped]) -> Hash[String, untyped]
+      def self?.key_of: (Hash[Symbol, untyped]) -> Hash[String, untyped]
+
+      # : (Hash[Symbol, untyped]?) -> Array[Hash[String, untyped]]
+      def self?.keys_of_path: (Hash[Symbol, untyped]?) -> Array[Hash[String, untyped]]
+
+      # Whether a row aims at a criterion, from its tags and every entry its
+      # two sides' steps hold.
+      # : (Hash[Symbol, untyped], Array[String], Array[Hash[String, untyped]]) -> bool
+      def self?.aims?: (Hash[Symbol, untyped], Array[String], Array[Hash[String, untyped]]) -> bool
+
+      # The first row that declares each difference of one step, by its
+      # index among `changed`, in the rows' order: a count at once, a value
+      # in pairs.
+      # : (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Hash[Integer, Integer]
+      def self?.declared: (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Hash[Integer, Integer]
+
+      # Judges each row against the base pairs of `paths`: `{ paths:, rows: }`.
+      # `tags_of` gives a criterion's tags, as head's feature file has them.
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> Array[String]) -> Hash[Symbol, untyped]
+      def self?.judge: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> Array[String]) -> Hash[Symbol, untyped]
+
+      # The findings that gate a run whose change declares an intent: each
+      # problem reading it, each criterion with a difference nothing the
+      # change declares, and each row that did not happen where it aimed. A
+      # row not reached gates nothing. `rerun` gives the command that runs
+      # one criterion against the same base.
+      # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> String) -> Array[Hash[Symbol, untyped]]
+      def self?.findings: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> String) -> Array[Hash[Symbol, untyped]]
+    end
+  end
+end

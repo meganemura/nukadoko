@@ -177,6 +177,15 @@ Each release's notes come from the section below whose heading starts with `## [
   unchanged criterion shows what the code change did to it; the base tree
   is now made for this too when no criterion is new or changed. The same
   as the TypeScript engine.
+- A change's intent (docs/intent.md): under `--base`, an `INTENT.md` at
+  the repository's top that differs from the base's is read, each row is
+  judged against the base pairs of `paths`, and run.json gains `intent`,
+  the summary an Intent section, and each difference the row that
+  declares it. A difference nothing declares (`intent-unintended`), a row
+  that did not happen (`intent-not-happening`), and a file that cannot be
+  read (`intent-unread`) fail the run. A writer's own kind counts in a
+  path by the fields the rows read on it. The same as the TypeScript
+  engine.
 
 ## [0.6.0] - 2026-11-17
 

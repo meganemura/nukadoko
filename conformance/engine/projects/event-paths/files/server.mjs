@@ -1,7 +1,7 @@
 // The program under test for compared paths, in both engines. It runs
 // with QUICK_REORDER true or false, the condition its two environments
 // differ in. POST /items adds an item and, with the reorder on, moves
-// its position too. POST /peek writes a visit, a bookkeeping table, once
+// its position too, and writes its decision, a writer's own kind. POST /peek writes a visit, a bookkeeping table, once
 // with the reorder off and twice with it on. POST /list writes nothing
 // but its request line, the same on both sides. POST /mail enqueues one
 // mail job with the reorder off and two with it on, which never perform,
@@ -20,6 +20,7 @@ createServer((request, response) => {
   if (request.method === "POST" && request.url === "/items") {
     write({ trace, kind: "flag", name: "quick_reorder", side: quick ? "on" : "off", gate: "actor" });
     write({ trace, kind: "db", table: "items", op: "insert", rows: 1, committed: true });
+    write({ trace, kind: "x_decision", x_result: { features: quick ? ["sso", "audit"] : ["sso"], at: Date.now() } });
     if (quick) write({ trace, kind: "db", table: "positions", op: "update", rows: 1, committed: true });
     write({ trace, kind: "request", method: "POST", route: "/items", status: 201 });
     response.statusCode = 201;

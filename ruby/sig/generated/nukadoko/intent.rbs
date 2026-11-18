@@ -1,0 +1,132 @@
+# Generated from lib/nukadoko/intent.rb with RBS::Inline
+
+# Responsibility: the intent file's format (docs/intent.md): what a change
+# declares it means to do differently, as one Markdown table whose rows
+# are target x observation x before -> after, each cell in the execution
+# events vocabulary. Reading it, writing it back, and the two questions a
+# row answers about one entry of a path: does the row aim at it, and does
+# a difference on it go the way the row says. Pure. Boundary: where the
+# file is and what git says of it are IntentFile's; which criteria a row
+# reached, and what each came to, are IntentView's.
+#
+# Only the table whose header is exactly
+# `| Target | Observation | Before | After |` is read; prose around it is
+# for people. A cell's terms are the events vocabulary: a kind, and
+# `field<op>value` over a line's fields, so a row names what the program
+# reports and never a step, a criterion's text, or an id.
+#
+# A value is JSON when it parses as JSON and is otherwise the bare text:
+# `plan:team` and `"plan:team"` are one value, and `10` is a number. A
+# term ends at a space outside a JSON string or brackets, so a value with
+# spaces is written as JSON, and a `|` in a cell is written `\|`, as
+# Markdown has it.
+#
+# Before and after say how many lines a step's path counts for an
+# observation with no bare field (`0` -> `1`), or which value the bare
+# field had. Both left empty says the observation is not meant to change
+# at all, which is how a refactor declares that decisions stay as they
+# were. A row that cannot be read is a problem named by its line, never
+# left out in silence.
+module Nukadoko
+  module Engine
+    module Intent
+      FILE: ::String
+
+      HEADER: untyped
+
+      OPS: untyped
+
+      FIELD: ::Regexp
+
+      # The cells of a Markdown table line: between its outer pipes, split
+      # at each `|` that `\` does not escape, each trimmed, `\|` read as `|`.
+      # : (String) -> Array[String]?
+      def self?.table_cells: (String) -> Array[String]?
+
+      # A cell as a table line holds it: `|` escaped.
+      # : (String) -> String
+      def self?.cell_text: (String) -> String
+
+      # The terms of a cell, split at each run of spaces outside a JSON
+      # string and outside brackets.
+      # : (String) -> Array[String]
+      def self?.split_terms: (String) -> Array[String]
+
+      # A value as written: JSON when it parses, the bare text otherwise.
+      # : (String) -> untyped
+      def self?.value_of: (String) -> untyped
+
+      # A value as a cell writes it: bare when that reads back as the same
+      # value and holds no space, pipe, quote, or bracket, and JSON
+      # otherwise.
+      # : (untyped) -> String
+      def self?.value_text: (untyped) -> String
+
+      # : (String) -> Hash[Symbol, untyped]
+      def self?.term_of: (String) -> Hash[Symbol, untyped]
+
+      # Why a field cannot be read on a kind's lines, or nil.
+      # : (String, String) -> String?
+      def self?.field_problem: (String, String) -> String?
+
+      # A term as a path's key reads it: an `http` origin on loopback
+      # without its port, as a path keeps it.
+      # : (String, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+      def self?.key_term: (String, Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
+
+      # : (String) -> Integer?
+      def self?.count_of: (String) -> Integer?
+
+      # : (Integer, Integer, Hash[Symbol, String]) -> Hash[Symbol, untyped]
+      def self?.row_of: (Integer, Integer, Hash[Symbol, String]) -> Hash[Symbol, untyped]
+
+      # Reads the intent file's text: `{ rows:, problems: }`. Pure.
+      # : (String) -> Hash[Symbol, Array[Hash[Symbol, untyped]]]
+      def self?.parse: (String) -> Hash[Symbol, Array[Hash[Symbol, untyped]]]
+
+      # The table a list of rows' cells makes, header first: what `parse`
+      # reads back to the same cells.
+      # : (Array[Hash[Symbol, String]]) -> String
+      def self?.table: (Array[Hash[Symbol, String]]) -> String
+
+      # For each writer's own kind a row observes, every field a row reads
+      # on it, so a path counts the kind by them.
+      # : (Hash[Symbol, untyped]) -> Hash[String, Array[String]]
+      def self?.own_fields: (Hash[Symbol, untyped]) -> Hash[String, Array[String]]
+
+      # Two values are one when their JSON is, objects' keys in any order.
+      # : (untyped, untyped) -> bool
+      def self?.same_value?: (untyped, untyped) -> bool
+
+      # : (untyped) -> String
+      def self?.canonical: (untyped) -> String
+
+      # The value a key or a line holds at a field: a path's own key holds
+      # a dotted field as one name, a line as nested objects. `nil` with
+      # `found: false` when it holds none.
+      # : (Hash[String, untyped], String) -> [bool, untyped]
+      def self?.field_value: (Hash[String, untyped], String) -> [ bool, untyped ]
+
+      # Whether a term holds on a record. A field the record lacks meets no
+      # term, and an order compares two numbers or two strings alone.
+      # : (Hash[Symbol, untyped], Hash[String, untyped]) -> bool
+      def self?.term_holds?: (Hash[Symbol, untyped], Hash[String, untyped]) -> bool
+
+      # Whether a row aims at an entry of a path: its kind, and every
+      # condition and filter holds on it.
+      # : (Hash[Symbol, untyped], Hash[String, untyped]) -> bool
+      def self?.observes?: (Hash[Symbol, untyped], Hash[String, untyped]) -> bool
+
+      # : (Hash[Symbol, untyped], Integer) -> bool
+      def self?.within?: (Hash[Symbol, untyped], Integer) -> bool
+
+      # Whether a difference on an entry the row observes goes the way the
+      # row says. For a count: the base side can hold `before` and head
+      # `after`. For a value: the entry holds `before` and fewer lines at
+      # head, or `after` and more; the caller pairs the two. A row meant not
+      # to change declares no difference.
+      # : (Hash[Symbol, untyped], Hash[String, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Symbol?
+      def self?.declares: (Hash[Symbol, untyped], Hash[String, untyped], Hash[Symbol, untyped], Hash[Symbol, untyped]) -> Symbol?
+    end
+  end
+end

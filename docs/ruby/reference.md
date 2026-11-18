@@ -253,7 +253,6 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- In run.json: `intent`, what INTENT.md declares the change does.
 - Failures underneath: a response, an error, or a page error a passed
   scenario did not name turns its cell broke, unless an `@expects:` tag
   names it.

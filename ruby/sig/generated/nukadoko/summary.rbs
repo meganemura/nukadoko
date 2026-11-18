@@ -236,6 +236,11 @@ module Nukadoko
       # still read the same.
       BASE_GROUPS: untyped
 
+      BASE_GROUP_UNDECLARED: ::String
+
+      # The words of a row's result, as the intent's readers use them.
+      INTENT_RESULTS: untyped
+
       # : (untyped) -> String
       def self?.program_code: (untyped) -> String
 
@@ -263,6 +268,10 @@ module Nukadoko
 
       # : (Hash[Symbol, untyped]) -> String
       def self?.difference_text: (Hash[Symbol, untyped]) -> String
+
+      # Against the base, the intent row that declares a difference.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.intent_text: (Hash[Symbol, untyped]) -> String
 
       # A writer's own value that changed reads as one difference: the
       # fields that stayed, then the one that changed, old then new, when
@@ -351,6 +360,18 @@ module Nukadoko
       # several base pairs is listed once, naming their environments.
       # : (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Array[String]
       def self?.path_section: (Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]) -> Array[String]
+
+      # What a row declares, its cells as written.
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.intent_row_text: (Hash[Symbol, untyped]) -> String
+
+      # run.json's `intent`, for the person who approves the change: when it
+      # was declared and whether it moved since, and what each row came to.
+      # Each criterion with a difference no row declares is listed under
+      # "Changed paths", so this section counts them and does not repeat
+      # them.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.intent: (Hash[Symbol, untyped]) -> Array[String]
 
       # run.json's `paths`, for the person who decides whether a change may
       # be turned on for everyone: per pair of sides, each criterion whose

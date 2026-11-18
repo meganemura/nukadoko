@@ -210,7 +210,6 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- run.json の `intent`(INTENT.md が宣言する変更の中身)。
 - 下にある失敗(通った scenario が名指ししていない応答、エラー、ページのエラー)でセルを broke にすること。
 `@expects:` タグで名指ししたものは除きます。
 - fixture の `use` が返すもの。

@@ -246,9 +246,11 @@ module Nukadoko
         # folded from every line of its trace, and each of `recounts`
         # (`{ trace_id:, inputs:, selection:, replaced: }`) is counted again
         # over every line of its trace, leaving out what `tables` leaves out.
-        #: (String, Hash[String, Array[untyped]], ?recounts: Array[Hash[Symbol, untyped]], ?tables: Hash[Symbol, untyped]) -> Hash[Symbol, untyped]
-        def collect(copy, steps, recounts: [], tables: NO_MARKED_TABLES)
-          own = { fields: {}, redact: ->(value) { @secrets.().redact(value) } }
+        # A writer's own kind counts in a path by `own_fields`, the fields
+        # the change's intent reads on it.
+        #: (String, Hash[String, Array[untyped]], ?recounts: Array[Hash[Symbol, untyped]], ?tables: Hash[Symbol, untyped], ?own_fields: Hash[String, Array[String]]) -> Hash[Symbol, untyped]
+        def collect(copy, steps, recounts: [], tables: NO_MARKED_TABLES, own_fields: {})
+          own = { fields: own_fields, redact: ->(value) { @secrets.().redact(value) } }
           folds = steps.filter_map { |id, (_, _, inputs)| [id, PathFold.new(inputs.merge(tables: tables), own)] if inputs }.to_h
           writes = steps.filter_map { |id, (_, _, inputs)| [id, Tally.new(inputs.merge(selections: [Selection::PERSISTED_WRITES], tables: tables))] if inputs }.to_h
           kinds = KindsSeen.new

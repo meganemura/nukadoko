@@ -26,8 +26,8 @@ module Nukadoko
       # claim in Then position (Run.then_judged_by).
       # `writes_events` says whether head's world of an environment writes
       # execution events.
-      # : (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String, ?writes_events: ^(Environment) -> bool) -> void
-      def initialize: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String, ?writes_events: ^(Environment) -> bool) -> void
+      # : (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String, ?writes_events: ^(Environment) -> bool, ?own_fields: Hash[String, Array[String]]) -> void
+      def initialize: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String, ?writes_events: ^(Environment) -> bool, ?own_fields: Hash[String, Array[String]]) -> void
 
       # The worlds each tree's passes started, as run.json names them.
       attr_reader worlds: untyped

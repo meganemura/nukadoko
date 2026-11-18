@@ -72,3 +72,35 @@ Feature: the paths a run compares
 
       - `features/paths.feature:16` mailing the items: the same so far, with `jobs-pending` on both sides
       """
+
+  Scenario: a change declares its intent, and each row says whether it happened
+    Given the project "event-paths" in a git repository
+    And the file "INTENT.md" reads
+      """
+      | Target | Observation | Before | After |
+      | --- | --- | --- | --- |
+      |  | db table=positions |  |  |
+      |  | db table=items op=insert | 1 | 2 |
+      | @nothing | job | 0 | 1 |
+      |  | bogus |  |  |
+      """
+    When nuka runs "run --json --base HEAD --env reorder-off"
+    Then it exits with 1
+    And the findings are "intent-unread intent-not-happening"
+    And the summary's section "Intent" is
+      """
+      `INTENT.md` is declared in the working tree alone, in no commit since the base.
+      The working tree's `INTENT.md` differs from the one at HEAD, and the run read the working tree's.
+
+      3 rows: 1 as intended, 1 intended but not happening, 1 not reached by the scenarios compared.
+
+      - row 1 every criterion `db table=positions`: no change; as intended in `features/paths.feature:3`, `features/paths.feature:7`, `features/paths.feature:12`, `features/paths.feature:16`, `features/paths.feature:21`
+      - row 2 every criterion `db table=items op=insert`: `1` → `2`; intended but not happening in `features/paths.feature:3`, `features/paths.feature:7`, `features/paths.feature:12`, `features/paths.feature:16`, `features/paths.feature:21`
+      - row 3 `@nothing` `job`: `0` → `1`; not reached by the scenarios compared
+
+      What `INTENT.md` holds that could not be read as a row:
+
+      - line 6: row 4: `bogus` is not a kind a path keeps: one of `error`, `db`, `http`, `job`, `request`, `flag`, or a writer's own kind that starts with `x_`
+
+      No criterion compared with the base did anything the change does not declare.
+      """

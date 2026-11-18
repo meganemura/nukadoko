@@ -30,9 +30,10 @@ module Nukadoko
       # claim in Then position (Run.then_judged_by).
       # `writes_events` says whether head's world of an environment writes
       # execution events.
-      #: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String, ?writes_events: ^(Environment) -> bool) -> void
-      def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {}, head_root: Dir.pwd, writes_events: ->(_) { false })
+      #: (Base, Array[Scenario], Hash[Scenario, Array[Hash[Symbol, untyped]]], Array[Environment], String, IO, ?^(Scenario) -> untyped, ?head_root: String, ?writes_events: ^(Environment) -> bool, ?own_fields: Hash[String, Array[String]]) -> void
+      def initialize(base, scenarios, head_cells, environments, dir, out, judged_by = ->(_) {}, head_root: Dir.pwd, writes_events: ->(_) { false }, own_fields: {})
         @head_root = head_root
+        @own_fields = own_fields
         @writes_events = writes_events
         @judged_by = judged_by
         @base = base
@@ -138,7 +139,8 @@ module Nukadoko
         targets = rows.map { |scenario| place(world, scenario).then { { feature: _1, line: _2 } } }
         for_paths = paths.map { |scenario| place(world, scenario).then { { feature: _1, line: _2 } } }
         config = Nukadoko.config_options.fetch(:secrets, {}) #: Hash[Symbol, untyped]
-        head = { root: File.expand_path(@head_root), env_files: environment.env_files, public: (config[:public] || []).map(&:to_s), redact: (config[:redact] || []).map(&:to_s) }
+        head = { root: File.expand_path(@head_root), env_files: environment.env_files, public: (config[:public] || []).map(&:to_s), redact: (config[:redact] || []).map(&:to_s),
+                 own_fields: @own_fields }
         File.write(plan, JSON.generate(world: world, environment: environment.name, targets: targets, for_paths: for_paths, dir: @dir, result: result, head: head))
         output, status = Open3.capture2e(RbConfig.ruby, "-I", LIB, EXE, "__tree", plan, chdir: root)
         @out.write(output.gsub(@dir, File.join(".nukadoko", "runs", File.basename(@dir))))
