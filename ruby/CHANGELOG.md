@@ -17,9 +17,8 @@ Each release's notes come from the section below whose heading starts with `## [
 - **Breaking.** The program is checked before anything starts, and a key
   it does not know is refused (`config-invalid`), with the known key it
   matches when only its case differs: a misspelt `ready` used to leave the
-  world ready on any answer from `/`. A key the TypeScript engine reads
-  and this one does not yet (`lists`) is refused too, naming it, rather than
-  skipped. To move: correct or remove the key the message names.
+  world ready on any answer from `/`. To move: correct or remove the key
+  the message names.
 - **Breaking.** A world is ready once `ready` answers 2xx, as in the
   TypeScript engine; any answer counted before, a 404 or a 503 from a
   server still starting included. `serve` takes `timeout_ms` (default
@@ -156,6 +155,18 @@ Each release's notes come from the section below whose heading starts with `## [
   `claim-judged-early` finding. run.json's `limits` and the summary now
   list `after-record`, `unrecorded-log`, and `unrecorded-events`, as the
   TypeScript engine does.
+- run.json's `flags`: one row per flag and side the steps' execution
+  events evaluated, with the criteria that evaluated it, their cells there,
+  and the gates their lines named, and the summary's Flags section.
+- An `undeclared-write` note: a step that declares `mutates false` and
+  whose trace holds a write the program committed to a table that holds
+  state.
+- The program's `lists`: one command per kind of place (`routes`, `flags`,
+  `tables`), each printing one JSON object per line. A world nukadoko
+  serves reads them once the program answers. The tables list decides
+  which tables a count of writes leaves out, and run.json gains `routes`,
+  each world's `lists`, and a `program-list-unread` warning for a list
+  that was not read, as in the TypeScript engine.
 
 ## [0.6.0] - 2026-11-17
 

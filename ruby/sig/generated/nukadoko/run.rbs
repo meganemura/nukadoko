@@ -36,6 +36,16 @@ module Nukadoko
       # : () -> [Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]]]
       def pass: () -> [ Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]] ]
 
+      # A list a started world did not read, as a warning: head's routes and
+      # flags, and the tables list of a world of any tree.
+      # : (Environment, World, String) -> void
+      def warn_lists_unread: (Environment, World, String) -> void
+
+      # Under `nuka do`, a tables list the world did not read leaves the
+      # step's counts unjudged, and the warning says why, as a run's does.
+      # : (World) -> void
+      def warn_do_lists_unread: (World) -> void
+
       # A stopped world as run.json names it. The lines of the program's log
       # that came after their step's record was read go beside that record,
       # and its run.json entry names them.
@@ -120,6 +130,18 @@ module Nukadoko
       # under `--base`; each row is judged with what changed since the base.
       # : (Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]], ?Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> Hash[Symbol, untyped]
       def finish: (Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]], ?Hash[Scenario, Array[Hash[Symbol, untyped]]]) -> Hash[Symbol, untyped]
+
+      # A step that declares mutates: false and whose trace holds a write
+      # the program committed to a table that holds state: one note per
+      # step line of each scenario and environment, the first execution's
+      # writes named, since the runs of --repeat would say it again. Only
+      # head's executions: another tree's declarations are not the change.
+      # : (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def undeclared_writes: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # A scenario's name, and its environment in a run over several.
+      # : (String, String) -> String
+      def label: (String, String) -> String
 
       # What `--base` knows of one row: its change, whether it carries
       # @held, whether the mapping changed, whether its tags or its name or

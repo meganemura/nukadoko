@@ -1,0 +1,7 @@
+{
+  "serve": { "command": "node server.mjs {port} {events}", "ready": "/up" },
+  "lists": { "routes": "node lists.mjs routes", "flags": "node lists.mjs flags", "tables": "node lists.mjs tables" },
+  "environments": {
+    "broken": { "lists": { "tables": "node lists.mjs bad-tables" } }
+  }
+}

@@ -18,7 +18,7 @@ class ProgramPropertiesTest < Minitest::Test
 
   def recipe(build: [], prepare: [], env: {}, reach: { kind: "none" }, conditions: {})
     Nukadoko::Engine::Recipe.new(build: build.map { { command: _1, timeout_ms: 1 } }, prepare: prepare.map { { command: _1, timeout_ms: 1 } },
-                                 reach: reach, env: env, setup: nil, conditions: conditions)
+                                 reach: reach, env: env, setup: nil, conditions: conditions, lists: [])
   end
 
   def test_text_with_no_placeholder_is_left_as_written

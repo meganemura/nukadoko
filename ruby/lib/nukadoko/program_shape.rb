@@ -20,9 +20,8 @@ module Nukadoko
       CONDITION_VALUE = /\A[^\s@]+\z/
 
       SERVE_KEYS = %i[command port ready timeout_ms].freeze
-      # What the TypeScript engine reads that this one does not yet.
-      NOT_YET = %i[lists].freeze
-      PROGRAM_KEYS = %i[build prepare serve url env setup].freeze
+      PROGRAM_KEYS = %i[build prepare serve url env setup lists].freeze
+      LIST_KEYS = %i[routes flags tables].freeze
       TOP_KEYS = [*PROGRAM_KEYS, :environments, :defaultEnvironments].freeze
       ENVIRONMENT_KEYS = [*PROGRAM_KEYS, :conditions, :policy, :envFiles, :version].freeze
       COMMAND_KEYS = %i[command timeout_ms].freeze
@@ -56,15 +55,13 @@ module Nukadoko
       #: (Hash[Symbol, untyped], Array[Symbol], Array[String], Array[String]) -> Hash[Symbol, untyped]
       def self.fields(level, keys, path, issues)
         at = ->(key) { [*path, key.to_s].join(".") }
-        unknown = level.keys.map(&:to_sym) - keys - NOT_YET
+        unknown = level.keys.map(&:to_sym) - keys
         issues << "unknown key(s): #{unknown.map { described(_1, keys) }.join(", ")}" if unknown.any?
-        (level.keys.map(&:to_sym) & NOT_YET).each do |key|
-          issues << "#{at.(key)}: is read by the TypeScript engine and not yet by the Ruby engine, so the Ruby engine would not do what it describes"
-        end
         read = level.dup
         read[:serve] = serve(level[:serve], at.(:serve), issues) if level.key?(:serve)
         %i[build prepare].each { commands(level[_1], at.(_1), issues) if level.key?(_1) }
         url(level[:url], at.(:url), issues) if level.key?(:url)
+        lists(level[:lists], at.(:lists), issues) if level.key?(:lists)
         setup(level[:setup], at.(:setup), issues) if level.key?(:setup)
         if level.key?(:serve) && level.key?(:url)
           issues << "#{at.(:url)}: serve and url are two ways to reach the program: serve starts it, url names one nukadoko does not start. Keep one."
@@ -127,6 +124,17 @@ module Nukadoko
           end
           issues << "#{where}: must name a program to run, as a String or an Array of words" unless command?(entry)
         end
+      end
+
+      # `lists`: one command per kind of list the program prints, each a
+      # build entry's shape.
+      #: (untyped, String, Array[String]) -> void
+      def self.lists(lists, at, issues)
+        return issues << "#{at}: must be a Hash of routes, flags, or tables to a command" unless lists.is_a?(Hash)
+
+        unknown = lists.keys.map(&:to_sym) - LIST_KEYS
+        issues << "unknown key(s): #{unknown.map { described(_1, LIST_KEYS) }.join(", ")}" if unknown.any?
+        lists.each { |kind, entry| commands([entry], "#{at}.#{kind}", issues) if LIST_KEYS.include?(kind.to_sym) }
       end
 
       #: (untyped) -> bool

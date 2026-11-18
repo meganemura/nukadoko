@@ -5,6 +5,8 @@
 // answer, so its perform line arrives after the step ended, and writes a
 // line that is not JSON beside it. POST /slow-items answers at once and
 // writes its lines 250 ms later, after a claim that waits less has read.
+// POST /reorder/<side> evaluates a flag on that side, and POST /peek
+// writes a visit, though the step that sends it declares it changes nothing.
 import { appendFileSync } from "node:fs";
 import { createServer } from "node:http";
 
@@ -19,6 +21,16 @@ createServer((request, response) => {
     write({ trace, kind: "request", method: "POST", route: "/items", status: 201 });
     response.statusCode = 201;
     return response.end("added");
+  }
+  if (request.method === "POST" && request.url.startsWith("/reorder/")) {
+    write({ trace, kind: "flag", name: "quick_reorder", side: request.url.slice("/reorder/".length), gate: "actor" });
+    write({ trace, kind: "request", method: "POST", route: "/reorder/:side", status: 200 });
+    return response.end("evaluated");
+  }
+  if (request.method === "POST" && request.url === "/peek") {
+    write({ trace, kind: "db", table: "visits", op: "insert", rows: 1, committed: true });
+    write({ trace, kind: "request", method: "POST", route: "/peek", status: 200 });
+    return response.end("peeked");
   }
   if (request.method === "POST" && request.url === "/slow-items") {
     setTimeout(() => {

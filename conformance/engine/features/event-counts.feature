@@ -99,3 +99,38 @@ Feature: a claim on a count of an earlier step's execution events
       """
       "2 lines of the program's events after the step ended, in `events-late.jsonl`"
       """
+
+  Scenario: a flag's side lists the criteria whose steps evaluated it
+    Given the project "event-counts"
+    When nuka runs "run --json features/places.feature"
+    Then it exits with 0
+    And the run.json at "flags[0].counts" is
+      """
+      {
+        "controls": 0,
+        "failed": 0,
+        "held": 1,
+        "moved": 0,
+        "proven": 0,
+        "unproven": 0
+      }
+      """
+    And the run.json at "flags[0].criteria[0].cells[0].gates" is
+      """
+      [
+        "actor"
+      ]
+      """
+    And the run.json at "flags[0].only_side_evaluated" is
+      """
+      true
+      """
+
+  Scenario: a step that declares it changes nothing and writes is noted
+    Given the project "event-counts"
+    When nuka runs "run --json features/places.feature"
+    Then it exits with 0
+    And the run.json at "findings[0].message" is
+      """
+      "a peek writes a visit: the step at line 9, the-items-are-peeked, declares mutates: false, and its trace holds writes the program committed to tables that hold state, 1 line: db insert into visits"
+      """

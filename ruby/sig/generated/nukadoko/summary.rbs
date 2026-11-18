@@ -217,6 +217,40 @@ module Nukadoko
       # : (Hash[Symbol, untyped]) -> Array[String]
       def self?.claims: (Hash[Symbol, untyped]) -> Array[String]
 
+      FLAG_VERDICTS: untyped
+
+      # At most this many routes are named in one line of "Routes"; the
+      # rest are counted, and run.json's `routes` names every one.
+      ROUTES_NAMED: ::Integer
+
+      # A flag's name, side, and gate are the program's text: a line break
+      # in one would end the list item, so control characters are escaped.
+      # : (String) -> String
+      def self?.program_word: (String) -> String
+
+      # : (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def self?.head_worlds: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+
+      # One line per flag and side of run.json's `flags`: its counts, and
+      # the gates its lines named, or that no criterion evaluated a side the
+      # flags list declares. A world whose flags list was not read is named,
+      # so a missing side is never read as one the program does not have.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.flags: (Hash[Symbol, untyped]) -> Array[String]
+
+      # : (Hash[Symbol, untyped]) -> String
+      def self?.route_name: (Hash[Symbol, untyped]) -> String
+
+      # : (Array[String]) -> String
+      def self?.named_list: (Array[String]) -> String
+
+      # The places of run.json's `routes` no step reached: the listed routes
+      # no head step requested, split from those whose handler a request
+      # reached through another route, then the requests the lists do not
+      # account for. A world whose list was not read is named.
+      # : (Hash[Symbol, untyped]) -> Array[String]
+      def self?.routes: (Hash[Symbol, untyped]) -> Array[String]
+
       # : (Hash[Symbol, untyped]) -> String
       def self?.where_of: (Hash[Symbol, untyped]) -> String
 

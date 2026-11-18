@@ -35,6 +35,7 @@ module Nukadoko
       :env, #: Hash[String, String]
       :setup, #: Hash[Symbol, untyped]?
       :conditions, #: Hash[String, untyped]
+      :lists, #: Array[Hash[Symbol, untyped]]
     )
 
     class Program
@@ -44,6 +45,11 @@ module Nukadoko
       DEFAULT_COMMAND_TIMEOUT_MS = 600_000
       DEFAULT_SETUP_TIMEOUT_MS = 60_000
       DEFAULT_URL_TIMEOUT_MS = 60_000
+      # How long a `lists` command may run: a list is read while the world
+      # waits to run its first scenario.
+      DEFAULT_LIST_TIMEOUT_MS = 60_000
+      # The most a list command may print; past it the list is not read.
+      LIST_OUTPUT_CAP_BYTES = 16 * 1024 * 1024
       # What a placeholder names, as the TypeScript engine names them.
       PLACEHOLDER = /\{(port|url|dir|root|world|token|events|condition\.[A-Za-z0-9_.-]+)\}/
 
@@ -109,7 +115,9 @@ module Nukadoko
           reach: Program.reach_of(e) || Program.reach_of(@options) || { kind: "none" },
           env: (@options[:env] || {}).merge(environment.env).to_h { |k, v| [k.to_s, v.to_s] },
           setup: Program.setup_of(pick.(:setup)),
-          conditions: environment.conditions
+          conditions: environment.conditions,
+          # An environment's lists replace the top level's whole.
+          lists: Events::LIST_KINDS.filter_map { |kind| (entry = (pick.(:lists) || {})[kind.to_sym]) && { kind: kind, **Program.timed(entry, DEFAULT_LIST_TIMEOUT_MS) } }
         )
       end
 
@@ -176,6 +184,8 @@ module Nukadoko
           *recipe.build.each_with_index.map { |entry, i| ["build[#{i}]", entry[:command], "build"] },
           *recipe.prepare.each_with_index.map { |entry, i| ["prepare[#{i}]", entry[:command], kind] },
           *(kind == "serve" ? [["serve.command", words(recipe.reach[:serve][:command]), kind]] : []),
+          # A lists command runs only in a world nukadoko serves.
+          *(kind == "serve" ? recipe.lists.map { ["lists.#{_1[:kind]}", _1[:command], kind] } : []),
           *recipe.env.map { |key, value| ["env.#{key}", [value], kind] }
         ] #: Array[[String, Array[String], String]]
         fields.flat_map do |where, texts, reach|
@@ -266,15 +276,18 @@ module Nukadoko
       # Started, or StartFailed with the world as far as it got, and the
       # message the run reports as program-start-failed. A base world that
       # has no URL of its own raises Unavailable.
-      #: (Environment, String, String, ?tree: String) -> World
-      def start(environment, dir, project, tree: "head")
+      # `lists` reads the program's routes and flags lists in head's worlds,
+      # as `nuka run` does; `tables` reads its tables list in a world of any
+      # tree, which `nuka do` leaves out when its step reads no events.
+      #: (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool) -> World
+      def start(environment, dir, project, tree: "head", lists: false, tables: true)
         recipe = self.recipe(environment)
         reach = recipe.reach
         token = SecureRandom.hex(16)
         prefix = Trace.new_prefix
         log_path = File.join(dir, "program.log")
         world = World.new(base_url: nil, pid: nil, log: nil, env: {}, trace_prefix: prefix, log_path: nil, commands: [], timings: {}, token: token,
-                          events_path: nil)
+                          events_path: nil, places: {}, listed: {}, tables: Events::NO_MARKED_TABLES)
         begin
           gap = Program.placeholder_gaps(recipe).first
           raise StartError, gap if gap
@@ -358,6 +371,35 @@ module Nukadoko
             end
             world.timings[:setup_ms] = Request.since(started)
           end
+
+          # A list command that fails, passes its limit, or prints what is
+          # not a list fails no world: the record names why its list was not
+          # read, and nothing of it counts.
+          wanted = recipe.lists.select { _1[:kind] == "tables" ? tables : lists && tree == "head" }
+          if events && wanted.any?
+            started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            places = {} #: Hash[String, Array[Hash[Symbol, untyped]]]
+            listed = {} #: Hash[String, Hash[Symbol, untyped]]
+            wanted.each do |list|
+              list_argv = list[:command].map { fill.(_1) }
+              world.commands << { phase: "lists", argv: list_argv }
+              read = Program.read_list(list[:kind], list_argv, list[:timeout_ms], env, project, open_log.())
+              if read[:problem]
+                listed[list[:kind]] = { entries: nil, error: read[:problem] }
+              else
+                listed[list[:kind]] = { entries: read[:entries].size, error: nil }
+                places[list[:kind]] = read[:entries]
+              end
+            end
+            world.timings[:lists_ms] = Request.since(started)
+            # A tables list the world did not read leaves every table's
+            # holding unknown, never state.
+            marked = if places["tables"] then Events::Lists.tables_of(places["tables"])
+                     elsif listed["tables"] then { unread: true }
+                     else Events::NO_MARKED_TABLES
+                     end
+            world = world.with(places: places, listed: listed, tables: marked)
+          end
           world
         rescue Unavailable
           world.stop
@@ -424,14 +466,48 @@ module Nukadoko
         end
       end
 
-      # Runs one build or prepare command to its end in the tree's root,
-      # its output in the world's log, its process group stopped at its limit.
-      #: (String, Array[String], Integer, Hash[String, String], String, File) -> void
-      def self.run_to_end(phase, argv, timeout_ms, env, root, log)
+      # Runs one list command to its end and reads what it printed: the
+      # list's entries (`{ entries: }`), or why it was not read
+      # (`{ problem: }`). A failure is the list's and never the world's.
+      #: (String, Array[String], Integer, Hash[String, String], String, File) -> Hash[Symbol, untyped]
+      def self.read_list(kind, argv, timeout_ms, env, root, log)
+        phase = "lists.#{kind}"
+        reader, writer = IO.pipe
+        bytes = 0
+        chunks = [] #: Array[String]
+        drain = Thread.new do
+          loop do
+            chunk = reader.readpartial(65_536)
+            bytes += chunk.bytesize
+            chunks << chunk if bytes <= LIST_OUTPUT_CAP_BYTES
+          end
+        rescue EOFError, IOError
+          nil
+        end
+        begin
+          run_to_end(phase, argv, timeout_ms, env, root, log, out: writer)
+        rescue StartError => e
+          return { problem: e.message }
+        ensure
+          writer.close
+          drain.join
+          reader.close
+        end
+        return { problem: "#{phase} command #{display(argv)} printed more than 16 MiB" } if bytes > LIST_OUTPUT_CAP_BYTES
+
+        read = Events::Lists.parse(kind, chunks.join.force_encoding(Encoding::UTF_8).scrub)
+        read[:problem] ? { problem: "#{phase} command #{display(argv)} printed a line that is not one entry of the list: #{read[:problem]}" } : read
+      end
+
+      # Runs one build, prepare, or list command to its end in the tree's
+      # root, its stderr in the world's log and its stdout in `out` (the
+      # log unless a list reads it), its process group stopped at its limit.
+      #: (String, Array[String], Integer, Hash[String, String], String, File, ?out: IO) -> void
+      def self.run_to_end(phase, argv, timeout_ms, env, root, log, out: log)
         shown = display(argv)
         log.puts "$ #{shown}"
         begin
-          pid = Process.spawn(env, [argv.first, argv.first], *argv.drop(1), out: log, err: log, pgroup: true, chdir: root)
+          pid = Process.spawn(env, [argv.first, argv.first], *argv.drop(1), out: out, err: log, pgroup: true, chdir: root)
         rescue SystemCallError => e
           raise StartError, "#{phase} command #{shown} could not start: #{e.message}"
         end
@@ -565,6 +641,9 @@ module Nukadoko
       :timings, #: Hash[Symbol, Integer]
       :token, #: String
       :events_path, #: String?
+      :places, #: Hash[String, Array[Hash[Symbol, untyped]]]
+      :listed, #: Hash[String, Hash[Symbol, untyped]]
+      :tables, #: Hash[Symbol, untyped]
     )
 
     class World

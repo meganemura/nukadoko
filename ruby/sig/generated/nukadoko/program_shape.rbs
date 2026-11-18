@@ -24,10 +24,9 @@ module Nukadoko
 
       SERVE_KEYS: untyped
 
-      # What the TypeScript engine reads that this one does not yet.
-      NOT_YET: untyped
-
       PROGRAM_KEYS: untyped
+
+      LIST_KEYS: untyped
 
       TOP_KEYS: untyped
 
@@ -57,6 +56,11 @@ module Nukadoko
       # timeout_ms of its own.
       # : (untyped, String, Array[String]) -> void
       def self.commands: (untyped, String, Array[String]) -> void
+
+      # `lists`: one command per kind of list the program prints, each a
+      # build entry's shape.
+      # : (untyped, String, Array[String]) -> void
+      def self.lists: (untyped, String, Array[String]) -> void
 
       # : (untyped) -> bool
       def self.command?: (untyped) -> bool

@@ -99,6 +99,10 @@ module Nukadoko
       #: () -> [Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]]]
       def pass
         @base_urls = {}
+        # What each of head's worlds read of the program's lists, by
+        # environment, for run.json's flags and routes.
+        @listed_places = {} #: Hash[String, Hash[String, Array[Hash[Symbol, untyped]]]]
+        @world_tables = Events::NO_MARKED_TABLES #: Hash[Symbol, untyped]
         executions = []
         cells = Hash.new { |h, k| h[k] = [] }
         # Each scenario line is numbered across every environment and
@@ -118,7 +122,7 @@ module Nukadoko
           probe_version(environment)
           roles = @scenarios.to_h { [_1, @world == "head" ? role_of(_1, environment) : "required"] }
           begin
-            world = @program.start(environment, world_dir, @project, tree: @world)
+            world = @program.start(environment, world_dir, @project, tree: @world, lists: true)
           rescue Program::Unavailable => e
             # A base with no URL of its own runs no cell, and nothing failed.
             @scenarios.each { cells[_1] << cell([], environment, roles[_1], _1).merge(reason: "the #{@world} world has no URL to reach: #{e.message}") }
@@ -141,6 +145,9 @@ module Nukadoko
           @program_log = world.pid && world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
           @events = world.events_path && Events::Reader.new(world.events_path, world.trace_prefix, -> { secrets })
           @base_urls[environment.name] = world.base_url
+          @world_tables = world.tables
+          @listed_places[environment.name] = world.places if @world == "head"
+          warn_lists_unread(environment, world, world_dir)
           runs = Hash.new { |h, k| h[k] = [] }
           ran = lambda do |scenario, execution|
             runs[scenario] << execution
@@ -184,6 +191,34 @@ module Nukadoko
         [executions, cells]
       end
 
+      # A list a started world did not read, as a warning: head's routes and
+      # flags, and the tables list of a world of any tree.
+      #: (Environment, World, String) -> void
+      def warn_lists_unread(environment, world, world_dir)
+        named = @world == "head" ? environment.name : "#{environment.name} (#{@world})"
+        world.listed.each do |kind, list|
+          next unless list[:error]
+
+          log = world.log_path ? "; see #{File.join(@dir, "worlds", File.basename(world_dir), "program.log").delete_prefix("#{@project}/")}" : ""
+          @warnings << { severity: "warning", code: "program-list-unread", message: redact("world #{named}: the #{kind} list was not read: #{list[:error]}#{log}"),
+                        fix: Codes.fix("program-list-unread") }
+        end
+      end
+
+      # Under `nuka do`, a tables list the world did not read leaves the
+      # step's counts unjudged, and the warning says why, as a run's does.
+      #: (World) -> void
+      def warn_do_lists_unread(world)
+        world.listed.each do |kind, list|
+          next unless list[:error]
+
+          log = world.log_path ? "; see #{world.log_path.to_s.delete_prefix("#{@project}/")}" : ""
+          message = redact("world #{@environment&.name}: the #{kind} list was not read: #{list[:error]}#{log}")
+          fix = Codes.fix("program-list-unread")
+          @out.puts ["warning", "program-list-unread", "-", message].join("\t"), *("  fix: #{fix}" if fix)
+        end
+      end
+
       # A stopped world as run.json names it. The lines of the program's log
       # that came after their step's record was read go beside that record,
       # and its run.json entry names them.
@@ -204,7 +239,8 @@ module Nukadoko
         end
         sum = ->(key) { steps.sum { _1[:observed][:program_log][key] } }
         entry = entry.merge(program_log: { stamped: sum.(:stamped), lines: sum.(:lines), late: found[:late].values.sum { _1[:lines] }, tagged: found[:tagged] })
-        world.events_path ? entry.merge(events: world_events(world, world_dir, executions)) : entry
+        entry = entry.merge(events: world_events(world, world_dir, executions)) if world.events_path
+        world.listed.empty? ? entry : entry.merge(lists: redact(world.listed))
       end
 
       # The stopped world's events as run.json names them: its redacted
@@ -219,7 +255,7 @@ module Nukadoko
         end #: Hash[String, Array[untyped]]
         places, recounts = readings_to_recount(executions)
         copy = File.join(world_dir, Events::WORLD_FILE)
-        found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets }).collect(copy, traced, recounts: recounts)
+        found = Events::Reader.new(world.events_path.to_s, world.trace_prefix, -> { secrets }).collect(copy, traced, recounts: recounts, tables: world.tables)
         steps.each do |step|
           id = step[:observed][:events][:trace_id]
           late = found[:late][id]
@@ -308,7 +344,7 @@ module Nukadoko
         return if @world != "head" || @judged_early.key?(key) || scenario.nil? || @environment.nil?
 
         @judged_early[key] = { severity: "failed", code: "claim-judged-early", file: json[:feature], line: line,
-                               message: "#{json[:scenario]}: a claim at line #{line} #{claim[:outcome]} before every execution event it counts " \
+                               message: "#{label(json[:scenario], json[:environment])}: a claim at line #{line} #{claim[:outcome]} before every execution event it counts " \
                                         "had arrived, so its cell is broke: #{claim[:after_world_stop][:reason]}",
                                do: again(scenario, @environment) }
       end
@@ -509,18 +545,58 @@ module Nukadoko
           end)
         end
         judged += Judgments.findings(rows, @id) + problems
+        listed = ->(kind) { @environments.filter_map { |e| (entries = @listed_places.dig(e.name, kind)) && { environment: e.name, kind.to_sym => entries } } }
+        flags = PlaceRows.flag_rows(scenarios, rows, listed.("flags"))
+        # With no routes list read, a run has no routes at all, never one
+        # that reads as nothing listed.
+        routes = listed.("routes").then { _1.empty? ? nil : PlaceRows.route_rows(scenarios, rows, _1) }
         { run_id: @id, run_dir: File.join(".nukadoko/runs", @id), started_at: @started_at, finished_at: now, commit: @commit,
           environments: @environments.map { environment_entry(_1) }, worlds: @world_entries, order: @order,
           counts: RunRecord.counts(scenarios.reject { _1[:world] }, rows), scenarios: scenarios,
           table: { base: @base && { ref: @base.ref, commit: @base.commit }, mapping_changed: @base&.mapping&.dig(:changed),
                    mapping_changes: @base&.mapping_changes, **(changed ? { judgments_changed: changed } : {}),
                    worlds: worlds, rows: rows, left_out: @left_out, proof_runs: Table.proof_runs },
-          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + @judged_early.values + judged + @incomplete,
+          **(flags.empty? ? {} : { flags: flags }),
+          **(routes.nil? ? {} : { routes: routes }),
+          failures: @warnings + warnings + executions.filter_map { _1[:failure] } + @judged_early.values + undeclared_writes(scenarios) + judged + @incomplete,
           # A criterion whose Then asks for a judgment holds only once one
           # cites what it read: the judgment column has a gate of its own.
           passed: @incomplete.empty? && rows.none? { Summary::RED.include?(_1[:verdict]) } && !Judgments.open?(rows) && problems.empty?,
           **(@walk ? { walk: @walk.record } : {}) }
       end
+
+      # A step that declares mutates: false and whose trace holds a write
+      # the program committed to a table that holds state: one note per
+      # step line of each scenario and environment, the first execution's
+      # writes named, since the runs of --repeat would say it again. Only
+      # head's executions: another tree's declarations are not the change.
+      #: (Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def undeclared_writes(scenarios)
+        found = {} #: Hash[String, Hash[Symbol, untyped]]
+        scenarios.each do |scenario|
+          next if scenario[:world]
+
+          (scenario[:steps] || []).each_with_index do |step, index|
+            next unless step[:mutates] == false
+
+            writes = @state_writes[step.dig(:observed, :events, :trace_id)]
+            next if writes.nil? || writes.empty?
+
+            line = step[:line] || scenario[:line]
+            found["#{scenario[:feature]}:#{scenario[:line]}:#{scenario[:environment]}:#{index}"] ||= {
+              severity: "note", code: "undeclared-write", file: scenario[:feature], line: line,
+              message: "#{label(scenario[:scenario], scenario[:environment])}: the step at line #{line}, #{step[:step] || step[:text]}, declares mutates: false, " \
+                       "and its trace holds writes the program committed to tables that hold state, #{Events::Counted.describe(writes)}",
+              fix: Codes.fix("undeclared-write")
+            }.compact
+          end
+        end
+        found.values
+      end
+
+      # A scenario's name, and its environment in a run over several.
+      #: (String, String) -> String
+      def label(name, environment) = @environments.size > 1 ? "#{name} (#{environment})" : name
 
       # What `--base` knows of one row: its change, whether it carries
       # @held, whether the mapping changed, whether its tags or its name or
@@ -931,7 +1007,7 @@ module Nukadoko
         read = {} #: Hash[String, Hash[Symbol, untyped]]
         failure = "nukadoko read no execution events for this key"
         begin
-          read = Events.read(requests, Events.clock + (Float(wait) / 1000), dir, secrets) if requests.any?
+          read = Events.read(requests, Events.clock + (Float(wait) / 1000), dir, secrets, @world_tables) if requests.any?
         rescue StandardError => e
           failure = "nukadoko could not read the execution events: #{e.message}"
         end
@@ -978,7 +1054,10 @@ module Nukadoko
         # The world's own files go in a directory beside the record's.
         world_dir = File.join(@dir, "world")
         FileUtils.mkdir_p(world_dir)
-        world = @program.start(environment, world_dir, @project)
+        # Its tables list is read only for a step that counts execution events.
+        world = @program.start(environment, world_dir, @project, tables: step.events.any?)
+        @world_tables = world.tables
+        warn_do_lists_unread(world)
         @secrets = secrets.with(Secrets.new({ "WORLD_TOKEN" => world.token }))
         @program_log = world.pid && world.log_path && Trace::Log.new(world.log_path, world.trace_prefix)
         @events = world.events_path && Events::Reader.new(world.events_path, world.trace_prefix, -> { secrets })

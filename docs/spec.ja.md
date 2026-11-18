@@ -4180,7 +4180,23 @@ world への HTTP での呼び出しの行です:
 プログラムの `lists` は、箇所の種類ごとに 1 つのコマンドを名指します。
 各コマンドは、その種類のプログラムの箇所を、1 行に 1 つの JSON オブジェクトで出力します:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "ruby server.rb", ready: "/up" },
+      env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+      lists: {
+        routes: "ruby scripts/routes.rb",
+        flags: ["ruby", "scripts/flags.rb", "{url}"],
+        tables: "ruby scripts/tables.rb",
+      },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -4223,7 +4239,16 @@ export default defineConfig({
 Rails のアプリケーションは、依存無しでルートを出力できます。
 コマンドは `bin/rails runner` への 1 つの argv の語なので、shell はそれを読みません:
 
-<!-- engine: typescript -->
+```ruby
+lists: {
+  routes: [
+    "bin/rails",
+    "runner",
+    'Rails.application.routes.routes.reject(&:internal).each { |r| r.verb.split("|").each { |verb| puts({ method: verb, route: r.path.spec.to_s.delete_suffix("(.:format)"), handler: r.defaults.values_at(:controller, :action).compact.join("#").presence }.compact.to_json) } }',
+  ],
+},
+```
+
 ```ts
 lists: {
   routes: [

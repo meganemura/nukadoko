@@ -5399,7 +5399,23 @@ can say which it has, and what each of its tables holds.
 each command prints the program's places of that kind, one JSON object
 per line:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+Nukadoko.config(
+  program: -> {
+    {
+      serve: { command: "ruby server.rb", ready: "/up" },
+      env: { PORT: "{port}", EXECUTION_EVENTS: "{events}" },
+      lists: {
+        routes: "ruby scripts/routes.rb",
+        flags: ["ruby", "scripts/flags.rb", "{url}"],
+        tables: "ruby scripts/tables.rb",
+      },
+    }
+  },
+)
+```
+
 ```ts
 // nukadoko.config.ts
 import { defineConfig } from "nukadoko";
@@ -5444,7 +5460,16 @@ export default defineConfig({
 A Rails application prints its routes with no dependency.
 The command is one argv word to `bin/rails runner`, so no shell reads it:
 
-<!-- engine: typescript -->
+```ruby
+lists: {
+  routes: [
+    "bin/rails",
+    "runner",
+    'Rails.application.routes.routes.reject(&:internal).each { |r| r.verb.split("|").each { |verb| puts({ method: verb, route: r.path.spec.to_s.delete_suffix("(.:format)"), handler: r.defaults.values_at(:controller, :action).compact.join("#").presence }.compact.to_json) } }',
+  ],
+},
+```
+
 ```ts
 lists: {
   routes: [

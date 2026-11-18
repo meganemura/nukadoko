@@ -1,0 +1,47 @@
+# Generated from lib/nukadoko/events/lists.rb with RBS::Inline
+
+module Nukadoko
+  module Engine
+    module Events
+      # Every kind, in the order a world reads them.
+      LIST_KINDS: untyped
+
+      module Lists
+        TEXT: ^(untyped) -> String?
+
+        METHOD: ^(untyped) -> String?
+
+        HOLDS: ^(untyped) -> String?
+
+        SIDES: ^(untyped) -> String?
+
+        # Every kind of list and the fields its lines hold, each with
+        # whether it is required and why a value cannot be it. A key that is
+        # not one of them, and does not start with `x_`, is refused, so a
+        # misspelt optional field is not read as absent.
+        FIELDS: Hash[String, Hash[String, [ bool, ^(untyped) -> String? ]]]
+
+        # What a list command of `kind` printed, as the kind's entries
+        # (`{ entries: }`), or why it is not a list (`{ problem: }`). A line
+        # of whitespace alone holds no entry, so a blank line at the end, or
+        # a CR before each line feed, reads as nothing.
+        # : (String, String) -> Hash[Symbol, untyped]
+        def self?.parse: (String, String) -> Hash[Symbol, untyped]
+
+        # Line `number` of the output as an entry of `kind`, or why it is
+        # not one.
+        # : (String, String, Integer) -> Hash[Symbol, untyped]
+        def self?.line: (String, String, Integer) -> Hash[Symbol, untyped]
+
+        # What a kind's checked lines come to, merged per place, or why they
+        # are not one list.
+        # : (String, Array[[Hash[String, untyped], Integer]]) -> Hash[Symbol, untyped]
+        def self?.collect: (String, Array[[ Hash[String, untyped], Integer ]]) -> Hash[Symbol, untyped]
+
+        # A read tables list, as a count reads it: the tables it marks.
+        # : (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+        def self?.tables_of: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, untyped]
+      end
+    end
+  end
+end

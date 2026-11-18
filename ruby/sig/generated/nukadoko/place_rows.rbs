@@ -1,0 +1,40 @@
+# Generated from lib/nukadoko/place_rows.rb with RBS::Inline
+
+module Nukadoko
+  module Engine
+    module PlaceRows
+      COUNTED: untyped
+
+      # Each place the head executions' visits reached, by key, in the order
+      # of its first visit: its criteria in the table's row order, each with
+      # its head cells there in the table's column order. `visits` gives an
+      # execution's visits as [key, place, detail]; `cell_of` what a cell
+      # holds beyond the table's fields, from its visits' details.
+      # : (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> Array[[String, untyped, untyped]], ^(Array[untyped]) -> Hash[Symbol, untyped]) -> Hash[String, Hash[Symbol, untyped]]
+      def self?.criteria_by_place: (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ^(Hash[Symbol, untyped]) -> Array[[ String, untyped, untyped ]], ^(Array[untyped]) -> Hash[Symbol, untyped]) -> Hash[String, Hash[Symbol, untyped]]
+
+      # : (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
+      def self?.counts_of: (Array[Hash[Symbol, untyped]]) -> Hash[Symbol, Integer]
+
+      # : (Hash[Symbol, untyped]) -> Array[Hash[String, untyped]]
+      def self?.paths_of: (Hash[Symbol, untyped]) -> Array[Hash[String, untyped]]
+
+      # : (String, String) -> String
+      def self?.flag_key: (String, String) -> String
+
+      # One row per flag and side the head paths' flag entries name, and per
+      # side a read flags list declares, by flag name and then side.
+      # `listed` is each environment whose flags list was read, in the
+      # run's order.
+      # : (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ?Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.flag_rows: (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], ?Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+
+      # One entry per method and route a head world's routes list or a head
+      # step's request line names, by route (a route no line matched last),
+      # then by method. `listed` is each environment whose routes list was
+      # read, in the run's order.
+      # : (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+      def self?.route_rows: (Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]], Array[Hash[Symbol, untyped]]) -> Array[Hash[Symbol, untyped]]
+    end
+  end
+end

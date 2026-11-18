@@ -73,14 +73,16 @@ module Nukadoko
       # longer become whole, or `until_at` (monotonic seconds) is near, and
       # writes the lines it counted to READ_FILE in `dir`. Returns each
       # key's reading, as a step record's `events_read` holds it.
-      #: (Array[Hash[Symbol, untyped]], Float, String, Secrets) -> Hash[String, Hash[Symbol, untyped]]
-      def self.read(requests, until_at, dir, secrets)
+      # `tables` is what the claim step's world's tables list says, which
+      # decides the lines a count leaves out.
+      #: (Array[Hash[Symbol, untyped]], Float, String, Secrets, ?Hash[Symbol, untyped]) -> Hash[String, Hash[Symbol, untyped]]
+      def self.read(requests, until_at, dir, secrets, tables = NO_MARKED_TABLES)
         started = clock
         by_producer = {} #: Hash[Hash[Symbol, untyped], Array[Hash[Symbol, untyped]]]
         requests.each { (by_producer[_1[:producer]] ||= []) << _1 unless _1[:producer][:source] == "unread" }
         groups = by_producer.to_h do |producer, keys|
           inputs = producer[:source] == "live" ? producer[:start][:inputs] : inputs_of_slice(producer[:slice])
-          [producer.object_id, Group.new(producer, keys, Tally.new(inputs.merge(selections: keys.map { _1[:selection] })))]
+          [producer.object_id, Group.new(producer, keys, Tally.new(inputs.merge(selections: keys.map { _1[:selection] }, tables: tables)))]
         end
         kept = Kept.new
         live_kept = {} #: Hash[Integer, String]

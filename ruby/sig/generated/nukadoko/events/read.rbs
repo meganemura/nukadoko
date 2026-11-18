@@ -67,8 +67,10 @@ module Nukadoko
       # longer become whole, or `until_at` (monotonic seconds) is near, and
       # writes the lines it counted to READ_FILE in `dir`. Returns each
       # key's reading, as a step record's `events_read` holds it.
-      # : (Array[Hash[Symbol, untyped]], Float, String, Secrets) -> Hash[String, Hash[Symbol, untyped]]
-      def self.read: (Array[Hash[Symbol, untyped]], Float, String, Secrets) -> Hash[String, Hash[Symbol, untyped]]
+      # `tables` is what the claim step's world's tables list says, which
+      # decides the lines a count leaves out.
+      # : (Array[Hash[Symbol, untyped]], Float, String, Secrets, ?Hash[Symbol, untyped]) -> Hash[String, Hash[Symbol, untyped]]
+      def self.read: (Array[Hash[Symbol, untyped]], Float, String, Secrets, ?Hash[Symbol, untyped]) -> Hash[String, Hash[Symbol, untyped]]
 
       # Reads the live groups' world file forward, feeding each group's
       # tally, until every group is settled or `until_at` is near. The block

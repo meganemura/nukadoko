@@ -42,12 +42,14 @@ module Nukadoko
 
       attr_reader conditions(): Hash[String, untyped]
 
-      def self.new: (Array[Hash[Symbol, untyped]] build, Array[Hash[Symbol, untyped]] prepare, Hash[Symbol, untyped] reach, Hash[String, String] env, Hash[Symbol, untyped]? setup, Hash[String, untyped] conditions) -> instance
-                  | (build: Array[Hash[Symbol, untyped]], prepare: Array[Hash[Symbol, untyped]], reach: Hash[Symbol, untyped], env: Hash[String, String], setup: Hash[Symbol, untyped]?, conditions: Hash[String, untyped]) -> instance
+      attr_reader lists(): Array[Hash[Symbol, untyped]]
 
-      def self.members: () -> [ :build, :prepare, :reach, :env, :setup, :conditions ]
+      def self.new: (Array[Hash[Symbol, untyped]] build, Array[Hash[Symbol, untyped]] prepare, Hash[Symbol, untyped] reach, Hash[String, String] env, Hash[Symbol, untyped]? setup, Hash[String, untyped] conditions, Array[Hash[Symbol, untyped]] lists) -> instance
+                  | (build: Array[Hash[Symbol, untyped]], prepare: Array[Hash[Symbol, untyped]], reach: Hash[Symbol, untyped], env: Hash[String, String], setup: Hash[Symbol, untyped]?, conditions: Hash[String, untyped], lists: Array[Hash[Symbol, untyped]]) -> instance
 
-      def members: () -> [ :build, :prepare, :reach, :env, :setup, :conditions ]
+      def self.members: () -> [ :build, :prepare, :reach, :env, :setup, :conditions, :lists ]
+
+      def members: () -> [ :build, :prepare, :reach, :env, :setup, :conditions, :lists ]
     end
 
     class Program
@@ -59,6 +61,13 @@ module Nukadoko
       DEFAULT_SETUP_TIMEOUT_MS: ::Integer
 
       DEFAULT_URL_TIMEOUT_MS: ::Integer
+
+      # How long a `lists` command may run: a list is read while the world
+      # waits to run its first scenario.
+      DEFAULT_LIST_TIMEOUT_MS: ::Integer
+
+      # The most a list command may print; past it the list is not read.
+      LIST_OUTPUT_CAP_BYTES: untyped
 
       # What a placeholder names, as the TypeScript engine names them.
       PLACEHOLDER: ::Regexp
@@ -167,8 +176,11 @@ module Nukadoko
       # Started, or StartFailed with the world as far as it got, and the
       # message the run reports as program-start-failed. A base world that
       # has no URL of its own raises Unavailable.
-      # : (Environment, String, String, ?tree: String) -> World
-      def start: (Environment, String, String, ?tree: String) -> World
+      # `lists` reads the program's routes and flags lists in head's worlds,
+      # as `nuka run` does; `tables` reads its tables list in a world of any
+      # tree, which `nuka do` leaves out when its step reads no events.
+      # : (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool) -> World
+      def start: (Environment, String, String, ?tree: String, ?lists: bool, ?tables: bool) -> World
 
       # What setup receives once its program answers, as the TypeScript
       # engine's ProgramWorld names it.
@@ -228,10 +240,17 @@ module Nukadoko
       # : (String, Hash[String, String], Hash[String, untyped]) -> String
       def self.filled: (String, Hash[String, String], Hash[String, untyped]) -> String
 
-      # Runs one build or prepare command to its end in the tree's root,
-      # its output in the world's log, its process group stopped at its limit.
-      # : (String, Array[String], Integer, Hash[String, String], String, File) -> void
-      def self.run_to_end: (String, Array[String], Integer, Hash[String, String], String, File) -> void
+      # Runs one list command to its end and reads what it printed: the
+      # list's entries (`{ entries: }`), or why it was not read
+      # (`{ problem: }`). A failure is the list's and never the world's.
+      # : (String, Array[String], Integer, Hash[String, String], String, File) -> Hash[Symbol, untyped]
+      def self.read_list: (String, Array[String], Integer, Hash[String, String], String, File) -> Hash[Symbol, untyped]
+
+      # Runs one build, prepare, or list command to its end in the tree's
+      # root, its stderr in the world's log and its stdout in `out` (the
+      # log unless a list reads it), its process group stopped at its limit.
+      # : (String, Array[String], Integer, Hash[String, String], String, File, ?out: IO) -> void
+      def self.run_to_end: (String, Array[String], Integer, Hash[String, String], String, File, ?out: IO) -> void
 
       # The port a request to `url` goes to: the one it writes, or its scheme's.
       # : (String) -> Integer
@@ -294,12 +313,18 @@ module Nukadoko
 
       attr_reader events_path(): String?
 
-      def self.new: (String? base_url, Integer? pid, File? log, Hash[String, String] env, String trace_prefix, String? log_path, Array[Hash[Symbol, untyped]] commands, Hash[Symbol, Integer] timings, String token, String? events_path) -> instance
-                  | (base_url: String?, pid: Integer?, log: File?, env: Hash[String, String], trace_prefix: String, log_path: String?, commands: Array[Hash[Symbol, untyped]], timings: Hash[Symbol, Integer], token: String, events_path: String?) -> instance
+      attr_reader places(): Hash[String, Array[Hash[Symbol, untyped]]]
 
-      def self.members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings, :token, :events_path ]
+      attr_reader listed(): Hash[String, Hash[Symbol, untyped]]
 
-      def members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings, :token, :events_path ]
+      attr_reader tables(): Hash[Symbol, untyped]
+
+      def self.new: (String? base_url, Integer? pid, File? log, Hash[String, String] env, String trace_prefix, String? log_path, Array[Hash[Symbol, untyped]] commands, Hash[Symbol, Integer] timings, String token, String? events_path, Hash[String, Array[Hash[Symbol, untyped]]] places, Hash[String, Hash[Symbol, untyped]] listed, Hash[Symbol, untyped] tables) -> instance
+                  | (base_url: String?, pid: Integer?, log: File?, env: Hash[String, String], trace_prefix: String, log_path: String?, commands: Array[Hash[Symbol, untyped]], timings: Hash[Symbol, Integer], token: String, events_path: String?, places: Hash[String, Array[Hash[Symbol, untyped]]], listed: Hash[String, Hash[Symbol, untyped]], tables: Hash[Symbol, untyped]) -> instance
+
+      def self.members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings, :token, :events_path, :places, :listed, :tables ]
+
+      def members: () -> [ :base_url, :pid, :log, :env, :trace_prefix, :log_path, :commands, :timings, :token, :events_path, :places, :listed, :tables ]
     end
 
     class World

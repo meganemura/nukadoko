@@ -51,7 +51,7 @@ module Nukadoko
       #: (Hash[Symbol, untyped]) -> String
       def render(doc)
         lines = [MARKER, *title(doc), *table(doc), *reasons(doc), *limits_section(doc), *condition(doc),
-                 *removed(doc), *claims(doc), *findings(doc), *rerun(doc)]
+                 *removed(doc), *flags(doc), *routes(doc), *claims(doc), *findings(doc), *rerun(doc)]
         "#{lines.join("\n")}\n"
       end
 
@@ -748,6 +748,110 @@ module Nukadoko
                     "not these files, and the scenario's `final.png` is the page as the scenario ended, not as it was judged."
         lead += seen_note if entries.values.any? { _2.first.include?("; seen: ") }
         ["", "## Claims", "", lead, "", *entries.values.each_with_index.sort_by { |(place, _), index| [*place, index] }.flat_map { _1.first.last }]
+      end
+
+      FLAG_VERDICTS = %i[held proven failed unproven moved].freeze
+      # At most this many routes are named in one line of "Routes"; the
+      # rest are counted, and run.json's `routes` names every one.
+      ROUTES_NAMED = 20
+
+      # A flag's name, side, and gate are the program's text: a line break
+      # in one would end the list item, so control characters are escaped.
+      #: (String) -> String
+      def program_word(text) = text.to_s.gsub(/[\u0000-\u001f\u007f\u{2028}\u{2029}]/) { format("\\u%04x", _1.ord) }
+
+      #: (Hash[Symbol, untyped]) -> Array[Hash[Symbol, untyped]]
+      def head_worlds(doc) = (doc[:worlds] || []).select { _1[:tree].nil? || _1[:tree] == "head" }
+
+      # One line per flag and side of run.json's `flags`: its counts, and
+      # the gates its lines named, or that no criterion evaluated a side the
+      # flags list declares. A world whose flags list was not read is named,
+      # so a missing side is never read as one the program does not have.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def flags(doc)
+        rows = doc[:flags] || []
+        unread = head_worlds(doc).select { _1.dig(:lists, :flags, :error) }
+        return [] if rows.empty? && unread.empty?
+
+        lines = rows.map do |row|
+          flag = "- #{code_span(program_word(row[:name]))} #{code_span(program_word(row[:side]))}"
+          next "#{flag}, no criterion's steps evaluated it on this side" if row[:criteria].empty?
+
+          counts = FLAG_VERDICTS.select { row[:counts][_1].positive? }.map { "#{row[:counts][_1]} #{_1}" }
+          counts << "#{row[:counts][:controls]} only in controls" if row[:counts][:controls].positive?
+          gates = row[:criteria].flat_map { |criterion| criterion[:cells].flat_map { _1[:gates] } }.uniq.sort { |a, b| Events.by_gate(a, b) }
+          named = gates.compact.map { code_span(program_word(_1)) }
+          tail = [*("gates #{named.join(", ")}" if named.any?), *("only this side was evaluated" if row[:only_side_evaluated]),
+                  *("no flags list that was read declares this side" if row[:listed_in]&.empty?)]
+          "#{flag}, #{count_of(row[:criteria].size, "criterion", "criteria")}#{counts.empty? ? "" : ": #{counts.join(", ")}"}#{tail.map { "; #{_1}" }.join}"
+        end
+        lead = ["Each line counts the criteria whose steps evaluated the flag on the side the program's lines named, by their verdict in the table.",
+                "One seen on that side only in controls is counted apart, since its verdict is about another side.",
+                "`gates` lists the gates those lines named, and a line may name none.", ""]
+        ["", "## Flags", "", *(rows.empty? ? [] : lead), *lines,
+         *unread.map { "- World #{code_span(program_word(_1[:name]))} read no flags list (`program-list-unread` under Findings), so a side of a flag its steps never evaluated may not stand here." }]
+      end
+
+      #: (Hash[Symbol, untyped]) -> String
+      def route_name(route) = code_span(program_word(route[:route].nil? ? route[:method] : "#{route[:method]} #{route[:route]}"))
+
+      #: (Array[String]) -> String
+      def named_list(names)
+        shown = names.first(ROUTES_NAMED).join(", ")
+        names.size > ROUTES_NAMED ? "#{shown}, and #{names.size - ROUTES_NAMED} more" : shown
+      end
+
+      # The places of run.json's `routes` no step reached: the listed routes
+      # no head step requested, split from those whose handler a request
+      # reached through another route, then the requests the lists do not
+      # account for. A world whose list was not read is named.
+      #: (Hash[Symbol, untyped]) -> Array[String]
+      def routes(doc)
+        heads = head_worlds(doc)
+        unread = heads.select { _1.dig(:lists, :routes, :error) }
+        routes = doc[:routes] || []
+        return [] if unread.empty? && doc[:routes].nil?
+
+        read = heads.select { _1.dig(:lists, :routes)&.key?(:error) && _1.dig(:lists, :routes, :error).nil? }.map { _1[:name] }.uniq
+        listed = routes.select { _1[:listed_in].any? }
+        requested = listed.select { _1[:requests].positive? }
+        through = {} #: Hash[String, Array[Hash[Symbol, untyped]]]
+        routes.each { |route| route[:handlers].each { (through[_1] ||= []) << route } if route[:requests].positive? }
+        gaps = [] #: Array[String]
+        aliases = [] #: Array[String]
+        listed.each do |route|
+          next if route[:requests].positive?
+
+          others = route[:handlers].flat_map { through[_1] || [] }
+          if route[:handlers].any? && route[:handlers].all? { through.key?(_1) }
+            aliases << "#{route_name(route)} through #{others.map { route_name(_1) }.uniq.join(", ")}"
+          else
+            gaps << route_name(route)
+          end
+        end
+        unlisted = routes.filter_map do |route|
+          next nil if route[:route].nil?
+
+          requests = route[:criteria].sum { |c| c[:cells].sum { read.include?(_1[:environment]) && !route[:listed_in].include?(_1[:environment]) ? _1[:requests] : 0 } }
+          requests.zero? ? nil : [route, requests]
+        end
+        unmatched = routes.select { _1[:route].nil? && _1[:requests].positive? }
+        same = listed.all? { |route| read.all? { route[:listed_in].include?(_1) } }
+        lists = if read.size == 1 then "the program's routes list names"
+                elsif same then "the program's routes list names (the same in #{read.size} worlds)"
+                else "the routes lists of #{read.size} worlds name"
+                end
+        lines = [
+          *(doc[:routes].nil? ? [] : ["Head steps requested #{requested.size} of the #{count_of(listed.size, "route", "routes")} #{lists}.",
+                                      "A request says which route the program matched, not that a step checked what it answered.", ""]),
+          *("- Never requested (#{gaps.size}): #{named_list(gaps)}" if gaps.any?),
+          *("- Never requested, though a route with its handler was (#{aliases.size}): #{named_list(aliases)}" if aliases.any?),
+          *("- #{count_of(unlisted.sum(&:last), "request", "requests")} to a route its world's list does not name: #{named_list(unlisted.map { "#{route_name(_1)} #{_2}" })}" if unlisted.any?),
+          *("- #{count_of(unmatched.sum { _1[:requests] }, "request", "requests")} the program matched to no route: #{named_list(unmatched.map { "#{route_name(_1)} #{_1[:requests]}" })}" if unmatched.any?),
+          *unread.map { "- World #{code_span(program_word(_1[:name]))} read no routes list (`program-list-unread` under Findings), so none of its routes stands here." }
+        ].compact
+        lines.pop if lines.last == ""
+        ["", "## Routes", "", *lines]
       end
 
       #: (Hash[Symbol, untyped]) -> String
