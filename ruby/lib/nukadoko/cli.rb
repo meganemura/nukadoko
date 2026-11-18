@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 # rbs_inline: enabled
 
+require_relative "command_help"
+
 # The `nuka` command. With --json it prints one envelope in the shape the
 # TypeScript engine prints, so an agent reads both engines the same way.
 module Nukadoko
@@ -89,6 +91,10 @@ module Nukadoko
         @out = $stderr
         message = @command.nil? ? "Not enough non-option arguments: got 0, need at least 1" : "Unknown argument: #{@command}"
         return refuse(Engine::Refusal.new("invalid-arguments", message, run: "nuka --help"))
+      end
+      if @words.include?("--help") && CommandHelp::COMMANDS.key?(@command)
+        @out.write(CommandHelp.text(@command))
+        return 0
       end
       return refuse(Engine::Refusal.new("invalid-arguments", "Unknown argument: #{@unknown.first}")) if @unknown.any?
       return verdict if @command == "verdict"

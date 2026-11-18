@@ -8,6 +8,11 @@ notes come from the section below whose heading starts with `## [<version>]`.
 
 ### Added
 
+- `nuka <command> --help` prints that command's usage, what it is for, and
+  the flags it reads, and exits 0. A refusal of an unknown flag already
+  pointed at it, and until now it did not exist. `docs/engines.json` lists
+  each engine's commands and flags, and a conformance case holds that list
+  to this help.
 - The gem declares itself a [Rails Hyperdrive](https://github.com/rails-hyperdrive/rails-hyperdrive) companion in its metadata (`hyperdrive_targets: "*"`, `hyperdrive_artifacts: skill`). In a Rails app that bundles it, `bin/rails hyperdrive:init` installs the two skills the gem ships to `.claude/skills/nukadoko/` and `.claude/skills/nukadoko-verification/`.
 
 ## [0.6.0] - 2026-11-17

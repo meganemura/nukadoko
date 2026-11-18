@@ -50,6 +50,7 @@ end
 ## Commands
 
 - `nuka init` writes `nukadoko.config.rb`, the empty `features/steps/`, and the `.gitignore` entries for `.nukadoko/` and `.env` files. A Rakefile with no `scenarios` task gets one that runs `bundle exec nuka run`, so people and CI run `rake scenarios`. It refuses when the config file exists.
+- `nuka <command> --help` prints the command's usage, what it is for, and the flags it reads.
 - `nuka check [--json]` reports what is wrong before anything runs.
 - `nuka run [<feature[:line]|dir>...] [--tag <expression>]... [--env <name>]... [--order file|shuffled[:<seed>]] [--repeat <n>] [--concurrency <n>] [--proof-runs <n>] [--step] [--records] [--json] [--no-check]` starts the program in each selected world, runs the selected scenarios, and writes a record per step under `.nukadoko/runs/`. With no target it runs `features/`. `--order shuffled` plays the files, then each file's scenarios, in an order a seed names, the same order the TypeScript engine plays for that seed. `--repeat` plays the selection that many times, `--concurrency` spreads whole feature files over that many worker processes (a file tagged `@nukadoko:serial` on its Feature line runs alone, after them), `--proof-runs` sets how many times each control runs, and `--records` writes each scenario record to stdout as it ends.
 - `nuka verdict [--json] [--trailer]` says whether the newest run judged the working tree as it is now and left nothing red. It never starts a run. `--trailer` prints one git trailer line that stamps a commit with that answer, and exits 0.

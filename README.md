@@ -95,6 +95,29 @@ For a Ruby project, add `gem "nukadoko", group: :test` to the Gemfile
 instead. It needs Ruby 3.4 or later, and [ruby/README.md](https://github.com/meganemura/nukadoko/blob/main/ruby/README.md)
 lists what it runs today.
 
+The commands of each engine, and the flags one has and the other does not,
+from [docs/engines.json](docs/engines.json), which the conformance
+scenarios check against each engine's `--help`:
+
+<!-- engines:begin -->
+| Command | Ruby | TypeScript |
+| --- | --- | --- |
+| `nuka init` | yes | yes |
+| `nuka scaffold` | yes | yes |
+| `nuka check` | all but `--codes`, `--fail-on` | yes |
+| `nuka run` | yes | yes |
+| `nuka report` | yes | yes |
+| `nuka verdict` | yes | yes |
+| `nuka judge` | yes | yes |
+| `nuka steps` | yes | yes |
+| `nuka describe` | yes | yes |
+| `nuka do` | yes | yes |
+| `nuka step` | yes | yes |
+| `nuka clean` | yes | yes |
+| `nuka skill` | yes | yes |
+| `nuka sig` | yes | not in this engine |
+<!-- engines:end -->
+
 ## Beside your unit tests
 
 Unit tests (vitest, `node:test`) check functions from the inside. A

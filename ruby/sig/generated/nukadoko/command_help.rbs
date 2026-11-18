@@ -1,0 +1,18 @@
+# Generated from lib/nukadoko/command_help.rb with RBS::Inline
+
+# What `nuka <command> --help` prints: the command's usage, what it is for, and the flags
+# it reads. The flags listed here are the ones the command acts on, so the table of what
+# each engine offers (docs/engines.json) can be checked against this text, and a refusal
+# that says "the command's --help lists its flags" points at something that exists.
+module Nukadoko
+  module CommandHelp
+    type entry = { usage: String, summary: String, flags: Array[[ String, String ]] }
+
+    JSON_FLAG: [ String, String ]
+
+    COMMANDS: Hash[String, entry]
+
+    # : (String) -> String
+    def self.text: (String) -> String
+  end
+end

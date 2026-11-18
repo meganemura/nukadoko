@@ -1,0 +1,19 @@
+{
+  "about": "What each engine offers, as a fact the conformance scenarios check: conformance/engine/features/engines.feature reads this file and each engine's nuka --help and nuka <command> --help. A command is null for an engine that does not have it, and lists the flags its --help names otherwise. --help and --version are left out, and a negatable flag is named by its negation (--no-check). The site and the README render this file; edit it, not them.",
+  "commands": {
+    "init": { "ruby": ["--allure"], "typescript": ["--allure"] },
+    "scaffold": { "ruby": ["--argv","--body","--command","--cwd","--description","--feature","--from","--pattern","--replace","--request","--then"], "typescript": ["--argv","--body","--command","--cwd","--description","--feature","--from","--pattern","--replace","--request","--then"] },
+    "check": { "ruby": ["--env","--json"], "typescript": ["--codes","--env","--fail-on","--json"] },
+    "run": { "ruby": ["--base","--concurrency","--env","--json","--no-check","--order","--proof-runs","--records","--repeat","--step","--tag"], "typescript": ["--base","--concurrency","--env","--json","--no-check","--order","--proof-runs","--records","--repeat","--step","--tag"] },
+    "report": { "ruby": ["--format","--json","--out"], "typescript": ["--format","--json","--out"] },
+    "verdict": { "ruby": ["--json","--trailer"], "typescript": ["--json","--trailer"] },
+    "judge": { "ruby": ["--because","--by","--json","--meets","--misses","--run"], "typescript": ["--because","--by","--json","--meets","--misses","--run"] },
+    "steps": { "ruby": ["--json"], "typescript": ["--json"] },
+    "describe": { "ruby": [], "typescript": [] },
+    "do": { "ruby": ["--args","--env","--use"], "typescript": ["--args","--env","--use"] },
+    "step": { "ruby": [], "typescript": [] },
+    "clean": { "ruby": ["--dry-run","--json"], "typescript": ["--dry-run","--json"] },
+    "skill": { "ruby": [], "typescript": [] },
+    "sig": { "ruby": [], "typescript": null }
+  }
+}

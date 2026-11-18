@@ -84,6 +84,28 @@ Ruby のプロジェクトでは、代わりに Gemfile へ `gem "nukadoko", gro
 Ruby 3.4 以降が必要です。
 いま何を実行できるかは [ruby/README.ja.md](https://github.com/meganemura/nukadoko/blob/main/ruby/README.ja.md) にあります。
 
+それぞれのエンジンのコマンドと、片方にだけあるフラグは次のとおりです。
+この表は [docs/engines.json](docs/engines.json) から作り、conformance のシナリオが各エンジンの `--help` と照らし合わせています。
+
+<!-- engines:begin -->
+| コマンド | Ruby | TypeScript |
+| --- | --- | --- |
+| `nuka init` | あり | あり |
+| `nuka scaffold` | あり | あり |
+| `nuka check` | `--codes`、`--fail-on` 以外のすべて | あり |
+| `nuka run` | あり | あり |
+| `nuka report` | あり | あり |
+| `nuka verdict` | あり | あり |
+| `nuka judge` | あり | あり |
+| `nuka steps` | あり | あり |
+| `nuka describe` | あり | あり |
+| `nuka do` | あり | あり |
+| `nuka step` | あり | あり |
+| `nuka clean` | あり | あり |
+| `nuka skill` | あり | あり |
+| `nuka sig` | あり | このエンジンにはない |
+<!-- engines:end -->
+
 ## Beside your unit tests
 
 **ユニットテストの横で**
