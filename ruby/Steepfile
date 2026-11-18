@@ -11,7 +11,7 @@ target :lib do
   signature "sig", "sig-deps"
 
   library "digest", "fileutils", "ipaddr", "json", "net-http", "open3", "pathname", "securerandom", "shellwords", "socket",
-          "time", "timeout", "tmpdir", "uri", "zlib", "prism"
+          "time", "timeout", "tmpdir", "uri", "zlib", "prism", "delegate"
 
   configure_code_diagnostics(D::Ruby.default) do |hash|
     # Most values here are JSON a step returned, so an empty [] or {} has no

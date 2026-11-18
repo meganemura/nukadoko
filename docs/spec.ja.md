@@ -4092,9 +4092,21 @@ claim はまだ届く途中の行で判定されたので、セルはどちら�
 プログラムは、Model Context Protocol(MCP)を通して agent に仕事を差し出せます。
 呼び出す tool、読む resource、得る prompt です。
 agent と同じようにそれらを呼び出す step は、このプロトコル自身の SDK の `Client` を使い、nukadoko は自分のクライアントを足しません。
-`nukadoko` の `measureMcp` がクライアントの transport を包み、step がそれを通して送るそれぞれの呼び出しは、その step の record の一部になります:
+`nukadoko` の `measureMcp`(gem では `Nukadoko.measure_mcp`)がクライアントの transport を包み、step がそれを通して送るそれぞれの呼び出しは、その step の record の一部になります:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+require "mcp"
+
+Nukadoko.fixture(:notes) do |use, base_url:|
+  transport = Nukadoko.measure_mcp(MCP::Client::HTTP.new(url: "#{base_url}/mcp"))
+  client = MCP::Client.new(transport: transport)
+  client.connect
+  use.(client)
+  transport.close
+end
+```
+
 ```ts
 // nukadoko.config.ts
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -4117,6 +4129,10 @@ export default defineConfig({
   そのため、stdio でも streamable HTTP でも、どの版の SDK の transport にも合い、nukadoko は SDK を import しません。
   ほかのメンバはどれも transport 自身のものです。
   stdio の transport の `pid`、HTTP の transport の `sessionId`、`instanceof` は、もとのままです。
+- `Nukadoko.measure_mcp(transport)` は、mcp gem のクライアントが transport に対して呼ぶ 2 つのメソッド、`send_request` と `send_notification` を計測し、ほかのメソッドはどれも transport にそのまま渡します。
+  `send_request` が答えを返すので、呼び出しは step が先へ進む前に答えを得るか、例外を出します。
+  そのため Ruby の行には `unanswered` も `after_step_end` もありません。
+  クライアントが自分のスレッドから送るリクエスト(`cancellation:` を渡した呼び出し)は step の外で動き、どこにも記録しません。
 - これは `ctx` のメンバではなく import で、`runCommand` がそうであるのと同じ理由によります。
   クライアントはふつう scenario の fixture の中、どの step の外でもつなぎ、いくつもの step から呼び出すので、`send` のそれぞれが、その時点で動いている step を見つけます。
   どの step の外でも送ったメッセージ(上の fixture でのクライアントの `initialize`)は、渡されたとおりに送り、どこにも記録しません。
@@ -4137,7 +4153,7 @@ export default defineConfig({
   そのため、MCP の呼び出しだけをした step には、欠け `no-requests` がありません。
 - `measureMcp` は判定をしません。
   `isError: true` の結果も JSON-RPC のエラーも step が読む答えで、その意味は step のコードが決めます。
-- `connect` の呼び出しの中に `new StdioClientTransport(...)` と書いてつないだクライアントの transport は、何も包めません。
+- `connect` の呼び出しの中に `new StdioClientTransport(...)` と書いてつないだクライアントや、Ruby で `MCP::Client.new(transport: MCP::Client::Stdio.new(...))` と書いて作ったクライアントの transport は、何も包めません。
   `nuka check` はそれを注記 `mcp-transport-unmeasured` として名指します(「check と注記」を参照)。
 
 呼び出しのそれぞれは、step record の隣の `mcp.jsonl`(`evidence.mcp`)の 1 行で、`observed.mcp` がその行を数えます(「Records」を参照)。
@@ -7470,7 +7486,7 @@ nukadoko を使う 11 のプロジェクトを調べたところ、その 14 の
   `"type": "module"` を追加するか、プロジェクト自身の `.js` ファイルが CommonJS なら `.mts` の名前にすることです。
   run は動くので、これは注記です。
 - **`connect` の呼び出しの中で作った transport につなぐ MCP のクライアント**(`mcp-transport-unmeasured`)。
-  config の fixture か型付き step の中の `client.connect(new StdioClientTransport(...))` のようなものです。
+  config の fixture か型付き step の中の `client.connect(new StdioClientTransport(...))` や、Ruby の `MCP::Client.new(transport: MCP::Client::Stdio.new(...))` のようなものです。
   その transport は引数の中にしか無いので、何もそれを `measureMcp` に通せません。
   そのクライアントが送るどの呼び出しも step record に届かず、trace context も運びません(「MCP の呼び出し」を参照)。
   先に作って名前で渡す transport は、作ったところで包んでいるかもしれないので報告しません。

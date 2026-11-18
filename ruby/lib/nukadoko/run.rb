@@ -962,6 +962,7 @@ module Nukadoko
         # run.json keeps the record's observed without file content, so it stays small.
         entry[:observed] = { processes: processes&.any? ? processes : nil, http: record[:http_count]&.positive? ? record[:http_count] : nil,
                              files: record[:files]&.map { _1.except(:content) }, unmeasured: [],
+                             **(record[:mcp_count] ? { mcp: record[:mcp_count] } : {}),
                              **(record.key?(:program_log) ? { program_log: record[:program_log] } : {}),
                              **(record.key?(:events) ? { events: record[:events] } : {}) }
         # A refused line never began, so its error has no kind, as the
@@ -1240,6 +1241,7 @@ module Nukadoko
       def execute(step, record, dir, world, then_line:, at_line:, results:, origins:)
         FileUtils.mkdir_p(dir)
         log = []
+        mcp_log = [] #: Array[Hash[Symbol, untyped]]
         fixtures = {}
         finish = nil #: Proc?
         processes = []
@@ -1263,7 +1265,9 @@ module Nukadoko
           Trace.within(boundary) do
             fixtures, finish = build_fixtures(step, dir, log, world, record, results)
             HttpRecording.collect(log) do
-              Processes.collect(processes) { RedactedOutput.around(secrets) { within_deadline(step, record) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts, dir) } } }
+              McpCalls.collect(mcp_log) do
+                Processes.collect(processes) { RedactedOutput.around(secrets) { within_deadline(step, record) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts, dir) } } }
+              end
             end
           end
           record[:page_view] = @browser.judged(dir, record[:step_record_id], aria_in_claims: step.claims.to_a.any? { !_1[:each] && _1[:compare] == "fits-aria-snapshot" }) if step.claims && (fixtures[:page] || fixtures[:context]) && record[:observation] != "unobserved"
@@ -1328,6 +1332,8 @@ module Nukadoko
           record[:underneath] = underneath if underneath
           File.write(File.join(dir, "http.jsonl"), "#{log.map { JSON.generate(secrets.redact(_1)) }.join("\n")}\n") if log.any?
           record[:http_file] = log.any?
+          File.write(File.join(dir, McpCalls::FILE), mcp_log.map { "#{JSON.generate(secrets.redact(_1))}\n" }.join) if mcp_log.any?
+          record[:mcp_count] = mcp_log.size if mcp_log.any?
           if (traced = TraceActions.read(File.join(dir, "trace.zip")))
             record[:trace] = "trace.zip"
             record[:actions] = traced[:actions] if traced[:actions].any?

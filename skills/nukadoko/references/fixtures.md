@@ -49,7 +49,8 @@ The program under test is not a fixture: the program in `nukadoko.config.ts` bui
 starts it once per world on a port of its own, and stops it after the
 scenarios (`program.md`). A fixture that starts a server in-process
 gives a run no record of which program answered. A fixture that connects
-an MCP client to the program passes the transport through `measureMcp`,
+an MCP client to the program passes the transport through `measureMcp`
+(`Nukadoko.measure_mcp`),
 so each call a step sends is in its record (`evidence.md`).
 
 

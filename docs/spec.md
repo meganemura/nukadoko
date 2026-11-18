@@ -5283,10 +5283,23 @@ A program can offer an agent its work through the Model Context Protocol
 (MCP): tools to call, resources to read, prompts to get.
 A step that calls them as an agent would uses the protocol's own SDK
 `Client`, and nukadoko adds no client of its own.
-`measureMcp` from `nukadoko` wraps the client's transport, and each call a
+`measureMcp` from `nukadoko` (`Nukadoko.measure_mcp` in the gem) wraps the
+client's transport, and each call a
 step sends through it is part of that step's record:
 
-<!-- engine: typescript -->
+```ruby
+# nukadoko.config.rb
+require "mcp"
+
+Nukadoko.fixture(:notes) do |use, base_url:|
+  transport = Nukadoko.measure_mcp(MCP::Client::HTTP.new(url: "#{base_url}/mcp"))
+  client = MCP::Client.new(transport: transport)
+  client.connect
+  use.(client)
+  transport.close
+end
+```
+
 ```ts
 // nukadoko.config.ts
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -5311,6 +5324,14 @@ export default defineConfig({
   version, stdio and streamable HTTP alike, and nukadoko imports no SDK.
   Every other member is the transport's own: a stdio transport's `pid`,
   an HTTP transport's `sessionId`, and `instanceof` stay as they were.
+- `Nukadoko.measure_mcp(transport)` measures `send_request` and
+  `send_notification`, the two methods the mcp gem's client calls on its
+  transport, and hands every other method to the transport.
+  `send_request` returns the answer, so a call is answered, or raised,
+  before the step goes on; a line in Ruby has no `unanswered` and no
+  `after_step_end`.
+  A request the client sends from a thread of its own (a call given
+  `cancellation:`) runs outside the step and is recorded nowhere.
 - It is an import, not a member of `ctx`, for the reason `runCommand` is
   one: a client is usually connected in a scenario fixture, outside every
   step, and called from several steps, so each `send` finds the step that
@@ -5343,8 +5364,10 @@ export default defineConfig({
   A result with `isError: true` and a JSON-RPC error are answers the step
   reads, and the step's code decides what they mean.
 - A client connected to `new StdioClientTransport(...)` written inside
-  the `connect` call has a transport nothing can wrap; `nuka check` names
-  it as the note `mcp-transport-unmeasured` (see "Checks and notes").
+  the `connect` call, or made by `MCP::Client.new(transport:
+  MCP::Client::Stdio.new(...))` in Ruby, has a transport nothing can wrap;
+  `nuka check` names it as the note `mcp-transport-unmeasured` (see
+  "Checks and notes").
 
 Each call is one line of `mcp.jsonl` beside the step record
 (`evidence.mcp`), and `observed.mcp` counts the lines (see "Records").
@@ -9569,8 +9592,9 @@ The following notes show what `nuka check` reads as rot rather than style:
   note, because the run works.
 - **An MCP client connected to a transport built inside the `connect`
   call** (`mcp-transport-unmeasured`), as in
-  `client.connect(new StdioClientTransport(...))`, in a config fixture
-  or a typed step. That transport exists only in the argument, so
+  `client.connect(new StdioClientTransport(...))`, or in Ruby
+  `MCP::Client.new(transport: MCP::Client::Stdio.new(...))`, in a config
+  fixture or a typed step. That transport exists only in the argument, so
   nothing can pass it through `measureMcp`, and each call the client
   sends reaches no step record and carries no trace context (see "MCP
   calls"). A transport built first and passed by name may be wrapped

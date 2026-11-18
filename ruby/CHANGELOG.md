@@ -217,6 +217,19 @@ Each release's notes come from the section below whose heading starts with `## [
   and the path of `program.log` once it is ready. The same as the
   TypeScript engine.
 
+- `Nukadoko.measure_mcp(transport)` (docs/spec.md "MCP calls") wraps an
+  MCP client's transport, such as the mcp gem's `MCP::Client::HTTP` or
+  `MCP::Client::Stdio`. Each request and notification a step sends
+  through it is a line of the step's `mcp.jsonl` (`evidence.mcp`,
+  counted by `observed.mcp`) and carries the step's trace context in
+  `params._meta.traceparent`; over HTTP to the world the request goes out
+  with the same value as its header, so the program's request line closes
+  the call, and a call that never reaches the world leaves the step's
+  events open with `mcp-unbounded`. `nuka check` notes
+  `mcp-transport-unmeasured` for `MCP::Client.new(transport:
+  MCP::Client::Stdio.new(...))`, whose transport nothing can wrap. The
+  same as the TypeScript engine's `measureMcp`.
+
 ## [0.6.0] - 2026-11-17
 
 ### Added

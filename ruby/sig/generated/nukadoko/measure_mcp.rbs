@@ -1,0 +1,104 @@
+# Generated from lib/nukadoko/measure_mcp.rb with RBS::Inline
+
+# `Nukadoko.measure_mcp`, which makes the MCP calls a step sends through a
+# client's transport part of the step record (docs/spec.md "MCP calls"):
+# each request and notification becomes a line of the step's mcp.jsonl
+# with the answer it got, and carries the step's trace context in
+# `params._meta.traceparent`, so the server's log lines and execution
+# events for the call are the step's. It decides no verdict: an `isError`
+# result or a JSON-RPC error is an answer the step reads.
+#
+# It wraps the transport, not the client. The mcp gem's client calls only
+# `send_request(request:)`, which returns the answer, and
+# `send_notification(notification:)` on its transport, so the wrapper
+# measures those two and hands every other method to the transport as it
+# is: a project keeps the official client, and nukadoko requires no MCP
+# gem.
+#
+# It finds the step at each send, on the thread that sends, as the
+# requests a step sends through Net::HTTP are found. A client is usually
+# made in a scenario fixture, outside every step, and called from several
+# steps, so a step bound when the transport was wrapped would be the wrong
+# one. A message sent outside every step (the client's `initialize`, or a
+# request the client sends from a thread of its own) goes as it was given
+# and is recorded nowhere.
+#
+# Over HTTP to the world, the request the transport sends for a call goes
+# out with the call's traceparent as its header, and counts as a stamped
+# request with the call's span, so the program's `request` line for it
+# closes the call. Over stdio no line can close a call: that is the
+# `mcp-unbounded` gap.
+module Nukadoko
+  # `transport`, measured: give it to the MCP client in its place.
+  # : [T] (T) -> T
+  def self.measure_mcp: [T] (T) -> T
+
+  module Engine
+    module McpCalls
+      FILE: ::String
+
+      # The params member that names each method's target, by the line
+      # field that keeps it. A method MCP adds later is one more row.
+      TARGETS: Hash[String, [ Symbol, String ]]
+
+      # : [T] (Array[Hash[Symbol, untyped]]) { () -> T } -> T
+      def self.collect: [T] (Array[Hash[Symbol, untyped]]) { () -> T } -> T
+
+      # The call whose transport is sending now: the traceparent its HTTP
+      # request takes, and the origins that got it.
+      # : () -> Hash[Symbol, untyped]?
+      def self.sending: () -> Hash[Symbol, untyped]?
+
+      # : [T] (Hash[Symbol, untyped]) { () -> T } -> T
+      def self.sending_as: [T] (Hash[Symbol, untyped]) { () -> T } -> T
+
+      # The header an MCP call's own HTTP request to the world takes: the
+      # call's traceparent, so the header and `params._meta` carry one
+      # value. Nil outside a call, or to another origin.
+      # : (String) -> String?
+      def self.traceparent_for: (String) -> String?
+
+      # A member of a message, whichever kind of key it was written with.
+      # : (untyped, String) -> untyped
+      def self.member: (untyped, String) -> untyped
+
+      # : (untyped) -> String?
+      def self.traceparent_in: (untyped) -> String?
+
+      # `message` with `traceparent` in `params._meta`, as a new Hash with
+      # keys of the kind the message has. A message that already carries a
+      # traceparent keeps it, as a request that sets its own header does,
+      # and one whose `params` is not a Hash goes as it was: JSON-RPC allows
+      # positional params, and an Array has no place for the key.
+      # : (Hash[untyped, untyped], String) -> Hash[untyped, untyped]
+      def self.stamp: (Hash[untyped, untyped], String) -> Hash[untyped, untyped]
+
+      # A call as it starts: the message as it goes out, and the
+      # traceparent nukadoko gave it, nil when it kept the step's own or
+      # the run has no world.
+      # : (Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+      def self.start: (Hash[untyped, untyped]) -> Hash[Symbol, untyped]
+
+      # The mcp.jsonl line of a call and how it ended. The params and the
+      # result are their JSON text, kept as a body is; a JSON-RPC error
+      # keeps its code and the first line of its message, which can carry
+      # a stack. The record redacts the line as it writes it.
+      # : (Hash[Symbol, untyped], **untyped) -> Hash[Symbol, untyped]
+      def self.line: (Hash[Symbol, untyped], **untyped) -> Hash[Symbol, untyped]
+
+      # : (untyped) -> Hash[Symbol, untyped]
+      def self.kept: (untyped) -> Hash[Symbol, untyped]
+
+      # The transport, measured. Recording never breaks the call: the
+      # transport's own error goes on to the client unchanged.
+      class Measured < SimpleDelegator
+        # : (request: Hash[untyped, untyped]) ?{ () -> void } -> untyped
+        def send_request: (request: Hash[untyped, untyped]) ?{ () -> void } -> untyped
+
+        # A notification has no answer, so its line is written as it goes.
+        # : (notification: Hash[untyped, untyped]) -> untyped
+        def send_notification: (notification: Hash[untyped, untyped]) -> untyped
+      end
+    end
+  end
+end

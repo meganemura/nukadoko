@@ -42,7 +42,7 @@ module Nukadoko
 
           Thread.current[:nukadoko_http_inside] = true
           url = "#{use_ssl? ? "https" : "http"}://#{address}#{":#{port}" unless port == (use_ssl? ? 443 : 80)}#{req.path}"
-          traceparent = req["traceparent"] ? nil : Trace.current&.stamp(url)
+          traceparent = req["traceparent"] ? nil : McpCalls.traceparent_for(url) || Trace.current&.stamp(url)
           req["traceparent"] = traceparent if traceparent
           stamp = traceparent ? { traceparent: traceparent, traceparent_sent_to: [Trace.origin(URI(url))] } : {}
           sent = body || req.body

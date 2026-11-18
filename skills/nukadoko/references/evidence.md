@@ -45,10 +45,13 @@ answers itself never reaches nukadoko, so it has no line; a mocked
 
 A step that calls a program's MCP server uses the SDK's own `Client`,
 connected in a fixture, with its transport passed through `measureMcp`
-(from `nukadoko`); nukadoko adds no client. This is the TypeScript
-engine's:
+(from `nukadoko`, `Nukadoko.measure_mcp` in the gem); nukadoko adds no
+client:
 
-<!-- engine: typescript -->
+```ruby
+client = MCP::Client.new(transport: Nukadoko.measure_mcp(MCP::Client::HTTP.new(url: "#{base_url}/mcp")))
+```
+
 ```ts
 await client.connect(measureMcp(new StreamableHTTPClientTransport(new URL("/mcp", baseURL))));
 ```

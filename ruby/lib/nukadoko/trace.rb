@@ -94,6 +94,7 @@ module Nukadoko
         attr_reader :stamped #: Integer
         attr_reader :spans #: Array[String]
         attr_reader :process_spans #: Array[String]
+        attr_reader :mcp_spans #: Array[String]
         attr_reader :last_stamp_at #: Float?
 
         #: (String, String) -> void
@@ -103,7 +104,33 @@ module Nukadoko
           @stamped = 0
           @spans = []
           @process_spans = []
+          @mcp_spans = []
           @last_stamp_at = nil
+        end
+
+        # The traceparent an MCP call carries in `params._meta`, with a
+        # span of its own.
+        #: () -> String
+        def mcp_traceparent
+          span = Trace.new_span
+          @last_stamp_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          @mcp_spans << span if @mcp_spans.size < MAX_SPANS
+          Trace.traceparent(@trace_id, span)
+        end
+
+        # An MCP call's HTTP request to the world goes out with the call's
+        # traceparent, and counts as one stamped request with the call's
+        # span however many requests its send makes.
+        #: (Hash[Symbol, untyped], String) -> void
+        def mcp_sent(call, origin)
+          sent_to = call[:sent_to] #: Array[String]
+          sent_to << origin unless sent_to.include?(origin)
+          @last_stamp_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          return if call[:counted]
+
+          call[:counted] = true
+          @stamped += 1
+          @spans << call[:span] if @spans.size < MAX_SPANS
         end
 
         # The traceparent a request to `url` goes out with, or nil when it

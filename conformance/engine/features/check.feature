@@ -114,3 +114,9 @@ Feature: nuka check says what is wrong before anything runs
       """
       "additional-feature-dir-missing"
       """
+
+  Scenario: an MCP client on a transport built inside the call that makes it is a note
+    Given the project "mcp-unmeasured"
+    When nuka runs "check --json"
+    Then it exits with 0
+    And the findings are "scenario-without-then mcp-transport-unmeasured"

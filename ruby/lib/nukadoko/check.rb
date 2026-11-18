@@ -87,6 +87,7 @@ module Nukadoko
           check_unbound
           check_from_unused
           check_unused_parameter_types
+          check_unmeasured_mcp
         end
         # Errors, then warnings, then notes, each kind in the order found, as
         # the TypeScript engine reports them.
@@ -246,6 +247,58 @@ module Nukadoko
                                   %(Step "#{step.step_name}" still has the description nuka scaffold wrote ("#{step.description}"); nuka steps and nuka describe show it to whoever picks a step, so say what the step does.),
                                   Codes.fix("step-description-todo"), nil)
         end
+      end
+
+      # An MCP client made on a transport built inside its own `new` call,
+      # as in `MCP::Client.new(transport: MCP::Client::Stdio.new(...))`.
+      # That transport exists nowhere but in the argument, so nothing can
+      # wrap it in measure_mcp later, and no call the client sends reaches
+      # a step record. Only that one shape can end one way: a transport
+      # built first and passed by name may be wrapped on another line. It
+      # reads the source text of each step file and each project fixture's
+      # block, and never runs one.
+      #: () -> void
+      def check_unmeasured_mcp
+        @steps.each do |step|
+          classes = Check.transports_built_in_new(File.exist?(step.file) ? File.read(step.file) : "")
+          next if classes.empty?
+
+          findings << Finding.new("note", "mcp-transport-unmeasured", step.file, nil, step.step_name,
+                                  Check.unmeasured_message(%(Step "#{step.step_name}"), classes), UNMEASURED_FIX, nil)
+        end
+        fixtures = [] #: Array[[Symbol, String, Integer]]
+        Nukadoko.project_fixtures.each_value do |fixture|
+          at = fixture.block.source_location
+          fixtures << [fixture.name, at[0], at[1]] if at
+        end
+        fixtures.each do |name, file, line|
+          next unless File.exist?(file)
+
+          ends = fixtures.filter_map { |_, other, start| start if other == file && start > line }.min
+          lines = File.readlines(file)[(line - 1)...(ends ? ends - 1 : nil)] || []
+          classes = Check.transports_built_in_new(lines.join)
+          next if classes.empty?
+
+          findings << Finding.new("note", "mcp-transport-unmeasured", CONFIG, nil, nil,
+                                  Check.unmeasured_message(%(Fixture "#{name}"), classes), UNMEASURED_FIX, nil)
+        end
+      end
+
+      UNMEASURED = /Client\.new\(\s*transport:\s*((?:::)?(?:[A-Z]\w*::)*(?:Stdio|HTTP))\.new\b/
+      UNMEASURED_FIX = "Pass the transport through Nukadoko.measure_mcp: MCP::Client.new(transport: Nukadoko.measure_mcp(MCP::Client::Stdio.new(...)))."
+
+      # The transport classes `source` builds inside an MCP client's `new`
+      # call, in the order written, comments left out.
+      #: (String) -> Array[String]
+      def self.transports_built_in_new(source)
+        code = source.lines.map { _1.sub(/(?<![\w"'])#.*$/, "") }.join
+        code.scan(UNMEASURED).flatten
+      end
+
+      #: (String, Array[String]) -> String
+      def self.unmeasured_message(subject, classes)
+        "#{subject} makes an MCP client on a new #{classes.uniq.join(", ")} inside MCP::Client.new, so nothing wraps it in measure_mcp: " \
+          "its calls reach no step record and carry no trace context."
       end
 
       # A config parameter type no pattern names.

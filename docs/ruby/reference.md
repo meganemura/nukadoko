@@ -183,6 +183,21 @@ Nukadoko.fixture(:page) do |use, page:|
 end
 ```
 
+A fixture that makes an MCP client passes its transport through
+`Nukadoko.measure_mcp`, so each call a step sends is a line of the step's
+`mcp.jsonl` and carries the step's trace context (docs/spec.md "MCP
+calls"):
+
+```ruby
+Nukadoko.fixture(:notes) do |use, base_url:|
+  transport = Nukadoko.measure_mcp(MCP::Client::HTTP.new(url: "#{base_url}/mcp"))
+  client = MCP::Client.new(transport: transport)
+  client.connect
+  use.(client)
+  transport.close
+end
+```
+
 ## Context
 
 The keyword arguments of `run` and `observe` are the fixtures the step
@@ -257,7 +272,6 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- `measureMcp`, which records the MCP calls a client makes.
 - The two doors that bring an existing suite in, from cucumber-js and from
   Playwright Test. Both are JavaScript suites, so they are the TypeScript
   engine's ([doors.md](../typescript/doors.md)).

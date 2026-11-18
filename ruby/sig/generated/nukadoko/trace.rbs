@@ -62,10 +62,23 @@ module Nukadoko
 
         attr_reader process_spans: Array[String]
 
+        attr_reader mcp_spans: Array[String]
+
         attr_reader last_stamp_at: Float?
 
         # : (String, String) -> void
         def initialize: (String, String) -> void
+
+        # The traceparent an MCP call carries in `params._meta`, with a
+        # span of its own.
+        # : () -> String
+        def mcp_traceparent: () -> String
+
+        # An MCP call's HTTP request to the world goes out with the call's
+        # traceparent, and counts as one stamped request with the call's
+        # span however many requests its send makes.
+        # : (Hash[Symbol, untyped], String) -> void
+        def mcp_sent: (Hash[Symbol, untyped], String) -> void
 
         # The traceparent a request to `url` goes out with, or nil when it
         # is not the world's.

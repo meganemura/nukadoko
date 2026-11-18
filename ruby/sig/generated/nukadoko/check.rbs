@@ -101,6 +101,29 @@ module Nukadoko
       # : () -> void
       def check_unbound: () -> void
 
+      # An MCP client made on a transport built inside its own `new` call,
+      # as in `MCP::Client.new(transport: MCP::Client::Stdio.new(...))`.
+      # That transport exists nowhere but in the argument, so nothing can
+      # wrap it in measure_mcp later, and no call the client sends reaches
+      # a step record. Only that one shape can end one way: a transport
+      # built first and passed by name may be wrapped on another line. It
+      # reads the source text of each step file and each project fixture's
+      # block, and never runs one.
+      # : () -> void
+      def check_unmeasured_mcp: () -> void
+
+      UNMEASURED: ::Regexp
+
+      UNMEASURED_FIX: ::String
+
+      # The transport classes `source` builds inside an MCP client's `new`
+      # call, in the order written, comments left out.
+      # : (String) -> Array[String]
+      def self.transports_built_in_new: (String) -> Array[String]
+
+      # : (String, Array[String]) -> String
+      def self.unmeasured_message: (String, Array[String]) -> String
+
       # A config parameter type no pattern names.
       # : () -> void
       def check_unused_parameter_types: () -> void

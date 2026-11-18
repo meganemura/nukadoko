@@ -106,7 +106,7 @@ module Nukadoko
       #: (Trace::Boundary, Array[Hash[Symbol, untyped]]?) -> Hash[Symbol, untyped]
       def self.inputs_of(boundary, processes)
         { spans: boundary.spans.dup, spans_not_kept: [0, boundary.stamped - boundary.spans.size].max, processes: processes_state(processes),
-          process_spans: boundary.process_spans.dup }
+          process_spans: boundary.process_spans.dup, mcp_spans: boundary.mcp_spans.dup }
       end
 
       # The tally inputs of a recorded slice. The slice's own gaps say what
@@ -122,7 +122,8 @@ module Nukadoko
                     elsif has.("no-requests") || slice[:stamped].to_i.positive? then "none"
                     else "ended"
                     end
-        { spans: spans, spans_not_kept: [0, slice[:stamped].to_i - spans.size].max, processes: processes, process_spans: slice[:process_spans] || [] }
+        { spans: spans, spans_not_kept: [0, slice[:stamped].to_i - spans.size].max, processes: processes, process_spans: slice[:process_spans] || [],
+          mcp_spans: slice[:mcp_spans] || [] }
       end
 
       # What one of a step's files may still hold, out of SLICE_CAP.
@@ -235,7 +236,8 @@ module Nukadoko
           reading = tally.reading(truncated: kept.truncated, replaced: @replaced)
           { trace_id: boundary.trace_id, lines: reading[:lines], file: kept.write(dir, SLICE_FILE), kinds: reading[:kinds], stamped: boundary.stamped,
             stamped_spans: boundary.spans.dup, unreadable: reading[:unreadable], unowned: reading[:unowned], process_spans: boundary.process_spans.dup,
-            process_requests: reading[:process_requests], whole: reading[:whole], open: reading[:open] }
+            process_requests: reading[:process_requests], **(boundary.mcp_spans.empty? ? {} : { mcp_spans: boundary.mcp_spans.dup }),
+            whole: reading[:whole], open: reading[:open] }
         end
 
         # Once the world stopped: the world's redacted copy at `copy`, each

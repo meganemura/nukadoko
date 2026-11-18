@@ -158,6 +158,19 @@ Nukadoko.fixture(:page) do |use, page:|
 end
 ```
 
+MCP のクライアントを作る fixture は、その transport を `Nukadoko.measure_mcp` に通します。
+すると step が送るそれぞれの呼び出しが step の `mcp.jsonl` の 1 行になり、step の trace context を運びます(docs/spec.ja.md「MCP の呼び出し」)。
+
+```ruby
+Nukadoko.fixture(:notes) do |use, base_url:|
+  transport = Nukadoko.measure_mcp(MCP::Client::HTTP.new(url: "#{base_url}/mcp"))
+  client = MCP::Client.new(transport: transport)
+  client.connect
+  use.(client)
+  transport.close
+end
+```
+
 ## Context
 
 `run` と `observe` のキーワード引数が、step の必要とする fixture です。
@@ -213,6 +226,5 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- MCP クライアントの呼び出しを記録する `measureMcp`。
 - 既存のスイートを取り込む 2 つの扉、cucumber-js からと Playwright Test から。
 どちらも JavaScript のスイートなので、TypeScript エンジンのものです([doors.ja.md](../typescript/doors.ja.md))。
