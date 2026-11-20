@@ -3144,7 +3144,7 @@ export default defineConfig({
 
 `url` は、nukadoko が動かさない場所で動いているプログラムを名指します。
 配備されたサーバや、pull request ごとのプレビューです。
-関数は、何かに届く前に world の `{ name, root, dir, signal, tree }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照。gem は `signal` を除く同じ項目を渡し、持ち時間を過ぎた関数をその場で止めます):
+関数は、何かに届く前に world の `{ name, root, dir, signal, tree }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照):
 
 ```ruby
 environments: {
@@ -3157,6 +3157,8 @@ environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
 },
 ```
+
+gem は `signal` を除く同じ項目を渡し、持ち時間を過ぎた関数をその場で止めます。
 
 `tree` は、基点のコードを走らせる `nuka run --base` の base の world では `"base"` で、それ以外のどの world でも `"head"` です。
 基点がどこに配備されているかを知っている関数は、base の world にその URL を返します。

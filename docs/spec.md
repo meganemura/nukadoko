@@ -3981,9 +3981,7 @@ with and is not in `defaultEnvironments`.
 server, a preview per pull request.
 A function receives the world's `{ name, root, dir, signal, tree }`
 before anything is reached, so one entry covers every preview (`signal`
-is aborted when the function is abandoned, see "Limits"; the gem passes
-the same fields with no `signal`, and stops a function past its limit
-where it is):
+is aborted when the function is abandoned, see "Limits"):
 
 ```ruby
 environments: {
@@ -3996,6 +3994,9 @@ environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
 },
 ```
+
+The gem passes the same fields with no `signal`, and stops a function past
+its limit where it is.
 
 `tree` is `"base"` for the base world of `nuka run --base`, which runs the
 base's code, and `"head"` for every other world.
