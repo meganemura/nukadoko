@@ -216,6 +216,68 @@ nukadoko が起動する world のプログラムが `{events}` を名指すと�
 各 step の行は record の隣に残り、`observed.events` にまとめられます。
 world が止まると、redact した world 全体の写しが `program.log` の隣に入ります([spec](../spec.ja.md) の「実行イベント」)。
 
+## Compat steps(移行の扉)
+
+cucumber-ruby のスイートは、step 定義とサポートファイルをそのままにして取り込めます。
+`features/` の下の `.rb` ファイルはすべて、cucumber-ruby と同じ順に読み込まれます。
+`features/support/env.rb`、`features/support/` の残り、そのほかのファイルの順です。
+`Given`、`When`、`Then`、`And`、`But`、`Before`、`After`、`AfterStep`、`BeforeAll`、`AfterAll`、`World`、`ParameterType` は、cucumber-ruby と同じくトップレベルにあります。
+型付き step のファイルも並んで読み込まれるので、1 つのシナリオで両方を使えます。
+
+```ruby
+World(BasketHelpers)
+
+Before("@tagged") do
+  @tagged = true
+end
+
+When("I add {int} apples") do |count|
+  count.times { @basket << "apple" }
+end
+
+When("I add these fruits:") do |table|
+  table.hashes.each { |row| row["count"].to_i.times { @basket << row["name"] } }
+end
+```
+
+- compat step の名前はパターンで、`compat: <pattern>` です。
+  Regexp のパターンは `/.../` と書きます。
+  文字列は cucumber expression で、型付き step と同じ parameter type を読みます。
+  step はオプションを取らず、オプションの Hash はファイルの読み込みで拒否されます。
+  `nuka steps` は `compat` として並べ、`nuka describe` は契約がないと言い、`nuka do` は拒否します(`compat-step-not-runnable`)。
+  1 つだけ動かすには `Nukadoko::Step` に昇格させます。
+- ブロックは、マッチした値を順に受け取り、そのあと行のテーブルか doc string を受け取ります。
+  マッチで埋まらない引数があるブロックは、cucumber-ruby と同じく step を失敗させます。
+  テーブルは `DataTable` で、`raw`、`rows`、`hashes`、`symbolic_hashes`、`rows_hash`、`transpose`、`cells_rows` があります。
+  `diff!`、`map_headers!`、`map_column!` は、中途半端に動かさず拒否します。
+  step record は、テーブルを生の行のまま残します。
+- シナリオごとに World が 1 つあり、そのhookと compat step が共有します。
+  `World(Module)` はモジュールを混ぜ込み、`World { MyWorld.new }` はオブジェクトを作ります。
+  名前空間つきの `World` は拒否します。
+  インスタンス変数には包むアクセサがないので、このエンジンは World の読み書きを計測しません。
+  そのため compat step の record に `world` はありません。
+- `step "text"` は、同じ World の上で別の compat step を動かします。
+  その中身は、呼んだ step の record に入ります。
+  Gherkin のテキストを渡す `steps` と `skip_this_scenario` は拒否します。
+  nukadoko には pending という結果がないので、`pending` はエラーの種類 `unsupported` で step を失敗させます。
+  `log` と `attach` は step record の `attachments` に入ります。
+- `open_page` と `open_request` は nukadoko が計測するページとリクエストを返すので、トレース、スクリーンショット、リクエストはその step のものになります。
+  使えるのは step の中だけです。
+  glueが自分で始めた Capybara の `page` は、トレースなしで動きます。
+- `Before` と `After` はシナリオ(`name`、`source_tag_names`、`location`、`status`、`failed?`、`passed?`)を受け取り、`AfterStep` は step の結果とその行を受け取ります。
+  hookのタグは `@tag` か `not @tag` で、1 つのhookが挙げるタグはすべて成り立つ必要があります。
+  それより広い式はエラー `unsupported-hook-tag-expression` です。
+  失敗した `Before` は、あとの `Before` hookを止め、すべての step を飛ばします。
+  `After` は逆順に、失敗のあとでも動きます。
+  `AfterStep` は始まった step のあとに毎回動き、その失敗は step 自身の失敗と同じくシナリオを止めます。
+  hookを 1 回動かすごとに、シナリオの record の `hooks` に 1 項目入ります。
+  hookはページを開きません。
+- `BeforeAll` と `AfterAll` は、環境ごとの 1 周に 1 回、World なしで、`--concurrency` のワーカーが fork する元のプロセスで動きます。
+  失敗はfinding `hook-failed` になり、失敗した `BeforeAll` のあとはシナリオを 1 つも動かしません。
+- `Around`、`InstallPlugin`、`AfterConfiguration` は、ファイルの読み込みで拒否します。
+  例外を出したファイルは `step-file-import-failed` で、ほかのファイルは読み込まれます。
+- compat step は例外を出すかどうかで判定するので、Then の位置にあれば警告 `then-compat-step` になり、run.json はそのシナリオに `judged_by: "compat"` を付けます。
+
 ## 型とツール
 
 `nuka sig` は、各 step の args と returns の RBS を `sig/nukadoko/steps.rbs` に書きます。
@@ -226,5 +288,6 @@ Steep を使うと、宣言していない args のキーを読む本体や、�
 TypeScript エンジンにあって、このエンジンにまだないものです。
 spec では、その例に `<!-- engine: typescript -->` を付けています。
 
-- 既存のスイートを取り込む 2 つの扉、cucumber-js からと Playwright Test から。
-どちらも JavaScript のスイートなので、TypeScript エンジンのものです([doors.ja.md](../typescript/doors.ja.md))。
+- Playwright Test からの扉。
+JavaScript のスイートを取り込むものなので、TypeScript エンジンのものです([doors.ja.md](../typescript/doors.ja.md))。
+上の compat の扉は、TypeScript エンジンの cucumber-js からの扉を、このエンジンの形にしたものです。

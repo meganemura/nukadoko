@@ -452,7 +452,7 @@ module Nukadoko
         by_place = ->(a, b) { [a[:feature].to_s, a[:line].to_i] <=> [b[:feature].to_s, b[:line].to_i] }
         list.concat(unjudged.uniq { [_1[:feature], _1[:line]] }.map do |scenario|
           { kind: "no-claim", feature: scenario[:feature], line: scenario[:line], text: scenario[:scenario],
-            detail: "no claim on a Then line was judged in it", fix: "end the scenario with a Then whose step declares claims" }
+            detail: scenario[:judged_by] == "compat" ? "no claim judged it, and a compat step in Then position may have, by throwing or not, where nukadoko cannot see what it checked" : "no claim on a Then line was judged in it", fix: "end the scenario with a Then whose step declares claims" }
         end.sort(&by_place))
         list.concat(judgment_limits(rows))
         list.concat(step_limits(head).sort(&by_place))

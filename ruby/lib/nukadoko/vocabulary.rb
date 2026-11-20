@@ -10,6 +10,9 @@ module Nukadoko
 
     #: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
     def self.entry(step, project, steps = [step])
+      compat = step #: untyped
+      return { name: step.step_name, kind: "compat", file: step.file.delete_prefix("#{project}/"), patterns: compat.compat_patterns } if compat?(step)
+
       {
         name: step.step_name, kind: "typed", file: step.file.delete_prefix("#{project}/"),
         patterns: step.patterns, description: step.description, mutates: step.mutating?, timeout: step.timeout,
@@ -21,6 +24,12 @@ module Nukadoko
 
     #: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
     def self.describe(step, project, steps = [step])
+      if compat?(step)
+        compat = step #: untyped
+        return { kind: "compat", name: step.step_name, file: step.file.delete_prefix("#{project}/"), pattern: compat.registration.source,
+                 message: %(compat steps have no type contract; promote this pattern to a Nukadoko::Step to add one (docs/ruby/reference.md "Compat steps")) }
+      end
+
       # A step with no returns returns an empty object, as zod's default says.
       returns = step.returns&.json_schema(output: true) || { "$schema": "https://json-schema.org/draft/2020-12/schema", default: {}, type: "object", properties: {}, additionalProperties: false }
       entry(step, project, steps).merge(args: step.args.json_schema, returns: returns)
@@ -78,8 +87,13 @@ module Nukadoko
       end
     end
 
+    #: (untyped) -> bool
+    def self.compat?(step) = step.respond_to?(:compat?) && step.compat?
+
     #: (singleton(Step), ?Array[singleton(Step)]) -> String
     def self.text(step, steps = [step])
+      return "#{step.step_name}  compat" if compat?(step)
+
       browser = step.bag.intersect?(BROWSER) ? "  browser" : ""
       header = "#{step.step_name}  typed  #{step.claims ? "claims" : step.mutating? ? "mutates" : "read-only"}#{browser}#{"  timeout #{step.timeout}ms" if step.timeout}"
       items = [*(step.patterns.empty? ? ["(no pattern)"] : step.patterns), step.description]

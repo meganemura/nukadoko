@@ -158,6 +158,13 @@ export default defineConfig({
 
 フィールドは [spec](../spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」にあります。
 
+## Compat steps(移行の扉)
+
+cucumber-js のスイートは、import を 1 つ `nukadoko/compat` に変えるだけで、step 定義をそのままにして取り込めます。
+compat step の名前はパターンで(`compat: <pattern>`)、契約はなく、それぞれ自分の step record を持って動きます。
+その hook はシナリオの World の上で動き、シナリオの record の `hooks` に 1 項目ずつ入ります。
+扉が受け付けるものは [doors.ja.md](doors.ja.md) に、スイートを移す手順は [migration.ja.md](migration.ja.md) にあります。
+
 ## 型とツール
 
 `tsc` が config と step を検査します。

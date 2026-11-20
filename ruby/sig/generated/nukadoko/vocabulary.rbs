@@ -32,6 +32,9 @@ module Nukadoko
     # : (singleton(Step)) -> Hash[untyped, untyped]?
     def self.from: (singleton(Step)) -> Hash[untyped, untyped]?
 
+    # : (untyped) -> bool
+    def self.compat?: (untyped) -> bool
+
     # : (singleton(Step), ?Array[singleton(Step)]) -> String
     def self.text: (singleton(Step), ?Array[singleton(Step)]) -> String
 

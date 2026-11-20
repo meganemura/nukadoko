@@ -5,7 +5,7 @@
 既存の JavaScript のスイートが TypeScript エンジンに入る 2 つの扉です。
 1 つは cucumber-js の step 定義をそのまま実行する扉、もう 1 つは Playwright Test のスイートが型付き step とコードを共有する扉です。
 スイートを一歩ずつ移す手順は、1 つ目の扉が [migration.ja.md](migration.ja.md)、2 つ目が [migration-playwright-test.ja.md](migration-playwright-test.ja.md) にあります。
-Ruby エンジンには、どちらの扉もありません。
+Ruby エンジンには、cucumber-ruby のスイート向けの compat の扉が別にあり([reference.ja.md](../ruby/reference.ja.md))、Playwright Test からの扉はありません。
 
 ## Compat steps(移行の扉)
 

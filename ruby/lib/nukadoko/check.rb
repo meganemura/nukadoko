@@ -63,6 +63,19 @@ module Nukadoko
                                    %(no .rb step file was found while scanning "features"; no step can ever be registered), Codes.fix("no-step-files-found"), nil)
         end
         @findings.concat(config)
+        # A glue file that raised while it loaded registered nothing.
+        Compat.load_failures.each do |file, message|
+          relative = file.delete_prefix("#{Dir.pwd}/")
+          @findings << Finding.new("error", "step-file-import-failed", relative, nil, nil, "#{relative}: #{message}", Codes.fix("step-file-import-failed"), nil)
+        end
+        # A compat hook's tags in a shape the door does not read would
+        # select scenarios differently than cucumber-ruby, so it is refused
+        # before anything runs.
+        Compat.hooks.each do |hook|
+          hook.tags.reject { Compat.tag_expression?(_1) }.each do |expression|
+            @findings << Finding.new("error", "unsupported-hook-tag-expression", nil, nil, nil, Compat.unsupported_tags(expression), Codes.fix("unsupported-hook-tag-expression"), nil)
+          end
+        end
         # The config's parameterTypes did not register, so no pattern binds a
         # line; that is said once, not once per pattern.
         if (collision = Pattern.collision)
@@ -831,6 +844,8 @@ module Nukadoko
             when 1
               step, captures = matches.first
               bound << step
+              next check_compat_line(scenario, line, step) if step.respond_to?(:compat?)
+
               check_fill(scenario, line, step, captures)
               check_position(scenario, line, step)
               check_kinds(scenario, line, step, captures)
@@ -846,12 +861,12 @@ module Nukadoko
           check_from_order(scenario)
           check_files_order(scenario)
           check_claim_sources(scenario)
+          judging_nothing(scenario)
         end
         check_events_worlds(bound.uniq) unless @worlds == false
         bound.uniq.each { check_transformed(_1) }
         check_state_order
         suppress_undefined(undefined)
-        @scenarios.each { judging_nothing(_1) }
       end
 
       # A scenario whose Then lines each bind one step, none of them a claim
@@ -865,8 +880,9 @@ module Nukadoko
         return unless steps.all? { _1.size == 1 }
         return if steps.any? { _1.first.first.claims }
 
+        compat = steps.any? { _1.first.first.respond_to?(:compat?) } ? " A compat step in Then position judges by raising or not, and nukadoko cannot see what it checked." : ""
         findings << Finding.new("warning", "scenario-without-then", scenario.uri, thens.first.line, nil,
-                                %(Scenario "#{scenario.name}" judges no claim: none of its Then lines binds a claim step, so it passes whenever its steps run without an error.),
+                                %(Scenario "#{scenario.name}" judges no claim: none of its Then lines binds a claim step, so it passes whenever its steps run without an error.#{compat}),
                                 Codes.fix("scenario-without-then"), nil)
       end
 
@@ -913,6 +929,18 @@ module Nukadoko
       end
 
       KEYWORD = { "Context" => "Given", "Action" => "When", "Outcome" => "Then" }.freeze
+
+      # A compat step has no contract to hold a line to. In Then position it
+      # judges by raising or not, which nukadoko cannot see.
+      #: (Scenario, PickleStep, untyped) -> void
+      def check_compat_line(scenario, line, step)
+        return unless line.kind.to_s == "Outcome"
+
+        findings << Finding.new("warning", "then-compat-step", scenario.uri, line.line, step.step_name,
+                                %(Step "#{step.step_name}" is a compat step bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges; ) +
+                                %(this is a static coverage gap, not something the tool caught at run time (docs/ruby/reference.md "Compat steps", docs/spec.md "Claims")),
+                                Codes.fix("then-compat-step"), nil)
+      end
 
       # Only a Then judges, so a claim step elsewhere and a step that runs in
       # Then position are both mistakes.
@@ -1093,7 +1121,11 @@ module Nukadoko
 
     #: (Array[singleton(Step)], String) -> Array[[singleton(Step), Hash[String, untyped]]]
     def self.matches(steps, text)
-      steps.filter_map { |step| (captures = step.patterns.lazy.filter_map { Pattern.new(_1).match(text) }.first) && [step, captures] }
+      steps.filter_map do |step|
+        compat = step #: untyped
+        captures = step.respond_to?(:compat?) ? compat.match_line(text) : step.patterns.lazy.filter_map { Pattern.new(_1).match(text) }.first
+        captures && [step, captures]
+      end
     end
   end
 end

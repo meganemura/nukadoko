@@ -200,11 +200,15 @@ module Nukadoko
 
   # Each step file is registered for autoload under its class name first, so a
   # step can name another in `from` or `field` whatever order the files load in.
+  # Every other Ruby file under the features directory is cucumber-ruby glue
+  # the compat door reads (lib/nukadoko/compat.rb), loaded before the step
+  # files in cucumber-ruby's order, and a step file may register glue too.
   #: (String) -> Array[singleton(Step)]
   def self.load_steps(dir)
     files = Dir.glob(File.join(dir, "**/*.rb")).sort.map { File.expand_path(_1) }
     files.each { Object.autoload(File.basename(_1, ".rb").split("_").map(&:capitalize).join.to_sym, _1) }
-    files.each { require _1 }
+    glue = Compat.files(File.dirname(dir), dir)
+    Compat.load(glue - files + files)
     Step.registry
   end
 end

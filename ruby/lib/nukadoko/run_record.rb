@@ -24,7 +24,9 @@ module Nukadoko
       #: (Hash[Symbol, untyped], environment: String, world_name: String?, run_id: String?, scenario_record_id: String?, evidence_dir: String, ?target_version: String?) -> Hash[Symbol, untyped]
       def step_file(record, environment:, world_name:, run_id:, scenario_record_id:, evidence_dir:, target_version: nil)
         passed = record[:status] == "passed"
-        outcome = if passed then { result: record[:result] || {}, returns_dropped: record[:returns_dropped] }.compact
+        # A compat step returns nothing nukadoko reads, so its result is null.
+        outcome = if passed && record[:mutates].nil? && record[:kind] != "claim" && record[:step].to_s.start_with?("compat: ") then { result: nil }
+                  elsif passed then { result: record[:result] || {}, returns_dropped: record[:returns_dropped] }.compact
                   else { error: { message: record[:error], kind: record[:error_kind], **(record[:error_at]&.any? ? { at: record[:error_at] } : {}) } }
                   end
         processes = record[:processes]
@@ -489,7 +491,8 @@ module Nukadoko
                           "its judgment decides it"]
         end
         if context[:then_judges_no_claim]
-          return ["unproven", "passes in #{passed_in}, but no claim step stands in its Then position, so no world can show a Then failing where its behaviour is absent" \
+          then_text = context[:then_judges_no_claim] == "compat" ? "its Then is a compat step, which judges no claim" : "no claim step stands in its Then position"
+          return ["unproven", "passes in #{passed_in}, but #{then_text}, so no world can show a Then failing where its behaviour is absent" \
                               "#{absent.empty? ? "" : " (#{absent.join(", ")})"}"]
         end
         if absent.empty?

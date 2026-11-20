@@ -144,7 +144,7 @@ module Nukadoko
         @out.puts "wrote #{path.delete_prefix("#{@project}/")}"
         0
       when "steps"
-        entries = check.usable.sort_by(&:file)
+        entries = check.usable.each_with_index.sort_by { |step, i| [step.file, i] }.map(&:first)
         return finish("steps", true, findings: findings, steps: entries.map { Vocabulary.entry(_1, @project, entries) }) if @json
 
         @out.puts entries.map { Vocabulary.text(_1, entries) }.join("\n\n")
@@ -463,6 +463,10 @@ module Nukadoko
       name = @rest.first
       step = check.usable.find { _1.step_name == name }
       return refuse(Engine::Refusal.new("unknown-step", "Unknown step: #{name}", fix: "Name a step that nuka steps lists.", run: "nuka steps")) unless step
+      if Vocabulary.compat?(step)
+        return refuse(Engine::Refusal.new("compat-step-not-runnable", %(Step "#{name}" is a compat step and has no typed contract, so nuka do cannot run it alone),
+                                          fix: "Promote the step to a Nukadoko::Step to run it with nuka do.", run: "nuka do --help"))
+      end
 
       describe = "nuka describe #{name}"
       args_fix = "Pass --args as a JSON object with the keys that nuka describe <step> lists."

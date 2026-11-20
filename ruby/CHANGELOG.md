@@ -70,6 +70,22 @@ Each release's notes come from the section below whose heading starts with `## [
 
 ### Added
 
+- The compat door: a cucumber-ruby suite comes in as it is. Every `.rb`
+  file under `features/` loads in cucumber-ruby's order, with `Given`,
+  `When`, `Then`, `Before`, `After`, `AfterStep`, `BeforeAll`, `AfterAll`,
+  `World`, and `ParameterType` at the top level. Each line a compat step
+  binds runs on the scenario's World with a step record of its own, named
+  `compat: <pattern>`, and its hooks are entries in the scenario record's
+  `hooks`, as in the TypeScript engine's door from cucumber-js. `nuka
+  check` warns of a compat step in Then position (`then-compat-step`) and
+  refuses a hook tag it does not read (`unsupported-hook-tag-expression`),
+  `nuka steps` and `nuka describe` list compat steps, and `nuka do` refuses
+  them (`compat-step-not-runnable`). A glue file that raises is
+  `step-file-import-failed`, and the others still load. The gem does not
+  measure the World's reads and writes. A project with no glue sees no
+  change, except that a typed step file that raises when it loads is now
+  that finding too.
+
 - The program's `{events}` placeholder: a served world whose program
   names it gets an empty file outside the run directory, made with mode
   0600 in a directory of its own, and the program appends its execution

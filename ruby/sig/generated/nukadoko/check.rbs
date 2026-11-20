@@ -279,6 +279,11 @@ module Nukadoko
 
       KEYWORD: untyped
 
+      # A compat step has no contract to hold a line to. In Then position it
+      # judges by raising or not, which nukadoko cannot see.
+      # : (Scenario, PickleStep, untyped) -> void
+      def check_compat_line: (Scenario, PickleStep, untyped) -> void
+
       # Only a Then judges, so a claim step elsewhere and a step that runs in
       # Then position are both mistakes.
       # : (Scenario, PickleStep, singleton(Step)) -> void

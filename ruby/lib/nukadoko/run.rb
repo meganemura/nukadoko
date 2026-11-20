@@ -208,7 +208,12 @@ module Nukadoko
           # until it has broken the same claim at the same line --proof-runs
           # times or a run disagrees.
           due = -> { @scenarios.select { proving?(roles[_1], runs[_1]) } }
-          if @concurrency > 1
+          # BeforeAll brackets the pass with AfterAll, in this process, which
+          # each worker forks from; a BeforeAll that failed plays nothing.
+          all_hooks = @scenarios.any?
+          before_all_failed = all_hooks && !run_hooks(:before_all, environment)
+          if before_all_failed then nil
+          elsif @concurrency > 1
             play_in_workers(environment, roles, world, due, ran, runs)
           else
             @process_fixtures = FixtureCache.new
@@ -228,6 +233,7 @@ module Nukadoko
             end
           end
         ensure
+          run_hooks(:after_all, environment) if all_hooks
           @browser&.close
           errors = @process_fixtures&.teardown(runs && !$! && runs.values.flatten.all? { _1[:json][:status] == "passed" } ? "passed" : "failed") || []
           FixtureCache.warnings(errors) { redact(_1) }.each { @out.puts _1 }
@@ -236,11 +242,37 @@ module Nukadoko
           @world_entries << world_entry(environment, world, world_dir, (runs&.values || []).flatten) if world && @program.file?
           # Cells are folded once the world stopped, so a claim its stop judged
           # otherwise turns its execution broke.
-          @scenarios.each { cells[_1] << cell(runs[_1], environment, roles[_1], _1) } if world && runs && !$!
+          if world && runs && !$!
+            @scenarios.each do |scenario|
+              cells[scenario] << cell(runs[scenario], environment, roles[scenario], scenario).merge(before_all_failed ? { reason: "a BeforeAll hook failed" } : {})
+            end
+          end
           world&.remove_events
           @browser = @process_fixtures = @program_log = @events = nil
         end
         [executions, cells]
+      end
+
+      # Runs each BeforeAll or AfterAll hook once, with no World, as the
+      # run's own: a failure is a finding of the run, naming the
+      # environment, and stops the BeforeAll hooks after it. False when one
+      # failed.
+      #: (Symbol, Environment) -> bool
+      def run_hooks(type, environment)
+        label = type == :before_all ? "BeforeAll" : "AfterAll"
+        ok = true
+        Compat.hooks_of(type).each do |hook|
+          hook.block.call
+        rescue StandardError => e
+          title = hook.name && !hook.name.empty? ? hook.name : label
+          message = e.is_a?(Compat::Pending) ? %(Hook "#{title}" called pending, which nukadoko does not interpret as pending or skipped (unlike cucumber-ruby). See docs/ruby/reference.md "Compat steps") : e.message
+          words = [*@rerun[:targets], *@rerun[:tags], *Order.flags(@order), *@env_flags]
+          @incomplete << { severity: "failed", code: "hook-failed", message: redact(%(#{title} failed in environment "#{environment.name}": #{message})),
+                           do: ["nuka", "run", *words].map { Selection.shell_word(_1) }.join(" ") }
+          ok = false
+          break if type == :before_all
+        end
+        ok
       end
 
       # A list a started world did not read, as a warning: head's routes and
@@ -852,6 +884,13 @@ module Nukadoko
         # included, as nuka check reports it: each such line carries its
         # message and every other line is skipped.
         refusals = States.refusals(@steps, scenario)
+        # A scenario of a suite that came in through the compat door gets a
+        # World of its own, which its hooks and compat steps share.
+        hooks = [] #: Array[Hash[Symbol, untyped]]
+        compat = (Compat::Scenario.new(scenario.name, scenario.tags, "#{scenario.uri}:#{scenario.line}") if Compat.steps.any? || Compat.hooks.any?)
+        @compat_world = compat ? Compat.new_world : nil
+        @compat_tags = scenario.tags
+        hook_failed = compat && !compat_hooks(:before, hooks, [compat])
         records = scenario.steps.each_with_index.map do |line, index|
           began = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           record = if refusals.any?
@@ -859,10 +898,18 @@ module Nukadoko
                        { status: "failed", outcome: :broke, step_record_id: nil, step: Engine.matches(@steps, line.text).first&.first&.step_name, error: messages.join("; "), refused: true }
                      else skipped(line)
                      end
-                   elsif stopped || walk_stopped then skipped(line)
+                   elsif stopped || walk_stopped || hook_failed then skipped(line)
                    else play_step(line, results, world)
                    end
           stopped ||= [record[:outcome], line.line, record[:claim], record[:broken_actual]] if record[:status] == "failed"
+          # AfterStep runs after each step that began, and its failure
+          # stops the scenario as the step's own would.
+          if compat && record[:step_record_id] && record[:status] != "skipped"
+            result = Compat::StepResult.new(status: record[:status].to_sym, exception: nil)
+            unless compat_hooks(:after_step, hooks, [result, line], step_index: index)
+              stopped ||= [:broke, scenario.line, "an AfterStep hook failed after the step at line #{line.line} passed"]
+            end
+          end
           seconds = format("%.1f", Process.clock_gettime(Process::CLOCK_MONOTONIC) - began)
           @out.puts "  step #{index + 1}/#{scenario.steps.size}  #{record[:status]}  #{seconds}s  #{line.text}"
           step_failure(record).each { @out.puts "      #{_1}" } if record[:status] == "failed"
@@ -874,6 +921,14 @@ module Nukadoko
           end
           record
         end
+        if compat
+          compat.status = stopped || hook_failed ? :failed : :passed
+          unless compat_hooks(:after, hooks, [compat])
+            stopped ||= [:broke, scenario.line, walk_stopped ? "an After hook failed after the walk was stopped" : "an After hook failed after its steps passed"] unless hook_failed
+          end
+          stopped ||= [:broke, scenario.line, "a Before hook failed before its steps ran"] if hook_failed
+        end
+        @compat_world = nil
         browser = @browser.scenario_browser
         final = @browser.end_scenario(File.join(@dir, "scenarios", scenario_record_id))
         teardown_errors = @scenario_fixtures.teardown(stopped || walk_stopped ? "failed" : "passed")
@@ -884,6 +939,10 @@ module Nukadoko
                     else [:pass]
                     end
         failed = records.find { _1[:status] == "failed" }
+        # A hook that failed with every step passed or skipped is the
+        # failure the scenario reports, by its message's first line.
+        hook_failure = hooks.find { _1[:status] == "failed" }
+        failed ||= { error: hook_failure[:error][:message].lines.first.to_s.chomp } if hook_failure
         status = if stopped then "failed"
                  elsif walk_stopped then "stopped"
                  else "passed"
@@ -891,7 +950,7 @@ module Nukadoko
         json = { scenario_record_id: scenario_record_id, feature: scenario.uri, line: scenario.line, scenario: scenario.name,
                  environment: environment.name, status: status, **(walk_stopped && !stopped ? { stopped: walk_stopped } : {}),
                  started_at: started_at, finished_at: now, **(browser ? { browser: browser } : {}),
-                 steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: [] } #: Hash[Symbol, untyped]
+                 steps: scenario.steps.zip(records).map { |line, record| step_entry(line, record) }, hooks: hooks } #: Hash[Symbol, untyped]
         json[:evidence] = { dir: File.join("scenarios", scenario_record_id), screenshots: final } if final.any?
         json[:teardown_errors] = redact(teardown_errors) if teardown_errors.any?
         json[:do] = again(scenario, environment) if (failed || status == "stopped") && role != "control"
@@ -904,7 +963,12 @@ module Nukadoko
         # what decides it.
         then_claims = scenario.steps.zip(records).select { |line, _| line_kind(line) == :then }.flat_map { _2[:claim_records] || [] }
         unless then_claims.any? { !%w[unobserved for-judgment].include?(_1[:outcome]) }
-          json[:judged_by] = then_claims.any? { _1[:outcome] == "for-judgment" } ? "judgment" : "nothing"
+          # A compat step in Then position may have judged by raising.
+          compat_then = scenario.steps.zip(records).any? { |line, record| line_kind(line) == :then && @steps.any? { _1.step_name == record[:step] && Vocabulary.compat?(_1) } }
+          json[:judged_by] = if then_claims.any? { _1[:outcome] == "for-judgment" } then "judgment"
+                             elsif compat_then then "compat"
+                             else "nothing"
+                             end
         end
         json[:role] = role
         failure = if failed && role != "control"
@@ -929,6 +993,39 @@ module Nukadoko
 
         failure = Underneath.demoting(json)
         failure ? [:broke, failure[:line], Underneath.reason(failure)] : execution
+      end
+
+      # Runs a compat hook kind on the scenario's World, each that its tags
+      # select, and adds an entry for each to `hooks`. Before stops at the
+      # first that fails, since nothing is left to prepare into; After runs
+      # in reverse order, as teardown unwinds setup. False when one failed.
+      #: (Symbol, Array[Hash[Symbol, untyped]], Array[untyped], ?step_index: Integer?) -> bool
+      def compat_hooks(type, hooks, given, step_index: nil)
+        chosen = Compat.hooks_of(type)
+        chosen = chosen.reverse if type == :after
+        ok = true
+        chosen.each do |hook|
+          entry = { type: type.to_s, **(step_index ? { step_index: step_index } : {}), status: "passed" } #: Hash[Symbol, untyped]
+          begin
+            next unless Compat.applies?(hook, @compat_tags)
+
+            @compat_world.instance_exec(*given, &hook.block)
+          rescue Compat::Pending
+            title = hook.name || { before: "Before", after: "After", after_step: "AfterStep hook (step #{step_index.to_i + 1})" }.fetch(type)
+            entry.merge!(status: "failed", error: { message: %(Hook "#{title}" called pending, which nukadoko does not interpret as pending or skipped (unlike cucumber-ruby). See docs/ruby/reference.md "Compat steps"), kind: "unsupported" })
+          rescue Compat::Unsupported => e
+            entry.merge!(status: "failed", error: { message: redact(e.message), kind: "unsupported" })
+          rescue StandardError => e
+            entry.merge!(status: "failed", error: { message: redact(e.message), kind: "step_error" })
+          end
+          entry[:name] = hook.name if hook.name && !hook.name.empty?
+          hooks << entry
+          next if entry[:status] == "passed"
+
+          ok = false
+          break if type == :before
+        end
+        ok
       end
 
       # The pause after the step that ran `number`th, under --step. Before
@@ -1012,6 +1109,11 @@ module Nukadoko
         record = { step_record_id: id, step: step.step_name, text: line.text, started_at: Time.now.utc.iso8601(3) }
         origins = {}
         execute(step, record, dir, world, then_line: line_kind(line) == :then, at_line: line.line, results: results, origins: origins) do
+          # A compat step takes its matched values in order, then the line's
+          # table or docstring, as cucumber-ruby passes them.
+          compat = step #: untyped
+          next [compat.values(captures, @compat_world) + [line.table ? Compat::DataTable.new(line.table) : line.doc_string].compact, {}] if Vocabulary.compat?(step)
+
           args = bind_args(step, captures, line, results, origins, record)
           [args, (step.patterns.lazy.filter_map { Pattern.new(_1).texts(line.text) }.first || {}).merge(attachment_texts(step, captures, line))]
         end
@@ -1250,10 +1352,12 @@ module Nukadoko
         # A world with a URL is one the step's requests can be traced into.
         boundary = world.base_url && Trace::Boundary.new(Trace.new_id(world.trace_prefix), world.base_url)
         begin
-          record[:mutates] = step.mutating?
+          compat = Vocabulary.compat?(step)
+          # A compat step declares nothing about what it changes.
+          record[:mutates] = compat ? nil : step.mutating?
           args, texts = yield
-          record[:args] = stored(args)
-          problems = step.args.problems(args, strict: true)
+          record[:args] = stored(compat ? args.map { _1.is_a?(Compat::DataTable) ? _1.raw : _1 } : args)
+          problems = compat ? [] : step.args.problems(args, strict: true)
           if problems.any?
             record[:error_kind] = "args_invalid"
             raise TypeError, "args validation failed: #{problems.join("; ")}"
@@ -1264,6 +1368,18 @@ module Nukadoko
           began = true
           Trace.within(boundary) do
             fixtures, finish = build_fixtures(step, dir, log, world, record, results)
+            if compat
+              open = @compat_open
+              Compat.opener = ->(kind) { open.(kind).tap { @request_log = @compat_built[:request] } }
+              Compat.evidence = lambda do |kind, values|
+                evidence = (record[:evidence_log] ||= Evidence.new(dir))
+                if kind == :log then evidence.attach("log.txt", values.join("\n"))
+                else
+                  data, _media_type, filename = values
+                  evidence.attach(filename || "attachment", data.to_s)
+                end
+              end
+            end
             HttpRecording.collect(log) do
               McpCalls.collect(mcp_log) do
                 Processes.collect(processes) { RedactedOutput.around(secrets) { within_deadline(step, record) { body(step, fixtures, args, [then_line, at_line], record, results, origins, texts, dir) } } }
@@ -1278,6 +1394,7 @@ module Nukadoko
           record[:error_at] = ErrorFrames.of(e, @project).map { redact(_1) } if record[:error_kind] == "step_error"
         ensure
           @browser&.step = nil
+          Compat.opener = Compat.evidence = nil
           finish&.call
           if began && (browser = @browser)
             page_events = browser.page_events
@@ -1365,7 +1482,25 @@ module Nukadoko
       #: (untyped, Hash[Symbol, untyped], untyped, [bool, Integer?], Hash[Symbol, untyped], Array[untyped], Hash[String, String], Hash[String, String?], String) -> void
       def body(step, fixtures, args, position, record, results, origins, texts, dir)
         then_line, at_line = position
-        if step.claims
+        if Vocabulary.compat?(step)
+          block = step.registration.block
+          # cucumber-ruby refuses a block whose parameters the match does
+          # not fill, rather than leaving one nil.
+          if block.arity >= 0 && block.arity != args.size
+            raise ArgumentError, "Your block takes #{block.arity} argument#{"s" unless block.arity == 1}, but the step \"#{record[:text]}\" passes #{args.size}"
+          end
+
+          begin
+            @compat_world.instance_exec(*args, &block)
+          rescue Compat::Pending
+            record[:error_kind] = "unsupported"
+            raise Compat::Unsupported, %(Step "#{step.step_name}" called pending, which nukadoko does not interpret as pending or skipped (unlike cucumber-ruby). See docs/ruby/reference.md "Compat steps")
+          rescue Compat::Unsupported
+            record[:error_kind] = "unsupported"
+            raise
+          end
+          record[:result] = nil
+        elsif step.claims
           own = fixtures.slice(*step.fixtures)
           observes = step.method_defined?(:observe)
           # A claim's actual that starts with a from key reads the value an
@@ -1623,7 +1758,7 @@ module Nukadoko
       def build_fixtures(step, dir, log, world, record, results)
         finishes = [] #: Array[^() -> void]
         @fixture_usage = []
-        built = {} #: Hash[Symbol, untyped]
+        built = @compat_built = {} #: Hash[Symbol, untyped]
         builtin = lambda do |name|
           name = ALIASES.fetch(name, name)
           next built[name] if built.key?(name)
@@ -1657,12 +1792,15 @@ module Nukadoko
         (step.bag - [:call]).each do |name|
           fixtures[name] = Nukadoko.project_fixtures.key?(name) || !BUILTINS.include?(name) ? project_fixture(name, world, [], builtin) : builtin.(name)
         end
+        # A compat step opens the page or the request when its glue asks.
+        @compat_open = builtin
         # Requests a wrapped request fixture sends are the builtin's, so the record keeps them.
         @request_log = built[:request]
         fixtures[:call] = Caller.new(step, fixtures, refuse: ->(part) { read_only_refusal(part) }) if step.fixtures.include?(:call)
         record[:fixtures] = @fixture_usage if @fixture_usage.any?
         @fixture_usage = nil
-        finish = finishes.empty? ? nil : -> { finishes.reverse_each(&:call) }
+        # Read when the step ends, so a page a compat step opened later is finished too.
+        finish = -> { finishes.reverse_each(&:call) }
         [fixtures, finish]
       end
 

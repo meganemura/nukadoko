@@ -31,6 +31,16 @@ module Cucumber
       def ast: () -> untyped
     end
 
+    class RegularExpression
+      def initialize: (Regexp, ParameterTypeRegistry) -> void
+      def match: (String) -> Array[untyped]?
+      def source: () -> Regexp
+    end
+
+    class ParameterType
+      def initialize: (String, Array[untyped], untyped, untyped, bool, bool) -> void
+    end
+
     class CucumberExpressionGenerator
       def initialize: (ParameterTypeRegistry) -> void
       def generate_expressions: (String) -> Array[untyped]

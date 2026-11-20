@@ -174,6 +174,15 @@ export default defineConfig({
 
 Its fields are under "Program" in [the spec](../spec.md#program).
 
+## Compat steps (the migration door)
+
+A cucumber-js suite comes in with its step definitions as they are, after
+one import changes to `nukadoko/compat`. A compat step is named by its
+pattern, `compat: <pattern>`, has no contract, and runs with a step record
+of its own; its hooks run on the scenario's World and are entries in the
+scenario record's `hooks`. [doors.md](doors.md) says what the door takes,
+and [migration.md](migration.md) how a suite moves across.
+
 ## Types and tooling
 
 `tsc` checks the config and the steps. `nuka init` adds

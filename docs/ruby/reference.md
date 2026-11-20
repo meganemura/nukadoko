@@ -261,6 +261,80 @@ Each step's lines are kept beside its record and summed up in its
 `program.log` once the world stops ([spec](../spec.md), "Execution
 events").
 
+## Compat steps (the migration door)
+
+A cucumber-ruby suite comes in with its step definitions and support files
+as they are. Every `.rb` file under `features/` loads in cucumber-ruby's
+order: `features/support/env.rb`, the rest of `features/support/`, then the
+other files. `Given`, `When`, `Then`, `And`, `But`, `Before`, `After`,
+`AfterStep`, `BeforeAll`, `AfterAll`, `World`, and `ParameterType` are at
+the top level, as cucumber-ruby defines them. Typed step files load beside
+them, so one scenario can bind both kinds.
+
+```ruby
+World(BasketHelpers)
+
+Before("@tagged") do
+  @tagged = true
+end
+
+When("I add {int} apples") do |count|
+  count.times { @basket << "apple" }
+end
+
+When("I add these fruits:") do |table|
+  table.hashes.each { |row| row["count"].to_i.times { @basket << row["name"] } }
+end
+```
+
+- A compat step is named by its pattern, `compat: <pattern>`, and a Regexp
+  pattern is written `/.../`. A string is a cucumber expression and reads
+  the same parameter types as typed steps. A step takes no options, and an
+  options hash is refused when the file loads. `nuka steps` lists the step
+  as `compat`, `nuka describe` says it has no contract, and `nuka do`
+  refuses it (`compat-step-not-runnable`): promote it to a `Nukadoko::Step`
+  to run it alone.
+- The block gets the matched values in order, then the line's table or doc
+  string. A block whose parameters the match does not fill fails the step,
+  as cucumber-ruby fails it. A table is a `DataTable` with `raw`, `rows`,
+  `hashes`, `symbolic_hashes`, `rows_hash`, `transpose`, and `cells_rows`.
+  `diff!`, `map_headers!`, and `map_column!` are refused, never half done.
+  The step record keeps the table as its raw rows.
+- Each scenario gets one World, which its hooks and compat steps share.
+  `World(Module)` mixes a module in, and `World { MyWorld.new }` builds the
+  object. A namespaced `World` is refused. The engine does not measure the
+  World's reads and writes: an instance variable has no accessor to wrap,
+  so a compat step record has no `world`.
+- `step "text"` runs another compat step on the same World, inside the
+  record of the step that called it. `steps` with Gherkin text and
+  `skip_this_scenario` are refused. `pending` fails the step with the
+  error kind `unsupported`, since nukadoko has no pending outcome. `log`
+  and `attach` go into the step record's `attachments`.
+- `open_page` and `open_request` return the page and the request nukadoko
+  measures, so their trace, screenshots, and requests are the step's. They
+  work inside a step only. A Capybara `page` the glue starts itself runs,
+  with no trace.
+- `Before` and `After` get the scenario (`name`, `source_tag_names`,
+  `location`, `status`, `failed?`, `passed?`), and `AfterStep` gets the
+  step's result and its line. A hook's tags are `@tag` or `not @tag`, and
+  all the tags one hook names must hold; anything wider is the error
+  `unsupported-hook-tag-expression`. A `Before` that fails stops the
+  `Before` hooks after it and skips every step. `After` runs in reverse
+  order, after a failure too. `AfterStep` runs after each step that began,
+  and its failure stops the scenario as the step's own would. Each run of
+  a hook is an entry in the scenario record's `hooks`, and a hook opens no
+  page.
+- `BeforeAll` and `AfterAll` run once for each environment's pass, with no
+  World, in the process the workers of `--concurrency` fork from. A failure
+  is the finding `hook-failed`, and a `BeforeAll` that failed plays no
+  scenario.
+- `Around`, `InstallPlugin`, and `AfterConfiguration` are refused when the
+  file loads. A file that raises is `step-file-import-failed`, and the other
+  files still load.
+- A compat step judges by raising or not, so one in Then position is the
+  warning `then-compat-step`, and run.json gives the scenario
+  `judged_by: "compat"`.
+
 ## Types and tooling
 
 `nuka sig` writes `sig/nukadoko/steps.rbs`, the RBS of each step's args
@@ -272,6 +346,7 @@ returns the wrong shape is an error.
 What the TypeScript engine has and this one does not yet. The spec marks
 each of its examples with `<!-- engine: typescript -->`.
 
-- The two doors that bring an existing suite in, from cucumber-js and from
-  Playwright Test. Both are JavaScript suites, so they are the TypeScript
-  engine's ([doors.md](../typescript/doors.md)).
+- The door from Playwright Test. It brings a JavaScript suite in, so it is
+  the TypeScript engine's ([doors.md](../typescript/doors.md)). The compat
+  door above is this engine's form of the TypeScript engine's door from
+  cucumber-js.

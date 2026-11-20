@@ -1,0 +1,392 @@
+# Generated from lib/nukadoko/compat.rb with RBS::Inline
+
+# The door a cucumber-ruby suite comes in through: its step definitions and
+# support files load as they are, with `Given`, `When`, `Then`, `Before`,
+# `After`, `World`, and `ParameterType` at the top level, as cucumber-ruby
+# defines them, and each line they bind runs with a measured step record.
+# A compat step has no contract: its arguments are the captures in order,
+# then a table or a docstring, and it is named by its pattern
+# (`compat: <pattern>`). It covers the subset suites use most; anything
+# else fails when the file loads or when the step runs, never by doing
+# something other than what cucumber-ruby did.
+module Nukadoko
+  module Compat
+    # What the door refuses, named so a migrating suite sees why.
+    class Unsupported < StandardError
+    end
+
+    # `pending` in a step: cucumber-ruby's Cucumber::Pending. nukadoko has
+    # no pending outcome, so the step fails and says so.
+    class Pending < StandardError
+    end
+
+    # A step definition as the glue registered it.
+    class Registration < Data
+      attr_reader keyword(): untyped
+
+      attr_reader pattern(): untyped
+
+      attr_reader block(): untyped
+
+      attr_reader file(): untyped
+
+      attr_reader line(): untyped
+
+      def self.new: (untyped keyword, untyped pattern, untyped block, untyped file, untyped line) -> instance
+                  | (keyword: untyped, pattern: untyped, block: untyped, file: untyped, line: untyped) -> instance
+
+      def self.members: () -> [ :keyword, :pattern, :block, :file, :line ]
+
+      def members: () -> [ :keyword, :pattern, :block, :file, :line ]
+    end
+
+    class Registration
+      # The pattern's text, as `nuka steps` and the step's name show it.
+      # : () -> String
+      def source: () -> String
+    end
+
+    # A Before, After, AfterStep, BeforeAll, or AfterAll hook.
+    class Hook < Data
+      attr_reader type(): untyped
+
+      attr_reader tags(): untyped
+
+      attr_reader name(): untyped
+
+      attr_reader block(): untyped
+
+      attr_reader file(): untyped
+
+      attr_reader line(): untyped
+
+      def self.new: (untyped type, untyped tags, untyped name, untyped block, untyped file, untyped line) -> instance
+                  | (type: untyped, tags: untyped, name: untyped, block: untyped, file: untyped, line: untyped) -> instance
+
+      def self.members: () -> [ :type, :tags, :name, :block, :file, :line ]
+
+      def members: () -> [ :type, :tags, :name, :block, :file, :line ]
+    end
+
+    HOOK_TYPES: untyped
+
+    STEP_OPTIONS: untyped
+
+    PARAMETER_TYPE_KEYS: untyped
+
+    # : () -> Array[Registration]
+    def self.steps: () -> Array[Registration]
+
+    # : () -> Array[Hook]
+    def self.hooks: () -> Array[Hook]
+
+    # : () -> Array[Module]
+    def self.world_modules: () -> Array[Module]
+
+    # : () -> Proc?
+    def self.world_factory: () -> Proc?
+
+    # : (Proc?) -> Proc?
+    def self.world_factory=: (Proc?) -> Proc?
+
+    # : () -> Array[Hash[Symbol, untyped]]
+    def self.parameter_types: () -> Array[Hash[Symbol, untyped]]
+
+    # Each glue file that raised while it loaded, with the first line of
+    # what it raised.
+    # : () -> Array[[String, String]]
+    def self.load_failures: () -> Array[[ String, String ]]
+
+    # : () -> void
+    def self.reset: () -> void
+
+    # : (Symbol) -> Array[Hook]
+    def self.hooks_of: (Symbol) -> Array[Hook]
+
+    # A new World for one scenario: the factory's object, or a plain one,
+    # with every `World` module in and the door's own methods on it.
+    # : () -> untyped
+    def self.new_world: () -> untyped
+
+    # A hook's tag expression in the one shape the door reads: `@tag` or
+    # `not @tag`. Anything wider would match differently than cucumber-ruby
+    # if read loosely, so it is refused.
+    TAG: ::Regexp
+
+    # : (String) -> bool
+    def self.tag_expression?: (String) -> bool
+
+    # Whether a hook applies to a scenario with `tags`: every one of its
+    # expressions holds, as cucumber-ruby ands several of them.
+    # : (Hook, Array[String]) -> bool
+    def self.applies?: (Hook, Array[String]) -> bool
+
+    # : (String) -> String
+    def self.unsupported_tags: (String) -> String
+
+    # The methods cucumber-ruby's glue calls at the top level of a file.
+    module Dsl
+      # : (*String, ?name: String?) { (untyped) -> void } -> void
+      def Before: (*String, ?name: String?) { (untyped) -> void } -> void
+
+      # : (*String, ?name: String?) { (untyped) -> void } -> void
+      def After: (*String, ?name: String?) { (untyped) -> void } -> void
+
+      # : (*String, ?name: String?) { (untyped, untyped) -> void } -> void
+      def AfterStep: (*String, ?name: String?) { (untyped, untyped) -> void } -> void
+
+      # : (?name: String?) { () -> void } -> void
+      def BeforeAll: (?name: String?) { () -> void } -> void
+
+      # : (?name: String?) { () -> void } -> void
+      def AfterAll: (?name: String?) { () -> void } -> void
+
+      # : (*untyped) -> void
+      def Around: (*untyped) -> void
+
+      # : (*untyped) -> void
+      def InstallPlugin: (*untyped) -> void
+
+      # : (*untyped) -> void
+      def AfterConfiguration: (*untyped) -> void
+
+      # `World(Module, ...)` mixes modules into every scenario's World, and
+      # `World { MyWorld.new }` makes the World itself, as cucumber-ruby does.
+      # : (*Module, **Module) ?{ () -> untyped } -> void
+      def World: (*Module, **Module) ?{ () -> untyped } -> void
+
+      # : (**untyped) -> void
+      def ParameterType: (**untyped) -> void
+    end
+
+    # : (Symbol, untyped, untyped, Proc?) -> void
+    def self.register_step: (Symbol, untyped, untyped, Proc?) -> void
+
+    # : (Symbol, Array[String], String?, Proc?) -> void
+    def self.register_hook: (Symbol, Array[String], String?, Proc?) -> void
+
+    # : (Hash[Symbol, untyped]) -> void
+    def self.register_parameter_type: (Hash[Symbol, untyped]) -> void
+
+    # The door's own methods on every World.
+    module WorldMethods
+      # cucumber-ruby's `pending`: the step stops here, and nukadoko, which
+      # has no pending outcome, fails it.
+      # : (?String) -> bot
+      def pending: (?String) -> bot
+
+      # : (*untyped) -> bot
+      def skip_this_scenario: (*untyped) -> bot
+
+      # Runs another step by its text, on this World, as cucumber-ruby's
+      # `step` does. The step it runs is part of this step's record.
+      # : (String, ?untyped) -> untyped
+      def step: (String, ?untyped) -> untyped
+
+      # : (*untyped) -> bot
+      def steps: (*untyped) -> bot
+
+      # What cucumber-ruby's `log` and `attach` keep: each goes into the
+      # step record's `attachments`, as a typed step's `evidence` does.
+      # : (*untyped) -> void
+      def log: (*untyped) -> void
+
+      # : (untyped, ?String?, ?String?) -> void
+      def attach: (untyped, ?String?, ?String?) -> void
+
+      # The page nukadoko measures: its trace, screenshots, and requests are
+      # the step's. Capybara's `page`, when the glue uses Capybara, is its
+      # own and is not measured.
+      # : () -> untyped
+      def open_page: () -> untyped
+
+      # The `request` fixture: requests to the world, measured.
+      # : () -> untyped
+      def open_request: () -> untyped
+    end
+
+    # What the running step opens on demand, set by the run around each
+    # compat step; nil outside one.
+    # : () -> (^(Symbol) -> untyped)?
+    def self.opener: () -> (^(Symbol) -> untyped)?
+
+    # : ((^(Symbol) -> untyped)?) -> (^(Symbol) -> untyped)?
+    def self.opener=: ((^(Symbol) -> untyped)?) -> (^(Symbol) -> untyped)?
+
+    # : () -> (^(Symbol, Array[untyped]) -> void)?
+    def self.evidence: () -> (^(Symbol, Array[untyped]) -> void)?
+
+    # : ((^(Symbol, Array[untyped]) -> void)?) -> (^(Symbol, Array[untyped]) -> void)?
+    def self.evidence=: ((^(Symbol, Array[untyped]) -> void)?) -> (^(Symbol, Array[untyped]) -> void)?
+
+    # : (Symbol) -> untyped
+    def self.open: (Symbol) -> untyped
+
+    # cucumber-ruby's DataTable, for the calls glue makes most. A table is
+    # read, never changed, and `diff!` is refused rather than half done.
+    class DataTable
+      # : (Array[Array[String]]) -> void
+      def initialize: (Array[Array[String]]) -> void
+
+      # : () -> Array[Array[String]]
+      attr_reader raw: untyped
+
+      # : () -> Array[Array[String]]
+      def rows: () -> Array[Array[String]]
+
+      # : () -> Array[Hash[String, String]]
+      def hashes: () -> Array[Hash[String, String]]
+
+      # : () -> Array[Hash[Symbol, String]]
+      def symbolic_hashes: () -> Array[Hash[Symbol, String]]
+
+      # : () -> Hash[String, String]
+      def rows_hash: () -> Hash[String, String]
+
+      # : () -> DataTable
+      def transpose: () -> DataTable
+
+      # : () -> Array[Array[String]]
+      def cells_rows: () -> Array[Array[String]]
+
+      # : () -> Integer
+      def size: () -> Integer
+
+      # : (untyped) -> bool
+      def ==: (untyped) -> bool
+
+      # : () -> String
+      def to_s: () -> String
+
+      # : (*untyped) -> bot
+      def diff!: (*untyped) -> bot
+
+      # : (*untyped) -> bot
+      def map_headers!: (*untyped) -> bot
+
+      # : (*untyped) -> bot
+      def map_column!: (*untyped) -> bot
+    end
+
+    # The scenario a Before or After hook is given, as cucumber-ruby gives it.
+    class Scenario
+      # : (String, Array[String], String?, ?status: Symbol) -> void
+      def initialize: (String, Array[String], String?, ?status: Symbol) -> void
+
+      attr_reader name: untyped
+
+      attr_reader source_tag_names: untyped
+
+      attr_reader location: untyped
+
+      attr_accessor status: untyped
+
+      # : () -> bool
+      def failed?: () -> bool
+
+      # : () -> bool
+      def passed?: () -> bool
+    end
+
+    # A step's result as AfterStep is given it.
+    class StepResult < Data
+      attr_reader status(): untyped
+
+      attr_reader exception(): untyped
+
+      def self.new: (untyped status, untyped exception) -> instance
+                  | (status: untyped, exception: untyped) -> instance
+
+      def self.members: () -> [ :status, :exception ]
+
+      def members: () -> [ :status, :exception ]
+    end
+
+    class StepResult
+      # : () -> bool
+      def passed?: () -> bool
+
+      # : () -> bool
+      def failed?: () -> bool
+    end
+
+    # Each registration as a member of the step vocabulary: a Step
+    # subclass named by its pattern, matched with cucumber-expressions or
+    # its Regexp, with no contract to check.
+    module Step
+      # : () -> Array[untyped]
+      def self.compat_steps: () -> Array[untyped]
+
+      # One Step subclass for a registration.
+      # : (Registration) -> singleton(Nukadoko::Step)
+      def self.build: (Registration) -> singleton(Nukadoko::Step)
+
+      # What a compat step answers where a typed step reads its declarations.
+      module Methods
+        # : () -> Registration
+        def registration: () -> Registration
+
+        # : () -> bool
+        def compat?: () -> bool
+
+        # : () -> String
+        def step_name: () -> String
+
+        # : () -> Integer?
+        def line: () -> Integer?
+
+        # : () -> String
+        def name: () -> String
+
+        # No typed pattern: every check of named captures and args passes
+        # a compat step by, and `compat_patterns` is what it lists.
+        # : (*untyped) -> Array[String]
+        def patterns: (*untyped) -> Array[String]
+
+        # : () -> Array[String]
+        def compat_patterns: () -> Array[String]
+
+        # : () -> bool
+        def mutating?: () -> bool
+
+        # : () -> Symbol
+        def body: () -> Symbol
+
+        # : () -> Array[Symbol]
+        def fixtures: () -> Array[Symbol]
+
+        # : (?Array[untyped]) -> Array[Symbol]
+        def bag: (?Array[untyped]) -> Array[Symbol]
+
+        # The expression the pattern is read with, against the registry
+        # typed patterns read, so a parameter type is one mechanism.
+        # : () -> untyped
+        def expression: () -> untyped
+
+        # The arguments a line's text matches, or nil.
+        # : (String) -> Array[untyped]?
+        def match_line: (String) -> Array[untyped]?
+
+        # Each capture's value, a parameter type's transformer running on
+        # the World, as cucumber-ruby runs it.
+        # : (Array[untyped], untyped) -> Array[untyped]
+        def values: (Array[untyped], untyped) -> Array[untyped]
+      end
+    end
+
+    # Registers the World methods at the top level and loads `files`, in
+    # cucumber-ruby's order: env.rb first, then the rest of support/, then
+    # every other file. A file that raises is kept as a load failure and
+    # the rest still load, so one broken file does not hide the others.
+    # : (Array[String]) -> void
+    def self.load: (Array[String]) -> void
+
+    # : (Hash[Symbol, untyped]) -> void
+    def self.register_type: (Hash[Symbol, untyped]) -> void
+
+    # The glue files under `features`, in the order cucumber-ruby loads
+    # them; the typed step files under `steps_dir` are among them.
+    # : (String, String) -> Array[String]
+    def self.files: (String, String) -> Array[String]
+  end
+end

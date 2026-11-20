@@ -53,6 +53,13 @@ module Nukadoko
       # : () -> [Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]]]
       def pass: () -> [ Array[Hash[Symbol, untyped]], Hash[Scenario, Array[Hash[Symbol, untyped]]] ]
 
+      # Runs each BeforeAll or AfterAll hook once, with no World, as the
+      # run's own: a failure is a finding of the run, naming the
+      # environment, and stops the BeforeAll hooks after it. False when one
+      # failed.
+      # : (Symbol, Environment) -> bool
+      def run_hooks: (Symbol, Environment) -> bool
+
       # A list a started world did not read, as a warning: head's routes and
       # flags, and the tables list of a world of any tree.
       # : (Environment, World, String) -> void
@@ -238,6 +245,13 @@ module Nukadoko
       # about the criterion.
       # : (Array[untyped], Hash[Symbol, untyped]) -> Array[untyped]
       def demoted: (Array[untyped], Hash[Symbol, untyped]) -> Array[untyped]
+
+      # Runs a compat hook kind on the scenario's World, each that its tags
+      # select, and adds an entry for each to `hooks`. Before stops at the
+      # first that fails, since nothing is left to prepare into; After runs
+      # in reverse order, as teardown unwinds setup. False when one failed.
+      # : (Symbol, Array[Hash[Symbol, untyped]], Array[untyped], ?step_index: Integer?) -> bool
+      def compat_hooks: (Symbol, Array[Hash[Symbol, untyped]], Array[untyped], ?step_index: Integer?) -> bool
 
       # The pause after the step that ran `number`th, under --step. Before
       # the walk waits, the open page's traffic moves to the pause's own

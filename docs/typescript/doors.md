@@ -5,7 +5,8 @@ TypeScript engine: its cucumber-js step definitions, run as they are, and a
 Playwright Test suite that shares its code with typed steps. Moving a suite
 across step by step is [migration.md](migration.md) for the first door and
 [migration-playwright-test.md](migration-playwright-test.md) for the second.
-The Ruby engine has neither door.
+The Ruby engine has a compat door of its own, for a cucumber-ruby suite
+([reference.md](../ruby/reference.md)), and no door from Playwright Test.
 
 ## Compat steps (the migration door)
 
