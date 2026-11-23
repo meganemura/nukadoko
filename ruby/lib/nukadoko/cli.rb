@@ -145,10 +145,24 @@ module Nukadoko
         0
       when "steps"
         entries = check.usable.each_with_index.sort_by { |step, i| [step.file, i] }.map(&:first)
-        return finish("steps", true, findings: findings, steps: entries.map { Vocabulary.entry(_1, @project, entries) }) if @json
+        places = entries.map { [_1, {}] } #: Array[[singleton(Step), Hash[Symbol, untyped]]]
+        unbound = [] #: Array[Hash[Symbol, untyped]]
+        unless @rest.empty?
+          begin
+            selection = Engine::Selection.new(@project, @rest, [])
+          rescue Engine::Refusal => e
+            return refuse(e)
+          end
+          places, unbound = Vocabulary.of_targets(entries, selection.scenarios)
+        end
+        if @json
+          return finish("steps", unbound.empty?, findings: findings + unbound,
+                                                 steps: places.map { |step, place| Vocabulary.entry(step, @project, entries).merge(place) })
+        end
 
-        @out.puts entries.map { Vocabulary.text(_1, entries) }.join("\n\n")
-        0
+        @out.puts places.map { |step, place| Vocabulary.text(step, entries, place) }.join("\n\n")
+        emit({}, unbound, "steps", io: $stderr)
+        unbound.empty? ? 0 : 1
       when "describe"
         step = check.usable.find { _1.step_name == @rest.first }
         @json = true

@@ -10,6 +10,15 @@ module Nukadoko
     # : (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
     def self.entry: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
 
+    # `nuka steps <target>`: the steps the selected lines bind, and the steps
+    # those call through `parts`, each with the lines that bind it and the
+    # listed steps that call it. A line binds a step only when exactly one
+    # step matches it, as `nuka check` judges. A line that binds no single
+    # step is a finding: a list that leaves out the step a line was meant
+    # to bind reads as complete.
+    # : (Array[singleton(Step)], Array[Engine::Scenario]) -> [Array[[singleton(Step), Hash[Symbol, untyped]]], Array[Hash[Symbol, untyped]]]
+    def self.of_targets: (Array[singleton(Step)], Array[Engine::Scenario]) -> [ Array[[ singleton(Step), Hash[Symbol, untyped] ]], Array[Hash[Symbol, untyped]] ]
+
     # : (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
     def self.describe: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
 
@@ -35,8 +44,8 @@ module Nukadoko
     # : (untyped) -> bool
     def self.compat?: (untyped) -> bool
 
-    # : (singleton(Step), ?Array[singleton(Step)]) -> String
-    def self.text: (singleton(Step), ?Array[singleton(Step)]) -> String
+    # : (singleton(Step), ?Array[singleton(Step)], ?Hash[Symbol, untyped]) -> String
+    def self.text: (singleton(Step), ?Array[singleton(Step)], ?Hash[Symbol, untyped]) -> String
 
     WIDTH: ::Integer
 

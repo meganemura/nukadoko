@@ -22,6 +22,57 @@ module Nukadoko
       }.compact
     end
 
+    # `nuka steps <target>`: the steps the selected lines bind, and the steps
+    # those call through `parts`, each with the lines that bind it and the
+    # listed steps that call it. A line binds a step only when exactly one
+    # step matches it, as `nuka check` judges. A line that binds no single
+    # step is a finding: a list that leaves out the step a line was meant
+    # to bind reads as complete.
+    #: (Array[singleton(Step)], Array[Engine::Scenario]) -> [Array[[singleton(Step), Hash[Symbol, untyped]]], Array[Hash[Symbol, untyped]]]
+    def self.of_targets(steps, scenarios)
+      lines = Hash.new { |h, k| h[k] = [] } #: Hash[singleton(Step), Array[String]]
+      findings = [] #: Array[Hash[Symbol, untyped]]
+      seen = {} #: Hash[String, bool]
+      scenarios.each do |scenario|
+        scenario.steps.each do |line|
+          where = "#{scenario.uri}:#{line.line}"
+          # A Background line and an outline step repeat in each scenario;
+          # the line is one place to edit, so it is named once.
+          next if seen[where]
+
+          seen[where] = true
+          matched = Engine.matches(steps, line.text).map(&:first).uniq
+          at = { severity: "error", file: scenario.uri, line: line.line }
+          case matched.size
+          when 1 then lines[matched.first] << where
+          when 0
+            findings << { **at, code: "undefined-step", message: %(No step definition matches "#{line.text}"),
+                          do: "nuka scaffold --feature #{Engine::Selection.shell_word(scenario.uri)}" }
+          else
+            findings << { **at, code: "ambiguous-step", message: %("#{line.text}" matches more than one step: #{matched.map(&:step_name).sort.join(", ")}) }
+          end
+        end
+      end
+      part_of = Hash.new { |h, k| h[k] = [] } #: Hash[singleton(Step), Array[String]]
+      listed = lines.keys
+      pending = listed.dup
+      until pending.empty?
+        caller = pending.shift #: singleton(Step)
+        (compat?(caller) ? [] : caller.parts).each do |part|
+          part_of[part] << caller.step_name unless part_of[part].include?(caller.step_name)
+          next if listed.include?(part)
+
+          listed << part
+          pending << part
+        end
+      end
+      places = steps.select { listed.include?(_1) }.map do |step|
+        place = { lines: lines.fetch(step, []), **(part_of.key?(step) ? { part_of: part_of[step] } : {}) } #: Hash[Symbol, untyped]
+        [step, place] #: [singleton(Step), Hash[Symbol, untyped]]
+      end
+      [places, findings]
+    end
+
     #: (singleton(Step), String, ?Array[singleton(Step)]) -> Hash[Symbol, untyped]
     def self.describe(step, project, steps = [step])
       if compat?(step)
@@ -90,8 +141,8 @@ module Nukadoko
     #: (untyped) -> bool
     def self.compat?(step) = step.respond_to?(:compat?) && step.compat?
 
-    #: (singleton(Step), ?Array[singleton(Step)]) -> String
-    def self.text(step, steps = [step])
+    #: (singleton(Step), ?Array[singleton(Step)], ?Hash[Symbol, untyped]) -> String
+    def self.text(step, steps = [step], place = {})
       return "#{step.step_name}  compat" if compat?(step)
 
       browser = step.bag.intersect?(BROWSER) ? "  browser" : ""
@@ -111,6 +162,8 @@ module Nukadoko
       end
       (states[:gives] || []).each { items << "gives: #{_1[:key] ? "#{_1[:state]} for #{_1[:key]}" : _1[:state]}" }
       (states[:ends] || []).each { items << "ends: #{_1[:key] ? "#{_1[:state]} for #{_1[:key]}" : _1[:state]}" }
+      items << "lines: #{place[:lines].join(" ")}" if place[:lines]&.any?
+      items << "part of: #{place[:part_of].join(" ")}" if place[:part_of]
       [header, *items.flat_map { wrap(_1.to_s) }].join("\n")
     end
 

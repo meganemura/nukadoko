@@ -89,7 +89,12 @@ module Nukadoko
           JSON_FLAG
         ]
       },
-      "steps" => { usage: "nuka steps", summary: "list the whole vocabulary: name, patterns, description, mutates", flags: [JSON_FLAG] },
+      "steps" => {
+        usage: "nuka steps [feature..]",
+        summary: "list the vocabulary: name, patterns, description, mutates; with a target (a feature file, file:line, or directory), " \
+                 "only the steps its lines bind and the steps those call through parts, each with the lines that bind it",
+        flags: [JSON_FLAG]
+      },
       "describe" => { usage: "nuka describe <name>", summary: "full contract, schemas as JSON Schema", flags: [] },
       "do" => {
         usage: "nuka do <name>",
