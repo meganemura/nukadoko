@@ -73,8 +73,8 @@ If none is true, ask what this is supposed to do before writing anything.
    `Feature:` (`references/writing-the-feature.md`). Every expected value
    is one the criteria state; a value they do not state is a question for
    a person, not a guess and not a value read off the program.
-2. **Steps.** `nuka steps` lists the vocabulary, `nuka describe <step>` one
-   contract; reuse before scaffolding. `nuka scaffold --feature <file>` stubs
+2. **Steps.** Reuse first: `nuka steps [<feature>]` lists the vocabulary (or
+   a file's), `nuka describe <step>` one step. `nuka scaffold --feature <file>` stubs
    each undefined line and prints each stub's own `nuka scaffold ...
    --replace` line. Redo the When that runs a program or sends a request, and
    the Thens that read it, from those lines with `--description`, `--command

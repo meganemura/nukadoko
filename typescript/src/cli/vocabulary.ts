@@ -7,6 +7,7 @@ import type { NukadokoConfig } from "../config/schema.js";
 import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import {
   discoverSteps,
+  type CompatParameterTypeEntry,
   type Vocabulary,
   type VocabularyEntry,
 } from "../discover/discover-steps.js";
@@ -30,9 +31,9 @@ export { formatVocabularyError };
 // Responsibility: the one path both `nuka steps` and `nuka describe` share —
 // load the project's config, then discover its vocabulary. Kept out of
 // run-cli.ts so that path is unit-testable without going through yargs.
-// `discoverSteps` also returns compat-origin parameter type registrations —
-// irrelevant to `steps`/`describe`, which only ever list/describe the step
-// vocabulary itself, so this module drops that half of the result.
+// It also passes on the compat-origin parameter type registrations
+// `discoverSteps` returns: `nuka steps <target>` matches feature lines, and a
+// compat pattern can name one of those types.
 // `formatVocabulary` below is `nuka steps`' non-JSON rendering, also kept
 // here as a pure function. Its caller passes a fixed width rather than the
 // terminal's, so a pipe and a terminal print the same text.
@@ -74,10 +75,11 @@ export async function loadVocabulary(
   readonly vocabulary: Vocabulary;
   readonly config: NukadokoConfig;
   readonly importFailures: readonly RawImportFailure[];
+  readonly compatParameterTypes: readonly CompatParameterTypeEntry[];
 }> {
   const config = await loadConfig(rootDir);
-  const { vocabulary, importFailures } = await discoverSteps(rootDir, config.featuresDir, options);
-  return { vocabulary, config, importFailures };
+  const { vocabulary, importFailures, compatParameterTypes } = await discoverSteps(rootDir, config.featuresDir, options);
+  return { vocabulary, config, importFailures, compatParameterTypes };
 }
 
 /** Thrown by {@link assertFeaturesDirExists}. `discoverSteps` itself
@@ -466,6 +468,13 @@ export interface StepSummary {
   /** The states that no longer hold once this step has passed. Absent
    * when none. */
   readonly ends?: readonly StateSummary[];
+  /** Under `nuka steps <target>` only: each selected feature line that
+   * binds this step, as `file:line`, in file order. `[]` for a step listed
+   * only because a listed step calls it through `parts`. */
+  readonly lines?: readonly string[];
+  /** Under `nuka steps <target>` only: the listed steps that call this one
+   * through `parts`. Absent when none does. */
+  readonly part_of?: readonly string[];
 }
 
 /** One `requires`, `gives`, or `ends` entry: the state's name, and the
@@ -746,6 +755,12 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   }
   for (const ended of s.ends ?? []) {
     lines.push(...wrapIndented(`ends: ${describeStateSummary(ended)}`, width));
+  }
+  if (s.lines !== undefined && s.lines.length > 0) {
+    lines.push(...wrapIndented(`lines: ${s.lines.join(" ")}`, width));
+  }
+  if (s.part_of !== undefined) {
+    lines.push(...wrapIndented(`part of: ${s.part_of.join(" ")}`, width));
   }
   if (s.needs_error !== undefined) {
     lines.push(...wrapIndented(`needs: ${s.needs_error}`, width));

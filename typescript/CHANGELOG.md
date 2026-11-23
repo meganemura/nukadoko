@@ -7,6 +7,17 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- `nuka steps <target>` lists the vocabulary of the scenarios a feature
+  file, a `file:line`, or a directory selects: the steps their lines bind
+  and the steps those call through `parts`. Each listed step names `lines`,
+  the lines that bind it, and a step listed through `parts` names
+  `part_of`, the listed steps that call it. A selected line that binds no
+  single step is an `undefined-step` or `ambiguous-step` finding, which
+  makes the exit code 1. An agent that changes one scenario reads only the
+  steps it uses.
+
 ### Changed
 
 - A fixture teardown error whose message has more than one line is one

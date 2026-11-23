@@ -72,6 +72,7 @@ export interface RunCliOptions {
 
 interface StepsArgs {
   json?: boolean;
+  feature?: string[];
 }
 
 interface DescribeArgs {
@@ -358,14 +359,22 @@ export async function runCli(
   });
 
   const stepsCommand: CommandModule<Record<string, never>, StepsArgs> = {
-    command: "steps",
-    describe: "list the whole vocabulary, typed and compat: name, patterns, description, mutates",
+    command: "steps [feature..]",
+    describe: "list the vocabulary, typed and compat: name, patterns, description, mutates; with a target, only the steps its lines bind",
     builder: (y: Argv) =>
-      y.option("json", {
-        type: "boolean",
-        default: false,
-        describe: "machine-readable output",
-      }) as Argv<StepsArgs>,
+      y
+        .positional("feature", {
+          type: "string",
+          array: true,
+          describe:
+            "feature file, file:line, or directory, selected the way nuka run selects them: list only the steps their lines bind " +
+            "and the steps those call through parts, each with the lines that bind it; omit to list the whole vocabulary",
+        })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "machine-readable output",
+        }) as Argv<StepsArgs>,
     handler: async (args: Arguments<StepsArgs>) => {
       if (argsFailed) return;
       const [
@@ -390,7 +399,7 @@ export async function runCli(
         // everything else it could still read — the same migrating-suite
         // reasoning `nuka check` already acts on. `run`/`do`/
         // `init` deliberately do not pass this (they stay fail-fast).
-        const { vocabulary, config, importFailures } = await loadVocabulary(rootDir, {
+        const { vocabulary, config, importFailures, compatParameterTypes } = await loadVocabulary(rootDir, {
           tolerateImportFailures: true,
         });
         // `nuka check`'s own `features-dir-missing` condition: discovery
@@ -403,36 +412,58 @@ export async function runCli(
         assertFeaturesDirExists(rootDir, config);
         const stepNames = buildStepNames(vocabulary);
         const graph = buildFixtureGraph(config);
-        const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames, rootDir, graph));
+        const everyStep = [...vocabulary.values()].map((entry) => summarize(entry, stepNames, rootDir, graph));
+        const targets = args.feature ?? [];
+        const selected =
+          targets.length === 0
+            ? { summaries: everyStep, findings: [] }
+            : (await import("./target-vocabulary.js")).vocabularyOfTargets(
+                rootDir,
+                targets,
+                vocabulary,
+                everyStep,
+                config.parameterTypes,
+                compatParameterTypes,
+              );
+        const summaries = selected.summaries;
         const importFailureSummaries = toImportFailureSummaries(importFailures);
+        // A target line that binds no single step makes the list
+        // incomplete, the same as an import failure does.
+        const lineFindings = selected.findings;
         if (args.json) {
           // Top-level shape change from a bare array to `{ steps,
           // import_failures }` — 0.x accepts the break; the alternative,
           // silently dropping `import_failures` off a bare array, is
           // exactly the "machine reader treats an incomplete list as
           // complete" failure this field exists to prevent.
-          const incomplete = importFailures.length > 0 || summaries.some((s) => s.needs_error !== undefined || s.from_errors !== undefined);
+          const incomplete =
+            importFailures.length > 0 || lineFindings.length > 0 || summaries.some((s) => s.needs_error !== undefined || s.from_errors !== undefined);
           stdout.write(
-            formatEnvelope("steps", incomplete ? 1 : 0, [...notices, ...importFailureFindings(rootDir, importFailureSummaries), ...contractFindings(summaries)], {
-              steps: summaries,
-            }),
+            formatEnvelope(
+              "steps",
+              incomplete ? 1 : 0,
+              [...notices, ...importFailureFindings(rootDir, importFailureSummaries), ...lineFindings, ...contractFindings(summaries)],
+              { steps: summaries },
+            ),
           );
         } else {
           // A fixed width, not the terminal's: the same project prints the
           // same text in a terminal, a pipe, and an agent's shell.
           stdout.write(formatVocabulary(summaries, 80));
-          for (const finding of importFailureFindings(rootDir, importFailureSummaries)) stderr.write(formatFinding(finding));
+          for (const finding of [...importFailureFindings(rootDir, importFailureSummaries), ...lineFindings]) stderr.write(formatFinding(finding));
         }
         // Exit 1 whenever the output is incomplete in a way this command
         // still went ahead and printed anyway — the check below has to name
         // every such case, not just today's, so a new one has to be added
-        // here the moment it exists. So far: an import failure, a step
+        // here the moment it exists. So far: an import failure, a target
+        // line that binds no single step, a step
         // whose own `needs` this run couldn't read (`summarize`'s own
         // `needs_error`), and a step with an unreadable `from` entry
         // (`from_errors`).
         // Output is not withheld either way — only "this succeeded" is.
         if (
           importFailures.length > 0 ||
+          lineFindings.length > 0 ||
           summaries.some((s) => s.needs_error !== undefined || s.from_errors !== undefined)
         ) {
           exitCode = 1;

@@ -7875,6 +7875,25 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               contract-unreadable finding naming the
                               step. Text
                               wraps at 80 columns, in a terminal or not
+nuka steps <target>... [--json]
+                              the vocabulary of the scenarios a target
+                              selects: a feature file, a file:line, or a
+                              directory, selected the way nuka run selects
+                              them, and refused the way it refuses them.
+                              It lists the steps the selected lines bind
+                              and the steps those call through parts, in
+                              the order of the whole list. Each listed
+                              step adds lines, the file:line of each
+                              selected line that binds it (a Background
+                              line once), and a step listed through parts
+                              adds part_of, the listed steps that call it,
+                              with lines empty (text: one lines: line and
+                              one part of: line). A selected line that
+                              binds no step is an undefined-step finding,
+                              and one that binds more than one is an
+                              ambiguous-step finding, the same as nuka
+                              check reports them; either exits 1, output
+                              printed either way
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared

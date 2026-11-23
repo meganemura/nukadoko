@@ -7,10 +7,10 @@ file's shape and its pattern: `step-files.md`. A Then, which claims:
 
 ## Reading the vocabulary
 
-`nuka steps --json` lists the whole vocabulary; `nuka describe <step>`
-gives one step's full contract; read the JSON itself for the field
-shapes. Both name any step file that failed to import beside everything
-else they could still read, and `nuka check` is where to fix the import.
+`nuka steps --json` lists the vocabulary, `nuka steps <feature>[:<line>]`
+only the steps those lines bind (each with `lines`) and their `parts`, and
+`nuka describe <step>` one full contract. Both name any step file that
+failed to import, and `nuka check` is where to fix the import.
 When a step's args or returns schema cannot be represented as JSON
 Schema (a `z.date()`, say), `nuka describe` still prints that step's
 contract with `args_error` or `returns_error` naming the step, and exits
